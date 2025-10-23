@@ -1,0 +1,690 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wireframe Globe Visualization</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/topojson/3.0.2/topojson.min.js"></script>
+    <style>
+        /* ============================================
+           AESTHETIC CONTROL: WIREFRAME THEME
+           Change these to customize your globe style
+           ============================================ */
+        :root {
+            --bg-color: #000000;
+            --globe-bg: #0a0a0a;
+            --wireframe-color: #00ff88;
+            --wireframe-hover: #00ffff;
+            --grid-color: rgba(0, 255, 136, 0.15);
+            --text-color: #00ff88;
+            --accent-color: #00ffff;
+            --glow-color: rgba(0, 255, 136, 0.4);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Courier New', monospace;
+            background: var(--bg-color);
+            color: var(--text-color);
+            overflow: hidden;
+        }
+
+        #map-container {
+            width: 100vw;
+            height: 100vh;
+            position: relative;
+            background: radial-gradient(circle at center, #1a1a1a 0%, #000000 100%);
+        }
+
+        svg {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* ============================================
+           WIREFRAME STYLING: Countries
+           ============================================ */
+        .country {
+            fill: none;
+            stroke: var(--wireframe-color);
+            stroke-width: 1;
+            stroke-linejoin: round;
+            transition: stroke 0.3s ease, stroke-width 0.3s ease;
+            cursor: pointer;
+            filter: drop-shadow(0 0 3px var(--glow-color));
+        }
+
+        .country:hover {
+            stroke: var(--wireframe-hover);
+            stroke-width: 2;
+            filter: drop-shadow(0 0 10px var(--accent-color));
+        }
+
+        /* Data-driven wireframe intensity */
+        .country.low { 
+            stroke: rgba(0, 255, 136, 0.5);
+            stroke-width: 0.8;
+        }
+        .country.medium { 
+            stroke: rgba(0, 255, 136, 0.7);
+            stroke-width: 1;
+        }
+        .country.high { 
+            stroke: rgba(0, 255, 136, 0.9);
+            stroke-width: 1.2;
+        }
+        .country.very-high { 
+            stroke: var(--wireframe-color);
+            stroke-width: 1.4;
+            filter: drop-shadow(0 0 8px var(--glow-color));
+        }
+
+        /* ============================================
+           GLOBE SPHERE AND GRID
+           ============================================ */
+        .sphere {
+            fill: var(--globe-bg);
+            stroke: var(--wireframe-color);
+            stroke-width: 2;
+            filter: drop-shadow(0 0 30px var(--glow-color));
+        }
+
+        .graticule {
+            fill: none;
+            stroke: var(--grid-color);
+            stroke-width: 0.5;
+        }
+
+        /* ============================================
+           DATA POINTS: Tiny red dot markers
+           ============================================ */
+        .city-marker {
+            fill: #ff0000;
+            stroke: none;
+            cursor: pointer;
+            opacity: 0.8;
+            transition: opacity 0.3s ease;
+        }
+
+        .city-marker:hover {
+            opacity: 1;
+            fill: #ff3333;
+        }
+
+        /* ============================================
+           TOOLTIP: Cyberpunk style
+           ============================================ */
+        .tooltip {
+            position: absolute;
+            background: rgba(0, 0, 0, 0.95);
+            border: 2px solid var(--accent-color);
+            border-radius: 0;
+            padding: 15px;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            max-width: 300px;
+            box-shadow: 0 0 20px var(--glow-color), inset 0 0 20px rgba(0, 255, 136, 0.1);
+            font-family: 'Courier New', monospace;
+        }
+
+        .tooltip.visible {
+            opacity: 1;
+        }
+
+        .tooltip h3 {
+            margin: 0 0 10px 0;
+            color: var(--accent-color);
+            font-size: 16px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            text-shadow: 0 0 10px var(--accent-color);
+        }
+
+        .tooltip p {
+            margin: 5px 0;
+            font-size: 12px;
+            line-height: 1.6;
+            color: var(--wireframe-color);
+        }
+
+        .tooltip img {
+            width: 100%;
+            height: 120px;
+            object-fit: cover;
+            margin-top: 10px;
+            border: 1px solid var(--wireframe-color);
+            filter: grayscale(100%) contrast(1.2);
+            opacity: 0.8;
+        }
+
+        /* ============================================
+           LEGEND: Data key
+           ============================================ */
+        .legend {
+            position: absolute;
+            bottom: 30px;
+            left: 30px;
+            background: rgba(0, 0, 0, 0.9);
+            padding: 20px;
+            border: 2px solid var(--wireframe-color);
+            box-shadow: 0 0 20px var(--glow-color);
+        }
+
+        .legend h4 {
+            margin: 0 0 15px 0;
+            font-size: 14px;
+            color: var(--accent-color);
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            margin: 8px 0;
+            font-size: 11px;
+        }
+
+        .legend-line {
+            width: 30px;
+            height: 2px;
+            margin-right: 10px;
+            box-shadow: 0 0 4px currentColor;
+        }
+
+        /* ============================================
+           CONTROLS: Rotation and interaction
+           ============================================ */
+        .controls {
+            position: absolute;
+            top: 30px;
+            right: 30px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .control-btn {
+            background: rgba(0, 0, 0, 0.9);
+            border: 2px solid var(--wireframe-color);
+            color: var(--text-color);
+            padding: 10px 15px;
+            cursor: pointer;
+            font-size: 12px;
+            font-family: 'Courier New', monospace;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            transition: all 0.3s ease;
+            box-shadow: 0 0 10px var(--glow-color);
+        }
+
+        .control-btn:hover {
+            background: rgba(0, 255, 136, 0.1);
+            box-shadow: 0 0 20px var(--accent-color);
+            border-color: var(--accent-color);
+            color: var(--accent-color);
+        }
+
+        .control-btn.active {
+            background: rgba(0, 255, 136, 0.2);
+            border-color: var(--accent-color);
+            color: var(--accent-color);
+        }
+
+        /* Title overlay - hidden */
+        .title {
+            display: none;
+        }
+
+        /* Scanline effect */
+        .scanline {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: repeating-linear-gradient(
+                0deg,
+                transparent 0px,
+                rgba(0, 255, 136, 0.03) 1px,
+                transparent 2px
+            );
+            pointer-events: none;
+            opacity: 0.5;
+        }
+    </style>
+</head>
+<body>
+    <div id="map-container">
+        <div class="scanline"></div>
+        <h1 class="title">// GLOBAL.DATA.VIZ</h1>
+        <svg id="map"></svg>
+        <div class="tooltip"></div>
+        
+
+
+        <!-- Controls -->
+        <div class="controls">
+            <button class="control-btn active" id="auto-rotate">Auto Rotate</button>
+            <button class="control-btn" id="reset">Reset View</button>
+        </div>
+    </div>
+
+    <script>
+        /* ============================================
+           DATA SECTION: Replace with your own data
+           ============================================ */
+        
+        const countryData = {
+            // Africa
+            "Algeria": 65, "Angola": 58, "Benin": 45, "Botswana": 52,
+            "Burkina Faso": 42, "Burundi": 38, "Cameroon": 55, "Cape Verde": 48,
+            "Central African Republic": 35, "Chad": 40, "Comoros": 43, "Congo": 50,
+            "Democratic Republic of the Congo": 62, "Djibouti": 44, "Egypt": 75,
+            "Equatorial Guinea": 47, "Eritrea": 41, "Ethiopia": 68, "Gabon": 49,
+            "Gambia": 40, "Ghana": 60, "Guinea": 46, "Guinea-Bissau": 39,
+            "Ivory Coast": 57, "Kenya": 70, "Lesotho": 45, "Liberia": 42,
+            "Libya": 53, "Madagascar": 54, "Malawi": 48, "Mali": 44,
+            "Mauritania": 43, "Mauritius": 51, "Morocco": 66, "Mozambique": 52,
+            "Namibia": 50, "Niger": 41, "Nigeria": 78, "Rwanda": 56,
+            "Sao Tome and Principe": 40, "Senegal": 55, "Seychelles": 48,
+            "Sierra Leone": 43, "Somalia": 45, "South Africa": 80, "South Sudan": 42,
+            "Sudan": 58, "Swaziland": 47, "Tanzania": 64, "Togo": 46,
+            "Tunisia": 62, "Uganda": 61, "Zambia": 54, "Zimbabwe": 56,
+            
+            // Americas
+            "Antigua and Barbuda": 48, "Argentina": 79, "Bahamas": 52, "Barbados": 53,
+            "Belize": 46, "Bolivia": 60, "Brazil": 88, "Canada": 88,
+            "Chile": 74, "Colombia": 76, "Costa Rica": 65, "Cuba": 63,
+            "Dominica": 45, "Dominican Republic": 62, "Ecuador": 67, "El Salvador": 58,
+            "Grenada": 46, "Guatemala": 61, "Guyana": 48, "Haiti": 55,
+            "Honduras": 56, "Jamaica": 57, "Mexico": 87, "Nicaragua": 54,
+            "Panama": 64, "Paraguay": 59, "Peru": 72, "Saint Kitts and Nevis": 47,
+            "Saint Lucia": 48, "Saint Vincent and the Grenadines": 46, "Suriname": 49,
+            "Trinidad and Tobago": 60, "United States of America": 95, "Uruguay": 68,
+            "Venezuela": 70,
+            
+            // Asia
+            "Afghanistan": 52, "Armenia": 58, "Azerbaijan": 60, "Bahrain": 66,
+            "Bangladesh": 75, "Bhutan": 48, "Brunei": 55, "Cambodia": 62,
+            "China": 92, "Cyprus": 65, "Georgia": 59, "India": 90,
+            "Indonesia": 84, "Iran": 78, "Iraq": 68, "Israel": 76,
+            "Japan": 91, "Jordan": 64, "Kazakhstan": 70, "Kuwait": 67,
+            "Kyrgyzstan": 54, "Laos": 56, "Lebanon": 63, "Malaysia": 77,
+            "Maldives": 50, "Mongolia": 51, "Myanmar": 65, "Nepal": 60,
+            "North Korea": 55, "Oman": 64, "Pakistan": 82, "Palestine": 58,
+            "Philippines": 80, "Qatar": 69, "Saudi Arabia": 75, "Singapore": 85,
+            "South Korea": 86, "Sri Lanka": 67, "Syria": 60, "Taiwan": 79,
+            "Tajikistan": 52, "Thailand": 81, "Timor-Leste": 46, "Turkey": 83,
+            "Turkmenistan": 53, "United Arab Emirates": 78, "Uzbekistan": 61,
+            "Vietnam": 79, "Yemen": 57,
+            
+            // Europe
+            "Albania": 58, "Andorra": 52, "Austria": 78, "Belarus": 66,
+            "Belgium": 80, "Bosnia and Herzegovina": 62, "Bulgaria": 68,
+            "Croatia": 70, "Czech Republic": 76, "Denmark": 79, "Estonia": 72,
+            "Finland": 77, "France": 87, "Germany": 89, "Greece": 73,
+            "Hungary": 74, "Iceland": 65, "Ireland": 75, "Italy": 84,
+            "Kosovo": 55, "Latvia": 69, "Liechtenstein": 58, "Lithuania": 71,
+            "Luxembourg": 70, "Macedonia": 60, "Malta": 63, "Moldova": 59,
+            "Monaco": 60, "Montenegro": 57, "Netherlands": 82, "Norway": 78,
+            "Poland": 80, "Portugal": 75, "Romania": 72, "Russia": 85,
+            "San Marino": 56, "Serbia": 64, "Slovakia": 71, "Slovenia": 73,
+            "Spain": 83, "Sweden": 81, "Switzerland": 82, "Ukraine": 74,
+            "United Kingdom": 87, "Vatican City": 50,
+            
+            // Oceania
+            "Australia": 86, "Fiji": 54, "Kiribati": 42, "Marshall Islands": 43,
+            "Micronesia": 44, "Nauru": 40, "New Zealand": 78, "Palau": 45,
+            "Papua New Guinea": 58, "Samoa": 48, "Solomon Islands": 47,
+            "Tonga": 46, "Tuvalu": 41, "Vanuatu": 49,
+            
+            // Disputed/Special Territories
+            "Abkhazia": 45, "Somaliland": 42, "Northern Cyprus": 50,
+            "Western Sahara": 38, "Transnistria": 43, "South Ossetia": 40,
+            "Nagorno-Karabakh": 41, "Kosovo": 55
+        };
+
+        const cityData = [
+            { name: "Tokyo", coords: [139.6917, 35.6895], value: 91 },
+            { name: "Delhi", coords: [77.2090, 28.6139], value: 90 },
+            { name: "Shanghai", coords: [121.4737, 31.2304], value: 89 },
+            { name: "São Paulo", coords: [-46.6333, -23.5505], value: 88 },
+            { name: "Mexico City", coords: [-99.1332, 19.4326], value: 87 },
+            { name: "Cairo", coords: [31.2357, 30.0444], value: 86 },
+            { name: "Mumbai", coords: [72.8777, 19.0760], value: 85 },
+            { name: "Beijing", coords: [116.4074, 39.9042], value: 84 },
+            { name: "Dhaka", coords: [90.4125, 23.8103], value: 83 },
+            { name: "Osaka", coords: [135.5023, 34.6937], value: 82 },
+            { name: "New York", coords: [-74.0060, 40.7128], value: 81 },
+            { name: "Karachi", coords: [67.0099, 24.8607], value: 80 },
+            { name: "Buenos Aires", coords: [-58.3816, -34.6037], value: 79 },
+            { name: "Chongqing", coords: [106.5516, 29.5630], value: 78 },
+            { name: "Istanbul", coords: [28.9784, 41.0082], value: 77 },
+            { name: "Kolkata", coords: [88.3639, 22.5726], value: 76 },
+            { name: "Manila", coords: [120.9842, 14.5995], value: 75 },
+            { name: "Lagos", coords: [3.3792, 6.5244], value: 74 },
+            { name: "Rio de Janeiro", coords: [-43.1729, -22.9068], value: 73 },
+            { name: "Tianjin", coords: [117.3616, 39.3434], value: 72 },
+            { name: "Kinshasa", coords: [15.2663, -4.4419], value: 71 },
+            { name: "Guangzhou", coords: [113.2644, 23.1291], value: 70 },
+            { name: "Los Angeles", coords: [-118.2437, 34.0522], value: 69 },
+            { name: "Moscow", coords: [37.6173, 55.7558], value: 68 },
+            { name: "Shenzhen", coords: [114.0579, 22.5431], value: 67 },
+            { name: "Lahore", coords: [74.3587, 31.5204], value: 66 },
+            { name: "Bangalore", coords: [77.5946, 12.9716], value: 65 },
+            { name: "Paris", coords: [2.3522, 48.8566], value: 64 },
+            { name: "Bogotá", coords: [-74.0721, 4.7110], value: 63 },
+            { name: "Jakarta", coords: [106.8456, -6.2088], value: 62 },
+            { name: "Chennai", coords: [80.2707, 13.0827], value: 61 },
+            { name: "Lima", coords: [-77.0428, -12.0464], value: 60 },
+            { name: "Bangkok", coords: [100.5018, 13.7563], value: 59 },
+            { name: "Seoul", coords: [126.9780, 37.5665], value: 58 },
+            { name: "Nagoya", coords: [136.9066, 35.1815], value: 57 },
+            { name: "Hyderabad", coords: [78.4867, 17.3850], value: 56 },
+            { name: "London", coords: [-0.1276, 51.5074], value: 55 },
+            { name: "Tehran", coords: [51.3890, 35.6892], value: 54 },
+            { name: "Chicago", coords: [-87.6298, 41.8781], value: 53 },
+            { name: "Chengdu", coords: [104.0668, 30.5728], value: 52 },
+            { name: "Nanjing", coords: [118.7969, 32.0603], value: 51 },
+            { name: "Wuhan", coords: [114.3055, 30.5928], value: 50 },
+            { name: "Ho Chi Minh City", coords: [106.6297, 10.8231], value: 49 },
+            { name: "Luanda", coords: [13.2344, -8.8383], value: 48 },
+            { name: "Ahmedabad", coords: [72.5714, 23.0225], value: 47 },
+            { name: "Kuala Lumpur", coords: [101.6869, 3.1390], value: 46 },
+            { name: "Xi'an", coords: [108.9398, 34.3416], value: 45 },
+            { name: "Hong Kong", coords: [114.1694, 22.3193], value: 44 },
+            { name: "Dongguan", coords: [113.7518, 23.0209], value: 43 },
+            { name: "Hangzhou", coords: [120.1551, 30.2741], value: 42 },
+            { name: "Foshan", coords: [113.1220, 23.0218], value: 41 },
+            { name: "Shenyang", coords: [123.4328, 41.8057], value: 40 },
+            { name: "Riyadh", coords: [46.6753, 24.7136], value: 39 },
+            { name: "Baghdad", coords: [44.3661, 33.3152], value: 38 },
+            { name: "Santiago", coords: [-70.6693, -33.4489], value: 37 },
+            { name: "Surat", coords: [72.8311, 21.1702], value: 36 },
+            { name: "Madrid", coords: [-3.7038, 40.4168], value: 35 },
+            { name: "Suzhou", coords: [120.5954, 31.2989], value: 34 },
+            { name: "Pune", coords: [73.8567, 18.5204], value: 33 },
+            { name: "Harbin", coords: [126.5349, 45.8038], value: 32 },
+            { name: "Houston", coords: [-95.3698, 29.7604], value: 31 },
+            { name: "Dallas", coords: [-96.7970, 32.7767], value: 30 },
+            { name: "Toronto", coords: [-79.3832, 43.6532], value: 29 },
+            { name: "Dar es Salaam", coords: [39.2083, -6.7924], value: 28 },
+            { name: "Miami", coords: [-80.1918, 25.7617], value: 27 },
+            { name: "Belo Horizonte", coords: [-43.9378, -19.9167], value: 26 },
+            { name: "Singapore", coords: [103.8198, 1.3521], value: 25 },
+            { name: "Philadelphia", coords: [-75.1652, 39.9526], value: 24 },
+            { name: "Atlanta", coords: [-84.3880, 33.7490], value: 23 },
+            { name: "Fukuoka", coords: [130.4017, 33.5904], value: 22 },
+            { name: "Khartoum", coords: [32.5599, 15.5007], value: 21 },
+            { name: "Barcelona", coords: [2.1734, 41.3851], value: 20 },
+            { name: "Johannesburg", coords: [28.0473, -26.2041], value: 19 },
+            { name: "Saint Petersburg", coords: [30.3351, 59.9311], value: 18 },
+            { name: "Qingdao", coords: [120.3826, 36.0671], value: 17 },
+            { name: "Dalian", coords: [121.6147, 38.9140], value: 16 },
+            { name: "Washington", coords: [-77.0369, 38.9072], value: 15 },
+            { name: "Yangon", coords: [96.1951, 16.8661], value: 14 },
+            { name: "Alexandria", coords: [29.9187, 31.2001], value: 13 },
+            { name: "Jinan", coords: [117.1205, 36.6512], value: 12 },
+            { name: "Guadalajara", coords: [-103.3494, 20.6597], value: 11 },
+            { name: "Ankara", coords: [32.8597, 39.9334], value: 10 },
+            { name: "Chittagong", coords: [91.8123, 22.3569], value: 9 },
+            { name: "Melbourne", coords: [144.9631, -37.8136], value: 8 },
+            { name: "Sydney", coords: [151.2093, -33.8688], value: 7 },
+            { name: "Monterrey", coords: [-100.3161, 25.6866], value: 6 },
+            { name: "Changsha", coords: [112.9388, 28.2282], value: 5 },
+            { name: "Dubai", coords: [55.2708, 25.2048], value: 4 },
+            { name: "Boston", coords: [-71.0589, 42.3601], value: 3 },
+            { name: "Cape Town", coords: [18.4241, -33.9249], value: 2 },
+            { name: "San Francisco", coords: [-122.4194, 37.7749], value: 1 }
+        ];
+
+        /* ============================================
+           GLOBE CONFIGURATION
+           ============================================ */
+        
+        const width = window.innerWidth;
+        const height = window.innerHeight;
+
+        // Orthographic projection for 3D globe effect
+        const projection = d3.geoOrthographic()
+            .scale(400)
+            .translate([width / 2, height / 2])
+            .clipAngle(90);
+
+        const path = d3.geoPath().projection(projection);
+
+        const svg = d3.select("#map");
+        const g = svg.append("g");
+        const tooltip = d3.select(".tooltip");
+
+        // Graticule (latitude/longitude grid)
+        const graticule = d3.geoGraticule();
+
+        /* ============================================
+           AUTO-ROTATION STATE
+           ============================================ */
+        let autoRotate = true;
+        let rotationTimer;
+
+        /* ============================================
+           DATA VALUE CLASSIFICATION
+           ============================================ */
+        function getDataClass(value) {
+            if (value >= 76) return "very-high";
+            if (value >= 51) return "high";
+            if (value >= 26) return "medium";
+            return "low";
+        }
+
+        /* ============================================
+           LOAD AND RENDER GLOBE
+           ============================================ */
+        
+        d3.json("https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json")
+            .then(world => {
+                const countries = topojson.feature(world, world.objects.countries);
+
+                // Draw sphere (globe background)
+                g.append("path")
+                    .datum({type: "Sphere"})
+                    .attr("class", "sphere")
+                    .attr("d", path);
+
+                // Draw graticule grid
+                g.append("path")
+                    .datum(graticule)
+                    .attr("class", "graticule")
+                    .attr("d", path);
+
+                // Draw ALL countries as wireframes
+                const countryPaths = g.selectAll(".country")
+                    .data(countries.features)
+                    .enter()
+                    .append("path")
+                    .attr("class", d => {
+                        const countryName = d.properties.name;
+                        const value = countryData[countryName];
+                        // Draw ALL countries, apply class only if data exists
+                        return value ? `country ${getDataClass(value)}` : "country";
+                    })
+                    .attr("d", path)
+                    .on("mouseover", function(event, d) {
+                        const countryName = d.properties.name;
+                        const value = countryData[countryName];
+                        
+                        tooltip
+                            .style("left", (event.pageX + 15) + "px")
+                            .style("top", (event.pageY - 15) + "px")
+                            .classed("visible", true)
+                            .html(`
+                                <h3>${countryName}</h3>
+                                <p>VALUE: ${value || 'No data'}</p>
+                                ${value ? `<p>CLASS: ${getDataClass(value).toUpperCase()}</p>` : ''}
+                            `);
+                    })
+                    .on("mouseout", () => {
+                        tooltip.classed("visible", false);
+                    });
+
+                // Draw tiny red city markers
+                const markers = g.selectAll(".city-marker")
+                    .data(cityData)
+                    .enter()
+                    .append("circle")
+                    .attr("class", "city-marker")
+                    .attr("cx", d => projection(d.coords)[0])
+                    .attr("cy", d => projection(d.coords)[1])
+                    .attr("r", 1.5)
+                    .on("mouseover", function(event, d) {
+                        tooltip
+                            .style("left", (event.pageX + 15) + "px")
+                            .style("top", (event.pageY - 15) + "px")
+                            .classed("visible", true)
+                            .html(`
+                                <h3>${d.name}</h3>
+                                <p>VALUE: ${d.value}</p>
+                            `);
+                    })
+                    .on("mouseout", () => {
+                        tooltip.classed("visible", false);
+                    });
+
+                /* ============================================
+                   ROTATION LOGIC
+                   ============================================ */
+                
+                function rotate() {
+                    if (!autoRotate) return;
+                    
+                    const rotate = projection.rotate();
+                    const k = 0.25; // Rotation speed (adjust for faster/slower)
+                    
+                    projection.rotate([rotate[0] + k, rotate[1], rotate[2]]);
+                    
+                    // Update all paths
+                    g.selectAll("path").attr("d", path);
+                    
+                    // Update markers with visibility check
+                    markers.each(function(d) {
+                        const coords = projection(d.coords);
+                        const visible = coords && d3.geoDistance(d.coords, projection.invert([width/2, height/2])) < Math.PI/2;
+                        
+                        d3.select(this)
+                            .attr("cx", coords ? coords[0] : 0)
+                            .attr("cy", coords ? coords[1] : 0)
+                            .style("display", visible ? "block" : "none");
+                    });
+                }
+
+                // Start rotation
+                rotationTimer = d3.interval(rotate, 50);
+
+                /* ============================================
+                   DRAG TO ROTATE
+                   ============================================ */
+                
+                const drag = d3.drag()
+                    .on("start", () => {
+                        autoRotate = false;
+                        d3.select("#auto-rotate").classed("active", false);
+                    })
+                    .on("drag", function(event) {
+                        const rotate = projection.rotate();
+                        const k = 75 / projection.scale();
+                        projection.rotate([
+                            rotate[0] + event.dx * k,
+                            rotate[1] - event.dy * k
+                        ]);
+                        
+                        g.selectAll("path").attr("d", path);
+                        
+                        markers.each(function(d) {
+                            const coords = projection(d.coords);
+                            const visible = coords && d3.geoDistance(d.coords, projection.invert([width/2, height/2])) < Math.PI/2;
+                            
+                            d3.select(this)
+                                .attr("cx", coords ? coords[0] : 0)
+                                .attr("cy", coords ? coords[1] : 0)
+                                .style("display", visible ? "block" : "none");
+                        });
+                    });
+
+                svg.call(drag);
+
+                /* ============================================
+                   ZOOM BEHAVIOR
+                   ============================================ */
+                
+                const zoom = d3.zoom()
+                    .scaleExtent([0.5, 3])
+                    .on("zoom", (event) => {
+                        const scale = event.transform.k * 400;
+                        projection.scale(scale);
+                        
+                        g.selectAll("path").attr("d", path);
+                        
+                        markers.each(function(d) {
+                            const coords = projection(d.coords);
+                            const visible = coords && d3.geoDistance(d.coords, projection.invert([width/2, height/2])) < Math.PI/2;
+                            
+                            d3.select(this)
+                                .attr("cx", coords ? coords[0] : 0)
+                                .attr("cy", coords ? coords[1] : 0)
+                                .style("display", visible ? "block" : "none");
+                        });
+                    });
+
+                svg.call(zoom);
+            });
+
+        /* ============================================
+           CONTROLS
+           ============================================ */
+        
+        d3.select("#auto-rotate").on("click", function() {
+            autoRotate = !autoRotate;
+            d3.select(this).classed("active", autoRotate);
+        });
+
+        d3.select("#reset").on("click", () => {
+            projection.rotate([0, 0]).scale(400);
+            d3.selectAll("path").attr("d", path);
+            autoRotate = true;
+            d3.select("#auto-rotate").classed("active", true);
+        });
+
+        /* ============================================
+           CUSTOMIZATION NOTES:
+           
+           WIREFRAME STYLING:
+           - Adjust stroke-width in .country classes for line thickness
+           - Change --wireframe-color for different wireframe colors
+           - Modify glow effects via filter: drop-shadow()
+           
+           GLOBE ROTATION:
+           - Change k value in rotate() function for speed
+           - Adjust d3.interval(rotate, 50) for frame rate
+           
+           GRID DENSITY:
+           - Modify d3.geoGraticule() - add .step([stepX, stepY])
+           
+           PROJECTION:
+           - Scale controls globe size
+           - clipAngle controls visible hemisphere
+           
+           DATA VISUALIZATION:
+           - Wireframe thickness/opacity reflects data values
+           - Markers glow based on importance
+           ============================================ */
+    </script>
+</body>
+</html>
