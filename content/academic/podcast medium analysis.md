@@ -1,4 +1,4 @@
-[Podcast Medium Analysis.md](https://github.com/user-attachments/files/23401827/Podcast.Medium.Analysis.md)
+
 Kat Golubev (11766190) Thomas Malato (11809604) 
 
 Digital Practices
