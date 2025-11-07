@@ -1,7 +1,8 @@
 ---
 layout: page
-title: Can a Woman Have It All?
+title: "Can a Woman Have It All?"
 ---
+
 
 Final Paper 
 
