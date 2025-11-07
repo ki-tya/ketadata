@@ -1,9 +1,14 @@
 
 BOOK REVIEW
 
-The Best of Helmut Newton Selections from his Photographic Work 4th edition by Felix Zdenek  
+The Best of Helmut Newton Selections from his Photographic Work 
+4th edition
+Felix Zdenek  
 Schirmer/Mosel, 2004  
-156 pp, 105 color and duotone plates (paperback), ISBN 3888146356 Reviewed by Kat Golubev
+156 pp, 105 color and duotone plates (paperback)
+ISBN 3888146356 
+
+Reviewed by Kat Golubev
 
 The 4th edition exhibition catalogue of Helmut Newton’s retrospective, which traveled around Europe in 1993, presents the legendary photographer’s works in all their suspenseful serenity. Newton’s unmistakable black and white fashion photographs, nudes and portraits are all represented throughout the book as separate, intertwined oeuvres which collectively re-construct the photographer’s meticulous gaze. With short introductory essays by Noemi Smolek and Urs Stahel which discuss Newton’s transcendence of fashion photography as well as his fetishistic staples and meta-voyeurism, the catalogue wastes no time in attending to Newton’s works which span the course of four decades, from the 1960’s to the 1990’s. While stills from the same series are showcased side-by-side, the catalogue makes no attempt at chronology: the spreads are mostly unified through their subjects’ essence or ‘mystique’, the erotic quality which Newton so masterfully captures. Yet, despite this laissez-faire temporality, one rarely feels the passage or reversal of time. The bodies, and settings, are presented as timeless, removed from the grips and prophecies of history. Newton, who spent the second half of his life between Monte Carlo and Los Angeles, merges European decadence and Americana in a dizzying whirlwind of settings, yet the image always remains bound to the subject, implicitly demoting cultural heritage to a rich, textural backdrop for corporeal beauty. In an image entitled Lisa fleeing (1974) shot in Key Biscayne, Florida, a young woman in pink translucent tulle can be seen walking away from the glaring lights of the motel behind her, fearful. The setting is gritty and blurred, the suspense of the photograph exuding from the juxtaposition, the push and pull of the figure and the setting. In more sympathetic portraits, like those of Xavier Moreau in a pool (1979) or Francoise Sagan looking out the window of an automobile which almost completely engulfs her (1963), the subjects’ bodies are extended out through their surroundings, which inevitably bring the viewer’s eyes back to their origins through the angular perspective.
 
