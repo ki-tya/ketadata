@@ -1,4 +1,4 @@
-[DRAG - THE NEO-REAL SELF.md](https://github.com/user-attachments/files/23402138/DRAG.-.THE.NEO-REAL.SELF.md)
+
 
 **KAT GOLUBEV** 
 **11766190**
