@@ -1,8 +1,12 @@
 Kat Golubev 
+
 11766190
+
 Media Research 13 
+
 Assessment III
-J bouma 
+
+J Bouma 
 
 
 From tabloids to twitter: The celebrity Identity crisis
