@@ -1,7 +1,8 @@
-[BO BURNHAM & HIS DOUBLE.md](https://github.com/user-attachments/files/23402925/BO.BURNHAM.HIS.DOUBLE.md)
+
 Kat Golubev  
 11766190  
-The Mad Genius Debate Prof. Laura Prins
+The Mad Genius Debate 
+Prof. Laura Prins
 
 BO BURNHAM AND HIS DOUBLE: INSIDE (2021) AS DIGITAL THEATRE OF CRUELTY AND THE UNBREAKABLE FOURTH WALL
 
