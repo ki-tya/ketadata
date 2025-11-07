@@ -1,12 +1,14 @@
 
 Kat Golubev  
+
 11766190  
+
 Philosophy of the Humanities 
+
 Final Essay
 
-TikTok  
-The Implications of Sound
-
+TikTok - The Implications of Sound
+---
 I. Introduction
 
 TikTok is a video-sharing social networking platform which is best known for its dance, lip-sync and comedy videos. TikTok encompasses within itself the filming, editing and sharing of video content, while a user has the option to upload any video directly (max. 1 min. duration), it is customary for most of the creative process to happen on the application itself. Like any widespread social media technology, the affordances of the platform guide and restructure the psycho-social digital space the effects of which often transcend the confines of the platform. MySpace and Facebook developed the ‘profile’ and the ‘social circle’, Instagram aestheticized the mundane, and Twitter reimagined public discourse. As such, TikTok is indebted to its predecessors in terms of affordances such as followers, comments, and personal profiles yet significantly diverges from these platforms in terms of its organizing principle: the logic of montage. Within these logics, TikTok’s most significant contribution lies in its separation of audio and video as discrete elements and its use of audio soundbites as memetic elements which are searchable, reusable and re-mixable. The sound of every video uploaded to TikTok is available on its own for other users to use and functions as a hashtag in terms of searchability by grouping together all the videos which use the same sound. While TikTok is not connected to any musical services, soundbites and audio clips can be uploaded directly to the platform, resulting in short music clips and remixes of popular sounds circulating the platform. Because of this feature, TikTok sub-cultures and ‘trends’,which are best described as miniature genres of videos replicated or remade by different users, are formed predominantly through auditory repetition, making TikTok somewhat of a soundscape to which users continuously contribute. TikTok sounds are often referenced offline by those ‘in-the-know’ and can be described as cultivating a new type of audio culture which indiscriminately combines elements of music and speech.
