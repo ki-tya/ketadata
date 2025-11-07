@@ -1,34 +1,33 @@
+Kat Golubev 11766190 
+
+Luka Putarek 11447001
+
 Music Interface Analysis
+
 Research Report  
+
 Digital Methods & Information Analytics
-
-Report Info:
-
-Course Unit:  
-Course Instructor(s): Research Report Title: Group Members:
-
-Word Count:
-
-Report Contents:
-
-1. Introduction 2. Question  
-2. Method  
-3. Analysis
-
-4. Discussion 6. Conclusion 7. References 8. Reflection
 
 Unit 1: Assignment 1
 
 Emilija Jokubuskaite
 
-The Composition of Music: A Tale of Two Interfaces
-
-Kat Golubev 11766190 Luka Putarek 11447001
-
 2,680 words
 
-2 2 2 3 7 8 10 11
+Report Contents:
 
+1. Introduction 
+2. Question  
+3. Method  
+4. Analysis
+5. Discussion
+6. Conclusion
+7. References 
+8. Reflection
+
+
+The Composition of Music: A Tale of Two Interfaces
+---
 
 1. Introduction
 
