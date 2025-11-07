@@ -1,4 +1,4 @@
-[tiktok - the implications of sound.md](https://github.com/user-attachments/files/23401889/tiktok.-.the.implications.of.sound.md)
+
 Kat Golubev  
 11766190  
 Philosophy of the Humanities 
