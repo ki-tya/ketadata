@@ -1,6 +1,9 @@
-[Anne Sexton Female Trauma.md](https://github.com/user-attachments/files/23402249/Anne.Sexton.Female.Trauma.md)
-Kat Golubev 11766190  
-Media and Information R. Glitz
+
+Kat Golubev 
+11766190  
+Media and Information 
+Literary Analysis
+R. Glitz
 
 Those Times...: Anne Sexton and the Traumatic Female Childhood
 
