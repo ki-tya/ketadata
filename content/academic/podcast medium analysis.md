@@ -1,5 +1,7 @@
 
-Kat Golubev (11766190) Thomas Malato (11809604) 
+Kat Golubev (11766190) 
+
+Thomas Malato (11809604) 
 
 Digital Practices
 
