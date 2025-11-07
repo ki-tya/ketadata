@@ -1,4 +1,4 @@
-[Sensory Cinema.md](https://github.com/user-attachments/files/23402472/Sensory.Cinema.md)
+
 Take-Home Exam  
 Kat Golubev 11766190 24.03.2021  
 The Five Senses of Cinema Dr. Tarja Laine  
