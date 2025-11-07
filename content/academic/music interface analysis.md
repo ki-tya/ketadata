@@ -1,16 +1,23 @@
 Kat Golubev 11766190 
 
+
 Luka Putarek 11447001
+
 
 Music Interface Analysis
 
+
 Research Report  
+
 
 Digital Methods & Information Analytics
 
+
 Unit 1: Assignment 1
 
+
 Emilija Jokubuskaite
+
 
 2,680 words
 
@@ -28,6 +35,7 @@ Report Contents:
 
 The Composition of Music: A Tale of Two Interfaces
 ---
+
 
 1. Introduction
 
