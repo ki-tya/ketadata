@@ -1,0 +1,27 @@
+[*about L15 (Layer One-dot-Five)**.md](https://github.com/user-attachments/files/23407523/about.L15.Layer.One-dot-Five.md)
+**about L15 (Layer One-dot-Five)**
+
+Our mission is to build financial infrastructure that allows the Bitcoin ecosystem to flourish 
+
+
+Overview
+
+Arrowlabs is building cutting-edge technologies to invigorate the Bitcoin ecosystem through functional financial infrastructure, unleashing the power and promise of the community. Our radical deep-tech innovation is guided by scientific integrity and an unwavering commitment to the core values of open blockchains. 
+
+
+Layer One-dot-Five (L15) is a variant of a trustless sidechain to Bitcoin that enables BTC-backed loans in a stablecoin L15$. With the invention of the trustless lock, L15 maintains decentralized trust, focusing on a bridge between the sidechain and Bitcoin. This is the first service of its kind to be built on Bitcoin and addresses the needs and demands of Bitcoin holders and the community-at-large. 
+
+L15 infrastructure also provides the rails for further innovation within the Bitcoin ecosystem. We are partnering with developers to expand the scope of use cases for decentralized consumer finance exclusive to Bitcoin. 
+
+Goals
+
+Introduce a decentralized lending solution for Bitcoin holders
+
+Build an open-source community for developers to utilize and adapt the technology 
+
+Expand the Bitcoin ecosystem 
+
+
+Values
+
+The team is assembled of experts and professionals from diverse backgrounds united by a progressive vision for the future of Bitcoin and decentralized consumer finance. As the industry develops, we are constantly learning and expanding our scope - new and unconventional perspectives are highly valued. Our goal is to inspire each other to think more deeply and profoundly, and approach all challenges with a relentless sense of curiosity. While Bitcoin has the potential to fundamentally shift the paradigm, it is a nascent technology and we believe that expanding its functionality is essential to furthering adoption and driving financial independence worldwide.
