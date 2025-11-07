@@ -1,4 +1,12 @@
-Kat Golubev 11766190 Media Research J.Bouma Assignment 5
+Kat Golubev 
+
+11766190 
+
+Media Research 
+
+J.Bouma 
+
+Assignment 5
 
 
 Argument Structure and Presentation of Results
