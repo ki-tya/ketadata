@@ -1,29 +1,37 @@
-The Dramatic Imaginary of Trisha Paytas
+
 Research Report  
+
 Digital Methods & Information Analytics
 
+Unit 2: Assignment 2
+
+The Dramatic Imaginary of Trisha Paytas
 --
 
-Report Info:
+Kat Golubev 11766190 
 
-Course Unit:  
-Course Instructor(s): Research Report Title: Group Members:
+Luka Putarek 11447001
 
-Word Count:
+2,704 words
 
-Report Contents:
 
-1. Introduction 2 2. Question 4 3. Method 4 4. Analysis 5 5. Discussion 7 6. Conclusion 9 7. References 10 8. Reflection 11
 
-Unit 2: Assignment 2
+1. Introduction 2
+2.  Question 4 3.
+3.  Method 4 4.
+4.  Analysis 5 5.
+5.  Discussion 7 6.
+6.  Conclusion 9 7.
+7.  References 10 8.
+8.  Reflection 11
+
+
 
 Emilija Jokubuskaite
 
 The Dramatic Imaginary of Trisha Paytas
 
-Kat Golubev 11766190 Luka Putarek 11447001
 
-2,704 words
 
 1. Introduction
 
