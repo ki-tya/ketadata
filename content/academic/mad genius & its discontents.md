@@ -1,4 +1,4 @@
-[MAD GENIUS & ITS DISCONTENTS.md](https://github.com/user-attachments/files/23402613/MAD.GENIUS.ITS.DISCONTENTS.md)[Uploading MAD GENIUS & ITS DISCONTENTS.md
+
 Kat Golubev  
 The Mad Genius Debate May 27, 2021
 
