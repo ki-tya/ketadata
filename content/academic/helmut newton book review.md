@@ -1,4 +1,4 @@
-[Helmut Newton.md](https://github.com/user-attachments/files/23402445/Helmut.Newton.md)
+
 BOOK REVIEW
 
 The Best of Helmut Newton Selections from his Photographic Work 4th edition by Felix Zdenek  
