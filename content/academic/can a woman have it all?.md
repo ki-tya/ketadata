@@ -1,6 +1,6 @@
 ---
 layout: page
-title: "Can a Woman Have It All?"
+title: "can a woman have it all?"
 ---
 
 
@@ -21,7 +21,7 @@ Word count: 3297 
 
 ![woman report — pic 1](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/content/images/Pasted%20image%2020251105104601.png)
 
-![woman report — pic 1](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/content/images/Pasted%20image%2020251105104601.png)
+(https://raw.githubusercontent.com/ki-tya/ketadata/main/content/content/images/Pasted%20image%2020251105104601.png)
 
 
 
