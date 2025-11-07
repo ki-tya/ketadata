@@ -1,6 +1,9 @@
 
 Kat Golubev  
-The Mad Genius Debate May 27, 2021
+
+The Mad Genius Debate 
+
+May 27, 2021
 
 The ‘Mad Genius’ and its Discontents
 
