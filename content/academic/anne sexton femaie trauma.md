@@ -1,8 +1,12 @@
 
 Kat Golubev 
+
 11766190  
+
 Media and Information 
+
 Literary Analysis
+
 R. Glitz
 
 Those Times...: Anne Sexton and the Traumatic Female Childhood
