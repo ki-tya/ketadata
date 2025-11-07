@@ -1,6 +1,8 @@
 
-Katerina Golubev 11766190  
-Doing Media Studies A. Gekker
+Katerina Golubev 
+11766190  
+Doing Media Studies 
+A. Gekker
 
 Reading Assignment
 
