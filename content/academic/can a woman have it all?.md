@@ -1,8 +1,3 @@
----
-layout: page
-title: "can a woman have it all?"
----
-
 
 
 
