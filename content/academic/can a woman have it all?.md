@@ -21,7 +21,7 @@ Word count: 3297 
 
 ![woman report — pic 1](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/content/images/Pasted%20image%2020251105104601.png)
 
-(https://raw.githubusercontent.com/ki-tya/ketadata/main/content/content/images/Pasted%20image%2020251105104601.png)
+[](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/content/images/Pasted%20image%2020251105104601.png)
 
 
 
