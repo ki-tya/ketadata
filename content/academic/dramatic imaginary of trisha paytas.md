@@ -6,7 +6,6 @@ Digital Methods & Information Analytics
 Unit 2: Assignment 2
 
 The Dramatic Imaginary of Trisha Paytas
---
 
 Kat Golubev 11766190 
 
@@ -30,6 +29,7 @@ Luka Putarek 11447001
 Emilija Jokubuskaite
 
 The Dramatic Imaginary of Trisha Paytas
+---
 
 
 
