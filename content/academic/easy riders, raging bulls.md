@@ -1,4 +1,4 @@
-[Easy Riders, Raging Bulls.md](https://github.com/user-attachments/files/23402287/Easy.Riders.Raging.Bulls.md)
+
 Katerina Golubev 11766190  
 Doing Media Studies A. Gekker
 
