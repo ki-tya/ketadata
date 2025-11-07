@@ -1,5 +1,4 @@
-[DRIVING FORCES.md](https://github.com/user-attachments/files/23403633/DRIVING.FORCES.md)
-**
+
 FUTURE ENTREPRENEUR
 ASSIGNMENT 2
 
