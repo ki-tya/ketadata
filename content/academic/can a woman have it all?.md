@@ -1,5 +1,3 @@
-[can a woman have it all?.md](https://github.com/user-attachments/files/23403719/can.a.woman.have.it.all.md)
-**
 
 Final Paper 
 
