@@ -1,92 +1,407 @@
-[astrology texts.md](https://github.com/user-attachments/files/23417184/astrology.texts.md)
-**Ваша сексуальная совместимость** 
+[cold emails.md](https://github.com/user-attachments/files/23417196/cold.emails.md)
+Benefit
+
+SL: Contact: First name​, 23k+ of pick-up points for Benefit Cosmetics
+
+Email 1
+
+Hi {{ first_name }}, 
+
+А как вы относитесь к выдаче продуктов Benefit в физических магазинах в шаговой доступности от ваших клиентов? 
+
+The _Buy Online Pick Up In-Store_ trend is growing. Косметический бренд, который предлагает больше всех точек выдачи в США на сегодня - это Sephora, 2600 точек выдачи товара. Благодаря этому, у клиентов Sephora есть возможность получать свои товары раньше всех остальных косметических брендов. Сроки получения товара из Sephora со всеми предложенными способами доставки составляет 1-3 дня. 
+
+The Holiday Peak Season is approaching, shipping providers will be pressed for time to deliver the increasing volume of orders. Customers will order a lot of products last minute and inundate customer support with questions about delays. 
+
+Если доставить 100 заказов в одну точку выдачи заказов на районе вместо развоза всех посылок по домам - вы сможете значительно сократить сроки доставки. Что особенно понравится вашим клиентам в Holiday Season Rush. 
+
+Чтобы предложить такую опцию доставки клиенту, вам не обязательно иметь свои магазины. Your customers can choose any of our **23,700 stores** and come to pick up their packages from there. 
+
+**We work with:** Walgreens, Dollar Tree, FedEx offices, pharmacies, grocery stores, coffee shops, and shipping offices. As well as with multiple shipping providers and local carriers, which are united on our logistics platform. 
+
+Do you think Benefit Cosmetics customers might need this option to get their orders without delays during the Holiday Peak Season? 
+
+Please feel free to give me a call at your convenience or [book a meeting](https://calendly.com/o-nikitina/30min) with us. I would love to show you how this can be readily implemented.
 
   
 
-Ваш партнер относится к мужчинам, которые предпочитают заранее планировать все шаги. Его напористость, целеустремленность и ответственность создает ауру мужественности. Ему нравится радовать женщину, он наслаждается ощущением контроля над ее телом. Стоит сказать, что чувственная сторона мужчинам этого типа может быть чуждой, и ему сложно распознавать эмоции своей партнерши. Что мужчина ждет от вас в постели? Как стать идеальной для него? Узнайте ответ в полном гороскопе!
+Best regards,
+
+Elie Kinney
+
+Partnership Director
+
+(669) 207-0121
+
+585 Glenwood Ave, Menlo Park, CA 94025
 
   
 
-_это кнопки_
+Hi {{ first_name }}, 
 
-[Хочу гороскоп!] 
+How do you feel about the possibility of Benefit products delivered to physical pick-up locations which are within walking distance of your customers?
 
-[Вернуться к списку] 
+The _Buy Online Pick Up In-Store_ trend is growing. Out of all cosmetic brands in the US, Sephora currently offers the most pick-up locations, with 2,600 points of delivery. This allows Sephora customers to receive their products faster than other cosmetic brands. The delivery time for Sephora products, considering all the possible shipping options, is 1-3 days. 
 
-[Какие есть еще гороскопы] 
+The Holiday Peak Season is approaching, shipping providers will be pressed for time to deliver the increasing volume of orders. Customers will order a lot of products last minute and inundate customer support with questions about delays. 
 
-[Проверить совместимость другого партнера]
+If orders can be shipped to a single pickup location, rather than delivered to each address separately, shipping time can be significantly reduced, which will be particularly appreciated during the Holiday Season Rush. 
 
-  
+You don’t need your own locations to offer your customers this shipping option. Your customers can choose any of our **23,700 stores** and come to pick up their packages from there. 
 
-Sexual Compatibility 
+**We work with:** Walgreens, Dollar Tree, FedEx offices, pharmacies, grocery stores, coffee shops, and shipping offices. As well as with multiple shipping providers and local carriers, which are united on our logistics platform. 
 
-  
+Do you think Benefit Cosmetics customers might need this option to get their orders without delays during the Holiday Peak Season? 
 
-Your partner is the type of man who prefers to plan ahead. He is confident and assertive, with a strong sense of responsibility, indicating a powerful masculine aura. He enjoys giving his partner pleasure and savors the sense of control he feels over their body. It should be noted, however, that men of this type are somewhat detached from their emotional side and in turn might find it difficult to recognize the emotional state of their partner. What does he expect from you sexually? How can you become perfectly suited to his tastes? Find out the ways in which you can fulfill his most primal desires in the extended horoscope… 
-
-  
-
-[show me the full horoscope]
-
-[back to browse]
-
-[other horoscopes]
-
-[check compatibility with another partner]
-
-**Sun in Pisces 1st Decan**
-
-You are endowed with a patient, good-natured, and noble character. Your Pisces Sun  has gifted you with  a rich imagination and an undeniable creative power. You have access to “higher dimensions” and are able to draw a great deal of strength from the spiritual world through your intuition .You have mastered the art of “going with the flow”.
-
-On the other hand, you are also characterised by secrecy and a certain fear of self-expression. Sometimes your attempts at expressing yourself may seem too complicated or confusing. You do not always understand yourself and are afraid to be misunderstood by others.. Repressing this part of yourself may have manifested itself into a calm exterior , but periodically this  internal tension may come out  through uncontrollable outbursts of anger and hysteria.
-
-For most of your life, you may have been  immersed within  yourself, living  in a certain state of apathy or prolonged daydream. You must learn to switch back to reality  in order to  recognize  that you are responsible for your own fate.
-
-**Strengths**
-
-Intuition and insight, developed empathy, sensitivity, and compassion. You are capable of loving purely  and selflessly. You adapt to changes with ease, you possess an  inner flexibility and calmness, as well as  a tolerance for other cultures, beliefs, and views.
-
-**Weaknesses**
-
-Lack of will, high suggestibility, a proclivity  for  all kinds of addictions and a tendency towards depression. You are predisposed  towards excessive daydreaming, confusion, and an inability to set goals. In an unhealthy mental state or toxic environment , promiscuity , irrationality , absent-mindedness, impracticality, and weak sociability can possibly develop.
-
-**Moon in Capricorn**
-
-Your subconscious desire is to seem self-sufficient and strong. Emotional dependence makes you very uncomfortable and you never want people to think that you rely on their help and support. You consider feelings to be a sign of weakness and do your best to conceal themto protect your image, but you need to understand that ‘absolute independence’ does not exist. 
+Please feel free to give me a call at your convenience or [book a meeting](https://calendly.com/o-nikitina/30min) with us. I would love to show you how this can be readily implemented.
 
   
 
-While the Moon in Capricorn makes it easy for you to maintain your image and social status, it may also make you seem cold-hearted, stubborn and mean. You lack a certain sensitivity and are prone to being too rough in situations that  require a more gentle touch. You may also have some difficulty accepting change and going with the flow. The idea of bending the rules or improvising on the spot may cause you great distress. However, you do have a particular sense of humor that  is valued and appreciated within your social circle. 
+Best regards,
+
+Elie Kinney
+
+Partnership Director
+
+(669) 207-0121
+
+585 Glenwood Ave, Menlo Park, CA 94025
 
   
 
-For you, it is important to learn to express the kind and tender side of your personality. Stop taking life so seriously and try to see the humor in uncomfortable situations. This may help you loosen up and enjoy things in a new and profound way.  
+Email 2 - after 3 business days
+
+Hi {{ first_name }}, 
 
   
 
-**Moon in the 2nd House**
-
-Your mood directly depends on your material welfare. You have a keen business sense and always seem to know where to invest in order to multiply your assets. You surround yourself with beautiful things which provide a sense of stability, making periods of change particularly difficult to deal with. You like to play it safe and prefer to have savings or moveable assets so that you can always enjoy the luxurious lifestyle to which you are accustomed. 
+I hope my previous email found you well. If not, here is a quick reminder.
 
   
 
-**Neptune in the 9th House**
+The best thing about Via.Delivery’s pickup locations is that they are located within 3-10 minutes' driving distance to most residents in the US. 
 
-You enjoy dreaming and fantasizing, and may sometimes get lost in your own world, making  it difficult for others to understand you. You may be drawn to getting an education, possibly in the medical or artistic field, but can become bored by institutional drudgery and the lack of new and fresh perspectives. 
+  
 
-You are captivated by foreign ideas and cultures and may dream of living overseas. The dogmatic beliefs within your own culture seem too banal and commonplace leading  you to seek answers in the philosophies and religions of other parts of the world. However, Neptune can cause confusion during your travels and distort how  you perceive the world around you. 
+Via.Delivery does not replace any of your current shipping options, your customers simply get a new shipping option to choose from.
 
-**Advantages**
+  
 
-Confidence in your ideas & beliefs, visual imagination (commonly associated with poets and artists), an unusual perspective on life, and access to secret knowledge. Your love for traveling extends to flights of fantasy. Theater, cinema, and the world of imagination are a source of inspiration and influence you a lot. 
+Do you think Benefit Cosmetics customers would enjoy an expedited shipping experience at no additional cost? Please feel free to [book a meeting](https://calendly.com/o-nikitina/30min) with us or give me a call to get more details.
 
-**Disadvantages**
+  
 
-Dependence on a spiritual mentor, risk of joining a cult, unfounded dislike or judgment of people from afar, confused connections with foreign countries and dangerous travels, especially by water.  
+Best,
 
+Elie
 
-**Recommendations**
+(669) 207-0121
 
-Live in foreign countries and go on faraway trips. This will help you deepen your knowledge and understanding of the world. Spend time developing your critical thinking and ensuring  that your ideas and beliefs have a solid foundation.
+Email 3 - after a week from email 2
 
+Hi {{ first_name }},
+
+I would love to share our [latest research](https://via.delivery/holidaypeakseason) about key e-commerce challenges during the Holiday Peak Season. I hope your team will achieve a fantastic turnover in this period.
+
+Best,
+
+Elie
+
+(669) 207-0121
+
+  
+
+Reserve Bar
+
+LN templates
+
+Hi {{ first_name }},
+
+I see a growing tendency of online alcohol vendors delivering their products to pick-up locations, due to the fact that customers are not always at home to receive their order. For example, Wine currently has 20, 000 physical pick-up locations. 
+
+  
+
+What are your thoughts on the matter? Do you think Reserve Bar could benefit from utilizing the 23,000 pick-up locations which we represent?
+
+  
+
+Wine
+
+LN templates
+
+Hi Jesse! Great to be connected here
+
+  
+
+I can see that your store offers its clients 20,000 pick-up locations. Would you be interested in 3 thousand additional points of delivery? We are also currently negotiating with CVS and Sam’s Club  
+(600 Walmart stores) to provide e-commerce pick-up points at their locations. 
+
+Mac Cosmetics
+
+LN templates
+
+Hi Jesse! Great to be connected here
+
+Mac is one of the few cosmetic brands that offer their customers the Buy Online Pickup In-Store option. Do you think Mac might benefit from 27,000 more physical stores to dispense its products?
+
+**Kiko**
+
+SL: 23 000+ pickup locations for Kiko
+
+Email 1
+
+Hi {{ first_name }}, 
+
+I’m a big fan of Kiko and would love to contribute to your fantastic customer service experience. 
+
+At the moment, Kiko: 
+
+- Requests a minimum order of $40 for Free shipping
+- If the order is less than $40 - the shipping price is $7.50
+- Standard shipping delivers in 4-9 days 
+- The fastest delivery is 2 days and costs $25 
+- No pickup locations
+
+The Holiday Peak Season is approaching, shipping providers will be pressed for time to deliver the increasing volume of orders. Customers will order a lot of products last minute and, after seeing their delivery options, inundate customer support with questions. 
+
+**What if Kiko could get last-mile delivery in 2 days for $4+?** 
+
+It will allow Kiko to:
+
+- Request no minimum amount for Free shipping, as do Estee Lauder, Tarte Cosmetics, Vichy, etc.
+- Deliver in 1-3 days like Sephora, Huda Beauty, Mac, etc.
+- Provide the fastest delivery for less than $12 like Kylie, Yes Style, Charlotte Tilbury Beauty, etc.
+
+The _Buy Online Pick Up In-Store_ trend is growing. That’s why my company Via.Delivery provides **last-mile delivery to safe pickup locations in 2-4 days**. Your customers can choose any of our **23,700 stores** and come to pick up their packages from there. 
+
+**We work with:** Dollar Tree, FedEx offices, pharmacies, grocery stores, coffee shops, and shipping offices. As well as with multiple shipping providers and local carriers, which are united on our logistics platform. 
+
+Do you think Kiko’s customers would appreciate an additional delivery option? It will help deliver orders fast, even during the upcoming holiday season. 
+
+Please feel free to give me a call at your convenience or [book a meeting](https://calendly.com/o-nikitina/30min) with us. I would love to show you how this can be readily implemented.
+
+  
+
+Best regards,
+
+Elie Kinney
+
+Partnership Director
+
+(669) 207-0121
+
+585 Glenwood Ave, Menlo Park, CA 94025
+
+Email 2 - after 3 business days
+
+Hi {{ first_name }}, 
+
+  
+
+I hope my previous email found you well. 
+
+Cosmetics brands who have already started to offer the _Buy Online Pick Up In-Store_ option are: Sephora, Charlotte Tilbury Beauty (at CVS), all other products available at CVS and Walgreens. But there is no need for you to have your own stores or sign an agreement with pickup locations.
+
+You can easily use ours. 
+
+The best thing about Via.Delivery’s pickup locations is that they are located within 3-10 minutes' driving distance to most residents in the US. 
+
+  
+
+Via.Delivery does not replace any of your current shipping options, your customers simply get a new shipping option to choose from.
+
+  
+
+Do you think Kiko customers would enjoy an expedited shipping experience at no additional cost? Please feel free to [book a meeting](https://calendly.com/o-nikitina/30min) with us or give me a call to get more details.
+
+  
+
+Best,
+
+Elie
+
+(669) 207-0121
+
+  
+
+  
+
+Email 3 - after a week from email 2
+
+Hi {{ first_name }},
+
+I would love to share our [latest research](https://via.delivery/holidaypeakseason) about key e-commerce challenges during the Holiday Peak Season. I hope your team will achieve a fantastic turnover this period.
+
+Best,
+
+Elie
+
+(669) 207-0121
+
+Sephora
+
+SL: 27 000 pickup locations to Sephora
+
+Email 1
+
+Hi Ido,
+
+My name is Elie, I'm a huge fan of Sephora 🖤 
+
+It is so impressive that, among all cosmetic brands in the US, Sephora provides the most fantastic customer experience. Your team did a tremendous job. Thank you so much for that!  I would love the opportunity to contribute to this excellent example of an e-commerce company on the market. 
+
+The Holiday Peak Season is coming. Shipping providers will be pressed for time to deliver orders. Customers will order a lot of product last minute and, disappointed by the delivery time, inundate customer support with questions. Would you like to be well prepared?
+
+The _Buy Online Pick Up In-Store_ trend is growing. That’s why my company Via.Delivery provides **last-mile delivery to safe pickup locations in 2-4 days**. Your customers can choose any of our **27,027 stores** and come to pick up their packages from there. 
+
+**We work with:** Dollar Tree, FedEx offices, pharmacies, grocery stores, coffee shops, and shipping offices as pickup locations. As well as with multiple shipping providers and local carriers, united on our logistic platform. 
+
+Do you think Sephora customers would appreciate the opportunity to have more locations to pick up their orders? It will help deliver orders fast, even during the Holiday Peak Season. 
+
+Please feel free to [book a meeting](https://calendly.com/o-nikitina/30min) with us or give me a call to get more details.
+
+  
+
+Best regards,
+
+Elie Kinney
+
+Partnership Director
+
+(669) 207-0121
+
+585 Glenwood Ave, Menlo Park, CA 94025
+
+Email 2 - after 3 business days
+
+Hi {{ first_name }}, 
+
+  
+
+I hope my previous email finds you well. 
+
+  
+
+I have checked the convenience of Sephora’s pickup locations to its customers. The nearest pickup location to 94010, CA is on 1205 Burlingame Ave, Burlingame, CA 94010, which is **7 min driving and 34 min walking** distance. 
+
+  
+
+With Via.Delivery pickup locations your customers will have the nearest place in **3 min driving and 12 min walking** distance on 1160 Broadway, Burlingame, CA 94010, US. Please check [our map here.](https://via.delivery/map) Our stores are located within 3-10 minutes' driving distance to most residents. 
+
+  
+
+Do you think Sephora customers would enjoy an expedited shipping experience at no additional cost? Please feel free to [book a meeting](https://calendly.com/o-nikitina/30min) with us or give me a call to get more details.
+
+  
+
+Best,
+
+Elie
+
+(669) 207-0121
+
+Email 3 - after a week from email 2
+
+Hi {{ first_name }},
+
+I would love to share our [latest research](https://via.delivery/holidaypeakseason) about key e-commerce challenges during the Holiday Peak Season. I hope your team will achieve a fantastic turnover this period.
+
+Best,
+
+Elie
+
+(669) 207-0121
+
+  
+
+  
+
+L’Occitane
+
+SL: L’Occitane will be delivered in 3-5 days on Holiday Peak Season 
+
+Email 1
+
+Hi {{ first_name }}, 
+
+My name is Olga, and I'm  huge fan of L’Occitane 💛 
+
+However, I have noticed some issues with L'Occitane’s product delivery. I've been waiting for my order for ten days and still haven’t gotten it. Usually, it takes about 3-5 days. I would be happy to do something that might help.
+
+My company Via.Delivery provides **last-mile delivery to safe pickup locations in 2-4 days** for e-commerce sites and stores the orders for seven days. Your customers can choose any of our **27,027 stores** and come to pick up their packages from there. 
+
+**We work with:** Walgreens, Dollar General, as well as other pharmacies, grocery stores, coffee shops, and shipping offices. Our logistic platform unites multiple shipping providers and local carriers. 
+
+Do you think L’Occitane customers might need this option to get their orders without delays during the upcoming Holiday season? 
+
+Please feel free to [book a meeting](https://calendly.com/o-nikitina/30min) with me or give me a call. I would love to know more about your challenges and see what we can do for you. 
+
+  
+
+Best regards,
+
+Olga Nikitina
+
+Via.Delivery, Co-Founder
+
+(669) 207-0121
+
+585 Glenwood Ave, Menlo Park, CA 94025
+
+  
+
+Email 2 - after 3 days
+
+Hi {{ first_name }}, 
+
+  
+
+I hope my previous email found you well. 
+
+  
+
+The best thing about Via.Delivery’s pickup locations for L'Occitane is that they are located within 3-10 minutes' driving distance to most residents. 
+
+  
+
+Via.Delivery does not replace any of your current shipping options, your customers simply get a new shipping option to choose from.
+
+  
+
+Do you think L'Occitane customers would appreciate an expedited shipping experience at no additional cost? Please feel free to [book a meeting](https://calendly.com/o-nikitina/30min) with me or give me a call to get more details.
+
+  
+
+Best,
+
+Olga
+
+(669) 207-0121
+
+Email 3 - after a week from email 2
+
+Hi {{ first_name }},
+
+I would love to share our [latest research](https://via.delivery/holidaypeakseason) about key e-commerce challenges during the Holiday Peak Season. I hope your team will achieve a fantastic turnover this period.
+
+Best,
+
+Olga
+
+(669) 207-0121
+
+  
+
+  
+
+  
+
+Notes:
+
+- United **on** logistics platform
+- wildly out of time > pressed for time
+- If not, please let me make this kind reminder - sounds weird
+
+- Maybe: Here’s a quick follow-up (?)
+
+- massively order > order a lot of product last minute
