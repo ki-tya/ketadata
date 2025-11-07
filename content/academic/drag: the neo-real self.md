@@ -1,7 +1,9 @@
 
 
 **KAT GOLUBEV** 
+
 **11766190**
+
   ![[Pasted image 20251105110606.png]]![[Pasted image 20251105110728.png]]
 
 **DRAG: THE NEO-REAL SELF**
