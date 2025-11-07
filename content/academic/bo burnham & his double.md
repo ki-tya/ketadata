@@ -1,4 +1,3 @@
-
 Kat Golubev  
 11766190  
 The Mad Genius Debate 
