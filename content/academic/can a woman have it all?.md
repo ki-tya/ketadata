@@ -1,3 +1,7 @@
+---
+layout: page
+title: Can a Woman Have It All?
+---
 
 Final Paper 
 
