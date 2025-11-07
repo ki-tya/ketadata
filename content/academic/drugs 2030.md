@@ -1,4 +1,4 @@
-[DRUGS 2030.md](https://github.com/user-attachments/files/23403160/DRUGS.2030.md)
+
 Recreational Drug Use
 
 A future opportunity in the recreational drug sector
