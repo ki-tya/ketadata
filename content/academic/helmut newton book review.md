@@ -2,10 +2,15 @@
 BOOK REVIEW
 
 The Best of Helmut Newton Selections from his Photographic Work 
+
 4th edition
+
 Felix Zdenek  
+
 Schirmer/Mosel, 2004  
+
 156 pp, 105 color and duotone plates (paperback)
+
 ISBN 3888146356 
 
 Reviewed by Kat Golubev
