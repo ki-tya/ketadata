@@ -1,12 +1,22 @@
 
-Take-Home Exam  
-Kat Golubev 11766190 24.03.2021  
-The Five Senses of Cinema Dr. Tarja Laine  
+Take-Home Exam 
+
+Kat Golubev 
+
+11766190 
+
+24.03.2021  
+
+The Five Senses of Cinema 
+
+Dr. Tarja Laine  
+
 1096 words
 
 Kat Golubev  
 Professor Laine  
-The Five Senses of Cinema 24 March 2021
+The Five Senses of Cinema 
+24 March 2021
 
 Take-Home Exam
 
