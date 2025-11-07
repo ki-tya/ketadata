@@ -1,5 +1,4 @@
-[DECONSTRUCTING THE PATTERN.md](https://github.com/user-attachments/files/23403678/DECONSTRUCTING.THE.PATTERN.md)
-**  
+
 
 Deconstructing The Pattern :
 
