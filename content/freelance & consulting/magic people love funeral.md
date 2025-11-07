@@ -1,0 +1,52 @@
+[love funeral.md](https://github.com/user-attachments/files/23417237/love.funeral.md)
+LOVE FUNERAL, a film by Zhan Petrov
+
+By Rob Nilsson
+
+It was shot in 1 ½ hours.  No out takes or re-takes.  No rehearsals.  One take. It’s hard to know what inspired it. Love is difficult terrain and often torturous to look at.  Everyone knows its existential skirmishes and frenzies, its disappointments as it wanes into accompanying auxiliaries… friendship, empathy, fellow feeling.  
+
+And Love’s social profile?  80 percent of Americans claim to be Christians. If so, who is manning those thousands of nuclear warheads aimed at alleged enemies brandished under the rationale “unless we aim these at you, you might annihilate us.” Could churches preaching peace be complicit in the face of War?   Is love the reason to protect as to attack?  
+
+Love is the great subject.  All religions, all nations and  neighborhood coffee klatches revere it out loud and fear it out quiet.  So a film about the “funeral” of love is no small topic. This one begins with a quote from John Cassavetes, “The only thing I’m interested in is Love.”  
+
+The scene is a house somewhere in suburban LA.  There’s a swimming pool but the décor is ‘70s motel and the attitude is tarnished hip- hop: satin sheets, satin pillows, desultory, 2021 modish, pot and booze soaked, and filled with the sexual energy of uprooted youth, transplanted American rebels infused with Slavic soul party.*  Most of the characters are Russian and Ukranian, their dialogue translated in English.  The context is Generation Z rap and international Hip.
+
+This is not a plot film.  It’s all character and circumstance thrown into a juice squeezer, drunk pulp and seeds. A young artist, Vitaly, (what art is unclear), and his house mate hangers- on, including a woman who might also be his lover, face the energetic return of his girl friend Kristina.  The return is more mating ritual than reunion as Vitaly and Kristina alternately flirt, fight, flight and repeat. 
+
+A dark clad deadpan sceptic wanders through rooms with a slight smirk, one who knows all and shows so.  Vitaly is pushed into the swimming pool by Kristina who alternates love and derision toward this lover she can’t stand while actively pursuing.  The tall blonde Klarissa is either friend or lover of Kristina and the two confer on Vitaly’s cracked machismo which neither can stand nor avoid.  
+
+All characters, including Colen Philosopher alternate between trapped  hormones, rapid response anarchy and good natured sophistry often satirized by in house comedians such as RX The Rapper, Noah Nomad and Big Mike.  Agony alternates with ecstasy.  Feverish movements.  Fields and particles.  Neither created nor destroyed.
+
+Where did this unrelenting black hole come from?  Zhan Petrov, conceiver and creator of this first feature film, was inspired by TIME CODE, Mike Figgis’ tour de force composed of four feature length films presented simultaneously on a single screen divided into four segments. 
+
+In TIME CODE Hollywood types in cars start at the same moment from different LA locations and arrive at an industry facility holding auditions for the film we are already viewing.   All four dramas are integrated by synchronized clocks so that, for example, when a fictional earthquake happens, all players must begin shaking at the same second.  Because this cinema game does not allow for editing.  It’s a real time tight rope walk.  Four groups.  Four tight topes.  No mistakes allowed.  All four single takes have to be perfect.  All four will be shown at once, as shot, on a screen divided into four segments.
+
+How hard was this to do?  Figgis shot15 takes before selecting the 16th.  You might also ask how four films could play at once and be understood.  The heroic concept which brings all wand waving together?  Only one segment has sound up at any one time.   
+
+The subject is Hollywood:  the personal machinations of entertainment types, their sorrows and woes, their peccadilloes and imbroglios in hermetic auto interiors and tawdry office hallways, their sincere art talk and intense adultery with no one the wiser, all high concept drama, warts, face lifts, and natural high spirits included.  The result is insane, funny, and a sad admission of human frailty.  
+
+TIME CODE is one of my favorite films.  Figgis’ challenge to traditional filmmaking, his serious/humorous take on human skullduggery, his sheer verve, mendacity, and authenticity is unmatched in cinema.  To me his biggest achievement is his manipulation of perception and time.  Simultaneity is a problem in physics which suggests that the position and velocity of  viewers change their perceptions of time and alter time itself.  I don’t pretend to understand this spacetime paradox but maybe Figgis does. We watch four events happening in different places at the same moment, until all collide in a tour de force arrival at the rehearsal building where no cameras from any of the other scenes must be seen by any other camera.  How did they do that?  This is a feat easier to create in a lab than out in the streets of Beverly Hills. 
+
+I’ve not seen D-DAG, also created in 2000 by the Danish Dogme group,  Lars Von Trier, Thomas Vinterberg, Søren Kragh-Jacobsen and Kristian Levring but Alexander Sokurov’s RUSSIAN ARK, a single take feature involving historical periods of time staged at the Hermitage in Petersburg in 2004 is a related effort, this one attempting to link time and circumstance over 300 years of Russian history.  In its 90 some minute weave and warp of tacky eros and wacky thanatos TIME CODE equals Bob Fosse’s ALL THAT JAZZ  another send up of show biz done with wit, satire and wisdom.  
+
+Mike Figgis had Holly Hunter, Skellen Skaarsgard, Salma Hayek and other known talents.  They improvise most of the dialogue within the tightly controlled experiment.  Figgis spent money, took his time, and opened whole new avenues in cinematic form.
+
+In 2021, enter promising first time filmmaker Zhan Petrov and LOVE FUNERAL.  He had no money, no time and no Names.  You don‘t expect Figgis‘ breadth and depth, not yet that is, but Petrov is all energy.  He put together an acting workshop with friends and others he hardly knew.  Almost no time was spent preparing his players but at least three of them Klarissa Barskaya and Vitaly Ponomarev had acting training.  The others had never acted before.  
+
+  
+FUNERAL was shot with four handheld cell phones in an hour and 20 minutes.  One take.  Sometimes a camera was handed to one of the actors who kept rolling and improvising to taste.  At several points the fourth wall opens, (unlike in TIME CODE where the technology never reveals itself), and in one instance we see two live cameras in the hands of one operator.  
+
+Action takes place throughout the house, in and around the back yard swimming pool, where at one point it starts to rain.  Finally both women leave the house, one in a car, the other walking.  The car stops, picks up the walker, and later on leaves her out on a street again where she tries to flag down cars.  Then she is left alone as the titles role.  All dialogue is in Ukranian/Russian and if, like me, you don’t know the language there are English subtitles as a guide to the torrent of language coming from all sides.
+
+Why do I like this film so much?  You couldn’t say much was happening except that in the lives of these expressive players… everything was happening.  An avalanche of conflict hurtling in all directions at once.  But not all of it overt.  The covert happens too, sometimes with subtitles, misspelled or non- grammatical Russo-English enhancing the mysteries of the ordinary, miracles of everyday people living in their skins in a film seemingly allowed to happen by itself.
+
+And maybe it’s the uneasy sensation which gets to me, a vibrating clash of four, or three, or two cell phones all looking at the same thing from different angles.  Four moving images, vertigo for the complacent, a pictorial and audio sensorium for willing believers who must also absorb subtitles which instruct, infuriate and maybe even encourage.
+
+  
+What did I like best?  The whole, the sum of its parts, the integrated intransigence, the chaotic percolate of incessant un-relationship, exploding apart and marinating back together in the small cosmos of human love?  I don’t know.  My tangled, and excessive descriptions mirror the wrong-headed triumph of the piece. 
+
+All I can say is that you should see this film for yourself.  Bring medication in case of dizziness.  Watch it sitting, standing  mouth agape and psyche aghast.  But don’t judge.  Let it tsunami over you.  And then go out into the street, into the rain, perhaps with a lover skipping through the puddles, and see what it means to you.
+
+*Slavic Soul Party is the excellent New York based Balkan contemporary jazz band adding Dixieland, Funk, Klezmer and Roma music to the mix.
+
+Yet, interestingly, an almost identical project, _D-Dag_ (2000), was made on New Year’s Eve in Copenhagen by the ‘Dogme Brothers’, Lars Von Trier, Thomas Vinterberg, Søren Kragh-Jacobsen and Kristian Levring. In this case, four cameras directed by each of the four directors followed four different characters in the minutes leading up to New Year’s Eve and then on into the new millennium. In an extraordinary coup, however, the filmmakers convinced seven Danish television networks to devote their prime time programming to the film on the evening of New Year’s Day. This meant that each camera was played out on one of the four channels which viewers could switch from and to with their remote control, choosing their own editing points and following their own paths in the intertwining narrative. The fifth channel showed all four simultaneously on a quadruple-split screen in a format similar to _Time Code,_ and the sixth and seventh channels made the process transparent by showing the directors in a central control room monitoring the action and communicating with the actors and cameramen. This comparison is not meant to undermine the significant achievements of the makers of _Time Code_ but rather to illuminate that novelty alone is not enough to make a film ‘revolutionary’. What Figgis has achieved in _Time Code_ is impossible  Black hole- American prognostication meets Quantum because at that level there is only feverish movement and fields and particles of energy, incessant but neither created or destroyed.
