@@ -1,5 +1,9 @@
-Kat Golubev (11766190) 
+Kat Golubev 
+
+11766190 
+
 The Sublime  
+
 Dr. Katia Hay
 
 Part I
