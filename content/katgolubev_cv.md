@@ -18,7 +18,7 @@ New York, NY
 
 University of Amsterdam 
 Amsterdam NL (2018-21)
-Bachelor's in Media & Information  
+- Bachelor's in Media & Information  
 Honors Programme, Cum Laude
 
 
