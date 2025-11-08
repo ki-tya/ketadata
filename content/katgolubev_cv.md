@@ -21,6 +21,7 @@ Amsterdam NL (2018-21)
 - BA in Media & Information - Honors Programme, Cum Laude
 
 
+
 Work Experience
 
 - Tutor & Au Pair 2016-2018 
