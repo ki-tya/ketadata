@@ -3,7 +3,8 @@ Recreational Drug Use
 
 A future opportunity in the recreational drug sector
 
-![[Pasted image 20251105131159.png]]
+![](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/embedded/drugs%202030/Pasted%20image%2020251107042328.png)
+
 
 15-04-2020
 
