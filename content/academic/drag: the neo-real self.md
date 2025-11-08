@@ -4,12 +4,12 @@
 
 **11766190**
 
-  ![[Pasted image 20251105110606.png]]![[Pasted image 20251105110728.png]]
+![](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/embedded/drag/Pasted%20image%2020251105110728.png)
 
 **DRAG: THE NEO-REAL SELF**
 
-![[Pasted image 20251105110842.png]]    
-![[Pasted image 20251105110808.png]]
+![](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/embedded/drag/Pasted%20image%2020251105110808.png)
+
 
 **AESTHETICS AND POLITICS**
 
