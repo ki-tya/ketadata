@@ -1,7 +1,5 @@
 ![Page 01](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/yearbook/ED%20-%20OFF-SCREEN%20YEARBOOK_Page_01.jpg)
-![Page 02](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/yearbook/ED%20-%20OFF-SCREEN%20YEARBOOK_Page_02.jpg)
-![Page 03](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/yearbook/ED%20-%20OFF-SCREEN%20YEARBOOK_Page_03.jpg)
-![Page 04](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/yearbook/ED%20-%20OFF-SCREEN%20YEARBOOK_Page_04.jpg)
+
 ![Page 05](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/yearbook/ED%20-%20OFF-SCREEN%20YEARBOOK_Page_05.jpg)
 ![Page 06](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/yearbook/ED%20-%20OFF-SCREEN%20YEARBOOK_Page_06.jpg)
 ![Page 07](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/yearbook/ED%20-%20OFF-SCREEN%20YEARBOOK_Page_07.jpg)
