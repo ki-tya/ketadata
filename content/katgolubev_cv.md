@@ -31,22 +31,22 @@ Work Experience
 - Technical Writer & Project Management 2021-25
 - Freelance, Consulting & Editing 2023-25
 
-	Portfolio site
+Portfolio site
 
 		ketadata.com/login.html
 		password: 1111
 
-	Familiar w/ microsoft office, adobe suite, photoshop, google suite, final cut pro X, airtable, mattermost, github, obsidian, smartgit, cursor, typora, audacity, gephi, ticktick, notion
+Familiar w/ microsoft office, adobe suite, photoshop, google suite, final cut pro X, airtable, mattermost, github, obsidian, smartgit, cursor, typora, audacity, gephi, ticktick, notion
 
-	AI models: chat gpt, claude, google gemini
+AI models: chat gpt, claude, google gemini
 
-	Platforms: instagram, x, tiktok, rednote, medium, substack
+Platforms: instagram, x, tiktok, rednote, medium, substack
 
-	Strengths: strategic thinking, creative solutions, insight analysis, idea & lead generation, deep research, branding & legend, clear & concise communication, domain mythology, cross - cultural mediation, interpersonal psychology, big picture thinking, system dynamics & optimization, visual rhetoric, pattern recognition, collaborative engagement, emotional intelligence, discourse analysis, wide-ranging references, prompt engineering, vibe coding
+Strengths: strategic thinking, creative solutions, insight analysis, idea & lead generation, deep research, branding & legend, clear & concise communication, domain mythology, cross - cultural mediation, interpersonal psychology, big picture thinking, system dynamics & optimization, visual rhetoric, pattern recognition, collaborative engagement, emotional intelligence, discourse analysis, wide-ranging references, prompt engineering, vibe coding, decision-making
 
-	Interests: mixed media, artificial intelligence, digital culture, current events, art & photography, design technology, live events, cultural anthropology, digital currency,  brutalist architecture, aesthetics & politics, fashion & style, interface flow, data visualization, wellness industry, night-life, immersive experience production, , user experience design
+Interests: mixed media, artificial intelligence, digital culture, current events, art & photography, design technology, live events, cultural anthropology, digital currency,  brutalist architecture, aesthetics & politics, fashion & style, interface flow, data visualization, wellness industry, night-life, immersive experience production, , user experience design
 
-	Languages: English, Russian, French 
+Languages: English, Russian, French 
 
 
 
