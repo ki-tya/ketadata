@@ -10,17 +10,18 @@
 ![Page 13](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/yearbook/ED%20-%20OFF-SCREEN%20YEARBOOK_Page_13.jpg)
 ![Page 14](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/yearbook/ED%20-%20OFF-SCREEN%20YEARBOOK_Page_14.jpg)
 ![Page 15](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/yearbook/ED%20-%20OFF-SCREEN%20YEARBOOK_Page_15.jpg)
-![Page 16](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/yearbook/ED%20-%20OFF-SCREEN%20YEARBOOK_Page_16.jpg)
-![Page 17](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/yearbook/ED%20-%20OFF-SCREEN%20YEARBOOK_Page_17.jpg)
-![Page 18](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/yearbook/ED%20-%20OFF-SCREEN%20YEARBOOK_Page_18.jpg)
-![Page 19](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/yearbook/ED%20-%20OFF-SCREEN%20YEARBOOK_Page_19.jpg)
+
+
 ![Page 20](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/yearbook/ED%20-%20OFF-SCREEN%20YEARBOOK_Page_20.jpg)
-![Page 21](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/yearbook/ED%20-%20OFF-SCREEN%20YEARBOOK_Page_21.jpg)
+
 ![Page 22](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/yearbook/ED%20-%20OFF-SCREEN%20YEARBOOK_Page_22.jpg)
 ![Page 23](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/yearbook/ED%20-%20OFF-SCREEN%20YEARBOOK_Page_23.jpg)
 ![Page 24](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/yearbook/ED%20-%20OFF-SCREEN%20YEARBOOK_Page_24.jpg)
 ![Page 25](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/yearbook/ED%20-%20OFF-SCREEN%20YEARBOOK_Page_25.jpg)
-![Page 26](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/yearbook/ED%20-%20OFF-SCREEN%20YEARBOOK_Page_26.jpg)
+![Page 36](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/yearbook/ED%20-%20OFF-SCREEN%20YEARBOOK_Page_36.jpg)
+![Page 37](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/yearbook/ED%20-%20OFF-SCREEN%20YEARBOOK_Page_37.jpg)
+![Page 38](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/yearbook/ED%20-%20OFF-SCREEN%20YEARBOOK_Page_38.jpg)
+
 ![Page 27](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/yearbook/ED%20-%20OFF-SCREEN%20YEARBOOK_Page_27.jpg)
 ![Page 28](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/yearbook/ED%20-%20OFF-SCREEN%20YEARBOOK_Page_28.jpg)
 ![Page 29](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/yearbook/ED%20-%20OFF-SCREEN%20YEARBOOK_Page_29.jpg)
@@ -30,7 +31,5 @@
 ![Page 33](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/yearbook/ED%20-%20OFF-SCREEN%20YEARBOOK_Page_33.jpg)
 ![Page 34](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/yearbook/ED%20-%20OFF-SCREEN%20YEARBOOK_Page_34.jpg)
 ![Page 35](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/yearbook/ED%20-%20OFF-SCREEN%20YEARBOOK_Page_35.jpg)
-![Page 36](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/yearbook/ED%20-%20OFF-SCREEN%20YEARBOOK_Page_36.jpg)
-![Page 37](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/yearbook/ED%20-%20OFF-SCREEN%20YEARBOOK_Page_37.jpg)
-![Page 38](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/yearbook/ED%20-%20OFF-SCREEN%20YEARBOOK_Page_38.jpg)
+
 
