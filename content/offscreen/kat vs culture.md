@@ -1,4 +1,3 @@
-[kat vs culture.md](https://github.com/user-attachments/files/23401714/kat.vs.culture.md)
 OFFSCREEN ARCHIVE
 
 2018/19
