@@ -1,1 +1,13 @@
+![objective knowledge — pic 1](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/presentations/objective%20knowledge/Pasted%20image%2020251105123649.png)
+![objective knowledge — pic 2](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/presentations/objective%20knowledge/Pasted%20image%2020251105123705.png)
+![objective knowledge — pic 3](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/presentations/objective%20knowledge/Pasted%20image%2020251105123711.png)
+![objective knowledge — pic 4](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/presentations/objective%20knowledge/Pasted%20image%2020251105123716.png)
+![objective knowledge — pic 5](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/presentations/objective%20knowledge/Pasted%20image%2020251105123724.png)
+![objective knowledge — pic 6](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/presentations/objective%20knowledge/Pasted%20image%2020251105123730.png)
+![objective knowledge — pic 7](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/presentations/objective%20knowledge/Pasted%20image%2020251105123735.png)
+![objective knowledge — pic 8](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/presentations/objective%20knowledge/Pasted%20image%2020251105123740.png)
+![objective knowledge — pic 9](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/presentations/objective%20knowledge/Pasted%20image%2020251105123746.png)
+![objective knowledge — pic 10](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/presentations/objective%20knowledge/Pasted%20image%2020251105123752.png)
+![objective knowledge — pic 11](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/presentations/objective%20knowledge/Pasted%20image%2020251105123757.png)
+![objective knowledge — pic 12](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/presentations/objective%20knowledge/Pasted%20image%2020251105123804.png)
 
