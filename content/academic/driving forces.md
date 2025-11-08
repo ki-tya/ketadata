@@ -25,7 +25,8 @@ Entrepreneurship is constantly being reimagined. The world is changing and evolv
 
 DRIVING FORCES
 
-1. Open-Mindedness/Social Acceleration 
+1. Open-Mindedness/Social Acceleration
+
 ![](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/embedded/driving%20forces/Pasted%20image%2020251105112834.png)
 
 
@@ -35,6 +36,7 @@ In looking to the future of entrepreneurship, “competencies related to learnin
 
   
 2. Individuality/Brand Integrity
+
 ![](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/embedded/driving%20forces/Pasted%20image%2020251105112853.png)
 
 
@@ -44,6 +46,7 @@ Associations will become increasingly important.  This will lay fertile ground 
 
   
 3. Fun Production
+
 ![](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/embedded/driving%20forces/Pasted%20image%2020251105112915.png)
 
 Social media platforms run on user-generated content so it would stand to reason that the production industry should also face a sizable, if somewhat unorthodox, boom. The internet has reorganized spatio-temporal relations: ”in the age of globalization and the u-topicality of the Internet, time is increasingly conceived as compressing or even annihilating space.” (Rosa 2003). Thus geography and physical presence cease to be determining factors of online presence. 
@@ -53,6 +56,7 @@ While production has historically been localized in hotspots and inaccessible to
   
 
 4. Comfort and Convenience
+
 ![](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/embedded/driving%20forces/Pasted%20image%2020251105112934.png)
 
 
@@ -62,6 +66,7 @@ While there is debate about Uber and Amazon exploiting workers, it is unimaginab
 
 
 5. Decentralization and Individuation
+
 ![](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/embedded/driving%20forces/Pasted%20image%2020251105113002.png)
 
 
