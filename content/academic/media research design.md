@@ -10,7 +10,9 @@ Assignment 5
 
 
 Argument Structure and Presentation of Results
-![[Pasted image 20251107033230.png]]
+
+![](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/embedded/research%20design/Pasted%20image%2020251107033230.png)
+
 A2. Provisional Table of Contents
 
 Celebrity: Product and Entity  
