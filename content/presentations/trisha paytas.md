@@ -1,1 +1,12 @@
+![trisha paytas — pic 1](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/presentations/trisha%20paytas/Pasted%20image%2020251105123233.png)
+![trisha paytas — pic 2](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/presentations/trisha%20paytas/Pasted%20image%2020251105123241.png)
+![trisha paytas — pic 3](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/presentations/trisha%20paytas/Pasted%20image%2020251105123250.png)
+![trisha paytas — pic 4](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/presentations/trisha%20paytas/Pasted%20image%2020251105123257.png)
+![trisha paytas — pic 5](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/presentations/trisha%20paytas/Pasted%20image%2020251105123305.png)
+![trisha paytas — pic 6](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/presentations/trisha%20paytas/Pasted%20image%2020251105123338.png)
+![trisha paytas — pic 7](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/presentations/trisha%20paytas/Pasted%20image%2020251105123355.png)
+![trisha paytas — pic 8](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/presentations/trisha%20paytas/Pasted%20image%2020251105123404.png)
+![trisha paytas — pic 9](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/presentations/trisha%20paytas/Pasted%20image%2020251105123415.png)
+![trisha paytas — pic 10](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/presentations/trisha%20paytas/Pasted%20image%2020251105123424.png)
+![trisha paytas — pic 11](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/presentations/trisha%20paytas/Pasted%20image%2020251105123439.png)
 
