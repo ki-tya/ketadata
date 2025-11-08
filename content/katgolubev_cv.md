@@ -12,7 +12,8 @@ New York, NY
 
 [katgolubev@gmail.com](mailto:katgolubev@gmail.com)
 
-![[Pasted image 20251107215812.png]]
+![embedded image — pic](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/embedded/Pasted%20image%2020251107215812.png)
+
 
 
 University of Amsterdam Amsterdam NL (2018-21)
