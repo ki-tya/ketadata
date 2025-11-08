@@ -1,1 +1,11 @@
+![hilma af klint — pic 1](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/presentations/hilma%20af%20klint/Pasted%20image%2020251105122716.png)
+![hilma af klint — pic 2](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/presentations/hilma%20af%20klint/Pasted%20image%2020251105122744.png)
+![hilma af klint — pic 3](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/presentations/hilma%20af%20klint/Pasted%20image%2020251105122752.png)
+![hilma af klint — pic 4](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/presentations/hilma%20af%20klint/Pasted%20image%2020251105122759.png)
+![hilma af klint — pic 5](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/presentations/hilma%20af%20klint/Pasted%20image%2020251105122805.png)
+![hilma af klint — pic 6](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/presentations/hilma%20af%20klint/Pasted%20image%2020251105122811.png)
+![hilma af klint — pic 7](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/presentations/hilma%20af%20klint/Pasted%20image%2020251105122817.png)
+![hilma af klint — pic 8](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/presentations/hilma%20af%20klint/Pasted%20image%2020251105122823.png)
+![hilma af klint — pic 9](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/presentations/hilma%20af%20klint/Pasted%20image%2020251105122830.png)
+![hilma af klint — pic 10](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/presentations/hilma%20af%20klint/Pasted%20image%2020251105122837.png)
 
