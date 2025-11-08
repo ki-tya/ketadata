@@ -85,7 +85,8 @@ However, astrology has always developed as a multiplicity and it’s recent ‘a
 What is particularly curious about The Pattern, however, is the seeming intensity of its emotional resonance with its users, with some even going so far as to label it an app for ‘masochistic astrology enthusiasts’ and as a vessel of “emotional terrorism” (Stef 2018). There are countless testimonials on Twitter and Instagram proclaiming the ways in which the app has ‘destroyed’ them or ‘read them for filth’ (Kacala 2019). While reactions on social media are often exaggerated for the purposes of the medium, Google’s related searches reveal an alarmingly earnest and perhaps more sinister picture (fig. 1)
 
 The notion that an astrology app is ‘spying’ on its users, collecting bits of data and synthesizing them into long, personal passages concerning their psychological state and relationships with others, while being indicative of a larger concern surrounding big data, is also evidence of the app’s efficiency in convincing users of its legitimacy.  Far from Adorno’s description of LA Times readers ‘choosing’ to believe in astrology, The Pattern’s users seem compelled to think that the app has accessed personal information, whether that be through its interpretation of celestial objects or otherwise. I, myself, have watched friends and family, some of whom have never exhibited even a slight interest in astrology, spend countless hours transfixed by this application and, in many instances, the reactions which I witnessed could only be described as ‘cathartic’.  
-![[Pasted image 20251105113530.png]]
+![](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/embedded/pattern/Pasted%20image%2020251105113530.png)
+
 	Figure 1. Google related searches for The Pattern app
 
   
@@ -303,7 +304,9 @@ Cognitive Affordances 
 Considering apps as an imaginary media (Swiss 2015) which has been hailed for its potential for non-fiction writing (Allen 2015), cognitive affordances are considered as what the app allows and encourages the user to think, and feel, during their interaction (Jensen and Pedersen 2016; Molnillo et al 2020). The Pattern’s interface, in comparison to Co-star’s sleek design, for example, has always been rather humble, remaining consistently focused on centering the user. The app’s architecture of personality, found on the ‘Your Pattern’ screen of the app, is structured according to a generative logic of traits, beginning from the smallest unit and gradually expanding throughout.  However, The Pattern conceptualizes the most essential core of the personality as something prelingual - the profile picture. This element of the interface, which is scaled to roughly half of the screen, is an algorithmically generated image which, although placed behind the other components, nevertheless dominates the visual hierarchy of the user profile. This serves to establish the user’s ‘individuality’, giving them a non-verbal, symbolic representation through which they can conceptualize their overall ‘personality’ (Fig. 7). There are 13 image options in total and while the images can theoretically be considered as corresponding to the four elements, their exact correlations remain unclear.
 
 Figure 7. 8 examples of potential profile photos
-  ![[Pasted image 20251105113647.png]]
+
+ ![](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/embedded/pattern/Pasted%20image%2020251105113647.png)
+ 
   
 	Figure 7. 8 examples of potential profile photos
 
