@@ -2,12 +2,12 @@
 FUTURE ENTREPRENEUR
 ASSIGNMENT 2
 
-![[Pasted image 20251105112700.png]]
-  
+![](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/embedded/driving%20forces/Pasted%20image%2020251105112700.png)
 
 DRIVING FORCES
 
-![[Pasted image 20251105112729.png]]
+![](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/embedded/driving%20forces/Pasted%20image%2020251105112729.png)
+
 
 KAT GOLUBEV
 
@@ -16,7 +16,8 @@ KAT GOLUBEV
 
 INTRODUCTION
 
-![[Pasted image 20251105112811.png]]
+![](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/embedded/driving%20forces/Pasted%20image%2020251105112811.png)
+
 
 Entrepreneurship is constantly being reimagined. The world is changing and evolving at an ever-increasing rate and it is up to innovative minds to find ways to profit. In many ways, the market provides incentives to keep a vigorously close eye on emerging needs and desires – a finger on the pulse and an ear to the ground, so to speak, is a reliable way to gain a competitive edge. In this report, I will discuss five driving forces which I believe will gain prominence in the world of entrepreneurship over the next 10 years and develop two possible scenarios of this future. The five forces which I have chosen are open-mindedness/social acceleration, individuality/brand identity, ‘fun production’, comfort and convenience, and cyber-safety and decentralization.The driving forces I will be covering in this paper address not only what I believe to be general trajectories for entrepreneurship but also the steady social evolution in an ever-increasingly networked society. With generational shifts comes a greater awareness of how ‘online’ our existence has become. Whether they be financial, social, or confidential; our transactions have become digital. Entrepreneurs will have a large influence on how this space is further negotiated among its users. 
 
@@ -25,7 +26,8 @@ Entrepreneurship is constantly being reimagined. The world is changing and evolv
 DRIVING FORCES
 
 1. Open-Mindedness/Social Acceleration 
-![[Pasted image 20251105112834.png]]
+![](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/embedded/driving%20forces/Pasted%20image%2020251105112834.png)
+
 
 With digitization lowering inhibitions through the afforded degrees of anonymity in virtual space, demands are bound to become more and more ‘bizarre’. The digital sex industry is one example of this phenomenon with it’s explosion in homemade pornography and amateur camgirling platforms such as OnlyFans. However, one does not even need to go to that extreme to find an emergence of other sensory stimulating content such as slime or asmr videos. With virtual reality technology gaining traction, the market for ‘pleasing the senses’ stands to be taken to a new level. Neuroscience, as well, could play a big role in future developments with research of the brain’s reactions potentially allowing for virtual reality ‘therapies’ to be tested. However, due to the sensitive nature of the matter it will need to be approached with an open and non-judgemental mind. 
 
@@ -33,7 +35,8 @@ In looking to the future of entrepreneurship, “competencies related to learnin
 
   
 2. Individuality/Brand Integrity
-![[Pasted image 20251105112853.png]]
+![](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/embedded/driving%20forces/Pasted%20image%2020251105112853.png)
+
 
 In order to promote their products and gain recognition, entrepreneurs will have to cater to the attention economy. Therefore, brand identity will be extremely important to entrepreneurs of the future. Entrepreneurship already draws an interest as “a behavioral syndrome, involving risk-taking, pro- active, creative, and autonomous behavior in the context of creating value for other people” (Van Gelderen 2020) which gives it a mystique that can easily be capitalized on . The increasingly globalized and networked economy will require channeling that charisma into creating a ‘brand identity’. This means that rather than focusing on filling one specific niche, entrepreneurs will be faced with creating an image which resonates with their publics.  As well as being aesthetically memorable, companies will also have to be ethically sound so as not to alienate segments of their demographic.
 
@@ -41,7 +44,7 @@ Associations will become increasingly important.  This will lay fertile ground 
 
   
 3. Fun Production
-![[Pasted image 20251105112915.png]]
+![](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/embedded/driving%20forces/Pasted%20image%2020251105112915.png)
 
 Social media platforms run on user-generated content so it would stand to reason that the production industry should also face a sizable, if somewhat unorthodox, boom. The internet has reorganized spatio-temporal relations: ”in the age of globalization and the u-topicality of the Internet, time is increasingly conceived as compressing or even annihilating space.” (Rosa 2003). Thus geography and physical presence cease to be determining factors of online presence. 
 
@@ -50,7 +53,8 @@ While production has historically been localized in hotspots and inaccessible to
   
 
 4. Comfort and Convenience
-![[Pasted image 20251105112934.png]]
+![](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/embedded/driving%20forces/Pasted%20image%2020251105112934.png)
+
 
 The quickest thing people get used to is comfort. Of course, there are always traditionalists who proclaim that life was better in the past. The ‘I didn’t have an IPad, I played outside’ instinct will always be triggered as a response to changing lifestyles. However, there are certain luxuries that we have now which were unthinkable just a decade ago. Uber, food delivery, online banking – just to name a few. Our needs have been coded into applications with increasingly easy-to-use interfaces. The goal for entrepreneurs going forward is to figure out how to satisfy the expectation of comfort and convenience while operating a sustainable business model. 
 
@@ -58,7 +62,8 @@ While there is debate about Uber and Amazon exploiting workers, it is unimaginab
 
 
 5. Decentralization and Individuation
-![[Pasted image 20251105113002.png]]
+![](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/embedded/driving%20forces/Pasted%20image%2020251105113002.png)
+
 
 According to Uy,  “proactive personality encourages alertness to opportunities which in turn promotes boundaryless career mindset and career adaptability” (Uy 2015). The workforce has become saturated with freelancers and gig workers, more and more people strive to become self-employed. However, this flexibility can sometimes be an organizational disadvantage.  In a society where people become more atomized, entrepreneurs will have to create and coordinate their own hierarchical structures, workflow and collaboration. Increased decentralization will favor entrepreneurs with high organizational skills who use the digital medium to its full productivity potential rather than relying on outdated frameworks. Mckinsey emphasizes the need for entrepreneurs to “promptly invest in new talent with the management competencies necessary for professionalization and scale-up as well as in developing, training and retaining employees; and professional coaching and support” (Mckinsey 2016). Stephan noted that “organizational practices act as enablers supporting the effective deployment of deep-level change mechanisms in particular” (Stephan 2016).  In a decentralized workforce, the quality of protocol and set-up will determine the productivity and output. This could affect entrepreneurs of all types, yet corporate entrepreneurship might have the most seismic shifts, followed by state entrepreneurship which could prompt a decrease in bureaucratic agencies.   
 
@@ -69,14 +74,16 @@ SCENARIOS
 
 Scenario 1 
 
-![[Pasted image 20251105113020.png]]
+![](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/embedded/driving%20forces/Pasted%20image%2020251105113020.png)
+
 
 The driving force that is dominant in this scenario is decentralization. While entrepreneurs face a wide selection pool of freelance talent, the market is highly competitive. The digital medium, through which most collaborating is done, promotes a professional detachment from the physical body, allowing for a more meritocratic environment. The incentive is to plan as far ahead as possible, effectively coding workflow into inputs and outputs. There is a utilitarian view of productivity, with constant innovation concerning the flows of information. This mindset has rubbed off on other parts of life as well, comfort and convenience have  become increasingly important as there is a vested interest in doing things as quickly and simply as possible. A.I. and automation entrepreneurs have simplified daily tasks and condensed the lived experience into an algorithm. While people are constantly connected and available, they are growing more distant in their tastes and proclivities. The majority of time is spent within one’s own filter bubble consuming or creating content, an experience which connects communities with similar interests and simultaneously creates a multiplicity of subdivisions and niches across the board. In this environment, open-mindedness and social acceleration is not so much performative as it is symptomatic. People are always yearning for something new. Therefore, amateur content production continues to increase in scale and scope with audience/creator communities becoming more symbiotic and engaged. However, due to fragmentation of online spaces, brand integrity on a larger scale is less important. Enterprises are either ubiquitous corporations or niched community-oriented projects. 
 
   
 
 Scenario 2 
-![[Pasted image 20251105113045.png]]
+
+![](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/embedded/driving%20forces/Pasted%20image%2020251105113045.png)
 
 In the second scenario, brand integrity is the dominant force. Entrepreneurs are socially pressured into upholding a code of ethics which is constantly being updated in the court of public opinion. Issues such as workers’ rights, animal rights and sustainability are at the forefront and companies must pass scrutinizing background checks before they can enter the mainstream. Demographics are determined through identity politics and companies are inadvertently associated with socio-political agendas. Therefore, entrepreneurs tend to lean into this social responsibility just enough to effectively virtue-signal to their audiences as a way to increase trust in their brand and maximize profits within a community. The public expresses their opinions through a ‘strength in numbers’ approach and are willing to give up certain comforts and conveniences to pursue what they regard as a ‘greater good’. Social acceleration is somewhat stalled but there are steady improvements in poorer countries due to the globalized economy in conjecture with social responsibility. There is an increase in symbolic forms such as logos in order to denote the belief and alignments of the consumer. Entrepreneurs are faced with a double-task of creating value both in terms of revenue and social impact. Once an enterprise achieves a certain level of success it is quickly bought up by a conglomerate in order to diversify their portfolio and expand their reach. Content production is still prevalent yet has settled into more routine formats, many of which are sponsored by up-and-coming companies who share the same ‘views’. The networked society works as a recommendation system as well as a gatekeeping mechanism. 
 
