@@ -23,6 +23,8 @@ Honors Programme, Cum Laude
 
 
 
+
+
 Work Experience
 
 - Tutor & Au Pair 2016-2018
@@ -43,10 +45,13 @@ Work Experience
 
 
 
+
+
 Portfolio site
 
-				ketadata.com/login.html
-				password: 1111
+				--ketadata.com/login.html
+				
+				--password: 1111
 
 Familiar w/ microsoft office, adobe suite, photoshop, google suite, final cut pro X, airtable, mattermost, github, obsidian, smartgit, cursor, typora, audacity, gephi, ticktick, notion
 
