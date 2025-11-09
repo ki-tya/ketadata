@@ -2,8 +2,7 @@
 
 [KNG 01-01]
 
-![embedded image — pic](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/embedded/Pasted%20image%2020251107215812.png)
-
+Katerina Nikita Golubev
 
 New York, NY  
 
@@ -11,7 +10,7 @@ New York, NY
 
 [katgolubev@gmail.com](mailto:katgolubev@gmail.com)
 
-
+![embedded image — pic](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/embedded/Pasted%20image%2020251107215812.png)
 
 
 University of Amsterdam - 
@@ -38,7 +37,7 @@ Work Experience
   
 - Freelance, Consulting & Editing 2023-25
 
-![embedded image — pic](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/embedded/Pasted%20image%2020251107215741.png)
+
 
 Portfolio site
 
@@ -59,4 +58,4 @@ Languages: English, Russian, French
 
 
 
-
+![embedded image — pic](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/embedded/Pasted%20image%2020251107215741.png)
