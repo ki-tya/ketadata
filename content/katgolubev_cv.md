@@ -38,6 +38,8 @@ Work Experience
   
 - Freelance, Consulting & Editing 2023-25
 
+![embedded image — pic](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/embedded/Pasted%20image%2020251107215741.png)
+
 Portfolio site
 
 		ketadata.com/login.html
@@ -56,5 +58,5 @@ Interests: mixed media, artificial intelligence, digital culture, current events
 Languages: English, Russian, French 
 
 
-![embedded image — pic](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/embedded/Pasted%20image%2020251107215741.png)
+
 
