@@ -1,6 +1,8 @@
 [katgolubev_cv.pdf.md](https://github.com/user-attachments/files/23429800/katgolubev_cv.pdf.md)
 
-[KNG 01-01]![embedded image — pic](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/embedded/Pasted%20image%2020251107215812.png)
+[KNG 01-01]
+
+![embedded image — pic](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/embedded/Pasted%20image%2020251107215812.png)
 
 
 New York, NY  
