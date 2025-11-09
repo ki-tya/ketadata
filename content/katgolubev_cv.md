@@ -54,8 +54,11 @@ Strengths: strategic thinking, creative solutions, insight analysis, idea & lead
 
 Interests: mixed media, artificial intelligence, digital culture, current events, art & photography, design technology, live events, cultural anthropology, digital currency,  brutalist architecture, aesthetics & politics, fashion & style, interface flow, data visualization, wellness industry, night-life, immersive experience production, , user experience design
 
+
+![embedded image — pic](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/embedded/Pasted%20image%2020251107215741.png)
+
 Languages: English, Russian, French 
 
 
 
-![embedded image — pic](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/embedded/Pasted%20image%2020251107215741.png)
+
