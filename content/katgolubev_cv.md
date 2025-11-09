@@ -1,6 +1,7 @@
 [katgolubev_cv.pdf.md](https://github.com/user-attachments/files/23429800/katgolubev_cv.pdf.md)
 
-[KNG 01-01]
+[KNG 01-01]![embedded image — pic](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/embedded/Pasted%20image%2020251107215812.png)
+
 
 New York, NY  
 
@@ -8,7 +9,6 @@ New York, NY
 
 [katgolubev@gmail.com](mailto:katgolubev@gmail.com)
 
-![embedded image — pic](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/embedded/Pasted%20image%2020251107215812.png)
 
 
 
@@ -20,13 +20,20 @@ Amsterdam NL (2018-21)
 
 Work Experience
 
-- Tutor & Au Pair 2016-2018 
+- Tutor & Au Pair 2016-2018
+  
 - Freelance Writing/Translation 2016-2021
+
 - Event Photography 2018-21
+
 - Production Coordinator 2020-21
+  
 - Warehouse Management 2021-2022
+  
 - Info & Research Analyst 2020-2022
+  
 - Technical Writer & Project Management 2021-25
+  
 - Freelance, Consulting & Editing 2023-25
 
 Portfolio site
