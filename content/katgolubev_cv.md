@@ -41,8 +41,8 @@ Work Experience
 
 Portfolio site
 
-		ketadata.com/login.html
-		password: 1111
+				ketadata.com/login.html
+				password: 1111
 
 Familiar w/ microsoft office, adobe suite, photoshop, google suite, final cut pro X, airtable, mattermost, github, obsidian, smartgit, cursor, typora, audacity, gephi, ticktick, notion
 
@@ -58,6 +58,11 @@ Interests: mixed media, artificial intelligence, digital culture, current events
 ![embedded image — pic](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/embedded/Pasted%20image%2020251107215741.png)
 
 Languages: English, Russian, French 
+
+
+
+
+
 
 
 
