@@ -2,10 +2,6 @@
 
 [KNG 01-01]
 
-![embedded image — pic](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/embedded/Pasted%20image%2020251107215741.png)
-
-
-
 New York, NY  
 
 646-908-8424
@@ -51,5 +47,5 @@ Interests: mixed media, artificial intelligence, digital culture, current events
 Languages: English, Russian, French 
 
 
-
+![embedded image — pic](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/embedded/Pasted%20image%2020251107215741.png)
 
