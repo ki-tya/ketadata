@@ -1,6 +1,6 @@
 ketadata sensory experiments
 
-*flash warning*  *may cause seizures in photo-sensitive individuals*
+*flash warning* : *may cause seizures in photo-sensitive individuals*
 
 keta - light:
 
