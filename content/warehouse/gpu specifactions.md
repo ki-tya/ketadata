@@ -1,4 +1,4 @@
-[GPU Specifications.md](https://github.com/user-attachments/files/23403958/GPU.Specifications.md)
+
 GPU SPECIFICATIONS 
 
 1. **RX 470 4GB**
