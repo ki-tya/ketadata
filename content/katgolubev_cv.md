@@ -16,7 +16,6 @@ New York, NY
 
 
 University of Amsterdam  - Amsterdam NL (2018-21) <br/><br/>
-
 BA in Media & Information - Honors Programme, Cum Laude <br/><br/>
 
 
@@ -40,10 +39,6 @@ Work Experience
 
 <br/><br/>
 
-
-
-
-
 Portfolio site
 
 - ketadata.com/login.html password: 1111 <br/><br/>
@@ -63,7 +58,7 @@ Interests: mixed media, artificial intelligence, digital culture, current events
 
 Languages: English, Russian, French 
 
-
+<br/><br/>
 
 
 
