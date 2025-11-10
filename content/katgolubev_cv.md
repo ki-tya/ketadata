@@ -44,9 +44,9 @@ Work Experience
 
 Portfolio site
 
-nbsp ketadata.com/login.html
+- ketadata.com/login.html
 				
-nbsp password: 1111
+- password: 1111
 
 Familiar w/ microsoft office, adobe suite, photoshop, google suite, final cut pro X, airtable, mattermost, github, obsidian, smartgit, cursor, typora, audacity, gephi, ticktick, notion
 
