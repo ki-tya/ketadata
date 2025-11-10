@@ -1,5 +1,6 @@
 [katgolubev_cv.pdf.md](https://github.com/user-attachments/files/23429800/katgolubev_cv.pdf.md)
 
+![embedded image — pic](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/embedded/Pasted%20image%2020251107215741.png)
 [KNG 01-01]
 
 Katerina Nikita Golubev
@@ -49,9 +50,9 @@ Work Experience
 
 Portfolio site
 
-				--ketadata.com/login.html
+emsp ketadata.com/login.html
 				
-				--password: 1111
+emsp password: 1111
 
 Familiar w/ microsoft office, adobe suite, photoshop, google suite, final cut pro X, airtable, mattermost, github, obsidian, smartgit, cursor, typora, audacity, gephi, ticktick, notion
 
@@ -64,7 +65,7 @@ Strengths: strategic thinking, creative solutions, insight analysis, idea & lead
 Interests: mixed media, artificial intelligence, digital culture, current events, art & photography, design technology, live events, cultural anthropology, digital currency,  brutalist architecture, aesthetics & politics, fashion & style, interface flow, data visualization, wellness industry, night-life, immersive experience production, , user experience design
 
 
-![embedded image — pic](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/embedded/Pasted%20image%2020251107215741.png)
+
 
 Languages: English, Russian, French 
 
