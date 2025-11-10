@@ -38,15 +38,15 @@ Work Experience
   
 - Freelance, Consulting & Editing 2023-25
 
+<br/><br/>
+
 
 
 
 
 Portfolio site
 
-- ketadata.com/login.html
-				
-- password: 1111
+- ketadata.com/login.html password: 1111 <br/><br/>
 
 Familiar w/ microsoft office, adobe suite, photoshop, google suite, final cut pro X, airtable, mattermost, github, obsidian, smartgit, cursor, typora, audacity, gephi, ticktick, notion
 
