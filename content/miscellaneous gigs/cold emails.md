@@ -1,4 +1,4 @@
-[cold emails.md](https://github.com/user-attachments/files/23417196/cold.emails.md)
+
 Benefit
 
 SL: Contact: First name​, 23k+ of pick-up points for Benefit Cosmetics
