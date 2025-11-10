@@ -15,7 +15,8 @@ New York, NY
 ![embedded image — pic](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/embedded/Pasted%20image%2020251107215812.png)
 
 
-University of Amsterdam  - Amsterdam NL (2018-21)
+University of Amsterdam  - Amsterdam NL (2018-21)<br>
+
 BA in Media & Information - Honors Programme, Cum Laude
 <br>
 
