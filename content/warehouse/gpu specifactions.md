@@ -1,4 +1,3 @@
-
 GPU SPECIFICATIONS 
 
 1. **RX 470 4GB**
