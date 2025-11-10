@@ -44,9 +44,9 @@ Work Experience
 
 Portfolio site
 
-emsp ketadata.com/login.html
+nbsp ketadata.com/login.html
 				
-emsp password: 1111
+nbsp password: 1111
 
 Familiar w/ microsoft office, adobe suite, photoshop, google suite, final cut pro X, airtable, mattermost, github, obsidian, smartgit, cursor, typora, audacity, gephi, ticktick, notion
 
