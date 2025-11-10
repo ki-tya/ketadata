@@ -36,9 +36,7 @@ Work Experience
 - Technical Writer & Project Management 2021-25
   
 - Freelance, Consulting & Editing 2023-25
-
 <br/><br/>
-
 Portfolio site
 
 - ketadata.com/login.html password: 1111 <br/><br/>
