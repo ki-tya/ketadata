@@ -1,17 +1,14 @@
-
 Kat Golubev 
 
 11766190  
-
-Media and Information 
 
 Literary Analysis
 
 R. Glitz
 
-Those Times...: Anne Sexton and the Traumatic Female Childhood
+## Those Times...: Anne Sexton and the Traumatic Female Childhood
 
-“Women are born with pain built in. It’s our physical destiny. Period pains, sore boobs, childbirth, you know. We carry it within ourselves, throughout our lives. Men don’t. They have to seek it out. They invent all these gods and demons and things just so they can feel guilty about things which is something we do very well on our own. Then they create wars so they can feel things and touch each other and when there aren’t any wars, they can play rugby... and we have it all going on in here, inside.”
+*“Women are born with pain built in. It’s our physical destiny. Period pains, sore boobs, childbirth, you know. We carry it within ourselves, throughout our lives. Men don’t. They have to seek it out. They invent all these gods and demons and things just so they can feel guilty about things which is something we do very well on our own. Then they create wars so they can feel things and touch each other and when there aren’t any wars, they can play rugby... and we have it all going on in here, inside.”*
 
 ("Episode 3." Fleabag)
 
