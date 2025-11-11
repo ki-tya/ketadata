@@ -37,20 +37,22 @@ While the Artaudian notion of the theatre’s double emerges as a “vision of a
 Within this framework, Inside follows Burnham’s journey through a liminal space between two states of being: the performer and the spectator. This dichotomy is consistently re-established throughout the special as a central conflict, with Burnham using cinematic language and digital forms as a short-hand for internal states. These forms are often memetic or archetypal, a cyber-semiotic system of a kind of language-by-association.By looking at the imagery of the special through Dixon’s taxonomy of subject/double relationships, the fragmentation of Burnham’s ‘self’ and the patterns of his self-reflexivity begin to emerge.
 
 The Double as Reflection
-
-![[Pasted image 20251105111753.png]]
-![](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/embedded/bo%20burnham/Pasted%20image%2020251105%20111753.png)
+![](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/embedded/bo%20burnham/Pasted%20image%2020251105111753.png)
 
 
 The notion of the double as reflection is most simply understood through the myth of Narcissus, considering both the Lacanian implications of the ‘mirror’ as well as the collapse of the boundary between object and subject. This motif is rampant throughout the special, most explicitly expressed through Burnham’s use of an actual mirror as a stand-in for the audience (fig 2), the repeated projections of his own image onto his body (fig 3) and the multiplication of screens allowing for a dialogic interaction with the self through a subversion of the ‘reaction video’ genre (fig 4). 
 
 ![[Pasted image 20251105111835.png]]
-![](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/embedded/bo%20burnham/Pasted%20image%2020251105%20111835.png)
+
+![](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/embedded/bo%20burnham/Pasted%20image%2020251105111835.png)
 
 Unlike Narcissus, however, Burnham rarely seems to like what he sees. Despite being captivated by himself, he can never resist the urge to be critical, in an admittedly futile of watching and the passive image of being.
 
 ![[Pasted image 20251105111923.png]]
-![](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/embedded/bo%20burnham/Pasted%20image%2020251105%20111923.png)
+
+![](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/embedded/bo%20burnham/Pasted%20image%2020251105111923.png)
+
+
 
 The Double as Alter-Ego
 
@@ -59,7 +61,10 @@ attempt to absolve himself through self-awareness. Burnham is thus shown to be s
 The Double as Alter-Ego considers the self as a performative aspect, acting upon a different plane of ‘phantasy’. According to Dixon “the audience’s delight of recognition and differentiation between the live body and its mediatised double” can be traced back to one of the earliest examples of theatre which combined live and digital forms. Burnham presents the spectator with a different character for every musical number donning various ensembles and affects to fully ‘sell’ the performance before shattering the fantasy through the more confessional direct addresses, which are presumed to express Burnham’s ‘real’ self. However, one can never definitively know which incarnation represents his true self, which makes it difficult to pinpoint the ‘alter-ego’ per se. The most notable case of a presumed alter - ego, however, is shown during the ‘White Women’s Instagram’ sequence (fig.5), shot to resemble Instagram’s square aspect-ratio, in which Burnham de-genders himself to recreate pervasive visual tropes. 
 
 ![[Pasted image 20251105112013.png]]
-![](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/embedded/bo%20burnham/Pasted%20image%2020251105%20112013.png)
+
+![](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/embedded/bo%20burnham/Pasted%20image%2020251105112013.png)
+
+
 
 While the set-up initially seems like a way to mock the women, Burnham recreates the tropes un-ironically, participating in the stylized escapist fantasy of the form and generating an alternative aesthetic reality of himself.
 
@@ -70,16 +75,22 @@ According to Dixon: “digital doubles representing spiritual emanations or inca
 ![[Pasted image 20251105112043.png]]
 ![[Pasted image 20251105112110.png]]
 ![[Pasted image 20251105112137.png]]
-![](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/embedded/bo%20burnham/Pasted%20image%2020251105%20112043.png)
-![](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/embedded/bo%20burnham/Pasted%20image%2020251105%20112110.png)
-![](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/embedded/bo%20burnham/Pasted%20image%2020251105%20112137.png)
+
+![](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/embedded/bo%20burnham/Pasted%20image%2020251105112043.png)
+
+![](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/embedded/bo%20burnham/Pasted%20image%2020251105112110.png)
+
+![](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/embedded/bo%20burnham/Pasted%20image%2020251105112137.png)
+
 
 The Double as Manipulable Mannequin
 
 The final subject/double relation is the ‘manipulable mannequin’ which in Dixon’s survey is most often invoked through computer avatars or stand-ins for the body, a cross between ‘mythical being and digital deity’. Burnham takes a different approach by imagining his life as a monotonous video game which he himself is playing and live streaming for the first time.
 
 ![[Pasted image 20251105112211.png]]
-![](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/embedded/bo%20burnham/Pasted%20image%2020251105%20112211.png)
+
+![](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/embedded/bo%20burnham/Pasted%20image%2020251105112211.png)
+
 
 By separating himself from his actions, Burnham comments on the game casually, confused by the double’s limited functions yet appreciative of the ‘graphic design’. However, this puts the spectator into a counter-intuitive position in which, through Burnham’s awkward movements on screen, they are confronted with the basic performative and behavioral aspect of daily life. Burnham’s tears in the videogame (press X to cry) precede a clip of him bursting into tears during a mirror confessional, further problematizing the extent to which either one of those performances could be considered ‘real’ as well as whether there is a fundamental difference between them at all.
 
@@ -88,7 +99,8 @@ THE IMPOSSIBILITY OF (DIGITAL) THEATRE
 Despite the constant presence of Burnham’s ‘double’, he does not manage to transcend the paradox in which he has placed himself: he never goes ‘outside’, he never resolves the tension between his fragmented and alienated subjectivity and the external world. Artaud’s utopian vision can only be lived, because it remains impossible to perform. Thus, Burnham remains a ‘tragic hero’ faced with the impossibility and inevitable failure of his own endeavor. Yet, he is far from singular in this respect. According to Daniel R. Smith, the ‘expressive turn’ in digitised popular culture has had existential consequences for the notion of self and individuality in Western society. Online fame on platforms such as YouTube, according to Smith, has led individuals towards the recognition of their own inadequacy as a unified self, a breakdown which he likened to Hamlet’s moral conflict and termed the ‘tragedy of self’.
 
 ![[Pasted image 20251105112240.png]]
-![](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/embedded/bo%20burnham/Pasted%20image%2020251105%20112240.png)
+
+![](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/embedded/bo%20burnham/Pasted%20image%2020251105112240.png)
 
 
 In Inside, this tragedy is taken as a central theme at the outset and becomes increasingly distressing as the spectator witnesses Burnham’s declining mental health. The impossibility of any real intimacy or connection is foregrounded through Burnham’s emphasis on the ‘screen’ itself, the unbreakable fourth wall. The tacticity of the Intermission scene in which Burnham cleans the ‘screen’, momentarily disappearing behind foam bubbles and reappearing once again (fig. 10), sets an insurmountable boundary between the subject and the spectator.
