@@ -9,7 +9,7 @@ Prof. Laura Prins
 BO BURNHAM AND HIS DOUBLE: INSIDE (2021) AS DIGITAL THEATRE OF CRUELTY AND THE UNBREAKABLE FOURTH WALL
 
 INTRODUCTION
-![](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/embedded/bo%20burnham/Pasted%20image%2020251105%20111626.png)
+[![](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/embedded/bo%20burnham/Pasted%20image%2020251105%20111626.png)](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/embedded/bo%20burnham/Pasted%20image%2020251105111626.png)
 
 ![[Pasted image 20251105111626.png]]
 
