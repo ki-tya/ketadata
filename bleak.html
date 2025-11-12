@@ -1,57 +1,133 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
   <title>Bleak Lives Matter</title>
   <link href="https://fonts.googleapis.com/css2?family=Great+Vibes&display=swap" rel="stylesheet">
   <style>
+    :root {
+      --base-gray: #2f2f2f;   /* dark grey text */
+      --glow1: #6a6a6a;
+      --glow2: #8a8a8a;
+    }
+
     html, body {
       height: 100%;
       margin: 0;
       background: #000;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      overflow: hidden;
     }
 
+    /* full-screen stage */
+    #stage {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+      display: grid;
+      place-items: center;
+    }
+
+    /* the text “stamp” we’ll clone */
     .echo {
       position: absolute;
-      font-family: 'Great Vibes', cursive;
-      color: #3a3a3a;
-      font-size: 12vw;
-      letter-spacing: 0.05em;
-      font-weight: normal;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%) scale(1);
+      margin: 0;
+      font-family: "Great Vibes", cursive;
+      font-weight: 400;
+      line-height: 1;
       text-align: center;
-      opacity: 0;
-      animation: echoPulse 10s infinite ease-in-out;
+      font-size: min(14vw, 160px);
+      color: var(--base-gray);
+      filter: blur(0.2px); /* makes the glow smoother on some renderers */
+      text-shadow:
+        0 0 6px var(--glow1),
+        0 0 14px var(--glow2);
+      opacity: 0.95;
+      white-space: nowrap;
+      pointer-events: none;
     }
 
-    .echo:nth-child(1) { animation-delay: 0s; opacity: 1; }
-    .echo:nth-child(2) { animation-delay: 1s; }
-    .echo:nth-child(3) { animation-delay: 2s; }
-    .echo:nth-child(4) { animation-delay: 3s; }
-    .echo:nth-child(5) { animation-delay: 4s; }
-    .echo:nth-child(6) { animation-delay: 5s; }
+    /* subtle flicker per echo */
+    @keyframes flicker {
+      0%, 100% { opacity: 0.85; text-shadow: 0 0 6px var(--glow1), 0 0 14px var(--glow2); }
+      6%       { opacity: 0.35; text-shadow: none; }
+      8%       { opacity: 0.95; text-shadow: 0 0 10px var(--glow1), 0 0 22px var(--glow2); }
+      12%      { opacity: 0.6;  text-shadow: none; }
+      15%      { opacity: 0.92; text-shadow: 0 0 8px var(--glow1), 0 0 18px var(--glow2); }
+    }
 
-    @keyframes echoPulse {
-      0% {
-        opacity: 0;
-        transform: scale(1);
-        text-shadow: none;
+    .echo.flicker { animation: flicker 5s infinite ease-in-out; }
+  </style>
+</head>
+<body>
+  <div id="stage"></div>
+
+  <script>
+    // CONFIG
+    const PHRASE = "Bleak Lives Matter";
+    const MAX_ECHOS = 7;          // how many copies before shrinking back to 1
+    const STEP_MS = 900;          // how fast it grows/shrinks
+    const SCALE_STEP = 0.07;      // growth per additional echo
+    const OFFSET_STEP = 7;        // px drift per additional echo
+
+    const stage = document.getElementById('stage');
+
+    // create one immediately so you always see something
+    function makeEcho(i = 0) {
+      const el = document.createElement('div');
+      el.className = 'echo flicker';
+      el.textContent = PHRASE;
+
+      // scale and slight drift for each successive echo
+      const scale = 1 + i * SCALE_STEP;
+      const dx = i * OFFSET_STEP * (i % 2 ? 1 : -1);
+      const dy = i * OFFSET_STEP * (i % 3 ? 1 : -1);
+
+      el.style.transform = `translate(-50%, -50%) scale(${scale}) translate(${dx}px, ${dy}px)`;
+
+      // deeper echoes a bit dimmer
+      const op = Math.max(0.2, 1 - i * 0.12);
+      el.style.opacity = op.toString();
+
+      // slight desync in flicker per layer
+      el.style.animationDelay = `${(i * 173) % 1000}ms`;
+
+      stage.appendChild(el);
+      return el;
+    }
+
+    // start with one visible
+    makeEcho(0);
+
+    // progression: 1→MAX_ECHOS then back to 1, loop
+    let count = 1;
+    let growing = true;
+
+    setInterval(() => {
+      if (growing) {
+        if (count < MAX_ECHOS) {
+          makeEcho(count);
+          count++;
+        } else {
+          growing = false;
+        }
+      } else {
+        if (count > 1) {
+          // remove the topmost echo
+          stage.lastElementChild.remove();
+          count--;
+        } else {
+          growing = true;
+        }
       }
-      10%, 40% {
-        opacity: 0.9;
-        text-shadow:
-          0 0 6px #777,
-          0 0 14px #999,
-          0 0 28px #aaa;
-      }
-      60% {
-        opacity: 0.6;
-        transform: scale(1.08);
-      }
-      80% {
-        opacity: 0.2;
-        text-shadow: none;
-        transform: scale(1.12);
+    }, STEP_MS);
+
+    // ensure the font is loaded; if not, still show with a fallback
+    document.fonts && document.fonts.ready.then(() => {
+      // nothing needed—this avoids a flash of invisible text in some setups
+    });
+  </script>
+</body>
+</html>
