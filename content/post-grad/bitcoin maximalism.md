@@ -1,5 +1,4 @@
 
-[bitcoin maximalism.md](https://github.com/user-attachments/files/23427767/bitcoin.maximalism.md)
 **Bitcoin Maximalism Is Dead, Long Live Bitcoin Maximalism**
 
 "I don’t owe them anything," he said.
