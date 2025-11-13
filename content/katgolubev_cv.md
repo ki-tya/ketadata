@@ -14,7 +14,7 @@ New York, NY
 <br/><br/>
 Education
 
-University of Amsterdam  - Amsterdam NL (2018-21) <br/><br/>
+University of Amsterdam  - Amsterdam NL (2018-21) 
 BA in Media & Information - Honors Programme, Cum Laude <br/><br/>
 
 
