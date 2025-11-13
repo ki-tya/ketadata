@@ -21,7 +21,7 @@ Blockchain as a time-stamped ledger
 
 UTXO (unspent transaction output) accounting
 
-Start here. Read it as an engineering proposal rather than a manifesto.
+
 
 PHILOSOPHICAL CONTEXT
 NICK LAND — CRYPTOCURRENT / CRYPTOCENE
@@ -103,6 +103,7 @@ Nick Land – speculative theory
 Line Goes Up – critique and counter-analysis
 
 Casey Rodarmor – wallet and UTXO visualization
+
 
 WHAT IS BITCOIN?
 
