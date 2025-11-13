@@ -1,5 +1,4 @@
 
-![embedded image — pic](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/single/Screenshot%202025-11-10%20at%202.44.56%20AM.png)
 ![](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/embedded/Screenshot%202025-11-10%20at%205.01.04%20PM.png)
 
 
@@ -14,7 +13,6 @@ New York, NY
 
 [katgolubev@gmail.com](mailto:katgolubev@gmail.com)
 
-![embedded image — pic](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/embedded/Pasted%20image%2020251107215812.png)
 ![](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/embedded/Screenshot%202025-11-10%20at%205.02.04%20PM.png)
 
 University of Amsterdam  - Amsterdam NL (2018-21) <br/><br/>
