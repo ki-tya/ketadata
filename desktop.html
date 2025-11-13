@@ -6,8 +6,17 @@
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #6b6b6b; height: 100vh; overflow: hidden; }
-        body.dragging { user-select: none; -webkit-user-select: none; cursor: move !important; }
-        body.dragging * { cursor: move !important; }
+        body.dragging * { 
+            cursor: move !important; 
+            user-select: none !important; 
+            -webkit-user-select: none !important; 
+            -moz-user-select: none !important;
+            pointer-events: none !important;
+        }
+        body.dragging .preview-window,
+        body.dragging .content-preview-window { 
+            pointer-events: auto !important; 
+        }
         .menu-bar { background: rgba(40, 40, 40, 0.95); backdrop-filter: blur(20px); height: 24px; display: flex; align-items: center; padding: 0 12px; color: white; font-size: 13px; z-index: 1000; border-bottom: 1px solid rgba(0, 0, 0, 0.3); }
         .menu-bar-left { display: flex; gap: 20px; flex: 1; }
         .menu-bar-right { display: flex; gap: 12px; font-size: 12px; }
@@ -382,11 +391,13 @@
                 
                 isDragging = true;
                 activeWindow = win;
+                document.body.classList.add('dragging');
                 startX = e.clientX - win.offsetLeft;
                 startY = e.clientY - win.offsetTop;
                 win.style.transform = 'none';
                 win.classList.add('resizing');
                 e.preventDefault();
+                e.stopPropagation();
             });
         }
 
@@ -395,8 +406,10 @@
             handles.forEach(handle => {
                 handle.addEventListener('mousedown', (e) => {
                     e.stopPropagation();
+                    e.preventDefault();
                     isResizing = true;
                     activeWindow = win;
+                    document.body.classList.add('dragging');
                     win.classList.add('resizing');
                     resizeType = handle.classList.contains('corner-se') ? 'corner' : 
                                 handle.classList.contains('edge-e') ? 'e' : 's';
@@ -404,47 +417,51 @@
                     startY = e.clientY;
                     startWidth = win.offsetWidth;
                     startHeight = win.offsetHeight;
-                    e.preventDefault();
                 });
             });
         }
 
         document.addEventListener('mousemove', (e) => {
             if(isDragging && activeWindow) {
-                e.preventDefault();
-                let newLeft = e.clientX - startX;
-                let newTop = e.clientY - startY;
-                
-                const minTop = 24;
-                const maxLeft = window.innerWidth - activeWindow.offsetWidth;
-                const maxTop = window.innerHeight - activeWindow.offsetHeight;
-                
-                newLeft = Math.max(0, Math.min(newLeft, maxLeft));
-                newTop = Math.max(minTop, Math.min(newTop, maxTop));
-                
-                activeWindow.style.left = newLeft + 'px';
-                activeWindow.style.top = newTop + 'px';
+                requestAnimationFrame(() => {
+                    let newLeft = e.clientX - startX;
+                    let newTop = e.clientY - startY;
+                    
+                    const minTop = 24;
+                    const maxLeft = window.innerWidth - activeWindow.offsetWidth;
+                    const maxTop = window.innerHeight - activeWindow.offsetHeight;
+                    
+                    newLeft = Math.max(0, Math.min(newLeft, maxLeft));
+                    newTop = Math.max(minTop, Math.min(newTop, maxTop));
+                    
+                    activeWindow.style.left = newLeft + 'px';
+                    activeWindow.style.top = newTop + 'px';
+                });
+                return false;
             }
             if(isResizing && activeWindow) {
-                e.preventDefault();
-                const dx = e.clientX - startX;
-                const dy = e.clientY - startY;
+                requestAnimationFrame(() => {
+                    const dx = e.clientX - startX;
+                    const dy = e.clientY - startY;
 
-                if(resizeType === 'corner' || resizeType === 'e') {
-                    const newWidth = Math.max(400, startWidth + dx);
-                    activeWindow.style.width = newWidth + 'px';
-                }
-                if(resizeType === 'corner' || resizeType === 's') {
-                    const newHeight = Math.max(300, startHeight + dy);
-                    activeWindow.style.height = newHeight + 'px';
-                }
+                    if(resizeType === 'corner' || resizeType === 'e') {
+                        const newWidth = Math.max(400, startWidth + dx);
+                        activeWindow.style.width = newWidth + 'px';
+                    }
+                    if(resizeType === 'corner' || resizeType === 's') {
+                        const newHeight = Math.max(300, startHeight + dy);
+                        activeWindow.style.height = newHeight + 'px';
+                    }
+                });
+                return false;
             }
-        });
+        }, true);
 
-        document.addEventListener('mouseup', () => {
+        document.addEventListener('mouseup', (e) => {
             if (activeWindow) {
                 activeWindow.classList.remove('resizing');
             }
+            document.body.classList.remove('dragging');
             isDragging = false;
             isResizing = false;
             activeWindow = null;
