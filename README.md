@@ -1,8 +1,22 @@
+k-desktop
+
+k-1 : curriculum vitae
+
+nx : number order
+
+tx : time order
+
+p : proposition
+
+q : contraposition
+
+
+
 ketadata sensory experiments
 
 *flash warning* : *may cause seizures in photo-sensitive individuals*
 
-keta - light:
+keta - light :
 
 [1] - strobe 1
 
@@ -17,10 +31,12 @@ keta - light:
 [6] - strobe 6 
 
 
-keta - room:
+keta - room :
 
 [r] - room
 
 keta - map :
 
 [m] - map
+
+keta-ball : 
