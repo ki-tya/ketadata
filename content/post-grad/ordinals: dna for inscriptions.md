@@ -1,5 +1,4 @@
 
-[Ordinals - DNA for Inscriptions.md](https://github.com/user-attachments/files/23427797/Ordinals.-.DNA.for.Inscriptions.md)
 Ordinals: DNA for Inscriptions
 
 6 min read
