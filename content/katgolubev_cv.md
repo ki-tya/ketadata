@@ -9,6 +9,8 @@
 
 Katerina Nikita Golubev
 
+"Kat"
+
 New York, NY  
 
 646-908-8424
