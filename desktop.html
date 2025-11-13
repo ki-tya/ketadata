@@ -380,6 +380,9 @@
         }
 
         function setupWindowDragging(win, header) {
+            let dragHandler = null;
+            let upHandler = null;
+            
             header.addEventListener('mousedown', (e) => {
                 if (e.target.classList.contains('preview-close-btn') || 
                     e.target.classList.contains('content-preview-close') ||
@@ -387,7 +390,7 @@
                     e.target.closest('.content-preview-close')) return;
                 
                 const container = win.closest('.window-container');
-                if (container.classList.contains('cv-mode')) return;
+                if (container && container.classList.contains('cv-mode')) return;
                 
                 isDragging = true;
                 activeWindow = win;
@@ -395,76 +398,103 @@
                 startX = e.clientX - win.offsetLeft;
                 startY = e.clientY - win.offsetTop;
                 win.style.transform = 'none';
-                win.classList.add('resizing');
+                
                 e.preventDefault();
                 e.stopPropagation();
+                
+                dragHandler = (moveEvent) => {
+                    if (!isDragging || activeWindow !== win) return;
+                    
+                    moveEvent.preventDefault();
+                    moveEvent.stopPropagation();
+                    
+                    let newLeft = moveEvent.clientX - startX;
+                    let newTop = moveEvent.clientY - startY;
+                    
+                    const minTop = 24;
+                    const maxLeft = window.innerWidth - win.offsetWidth;
+                    const maxTop = window.innerHeight - win.offsetHeight;
+                    
+                    newLeft = Math.max(0, Math.min(newLeft, maxLeft));
+                    newTop = Math.max(minTop, Math.min(newTop, maxTop));
+                    
+                    win.style.left = newLeft + 'px';
+                    win.style.top = newTop + 'px';
+                };
+                
+                upHandler = () => {
+                    isDragging = false;
+                    activeWindow = null;
+                    document.body.classList.remove('dragging');
+                    document.removeEventListener('mousemove', dragHandler, true);
+                    document.removeEventListener('mouseup', upHandler, true);
+                };
+                
+                document.addEventListener('mousemove', dragHandler, true);
+                document.addEventListener('mouseup', upHandler, true);
             });
         }
 
         function setupWindowResize(win, container) {
             const handles = win.querySelectorAll('.resize-handle');
             handles.forEach(handle => {
+                let dragHandler = null;
+                let upHandler = null;
+                
                 handle.addEventListener('mousedown', (e) => {
                     e.stopPropagation();
                     e.preventDefault();
+                    
                     isResizing = true;
                     activeWindow = win;
                     document.body.classList.add('dragging');
-                    win.classList.add('resizing');
                     resizeType = handle.classList.contains('corner-se') ? 'corner' : 
                                 handle.classList.contains('edge-e') ? 'e' : 's';
                     startX = e.clientX;
                     startY = e.clientY;
                     startWidth = win.offsetWidth;
                     startHeight = win.offsetHeight;
+                    
+                    dragHandler = (moveEvent) => {
+                        if (!isResizing || activeWindow !== win) return;
+                        
+                        moveEvent.preventDefault();
+                        moveEvent.stopPropagation();
+                        
+                        const dx = moveEvent.clientX - startX;
+                        const dy = moveEvent.clientY - startY;
+
+                        if(resizeType === 'corner' || resizeType === 'e') {
+                            const newWidth = Math.max(400, startWidth + dx);
+                            win.style.width = newWidth + 'px';
+                        }
+                        if(resizeType === 'corner' || resizeType === 's') {
+                            const newHeight = Math.max(300, startHeight + dy);
+                            win.style.height = newHeight + 'px';
+                        }
+                    };
+                    
+                    upHandler = () => {
+                        isResizing = false;
+                        activeWindow = null;
+                        document.body.classList.remove('dragging');
+                        document.removeEventListener('mousemove', dragHandler, true);
+                        document.removeEventListener('mouseup', upHandler, true);
+                    };
+                    
+                    document.addEventListener('mousemove', dragHandler, true);
+                    document.addEventListener('mouseup', upHandler, true);
                 });
             });
         }
 
-        document.addEventListener('mousemove', (e) => {
-            if(isDragging && activeWindow) {
-                requestAnimationFrame(() => {
-                    let newLeft = e.clientX - startX;
-                    let newTop = e.clientY - startY;
-                    
-                    const minTop = 24;
-                    const maxLeft = window.innerWidth - activeWindow.offsetWidth;
-                    const maxTop = window.innerHeight - activeWindow.offsetHeight;
-                    
-                    newLeft = Math.max(0, Math.min(newLeft, maxLeft));
-                    newTop = Math.max(minTop, Math.min(newTop, maxTop));
-                    
-                    activeWindow.style.left = newLeft + 'px';
-                    activeWindow.style.top = newTop + 'px';
-                });
-                return false;
-            }
-            if(isResizing && activeWindow) {
-                requestAnimationFrame(() => {
-                    const dx = e.clientX - startX;
-                    const dy = e.clientY - startY;
-
-                    if(resizeType === 'corner' || resizeType === 'e') {
-                        const newWidth = Math.max(400, startWidth + dx);
-                        activeWindow.style.width = newWidth + 'px';
-                    }
-                    if(resizeType === 'corner' || resizeType === 's') {
-                        const newHeight = Math.max(300, startHeight + dy);
-                        activeWindow.style.height = newHeight + 'px';
-                    }
-                });
-                return false;
-            }
-        }, true);
-
         document.addEventListener('mouseup', (e) => {
-            if (activeWindow) {
-                activeWindow.classList.remove('resizing');
+            if (isDragging || isResizing) {
+                document.body.classList.remove('dragging');
+                isDragging = false;
+                isResizing = false;
+                activeWindow = null;
             }
-            document.body.classList.remove('dragging');
-            isDragging = false;
-            isResizing = false;
-            activeWindow = null;
         });
 
         createFolders();
