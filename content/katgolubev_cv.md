@@ -1,6 +1,6 @@
 [KNG 01-01]
 <br/><br/>
-
+![](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/embedded/Screenshot%202025-11-10%20at%205.02.04%20PM.png)
 
 K N Golubev 
 
@@ -45,7 +45,7 @@ Portfolio site
 - ketadata.com/login.html
 - password: 1111 <br/><br/>
 
-![](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/embedded/Screenshot%202025-11-10%20at%205.02.04%20PM.png)
+
 
 Familiar w/ microsoft office, adobe suite, photoshop, google suite, final cut pro X, airtable, mattermost, github, obsidian, smartgit, cursor, typora, audacity, gephi, ticktick, notion
 
