@@ -1,5 +1,5 @@
 [KNG 01-01]
-<br/><br/>
+
 ![](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/embedded/Screenshot%202025-11-10%20at%205.02.04%20PM.png)
 
 K N Golubev 
@@ -12,7 +12,6 @@ New York, NY
 <br/><br/>
 ![](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/embedded/Screenshot%202025-11-10%20at%205.01.04%20PM.png)
 <br/><br/>
-
 Education
 
 University of Amsterdam  - Amsterdam NL (2018-21) <br/><br/>
