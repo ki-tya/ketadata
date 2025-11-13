@@ -12,7 +12,6 @@ New York, NY
 
 <br/><br/>
 
-
 Education
 
 University of Amsterdam  - Amsterdam NL (2018-21) 
