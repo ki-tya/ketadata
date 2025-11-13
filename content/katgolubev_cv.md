@@ -1,15 +1,6 @@
-
-
-
-
-
 [KNG 01-01]
 
-![](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/embedded/Screenshot%202025-11-10%20at%205.02.04%20PM.png)
-
 K N Golubev 
-
-"Kat"
 
 New York, NY  
 
@@ -22,7 +13,7 @@ New York, NY
 
 University of Amsterdam  - Amsterdam NL (2018-21) <br/><br/>
 BA in Media & Information - Honors Programme, Cum Laude <br/><br/>
-
+![](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/embedded/Screenshot%202025-11-10%20at%205.02.04%20PM.png)
 
 Work Experience
 
@@ -58,9 +49,9 @@ Strengths: strategic thinking, creative solutions, insight analysis, idea & lead
 Interests: mixed media, artificial intelligence, digital culture, current events, art & photography, design technology, live events, cultural anthropology, digital currency,  brutalist architecture, aesthetics & politics, fashion & style, interface flow, data visualization, wellness industry, night-life, immersive experience production, , user experience design
 
 
-
-
 Languages: English, Russian, French 
+
+![](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/embedded/Screenshot%202025-11-10%20at%205.02.04%20PM.png)
 
 <br/><br/>
 
