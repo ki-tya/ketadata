@@ -10,33 +10,7 @@ p : proposition
 
 q : contraposition
 
+![](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/embedded/Screenshot%202025-11-10%20at%205.02.04%20PM.png)
 
 
-sensory experiments
 
-*flash warning* : *may cause seizures in photo-sensitive individuals*
-
-k - light :
-
-[1] - strobe 1
-
-[2] - strobe 2 
-
-[3] - strobe 3
-
-[4] - strobe 4 
-
-[5] - strobe 5
-
-[6] - strobe 6 
-
-
-k - room :
-
-[r] - room
-
-k - map :
-
-[m] - map
-
-k - ball : 
