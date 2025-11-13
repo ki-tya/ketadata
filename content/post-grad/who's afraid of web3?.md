@@ -1,5 +1,4 @@
 
-[who's afraid of web 3?.md](https://github.com/user-attachments/files/23427801/who.s.afraid.of.web.3.md)
 **Who’s afraid of Web 3?** 
 
 **Disentangling Web 3 - Fact, Fiction and Inbetween**
