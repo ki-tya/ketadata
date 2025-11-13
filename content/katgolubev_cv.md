@@ -11,7 +11,7 @@ New York, NY
 [katgolubev@gmail.com](mailto:katgolubev@gmail.com)
 
 
-
+Education
 
 University of Amsterdam  - Amsterdam NL (2018-21) <br/><br/>
 BA in Media & Information - Honors Programme, Cum Laude <br/><br/>
