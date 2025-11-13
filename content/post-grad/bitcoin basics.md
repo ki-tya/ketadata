@@ -3,6 +3,7 @@ BITCOIN BASICS
 A structured introduction to Bitcoin through key texts, thinkers, and critical lenses — moving from fundamentals to philosophy and mechanics.
 
 CORE TEXTS
+
 BITCOIN WHITE PAPER
 
 https://bitcoin.org/en/bitcoin-paper
@@ -34,6 +35,7 @@ Philosopher Nick Land treats Bitcoin as a techno-economic organism: an autonomou
 
 Focus on the idea of Bitcoin as a system that thinks economically and evolves beyond human control.
 
+
 TECHNICAL AND ECONOMIC ESSAYS
 ANDREW POELSTRA — ON STAKE AND CONSENSUS
 
@@ -64,6 +66,7 @@ SAIFEDEAN AMMOUS — THE BITCOIN STANDARD
 https://www.youtube.com/watch?v=gp4U5aH_T6A&ab_channel=LexFridman
 
 An economic argument for Bitcoin as “sound money.” Ammous connects Austrian economics with digital scarcity, presenting Bitcoin as a long-term store of value that restores low time preference and monetary discipline.
+
 
 CRITIQUES AND COUNTERPOINTS
 DAN OLSON — “LINE GOES UP: THE PROBLEM WITH NFTS”
@@ -110,22 +113,34 @@ WHAT IS BITCOIN?
 Bitcoin is a decentralized digital currency built on three principles: cryptography, consensus, and incentive. It replaces trust in institutions with verifiable computation.
 
 The Blockchain
+
+
 A public ledger storing every transaction in chronological order. Each block references the previous one, forming an immutable chain secured by cryptographic hashes.
 
 Proof-of-Work
+
+
 Miners compete to solve mathematical puzzles that require real energy expenditure. The first to solve adds a new block to the chain and receives newly minted Bitcoin as a reward.
 This process ensures that adding data is costly and that the longest chain represents the most computational work done — thus the most valid record.
 
 Decentralization
+
+
 Thousands of independent nodes verify transactions. No single server or authority controls the system. Consensus is achieved through majority validation and shared rules rather than decrees.
 
 Scarcity and Issuance
+
+
 There will only ever be 21 million bitcoins. The issuance rate halves roughly every four years (the “halving”), creating a deflationary structure analogous to gold scarcity.
 
 Ownership and Keys
+
+
 To hold Bitcoin is to control a pair of cryptographic keys. The private key signs transactions; the public key proves ownership. “Not your keys, not your coins” summarizes the system’s ethos.
 
 Social Layer
+
+
 Beyond the protocol, Bitcoin represents a cultural and philosophical shift: the belief that money can exist without the state, that code can enforce fairness, and that distributed systems can outlast centralized trust.
 
 Bitcoin is both a network and an idea, a living experiment in digital sovereignty, incentive design, and human coordination.
