@@ -21,21 +21,21 @@ BA in Media & Information - Honors Programme, Cum Laude <br/><br/>
 
 Work Experience
 
-- Tutor & Au Pair 2016-2018
+- Tutor & Au Pair (2016-18)
   
-- Freelance Writing/Translation 2016-2021
+- Freelance Writing/Translation (2016-21)
 
-- Event Photography 2018-21
+- Event Photography (2018-21)
 
-- Production Coordinator 2020-21
+- Production Coordinator (2020-21)
   
-- Warehouse Management 2021-2022
+- Warehouse Management (2021-22)
   
-- Info & Research Analyst 2020-2022
+- Info & Research Analyst (2020-22)
   
-- Technical Writer & Project Management 2021-25
+- Technical Writer & Project Management (2021-25)
   
-- Freelance, Consulting & Editing 2023-25
+- Freelance, Consulting & Editing (2023-25)
 <br/><br/>
 
 
