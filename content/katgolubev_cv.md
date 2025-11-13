@@ -1,4 +1,3 @@
-[katgolubev_cv.pdf.md](https://github.com/user-attachments/files/23429800/katgolubev_cv.pdf.md)
 
 ![embedded image — pic](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/single/Screenshot%202025-11-10%20at%202.44.56%20AM.png)
 
