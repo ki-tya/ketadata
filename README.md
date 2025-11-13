@@ -12,11 +12,11 @@ q : contraposition
 
 
 
-ketadata sensory experiments
+sensory experiments
 
 *flash warning* : *may cause seizures in photo-sensitive individuals*
 
-keta - light :
+k - light :
 
 [1] - strobe 1
 
@@ -31,12 +31,12 @@ keta - light :
 [6] - strobe 6 
 
 
-keta - room :
+k - room :
 
 [r] - room
 
-keta - map :
+k - map :
 
 [m] - map
 
-keta-ball : 
+k - ball : 
