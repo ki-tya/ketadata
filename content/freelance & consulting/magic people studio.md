@@ -1,256 +1,340 @@
-MAGIC PEOPLE
+MAGIC PEOPLE STUDIO
+Strategy & Identity Blueprint
 
-**2 Directions as (a) studio + (b) art collective**
+(Studio + Art Collective Ecosystem)
 
-- keep separate but intersecting - **different audiences**
-- Studio - **focus on artists**
-- Collective - **idea-centred**, **focus on characters**
-- Mixtape (?),  Music Videos (?)
-- Maybe: Go Pros - sound quality (?)
+1. Core Structure: Two Intersecting Entities
+A. MAGIC PEOPLE Studio
 
-  
+Audience: working artists, musicians, filmmakers, creators.
 
-References:
+Identity: scrappy-but-capable creative studio with soul.
 
-- Kenny Beats series
+Functions:
 
-[https://www.youtube.com/watch?v=qdMiTWbExyc](https://www.youtube.com/watch?v=qdMiTWbExyc)
+Recording and audio production.
 
-  
+Video production and concept shoots.
 
-- American Russians
+Brand voice, visuals, concept development.
 
-[https://www.youtube.com/watch?v=_f6c7VT5P_Q](https://www.youtube.com/watch?v=_f6c7VT5P_Q)
+Content creation hub (sessions, interviews, BTS).
 
-  
+Tone: casual professional, charmingly unpolished.
 
-- Баллада о дружбе
+Essence: Studio sells skill.
 
-[https://www.youtube.com/watch?v=tIbiajryFWY](https://www.youtube.com/watch?v=tIbiajryFWY)
+B. MAGIC PEOPLE Collective
 
-  
+Audience: story-driven communities, philosophy/art internet, post-soviet aesthetic circles.
 
-  
+Identity: living myth, characters, friendship as art, cigarette philosophy.
 
-ADD MORE ! 
+Functions:
 
-  
+Character-driven storytelling.
 
-**Social Media**
+Episodic films, narrative videos, conversation pieces.
 
-  
+Visual diaries, dialogues, archival content.
 
-**TikTok** - more artistic + music promotion - mix of both 
+Live performance, poetry events, screenings.
 
-- Algorithm + location based
+Tone: raw, philosophical, funny-sad, vulnerable.
 
-  
+Essence: Collective sells soul.
 
-**Instagram** - more studio based - casual professional - cool guys
+Intersection
 
-2x a week minimum - get stable studio shots
+Studio promotes artists through content.
 
-- studio content - promote your artists
+Collective builds mythology around those same artists.
 
-- Clout farm
-- professional/laidback easy
+Studio = Execution.
 
-YELP shit but not too sellout
+Collective = Purpose.
 
-- need more research on studio promo
+“Studio sells skill. Collective sells soul.”
 
-- Cross promote to Art Collective
+2. Founding Character Types
 
-- [deep cuts vibes]
+Core Characters:
 
-  
+Vitalik: Moody musician. Haunted genius. Method actor.
 
-**Twitter** - research network as studio/pr network - get the pretentious red scare crowd - “high brow”/slav-obsessed
+Zhan: Filmmaker. Sailor. Divorce romanticist.
 
-  
+Kostya: Fresh blood. Audience proxy. Innocent comedian.
 
-**Telegram Channel** - cross-promoted on both Tiktok + Instagram (exclusive( like onlyfans)) - needs cultivated audience
+Boris The Animal: Techno-sage. Bar philosopher. Chaos strategist.
 
-  
+Episodic Characters:
 
-**YouTube (?) -** can link from TikTok, long form, TikTok as trailer, YouTube as full thing
+Women, rappers, outsiders, muses, disruptors.
 
-  
+Purpose: arc tension, romance, chaos, emotional beat changes.
 
-**Content, content, content**
+Goal:
 
-  
+Make characters recognizable, quotable, and followable.
 
-[**Понял принципы работы вирусных видео и поисковиков, чтобы с нуля стать самым популярным музыкантом в США: опыт Lil Nas X — Маркетинг на vc.ru**](https://vc.ru/marketing/105550-ponyal-principy-raboty-virusnyh-video-i-poiskovikov-chtoby-s-nulya-stat-samym-populyarnym-muzykantom-v-ssha-opyt-lil-nas-x)
+Build fans of people, not just fans of work.
 
-  
+3. Aesthetic DNA
 
-  
+What we like:
 
-**COLLECTIVE**
+Friendship-as-art.
 
-  
+Humor as emotional shield.
 
-Mission Statement **(Manifesto)**
+Low-budget beauty.
 
-- Think about **values**
+Amateur genius.
 
-- **Destruction, simplicity, friendship & пир**
-- **Where is the SOUL ???**
-- **Beer-weed-shrooms type guys**
+Emotional mess + deadpan aesthetics.
 
-  
+Human chaos and stillness.
 
-- Artist profiles as --- part of [blank] collective
-- post-soviet prostranstvo, ‘Originally from Odessa…’ , consider your roots
+VHS, postcards, cigarettes, baby blue rooms.
 
-  
+Key Influences:
+Wu-Tang, Nirvana, Linklater, Cassavetes, Wong Kar-Wai, Bertolucci, Tarantino, Bukowski, Hunter S. Thompson, Jung, Freud.
 
-**PR photos** - not too serious - california lifestyle typeshit
+Visual Language:
 
-- Need concept !
-- Not too pretentious, not too casual
+Dusty studio floors.
 
-  
+Graffiti walls.
 
-Think about your **archetypes & PR legend**
+Lighting: baby blue, red, warm tungsten.
 
-- Story behind name
-- Personal backstories
-- What are you for? What are you against?
-- Don’t be scared to be funny, people like funny
-- Don’t be scared to be raw, people like raw
+Projector shadows.
 
-  
+Apartment nostalgia, cheap beer, flickering TV.
 
-Vitalik - musician/moody mf/method actor
+4. Social Media Strategy (No Tables, Pure Structure)
+TikTok
 
-Zhan - filmmaker/моряк/divorcee
+Purpose: Reach, growth, myth-building.
 
-Kostya - fresh blood/designated driver
+Content types:
 
-Boris The Animal - technocrat/bar enthusiast
+Studio BTS.
 
-  
+Raw character clips.
 
-- episodic characters (rappers, women, etc)
+Music snippets.
 
-  
+Funny/sad ephemeral moments.
 
-Add some NOSTALGIA (not too much)
+Tone: dreamy, chaotic, non-cringe.
 
-- Guys need to respect you
-- Girls need to like you
+Frequency: 3–5 times/week.
 
-  
+Instagram
 
-Надо разобраться с ЦЕЛЕВУХОЙ
+Purpose: Visual identity + studio credibility.
 
-  
+Content types:
 
-Influences 
+PR photos.
 
-Wutang 
+Studio shots.
 
-Nirvana
+Posters and event promotions.
 
-Tarantino 
+Tone: cool, human, cinematic.
 
-Cassavetes 
+Frequency: 2 posts/week minimum (carousel + reel).
 
-Bertolucci
+Twitter
 
-Bergman
+Purpose: Research, theory, philosophy, network-building.
 
-Bukowski
+Content types:
 
-S. Thompson
+Quotes.
 
-Jung
+Film references.
 
-Freud
+Thought threads.
 
-  
+Screenshots, book scraps.
 
-ADD MORE ! AND FORMULATE WHAT IT IS THAT YOU LIKE !
+Tone: ironic, clever, slightly pretentious.
 
-  
-ARTISTIC VISION IS FLUID AND EVOLVING, EXPERIMENTATION IS KEY
+Frequency: 2–3 tweets/week.
 
+Telegram Channel
 
-**STUDIO SETUP**
+Purpose: Intimacy, “inner circle.”
 
-**HIGH PRIORITY**
+Content types:
 
-- INTERNET
+Unreleased tracks.
 
+Voice notes.
 
-**SPACE**
+Found footage.
 
-- Booth space - secluded area, hot box
+Emotional texts.
 
-- Table, LED ground light 
+Tone: moody, personal, experimental.
 
-- Walls - too much white space
+Frequency: 1+ drops per week.
 
-- Graffiti 
+YouTube
 
-- Materials: Baby blue interior paint (5 gallons)
+Purpose: Archive, long-form soul.
 
-- Projector screen (size?)
+Content types:
 
-- Other 
+Studio sessions.
 
-- replace blanket - MPS sign (?)
-- finish red squares
+Micro documentaries.
 
-  
+Filmed conversations.
 
-**EVENTS** 
+Tone: cinematic, slow, emotional.
 
-- Potential directions
+Frequency: Monthly or episodic.
 
-- Thematic - film viewings, poetry readings, niched communities
-- Party - weekends (Fri, Sat, Sun) 
-- Lounge 
+5. Studio Setup
 
-  
+Non-negotiables:
 
-- Tentative calendar
+Internet (core infrastructure).
 
-  
+Soundproof booth / hot box room.
 
-**EVENT ORGANIZATION**
+Projector and screen.
 
-- Face control + security 
-- Backroom - no guests, workspace + storage
-- Bathroom issue 
+LED ground lighting.
 
-  
+Rugs, textures, lived-in aesthetic.
 
-**OUTREACH STRATEGY** 
+Walls:
 
-- Promotional Materials
-- Targeted Marketing
-- Investor/sponsor search (?)
-- Partnerships
-- Social media strategy
-- Community outreach 
-- Make cool friends
+Paint baby blue (color signature).
 
-  
+Add graffiti, doodles, quotes, scribbles.
 
-**EXPENSES**
+Build evolving mood-board wall.
 
-- Internet ($500)
-- Rent ($1500)
-- Paint (~$100)
-- Projector screen ( ~$35 - $100)
+Key Principle:
 
-  
+The space should feel like a living character.
 
-**REVENUE** 
+6. Events as Social Architecture
 
-  
+Formats:
 
-**NOTES**
+Studio Thursdays: intimate screenings, poetry, group talks.
+
+Weekend Parties: DJ, open mic, casual chaos.
+
+Lounge Sundays: vinyl, cigarettes, slow conversations.
+
+Logistics:
+
+Face control and security.
+
+Backroom (workspace only).
+
+Bathroom solution.
+
+RSVP via IG/Telegram.
+
+Capture Everything:
+
+Every event must create content: photos, quotes, short videos.
+
+7. Outreach & Growth Strategy
+
+Partnerships:
+
+Film students, DJs, small galleries, micro-festivals.
+
+Eastern European diaspora pockets (NYC, Berlin, LA).
+
+Russian-speaking nostalgia communities.
+
+Cultural podcasts, poetry collectives.
+
+Community Growth:
+
+Make fewer but deeper relationships.
+
+Invite collaborators into the myth.
+
+Investor / sponsor pitch angle:
+
+“Urban cultural atelier + living collective documenting human connection and chaos.”
+
+8. Financial Snapshot (No table, bullet form)
+
+Core expenses:
+
+Internet: ~$500 setup.
+
+Rent: ~$1500.
+
+Paint: ~$100.
+
+Projector screen: $35–100.
+
+Led lighting: ~$60.
+
+Rugs / props: ~$200–300.
+
+Revenue possibilities:
+
+Studio bookings (hourly/time blocks).
+
+Creative consulting.
+
+Branding & content production.
+
+Events (tickets, bar, memberships).
+
+Character/content licensing.
+
+9. Collective Mission Statement (Draft)
+
+We exist for friendship, destruction, and purpose.
+We believe raw ideas matter more than polished ones.
+We create art from conversations, cigarettes, and real life.
+We are not a studio, not a brand—
+we are four idiots, one mic, and a story.
+Our only real product is soul.
+
+10. Action Plan Timelines
+
+First 30 Days:
+
+Finalize studio space (paint, WiFi, lighting).
+
+Shoot founding interviews (“Who the hell are you?”).
+
+Launch TikTok & Instagram soft start.
+
+Build private Telegram channel with first members.
+
+Next 90 Days:
+
+Start weekly content drops.
+
+Release first episodic video: “Magic People: Episode 1.”
+
+Host Studio Thursday event.
+
+Launch minimal landing page.
+
+Make first collaboration invites.
+
+CORE PRINCIPLE
+
+Magic People does not have to be perfect.
+It must be real, soulful, watchable, followable, and alive.
+It is a myth we build while living it.
