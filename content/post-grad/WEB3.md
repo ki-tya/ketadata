@@ -1,3 +1,5 @@
+ { type: 'markdown', name: 'bitcoin realism', url: 'https://raw.githubusercontent.com/ki-tya/ketadata/main/content/post-grad/WEB3.md' },
+ 
 ![](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/WEB3/bitcoin%20realism%20(2).001.jpeg)
 
 ![](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/WEB3/bitcoin%20realism%20(2).002.jpeg)
