@@ -1,4 +1,4 @@
-[contents.md](https://github.com/user-attachments/files/23416907/contents.md)
+
 _Introduction_
 
 _Defining the Trust Model_
