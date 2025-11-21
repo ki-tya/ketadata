@@ -74,8 +74,9 @@ Skills: strategic thinking, creative solutions, insight analysis, idea & lead ge
 Interests: mixed media, artificial intelligence, digital culture, current events, pop culture, art & photography, design technology, live events, cultural anthropology, digital currency, architecture, aesthetics & politics, fashion & style, night-life, immersive experience production, user experience design
 
 Languages: English, Russian, French   
+<br/><br/>
 
-
+![](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/embedded/Screenshot%202025-11-10%20at%205.02.04%20PM.png)
 
 <br/><br/>
 
