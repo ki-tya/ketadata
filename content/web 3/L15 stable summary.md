@@ -1,4 +1,4 @@
-[stable summary.md](https://github.com/user-attachments/files/23416946/stable.summary.md)
+
 Layer One dot Five
 
 Lightning-compatible Stablecoin Backed by Bitcoin Collateral (non-technical summary)
