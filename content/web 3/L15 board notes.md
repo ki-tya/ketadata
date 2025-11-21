@@ -1,4 +1,4 @@
-[board notes.md](https://github.com/user-attachments/files/23416875/board.notes.md)
+
 Board 1
 
 1. Trust Model defined: why we trust L15 to fulfill its promises
