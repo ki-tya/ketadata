@@ -1,5 +1,3 @@
-[readme.md](https://github.com/user-attachments/files/23416938/readme.md)
-[**README.md**](https://github.com/layer1dot5/l15-core%23readme)
 
 **L15**
 
