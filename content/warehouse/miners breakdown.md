@@ -1,4 +1,4 @@
-[MINERS BREAKDOWN.md](https://github.com/user-attachments/files/23403996/MINERS.BREAKDOWN.md)
+
 **UNSORTED**
 
 **BOX 1**
