@@ -7,23 +7,8 @@
 ![L15 Trust Model Page 7](/content/images/L15/L15-Trustmodel copy_page_7.jpg)  
 ![L15 Trust Model Page 8](/content/images/L15/L15-Trustmodel copy_page_8.jpg)  
 ![L15 Trust Model Page 9](/content/images/L15/L15-Trustmodel copy_page_9.jpg)  
-![L15 Trust Model Page 10](/content/images/L15/L15-Trustmodel copy_page_10.jpg)  
-![L15 Trust Model Page 11](/content/images/L15/L15-Trustmodel copy_page_11.jpg)  
-![L15 Trust Model Page 12](/content/images/L15/L15-Trustmodel copy_page_12.jpg)  
-![L15 Trust Model Page 13](/content/images/L15/L15-Trustmodel copy_page_13.jpg)  
-![L15 Trust Model Page 14](/content/images/L15/L15-Trustmodel copy_page_14.jpg)  
-![L15 Trust Model Page 15](/content/images/L15/L15-Trustmodel copy_page_15.jpg)  
-![L15 Trust Model Page 16](/content/images/L15/L15-Trustmodel copy_page_16.jpg)  
-![L15 Trust Model Page 17](/content/images/L15/L15-Trustmodel copy_page_17.jpg)  
-![L15 Trust Model Page 18](/content/images/L15/L15-Trustmodel copy_page_18.jpg)  
-![L15 Trust Model Page 19](/content/images/L15/L15-Trustmodel copy_page_19.jpg)  
-![L15 Trust Model Page 20](/content/images/L15/L15-Trustmodel copy_page_20.jpg)  
-![L15 Trust Model Page 21](/content/images/L15/L15-Trustmodel copy_page_21.jpg)  
-![L15 Trust Model Page 22](/content/images/L15/L15-Trustmodel copy_page_22.jpg)  
-![L15 Trust Model Page 23](/content/images/L15/L15-Trustmodel copy_page_23.jpg)  
-![L15 Trust Model Page 24](/content/images/L15/L15-Trustmodel copy_page_24.jpg)  
-![L15 Trust Model Page 25](/content/images/L15/L15-Trustmodel copy_page_25.jpg)  
-![L15 Trust Model Page 26](/content/images/L15/L15-Trustmodel copy_page_26.jpg)
+![L15 Trust Model Page 10](/content/images/L15/L15-Trustmodel copy_page_10.jpg)
+
 
 L15 Trust Model
 
