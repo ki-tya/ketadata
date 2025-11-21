@@ -6,18 +6,28 @@
 
 **“Kat”** 
 
-New York, NY    
-646-908-8424  
+New York, NY 
+
+646-908-8424
+
 katgolubev@gmail.com
 
-Education   
-University of Amsterdam   
+
+Education
+
+University of Amsterdam  
+
 Amsterdam NL (UVA)  
-Bachelor's in Media & Information    
-Honors Programme, Cum Laude  
+
+Bachelor's in Media & Information 
+
+Honors Programme, Cum Laude
+
 Offscreen Reporter Committee
 
+
 Work Experience  
+
 Freelance, Consulting & Editing     				            Various Locations  (2023-25)
 
 * Consulted on a wide range of products \- MUKA (fashion & wellness), Librif-AI (ai-enabled document processing),  Nobel (alcohol delivery app), CreateWithMe (generative ai nft service), VuV learning center (modern curriculum), Winline (online casino)  
