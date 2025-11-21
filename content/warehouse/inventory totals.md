@@ -1,4 +1,4 @@
-[INVENTORY TOTALS.md](https://github.com/user-attachments/files/23403968/INVENTORY.TOTALS.md)
+
   
 
 **TOTALS**
