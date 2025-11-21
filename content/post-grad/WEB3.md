@@ -29,4 +29,3 @@
 ![](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/presentations/WEB3/bitcoin%20realism%20(2)%203.027.png)
 ![](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/presentations/WEB3/bitcoin%20realism%20(2)%203.028.png)
 ![](https://raw.githubusercontent.com/ki-tya/ketadata/main/content/images/presentations/WEB3/bitcoin%20realism%20(2)%203.029.png)
-{ type: 'markdown', name: 'bitcoin realism', url: 'https://raw.githubusercontent.com/ki-tya/ketadata/main/content/post-grad/WEB3.md' },
