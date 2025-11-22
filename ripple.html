@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>k-ripple</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background: #1a1a1a;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+        #canvas {
+            display: block;
+        }
+        #instructions {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: rgba(100, 255, 100, 0.6);
+            font-family: Arial, sans-serif;
+            font-size: 14px;
+            text-align: center;
+            z-index: 10;
+            pointer-events: none;
+            transition: opacity 1s;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="canvas"></canvas>
+    <div id="instructions">Press SPACE to start/stop</div>
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        
+        let isAnimating = false;
+        let animationFrame;
+        let time = 0;
+        let ripples = [];
+        
+        class Ripple {
+            constructor(x, y, delay = 0) {
+                this.x = x;
+                this.y = y;
+                this.radius = 0;
+                this.maxRadius = Math.random() * 150 + 200;
+                this.speed = Math.random() * 0.5 + 0.8;
+                this.delay = delay;
+                this.age = 0;
+                this.opacity = Math.random() * 0.3 + 0.5;
+            }
+            
+            update() {
+                if (this.delay > 0) {
+                    this.delay--;
+                    return;
+                }
+                
+                this.age++;
+                this.radius += this.speed;
+            }
+            
+            draw() {
+                if (this.delay > 0 || this.radius > this.maxRadius || this.radius < 1) return;
+                
+                let progress = this.radius / this.maxRadius;
+                let alpha = (1 - progress) * this.opacity;
+                
+                // Draw multiple concentric rings for depth
+                for (let i = 0; i < 3; i++) {
+                    let offset = i * 8;
+                    let ringRadius = this.radius - offset;
+                    if (ringRadius < 1) continue;
+                    
+                    ctx.strokeStyle = `rgba(100, 255, 100, ${alpha * (0.8 - i * 0.2)})`;
+                    ctx.lineWidth = 3 - i * 0.5;
+                    ctx.beginPath();
+                    ctx.arc(this.x, this.y, ringRadius, 0, Math.PI * 2);
+                    ctx.stroke();
+                }
+                
+                // Glow effect
+                if (this.radius >= 1) {
+                    ctx.shadowBlur = 15;
+                    ctx.shadowColor = `rgba(100, 255, 100, ${alpha * 0.5})`;
+                    ctx.strokeStyle = `rgba(150, 255, 150, ${alpha * 0.4})`;
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                    ctx.stroke();
+                    ctx.shadowBlur = 0;
+                }
+            }
+            
+            isDead() {
+                return this.radius > this.maxRadius;
+            }
+        }
+        
+        function createRipplePattern() {
+            // Create ripples in a flowing pattern
+            if (Math.random() > 0.85) {
+                let x = Math.random() * canvas.width;
+                let y = Math.random() * canvas.height;
+                ripples.push(new Ripple(x, y));
+            }
+            
+            // Create synchronized wave patterns
+            if (time % 80 === 0) {
+                for (let i = 0; i < 5; i++) {
+                    let x = (canvas.width / 6) * (i + 1);
+                    let y = canvas.height / 2 + Math.sin(time * 0.02 + i) * 150;
+                    ripples.push(new Ripple(x, y, i * 10));
+                }
+            }
+            
+            // Create circular pattern occasionally
+            if (time % 150 === 0) {
+                let centerX = canvas.width / 2;
+                let centerY = canvas.height / 2;
+                for (let i = 0; i < 8; i++) {
+                    let angle = (Math.PI * 2 / 8) * i;
+                    let distance = 150;
+                    let x = centerX + Math.cos(angle) * distance;
+                    let y = centerY + Math.sin(angle) * distance;
+                    ripples.push(new Ripple(x, y, i * 8));
+                }
+            }
+        }
+        
+        function drawRipples() {
+            // Fade effect for trails
+            ctx.fillStyle = 'rgba(10, 10, 10, 0.1)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            time++;
+            
+            createRipplePattern();
+            
+            // Update and draw all ripples
+            ripples.forEach(ripple => {
+                ripple.update();
+                ripple.draw();
+            });
+            
+            // Remove dead ripples
+            ripples = ripples.filter(ripple => !ripple.isDead());
+            
+            // Add ambient particles
+            if (Math.random() > 0.9) {
+                let x = Math.random() * canvas.width;
+                let y = Math.random() * canvas.height;
+                ctx.fillStyle = `rgba(100, 255, 100, ${Math.random() * 0.3})`;
+                ctx.beginPath();
+                ctx.arc(x, y, Math.random() * 2 + 1, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            
+            animationFrame = requestAnimationFrame(drawRipples);
+        }
+        
+        function start() {
+            document.getElementById('instructions').style.opacity = '0';
+            drawRipples();
+        }
+        
+        function stop() {
+            cancelAnimationFrame(animationFrame);
+            ctx.fillStyle = '#0a0a0a';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            document.getElementById('instructions').style.opacity = '0.6';
+            time = 0;
+            ripples = [];
+        }
+        
+        document.addEventListener("keydown", (event) => {
+            if (event.key === " " || event.code === "Space") {
+                event.preventDefault();
+                if (isAnimating) {
+                    stop();
+                } else {
+                    start();
+                }
+                isAnimating = !isAnimating;
+            }
+        });
+        
+        // Click to create ripples manually
+        canvas.addEventListener('click', (event) => {
+            if (isAnimating) {
+                ripples.push(new Ripple(event.clientX, event.clientY));
+            }
+        });
+        
+        window.addEventListener('resize', () => {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        });
+    </script>
+</body>
+</html>
