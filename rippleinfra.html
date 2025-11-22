@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Infrared Ripples</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background: #0a0000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+        #canvas {
+            display: block;
+        }
+        #instructions {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: rgba(255, 100, 80, 0.6);
+            font-family: Arial, sans-serif;
+            font-size: 14px;
+            text-align: center;
+            z-index: 10;
+            pointer-events: none;
+            transition: opacity 1s;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="canvas"></canvas>
+    <div id="instructions">Press SPACE to start/stop</div>
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        
+        let isAnimating = false;
+        let animationFrame;
+        let time = 0;
+        let ripples = [];
+        
+        class Ripple {
+            constructor(x, y, delay = 0) {
+                this.x = x;
+                this.y = y;
+                this.radius = 0;
+                this.maxRadius = Math.random() * 150 + 200;
+                this.speed = Math.random() * 0.5 + 0.8;
+                this.delay = delay;
+                this.age = 0;
+                this.opacity = Math.random() * 0.4 + 0.6;
+                this.hue = Math.random() * 20 - 10; // Slight color variation for metallic effect
+            }
+            
+            update() {
+                if (this.delay > 0) {
+                    this.delay--;
+                    return;
+                }
+                
+                this.age++;
+                this.radius += this.speed;
+            }
+            
+            draw() {
+                if (this.delay > 0 || this.radius > this.maxRadius || this.radius < 1) return;
+                
+                let progress = this.radius / this.maxRadius;
+                let alpha = (1 - progress) * this.opacity;
+                
+                // Heat signature pulsation
+                let heatPulse = Math.sin(this.age * 0.1) * 0.5 + 0.5;
+                
+                // Infrared heat rings - deep red to bright orange-white
+                for (let i = 0; i < 6; i++) {
+                    let offset = i * 5;
+                    let ringRadius = this.radius - offset;
+                    if (ringRadius < 1) continue;
+                    
+                    // Infrared heat gradient - dark red to bright orange
+                    let r = 180 + i * 12 + heatPulse * 40;
+                    let g = 20 + i * 15;
+                    let b = 0;
+                    
+                    if (i < 2) {
+                        // Hot core - bright orange-red to white-hot
+                        r = 255;
+                        g = 80 + i * 40;
+                        b = 10 + i * 20;
+                    }
+                    
+                    ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, ${alpha * (0.95 - i * 0.12)})`;
+                    ctx.lineWidth = 5 - i * 0.6;
+                    ctx.beginPath();
+                    ctx.arc(this.x, this.y, ringRadius, 0, Math.PI * 2);
+                    ctx.stroke();
+                }
+                
+                // Intense heat glow layers
+                if (this.radius >= 5) {
+                    // Outer glow - deep red heat
+                    ctx.shadowBlur = 40;
+                    ctx.shadowColor = `rgba(255, 40, 0, ${alpha * 0.9})`;
+                    ctx.strokeStyle = `rgba(255, 60, 20, ${alpha * 0.9})`;
+                    ctx.lineWidth = 4;
+                    ctx.beginPath();
+                    ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                    ctx.stroke();
+                    
+                    // Middle heat ring - bright orange
+                    let midRadius = this.radius + 4;
+                    if (midRadius >= 1) {
+                        ctx.shadowBlur = 30;
+                        ctx.shadowColor = `rgba(255, 100, 30, ${alpha * 0.8})`;
+                        ctx.strokeStyle = `rgba(255, 120, 40, ${alpha * 0.7})`;
+                        ctx.lineWidth = 2.5;
+                        ctx.beginPath();
+                        ctx.arc(this.x, this.y, midRadius, 0, Math.PI * 2);
+                        ctx.stroke();
+                    }
+                    
+                    // Inner white-hot core
+                    let innerRadius = this.radius - 3;
+                    if (innerRadius >= 1) {
+                        ctx.shadowBlur = 25;
+                        ctx.shadowColor = `rgba(255, 200, 100, ${alpha * heatPulse})`;
+                        ctx.strokeStyle = `rgba(255, 220, 150, ${alpha * 0.6})`;
+                        ctx.lineWidth = 2;
+                        ctx.beginPath();
+                        ctx.arc(this.x, this.y, innerRadius, 0, Math.PI * 2);
+                        ctx.stroke();
+                    }
+                    
+                    ctx.shadowBlur = 0;
+                }
+            }
+            
+            isDead() {
+                return this.radius > this.maxRadius;
+            }
+        }
+        
+        function createRipplePattern() {
+            // Create ripples in a flowing pattern
+            if (Math.random() > 0.85) {
+                let x = Math.random() * canvas.width;
+                let y = Math.random() * canvas.height;
+                ripples.push(new Ripple(x, y));
+            }
+            
+            // Create synchronized wave patterns
+            if (time % 80 === 0) {
+                for (let i = 0; i < 5; i++) {
+                    let x = (canvas.width / 6) * (i + 1);
+                    let y = canvas.height / 2 + Math.sin(time * 0.02 + i) * 150;
+                    ripples.push(new Ripple(x, y, i * 10));
+                }
+            }
+            
+            // Create circular pattern occasionally
+            if (time % 150 === 0) {
+                let centerX = canvas.width / 2;
+                let centerY = canvas.height / 2;
+                for (let i = 0; i < 8; i++) {
+                    let angle = (Math.PI * 2 / 8) * i;
+                    let distance = 150;
+                    let x = centerX + Math.cos(angle) * distance;
+                    let y = centerY + Math.sin(angle) * distance;
+                    ripples.push(new Ripple(x, y, i * 8));
+                }
+            }
+        }
+        
+        function drawRipples() {
+            // Very subtle fade for heat trail effect
+            ctx.fillStyle = 'rgba(10, 0, 0, 0.05)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            time++;
+            
+            createRipplePattern();
+            
+            // Update and draw all ripples
+            ripples.forEach(ripple => {
+                ripple.update();
+                ripple.draw();
+            });
+            
+            // Remove dead ripples
+            ripples = ripples.filter(ripple => !ripple.isDead());
+            
+            // Add glowing heat particles
+            if (Math.random() > 0.8) {
+                let x = Math.random() * canvas.width;
+                let y = Math.random() * canvas.height;
+                let size = Math.random() * 3 + 1.5;
+                
+                // Bright orange-red heat particles
+                ctx.shadowBlur = 15;
+                ctx.shadowColor = 'rgba(255, 80, 20, 0.9)';
+                ctx.fillStyle = `rgba(255, 100, 30, ${Math.random() * 0.7 + 0.3})`;
+                ctx.beginPath();
+                ctx.arc(x, y, size, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.shadowBlur = 0;
+            }
+            
+            // Add heat shimmer streaks
+            if (Math.random() > 0.95) {
+                let x = Math.random() * canvas.width;
+                let y = Math.random() * canvas.height;
+                
+                ctx.shadowBlur = 20;
+                ctx.shadowColor = 'rgba(255, 60, 0, 0.6)';
+                ctx.strokeStyle = `rgba(255, 80, 20, ${Math.random() * 0.5 + 0.3})`;
+                ctx.lineWidth = Math.random() * 2 + 1;
+                ctx.beginPath();
+                ctx.moveTo(x, y);
+                ctx.lineTo(x + Math.random() * 40 - 20, y + Math.random() * 40 - 20);
+                ctx.stroke();
+                ctx.shadowBlur = 0;
+            }
+            
+            animationFrame = requestAnimationFrame(drawRipples);
+        }
+        
+        function start() {
+            document.getElementById('instructions').style.opacity = '0';
+            drawRipples();
+        }
+        
+        function stop() {
+            cancelAnimationFrame(animationFrame);
+            ctx.fillStyle = '#0a0000';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            document.getElementById('instructions').style.opacity = '0.6';
+            time = 0;
+            ripples = [];
+        }
+        
+        document.addEventListener("keydown", (event) => {
+            if (event.key === " " || event.code === "Space") {
+                event.preventDefault();
+                if (isAnimating) {
+                    stop();
+                } else {
+                    start();
+                }
+                isAnimating = !isAnimating;
+            }
+        });
+        
+        // Click to create ripples manually
+        canvas.addEventListener('click', (event) => {
+            if (isAnimating) {
+                ripples.push(new Ripple(event.clientX, event.clientY));
+            }
+        });
+        
+        window.addEventListener('resize', () => {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        });
+    </script>
+</body>
+</html>
