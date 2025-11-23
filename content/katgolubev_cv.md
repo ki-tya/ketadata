@@ -30,43 +30,26 @@ Work Experience
 
 Freelance, Consulting & Editing     				            Various Locations  (2023-25)
 
-* Consulted on a wide range of products \- MUKA (fashion & wellness), Librif-AI (ai-enabled document processing),  Nobel (alcohol delivery app), CreateWithMe (generative ai nft service), VuV learning center (modern curriculum), Winline (online casino)  
-* Main focus \- brand identity & voice, language, tone & terminology, market positioning, cultural context, media & information strategy, ethical concerns
-
 
 Technical Writer & Project Management – L15/UTXORD  	            San Francisco, CA (2021-25)
 
-* Composite role at startup working across all stages of development   
-* Developed internal briefs, co-wrote/edited whitepaper & other technical documentation,  set deadlines, assisted on strategy, oversaw deliverables, drafted pitch decks & investor updates, lead site redesign, developed branding & legend, produced marketing materials, interface analysis, consumer testing & market research, represented the company at events & conferences globally, facilitated partnerships, organized digital events (e.g. twitter spaces, ama sessions, etc)
 
 Info & Research Analyst – Arrowlabs  				            San Francisco, CA (2020-23)
 
-* Conducted deep research on digital currencies, digital artifacts, fintech platforms, media ecologies, web3/crypto ecosystem, market conditions, technical developments, artificial intelligence, economic theory   
-* Produced briefs & insights based on findings & data collected, consulted on business development & strategic positioning 
 
  Warehouse Management – Arrowlabs 			 	           San Francisco, CA  (2021-22) 
 
-* Oversaw the re-organization of inventory & implemented a new labelling method  
-* Managed listings, sales & shipping of inventory on various e-commerce platforms
 
 Production Coordinator –  SLED 					         Moscow, RU (2020-21)
 
-* Television crime procedural – assisted with end-to-end episode production pipeline – casting, location scouting, schedules & call-sheets, department coordination, & internal conflict resolution
 
 Event Photography & Graphic Design 				                 Amsterdam, NL (2018-21)
 
-* Concurrent with studies – capturing events, selecting images & editing finals  
-* Designed posters, publication pages, website  layouts & presentation slides
 
 Freelance Writing/Translation	 				             Various Locations (2016-21) 
 
-* Translated screenplays, books & business documents from RU \> EN maintaining tone, stakes & narrative clarity  
-* Wrote & adapted content based on client needs –  blogs, astrology platforms, cold emails, scripts, presentations, social media copy  
 
 Private Language Tutor & Au Pair 					         Moscow, RU (2016-18) 
-
-* Developed curriculum for language learning, rhetoric & critical thinking skills  
-* Adapted to interests, cultures &  inner family dynamics 
 
 Portfolio site 
 
