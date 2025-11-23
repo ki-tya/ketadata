@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>DMT White Organism – Continuous Trap</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      background: #000;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      font-family: Arial, sans-serif;
+      color: #fff;
+    }
+    #canvas {
+      display: block;
+      image-rendering: crisp-edges;
+    }
+    #instructions {
+      position: absolute;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      color: rgba(255, 255, 255, 0.7);
+      font-size: 13px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      text-align: center;
+      pointer-events: none;
+      z-index: 10;
+      transition: opacity 1s ease;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="canvas"></canvas>
+  <div id="instructions">SPACE — TOGGLE • CLICK — OVERLOAD • MOVE — IT FOLLOWS</div>
+
+  <script>
+    const canvas = document.getElementById("canvas");
+    const ctx = canvas.getContext("2d");
+
+    let w = canvas.width = window.innerWidth;
+    let h = canvas.height = window.innerHeight;
+
+    let running = false;
+    let frameId = null;
+    let t = 0;
+
+    const CYCLE_FRAMES = 800;
+
+    let camZoom = 1;
+    let camZoomTarget = 1;
+    let camOffsetX = 0;
+    let camOffsetY = 0;
+    let camOffsetTargetX = 0;
+    let camOffsetTargetY = 0;
+
+    let pulseAmp = 1;
+    let pulseTarget = 1.3;
+
+    let flashAlpha = 0;
+    let microStrobe = 0;
+
+    let mouseX = w / 2;
+    let mouseY = h / 2;
+
+    const MAX_BRANCHES = 80;
+    const MAX_POINTS = 40;
+
+    class Branch {
+      constructor(x, y, angle, strength = 1) {
+        this.points = [{ x, y }];
+        this.angle = angle;
+        this.strength = strength;
+        this.life = 0;
+        this.maxLife = 600;
+        this.seed = Math.random() * 1000;
+      }
+      update(intensity) {
+        this.life++;
+        const last = this.points[this.points.length - 1];
+
+        const jitter =
+          (Math.random() - 0.5) *
+          0.4 *
+          intensity *
+          this.strength;
+        this.angle += jitter;
+
+        const step =
+          (4.5 + Math.random() * 4.5) *
+          (0.85 + 0.7 * intensity);
+        const nx = last.x + Math.cos(this.angle) * step;
+        const ny = last.y + Math.sin(this.angle) * step;
+
+        this.points.push({ x: nx, y: ny });
+        if (this.points.length > MAX_POINTS) {
+          this.points.shift();
+        }
+
+        if (this.life > this.maxLife) {
+          const cx = w / 2;
+          const cy = h / 2;
+          this.points = [{ x: cx, y: cy }];
+          this.life = 0;
+          this.angle = Math.random() * Math.PI * 2;
+        }
+      }
+      draw(intensity, globalHue) {
+        if (this.points.length < 2) return;
+
+        const lifeFrac = this.life / this.maxLife;
+        const localHue =
+          globalHue +
+          (this.seed * 73.421) % 60 +
+          lifeFrac * 120;
+        const hue = (localHue + 720) % 360;
+
+        const alpha = 0.12 + 0.28 * intensity * this.strength;
+        const width = 1.3 + 1.4 * intensity * this.strength;
+
+        ctx.lineWidth = width;
+        ctx.shadowBlur = 26 * intensity * this.strength;
+        ctx.shadowColor = `hsla(${hue}, 80%, 75%, ${0.8 * alpha})`;
+
+        ctx.beginPath();
+        ctx.moveTo(this.points[0].x, this.points[0].y);
+        for (let i = 1; i < this.points.length; i++) {
+          const p = this.points[i];
+          ctx.lineTo(p.x, p.y);
+        }
+
+        const grad = ctx.createLinearGradient(
+          this.points[0].x,
+          this.points[0].y,
+          this.points[this.points.length - 1].x,
+          this.points[this.points.length - 1].y
+        );
+        grad.addColorStop(
+          0,
+          `hsla(${hue}, 80%, 88%, ${alpha * 0.7})`
+        );
+        grad.addColorStop(
+          0.5,
+          `hsla(${(hue + 40) % 360}, 90%, 95%, ${alpha})`
+        );
+        grad.addColorStop(
+          1,
+          `hsla(${(hue + 80) % 360}, 85%, 80%, ${alpha * 0.6})`
+        );
+
+        ctx.strokeStyle = grad;
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+      }
+    }
+
+    let branches = [];
+
+    function initBranches() {
+      branches = [];
+      const cx = w / 2;
+      const cy = h / 2;
+      for (let i = 0; i < MAX_BRANCHES; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const strength = 0.6 + Math.random() * 0.8;
+        branches.push(new Branch(cx, cy, angle, strength));
+      }
+    }
+
+    function resize() {
+      w = canvas.width = window.innerWidth;
+      h = canvas.height = window.innerHeight;
+      initBranches();
+    }
+    window.addEventListener("resize", resize);
+
+    function lerp(a, b, f) {
+      return a + (b - a) * f;
+    }
+
+    function softStep(edge0, edge1, x) {
+      const t = Math.min(1, Math.max(0, (x - edge0) / (edge1 - edge0)));
+      return t * t * (3 - 2 * t);
+    }
+
+    function getPhaseWeights(norm) {
+      const lure = 1 - softStep(0.2, 0.3, norm);
+      const sync = Math.min(
+        softStep(0.2, 0.3, norm),
+        1 - softStep(0.45, 0.55, norm)
+      );
+      const brk = Math.min(
+        softStep(0.45, 0.55, norm),
+        1 - softStep(0.7, 0.8, norm)
+      );
+      const dom = softStep(0.7, 0.85, norm);
+      const sum = lure + sync + brk + dom || 1;
+      return {
+        lure: lure / sum,
+        sync: sync / sum,
+        brk: brk / sum,
+        dom: dom / sum,
+      };
+    }
+
+    function drawDmtTunnel(time, globalHue) {
+      const cx = w / 2;
+      const cy = h / 2;
+
+      const layers = 6;
+      const baseR = Math.min(w, h) * 0.45;
+      const baseSides = 6;
+
+      for (let i = 0; i < layers; i++) {
+        const depth = i / (layers - 1 || 1);
+        const sides =
+          baseSides +
+          Math.round(
+            2 * Math.sin(time * 0.0008 + depth * 4.0)
+          );
+        const r =
+          baseR *
+          (0.25 + depth * 0.8) *
+          (1 + 0.05 * Math.sin(time * 0.004 + depth * 3));
+
+        const hue =
+          (globalHue +
+            depth * 140 +
+            40 * Math.sin(time * 0.001 + depth * 5)) %
+          360;
+
+        const alpha =
+          0.08 +
+          0.1 * (1 - depth) +
+          0.05 * Math.sin(time * 0.004 + depth * 6);
+
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.rotate(time * 0.0009 * (i % 2 === 0 ? 1 : -1));
+        ctx.beginPath();
+        for (let s = 0; s < sides; s++) {
+          const ang = (Math.PI * 2 * s) / sides;
+          const x = Math.cos(ang) * r;
+          const y = Math.sin(ang) * r;
+          if (s === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        }
+        ctx.closePath();
+        ctx.strokeStyle = `hsla(${hue}, 85%, 75%, ${alpha})`;
+        ctx.lineWidth = 1.4 + 1.2 * (1 - depth);
+        ctx.shadowBlur = 22 * (1 - depth);
+        ctx.shadowColor = `hsla(${hue}, 90%, 80%, ${alpha})`;
+        ctx.stroke();
+        ctx.restore();
+      }
+      ctx.shadowBlur = 0;
+    }
+
+    function drawCore(time, breath, weights, globalHue) {
+      const cx = w / 2;
+      const cy = h / 2;
+
+      const targetX = lerp(cx, mouseX, 0.2);
+      const targetY = lerp(cy, mouseY, 0.2);
+
+      const baseR = Math.min(w, h) * 0.08;
+      const coreR =
+        baseR *
+        (1 + breath * 0.28) *
+        pulseAmp;
+
+      const spikeBase = 70;
+      const spikeCount =
+        spikeBase +
+        Math.floor(
+          40 * weights.sync +
+          60 * weights.brk +
+          80 * weights.dom
+        );
+
+      const spinBase =
+        0.0025 +
+        0.0014 * weights.sync +
+        0.0022 * weights.brk +
+        0.0034 * weights.dom;
+      const spin = time * spinBase;
+
+      for (let i = 0; i < spikeCount; i++) {
+        const frac = i / spikeCount;
+        const jitter =
+          (weights.brk + weights.dom) *
+          Math.sin(time * 0.004 + i * 0.35) *
+          0.45;
+        const angle =
+          frac * Math.PI * 2 +
+          spin +
+          (weights.lure * 0.1 + weights.sync * 0.2) *
+            Math.sin(time * 0.0025 + i * 0.18) +
+          jitter;
+
+        const innerR =
+          coreR * (0.7 + 0.15 * Math.sin(time * 0.013 + i));
+        const outerR =
+          coreR *
+          (1.8 +
+            (0.7 + 0.6 * (weights.brk + weights.dom)) *
+              Math.sin(time * 0.019 + i * 0.29));
+
+        const ix = cx + Math.cos(angle) * innerR;
+        const iy = cy + Math.sin(angle) * innerR;
+        const ox = cx + Math.cos(angle) * outerR;
+        const oy = cy + Math.sin(angle) * outerR;
+
+        const hue =
+          (globalHue + 30 * Math.sin(time * 0.002 + i * 0.7)) %
+          360;
+        const alphaBase =
+          0.12 +
+          0.06 * weights.sync +
+          0.12 * weights.brk +
+          0.18 * weights.dom;
+        const alpha = alphaBase + Math.random() * 0.45;
+        ctx.strokeStyle = `hsla(${hue}, 85%, 80%, ${alpha})`;
+        ctx.lineWidth =
+          0.7 +
+          (1.4 + 0.9 * weights.dom) *
+            (0.35 + 0.65 * Math.random());
+        ctx.shadowBlur = 18;
+        ctx.shadowColor = `hsla(${hue}, 90%, 75%, ${alpha})`;
+        ctx.beginPath();
+        ctx.moveTo(ix, iy);
+        ctx.lineTo(ox, oy);
+        ctx.stroke();
+      }
+
+      ctx.shadowBlur =
+        65 * pulseAmp * (1 + 0.35 * (weights.brk + weights.dom));
+      ctx.shadowColor = `hsla(${globalHue}, 100%, 95%, 0.98)`;
+      ctx.fillStyle = `hsla(${globalHue}, 100%, 98%, 0.98)`;
+      ctx.beginPath();
+      ctx.arc(cx, cy, coreR, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+
+      const dx = targetX - cx;
+      const dy = targetY - cy;
+      const angleToMouse = Math.atan2(dy, dx);
+      const pupilOffset = coreR * 0.27;
+
+      const pupilCx = cx + Math.cos(angleToMouse) * pupilOffset;
+      const pupilCy = cy + Math.sin(angleToMouse) * pupilOffset;
+
+      const pupilR =
+        coreR *
+        (0.25 +
+          0.08 * Math.sin(time * 0.035 + 0.7) +
+          0.06 * (weights.brk + weights.dom) *
+            Math.sin(time * 0.07));
+
+      ctx.fillStyle = "rgba(0,0,0,0.96)";
+      ctx.beginPath();
+      ctx.arc(pupilCx, pupilCy, pupilR, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.strokeStyle = `hsla(${(globalHue + 40) % 360}, 85%, 80%, 0.7)`;
+      ctx.lineWidth = 1.1;
+      ctx.beginPath();
+      ctx.arc(cx, cy, coreR * 1.48, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
+    function drawBackgroundFlicker(weights, globalHue) {
+      const baseCount =
+        16 +
+        Math.floor(
+          10 * weights.lure +
+          18 * weights.sync +
+          24 * weights.brk +
+          32 * weights.dom
+        );
+
+      for (let i = 0; i < baseCount; i++) {
+        const x = Math.random() * w;
+        const y = Math.random() * h;
+        const hue =
+          (globalHue +
+            120 * Math.random() *
+              (weights.brk + weights.dom)) %
+          360;
+        const alpha =
+          0.02 +
+          0.02 * (weights.brk + weights.dom) +
+          Math.random() * 0.04;
+        ctx.fillStyle = `hsla(${hue}, 85%, 80%, ${alpha})`;
+        ctx.fillRect(x, y, 1, 1);
+      }
+    }
+
+    function animate() {
+      t++;
+
+      const cyclePos = (t % CYCLE_FRAMES) / CYCLE_FRAMES;
+      const weights = getPhaseWeights(cyclePos);
+
+      const breath = Math.sin((Math.PI * 2 * t) / 600);
+      const globalHue =
+        (t * 0.03 +
+          40 * Math.sin(t * 0.0023)) %
+        360;
+
+      const fadeBase =
+        0.12 +
+        0.04 * weights.sync +
+        0.08 * weights.brk +
+        0.1 * weights.dom;
+      const trailFade = fadeBase + 0.025 * Math.sin(t * 0.01);
+      ctx.globalCompositeOperation = "source-over";
+      ctx.fillStyle = `rgba(0,0,0,${trailFade})`;
+      ctx.fillRect(0, 0, w, h);
+
+      pulseAmp = lerp(pulseAmp, pulseTarget, 0.045);
+      camZoom = lerp(camZoom, camZoomTarget, 0.035);
+      camOffsetX = lerp(camOffsetX, camOffsetTargetX, 0.035);
+      camOffsetY = lerp(camOffsetY, camOffsetTargetY, 0.035);
+
+      if (Math.abs(camOffsetX - camOffsetTargetX) < 0.4) camOffsetTargetX *= 0.6;
+      if (Math.abs(camOffsetY - camOffsetTargetY) < 0.4) camOffsetTargetY *= 0.6;
+
+      const driftChance =
+        0.002 +
+        0.004 * weights.sync +
+        0.006 * weights.brk +
+        0.009 * weights.dom;
+      if (Math.random() < driftChance) {
+        const spread = 60 + 90 * (weights.brk + weights.dom);
+        camOffsetTargetX = (Math.random() - 0.5) * spread;
+        camOffsetTargetY = (Math.random() - 0.5) * spread;
+      }
+
+      camZoomTarget =
+        1.04 +
+        0.035 * breath * (weights.lure + weights.sync) +
+        0.07 * Math.sin(t * 0.017) *
+          (weights.brk + weights.dom);
+
+      pulseTarget =
+        1.3 +
+        0.25 * ((breath + 1) / 2) * (weights.lure + weights.sync) +
+        0.45 * Math.sin(t * 0.022) *
+          (weights.brk + weights.dom);
+
+      if (weights.brk + weights.dom > 0.2 && Math.random() < 0.005) {
+        flashAlpha = 0.4 + 0.4 * (weights.dom + weights.brk);
+      }
+      flashAlpha = Math.max(0, flashAlpha - 0.02);
+
+      microStrobe = Math.max(0, microStrobe - 0.15);
+      if (weights.sync > 0.25) {
+        if (breath > 0.97 && t % 10 === 0) microStrobe = 0.25;
+      }
+      if (weights.brk > 0.2 && Math.random() < 0.05) microStrobe = 0.45;
+      if (weights.dom > 0.2 && Math.random() < 0.07) microStrobe = 0.65;
+
+      const intensity =
+        0.45 * weights.lure +
+        0.75 * weights.sync +
+        0.95 * weights.brk +
+        1.15 * weights.dom;
+
+      ctx.save();
+      ctx.translate(w / 2, h / 2);
+      ctx.scale(camZoom, camZoom);
+      ctx.translate(-w / 2 + camOffsetX, -h / 2 + camOffsetY);
+
+      ctx.globalCompositeOperation = "lighter";
+      drawBackgroundFlicker(weights, globalHue);
+      drawDmtTunnel(t, globalHue);
+      drawCore(t, breath, weights, globalHue);
+
+      branches.forEach(b => {
+        b.update(intensity);
+        b.draw(intensity, globalHue);
+      });
+
+      ctx.restore();
+
+      ctx.globalCompositeOperation = "screen";
+
+      if (flashAlpha > 0) {
+        ctx.globalAlpha = flashAlpha * 0.6;
+        ctx.fillStyle = "#fff";
+        ctx.fillRect(0, 0, w, h);
+        ctx.globalAlpha = 1;
+      }
+
+      if (microStrobe > 0) {
+        ctx.globalAlpha = microStrobe * 0.38;
+        ctx.fillStyle = "#fff";
+        ctx.fillRect(0, 0, w, h);
+        ctx.globalAlpha = 1;
+      }
+
+      if (running) frameId = requestAnimationFrame(animate);
+    }
+
+    function start() {
+      if (running) return;
+      running = true;
+      document.getElementById("instructions").style.opacity = "0.3";
+      animate();
+    }
+
+    function stop() {
+      running = false;
+      if (frameId) cancelAnimationFrame(frameId);
+      ctx.globalCompositeOperation = "source-over";
+      ctx.fillStyle = "#000";
+      ctx.fillRect(0, 0, w, h);
+      document.getElementById("instructions").style.opacity = "0.9";
+
+      pulseAmp = 1;
+      pulseTarget = 1.3;
+      camZoom = 1;
+      camZoomTarget = 1;
+      camOffsetX = camOffsetY = 0;
+      camOffsetTargetX = camOffsetTargetY = 0;
+      flashAlpha = 0;
+      microStrobe = 0;
+      t = 0;
+      initBranches();
+    }
+
+    document.addEventListener("keydown", (e) => {
+      if (e.code === "Space") {
+        e.preventDefault();
+        running ? stop() : start();
+      }
+    });
+
+    canvas.addEventListener("click", () => {
+      pulseTarget += 0.9;
+      camZoomTarget += 0.2;
+      flashAlpha = Math.min(1, flashAlpha + 0.7);
+      microStrobe = Math.max(microStrobe, 0.7);
+
+      setTimeout(() => {
+        pulseTarget = 1.5;
+        camZoomTarget = 1.1;
+      }, 450);
+    });
+
+    canvas.addEventListener("mousemove", (e) => {
+      mouseX = e.clientX;
+      mouseY = e.clientY;
+    });
+
+    initBranches();
+    ctx.fillStyle = "#000";
+    ctx.fillRect(0, 0, w, h);
+  </script>
+</body>
+</html>
