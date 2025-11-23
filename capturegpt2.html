@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Searing White Organism</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      background: #000;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      font-family: Arial, sans-serif;
+      color: #fff;
+    }
+    #canvas {
+      display: block;
+      image-rendering: crisp-edges;
+    }
+    #instructions {
+      position: absolute;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      color: rgba(255, 255, 255, 0.7);
+      font-size: 13px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      text-align: center;
+      pointer-events: none;
+      z-index: 10;
+      transition: opacity 1s ease;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="canvas"></canvas>
+  <div id="instructions">SPACE — TOGGLE • CLICK — OVERLOAD SPIKE</div>
+
+  <script>
+    const canvas = document.getElementById("canvas");
+    const ctx = canvas.getContext("2d");
+
+    let w = canvas.width = window.innerWidth;
+    let h = canvas.height = window.innerHeight;
+
+    let running = false;
+    let frameId = null;
+    let t = 0;
+
+    // camera / immersion
+    let camZoom = 1;
+    let camZoomTarget = 1;
+    let camOffsetX = 0;
+    let camOffsetY = 0;
+    let camOffsetTargetX = 0;
+    let camOffsetTargetY = 0;
+
+    // core pulse
+    let pulseAmp = 1;
+    let pulseTarget = 1;
+
+    // chaos / flashes
+    let flashAlpha = 0;
+    let microStrobe = 0;
+
+    // sprawling branches
+    class Branch {
+      constructor(x, y, angle, strength = 1) {
+        this.points = [{ x, y }];
+        this.angle = angle;
+        this.strength = strength;
+        this.life = 0;
+        this.maxLife = 80 + Math.random() * 120;
+        this.deadFlag = false;
+      }
+
+      update() {
+        if (this.deadFlag) return;
+        this.life++;
+
+        const last = this.points[this.points.length - 1];
+        const jitter = (Math.random() - 0.5) * 0.5 * this.strength;
+        this.angle += jitter;
+
+        const step = 6 + Math.random() * 6 * this.strength;
+        const nx = last.x + Math.cos(this.angle) * step;
+        const ny = last.y + Math.sin(this.angle) * step;
+
+        this.points.push({ x: nx, y: ny });
+
+        // occasional small fork
+        if (Math.random() < 0.03 * this.strength && this.points.length > 5) {
+          branches.push(
+            new Branch(
+              nx,
+              ny,
+              this.angle + (Math.random() - 0.5) * 0.9,
+              this.strength * 0.7
+            )
+          );
+        }
+
+        if (this.life > this.maxLife) {
+          this.deadFlag = true;
+        }
+      }
+
+      draw() {
+        if (this.points.length < 2) return;
+
+        const lifeFrac = this.life / this.maxLife;
+        const alpha = (1 - lifeFrac) * 0.7 * this.strength;
+        const width = 2.5 * this.strength * (1 - lifeFrac * 0.6);
+
+        ctx.strokeStyle = `rgba(255,255,255,${alpha})`;
+        ctx.lineWidth = width;
+        ctx.shadowBlur = 18 * this.strength * (1 - lifeFrac);
+        ctx.shadowColor = `rgba(255,255,255,${alpha})`;
+
+        ctx.beginPath();
+        ctx.moveTo(this.points[0].x, this.points[0].y);
+        for (let i = 1; i < this.points.length; i++) {
+          const p = this.points[i];
+          ctx.lineTo(p.x, p.y);
+        }
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+      }
+
+      dead() {
+        return this.deadFlag;
+      }
+    }
+
+    let branches = [];
+
+    function resize() {
+      w = canvas.width = window.innerWidth;
+      h = canvas.height = window.innerHeight;
+    }
+    window.addEventListener("resize", resize);
+
+    function lerp(a, b, f) {
+      return a + (b - a) * f;
+    }
+
+    function spawnCentralBurst(strength = 1) {
+      const cx = w / 2;
+      const cy = h / 2;
+      const count = 12 + Math.floor(Math.random() * 10);
+      for (let i = 0; i < count; i++) {
+        const angle = (Math.PI * 2 * i) / count + Math.random() * 0.4;
+        branches.push(new Branch(cx, cy, angle, strength));
+      }
+    }
+
+    function spawnPerimeterIntrusion() {
+      // spawn from edge inward
+      const edge = Math.floor(Math.random() * 4);
+      let x, y, angle;
+      if (edge === 0) { // top
+        x = Math.random() * w;
+        y = -20;
+        angle = Math.PI / 2 + (Math.random() - 0.5) * 0.6;
+      } else if (edge === 1) { // right
+        x = w + 20;
+        y = Math.random() * h;
+        angle = Math.PI + (Math.random() - 0.5) * 0.6;
+      } else if (edge === 2) { // bottom
+        x = Math.random() * w;
+        y = h + 20;
+        angle = -Math.PI / 2 + (Math.random() - 0.5) * 0.6;
+      } else { // left
+        x = -20;
+        y = Math.random() * h;
+        angle = (Math.random() - 0.5) * 0.6;
+      }
+      branches.push(new Branch(x, y, angle, 0.8));
+    }
+
+    function drawCore(time) {
+      const cx = w / 2;
+      const cy = h / 2;
+
+      const baseR = Math.min(w, h) * 0.08;
+      const breathing =
+        1 +
+        0.35 * Math.sin(time * 0.01) +
+        0.18 * Math.sin(time * 0.045 + 1.1);
+      const coreR = baseR * breathing * pulseAmp;
+
+      // radial spikes (confrontational)
+      const spikeCount = 90;
+      const spin = time * 0.003;
+      for (let i = 0; i < spikeCount; i++) {
+        const frac = i / spikeCount;
+        const angle =
+          frac * Math.PI * 2 +
+          spin +
+          Math.sin(time * 0.004 + i * 0.13) * 0.3;
+        const innerR = coreR * 0.8;
+        const outerR =
+          coreR * (1.8 + 0.7 * Math.sin(time * 0.02 + i * 0.27));
+
+        const ix = cx + Math.cos(angle) * innerR;
+        const iy = cy + Math.sin(angle) * innerR;
+        const ox = cx + Math.cos(angle) * outerR;
+        const oy = cy + Math.sin(angle) * outerR;
+
+        const alpha = 0.06 + 0.4 * Math.random();
+        ctx.strokeStyle = `rgba(255,255,255,${alpha})`;
+        ctx.lineWidth = 0.8 + Math.random() * 1.4;
+        ctx.beginPath();
+        ctx.moveTo(ix, iy);
+        ctx.lineTo(ox, oy);
+        ctx.stroke();
+      }
+
+      // core halo
+      ctx.shadowBlur = 60 * pulseAmp;
+      ctx.shadowColor = "rgba(255,255,255,0.92)";
+      ctx.fillStyle = "rgba(255,255,255,0.96)";
+      ctx.beginPath();
+      ctx.arc(cx, cy, coreR, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+
+      // dark pupil
+      const pupilR = coreR * (0.3 + 0.1 * Math.sin(time * 0.03 + 0.7));
+      ctx.fillStyle = "rgba(0,0,0,0.92)";
+      ctx.beginPath();
+      ctx.arc(cx, cy, pupilR, 0, Math.PI * 2);
+      ctx.fill();
+
+      // inner glow ring
+      ctx.strokeStyle = "rgba(255,255,255,0.5)";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.arc(cx, cy, coreR * 1.4, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
+    function drawOrbitalNetwork(time) {
+      const cx = w / 2;
+      const cy = h / 2;
+
+      const outerR = Math.min(w, h) * 0.45;
+      const innerR = outerR * 0.6;
+      const nodes = 14;
+
+      for (let ring = 0; ring < 2; ring++) {
+        const r = ring === 0 ? innerR : outerR;
+        const dir = ring === 0 ? 1 : -1;
+        const speed = ring === 0 ? 0.002 : 0.0035;
+
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.rotate(time * speed * dir);
+        for (let i = 0; i < nodes; i++) {
+          const ang = (Math.PI * 2 * i) / nodes;
+          const x = Math.cos(ang) * r;
+          const y = Math.sin(ang) * r;
+
+          const nodeAlpha = 0.55 + 0.3 * Math.sin(time * 0.02 + i);
+          ctx.shadowBlur = 22;
+          ctx.shadowColor = `rgba(255,255,255,${nodeAlpha})`;
+          ctx.fillStyle = `rgba(255,255,255,${nodeAlpha})`;
+          ctx.beginPath();
+          ctx.arc(x, y, 8 + 4 * Math.sin(time * 0.018 + i * 0.7), 0, Math.PI * 2);
+          ctx.fill();
+
+          const nextAng = (Math.PI * 2 * ((i + 1) % nodes)) / nodes;
+          const nx = Math.cos(nextAng) * r;
+          const ny = Math.sin(nextAng) * r;
+          ctx.shadowBlur = 10;
+          ctx.strokeStyle = `rgba(255,255,255,${0.4 + 0.2 * ring})`;
+          ctx.lineWidth = 4;
+          ctx.beginPath();
+          ctx.moveTo(x, y);
+          ctx.lineTo(nx, ny);
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
+      ctx.shadowBlur = 0;
+    }
+
+    function drawBackgroundFlicker(time) {
+      // subtle noisy glow layer for immersion
+      if (Math.random() < 0.7) {
+        const count = 40;
+        for (let i = 0; i < count; i++) {
+          const x = Math.random() * w;
+          const y = Math.random() * h;
+          const alpha = 0.02 + Math.random() * 0.04;
+          ctx.fillStyle = `rgba(255,255,255,${alpha})`;
+          ctx.fillRect(x, y, 1, 1);
+        }
+      }
+    }
+
+    function animate() {
+      t++;
+
+      // fade for trails (not full clear)
+      const trailFade = 0.18 + 0.07 * Math.sin(t * 0.01);
+      ctx.fillStyle = `rgba(0,0,0,${trailFade})`;
+      ctx.fillRect(0, 0, w, h);
+
+      // update chaos parameters
+      pulseAmp = lerp(pulseAmp, pulseTarget, 0.04);
+      camZoom = lerp(camZoom, camZoomTarget, 0.03);
+      camOffsetX = lerp(camOffsetX, camOffsetTargetX, 0.03);
+      camOffsetY = lerp(camOffsetY, camOffsetTargetY, 0.03);
+
+      if (Math.abs(camOffsetX - camOffsetTargetX) < 0.5) camOffsetTargetX *= 0.6;
+      if (Math.abs(camOffsetY - camOffsetTargetY) < 0.5) camOffsetTargetY *= 0.6;
+
+      if (Math.random() < 0.004) {
+        camOffsetTargetX = (Math.random() - 0.5) * 60;
+        camOffsetTargetY = (Math.random() - 0.5) * 60;
+      }
+
+      // occasional big flash
+      if (Math.random() < 0.002) {
+        flashAlpha = 0.8;
+      }
+      flashAlpha = Math.max(0, flashAlpha - 0.02);
+
+      // micro strobe
+      microStrobe = Math.max(0, microStrobe - 0.15);
+      if (Math.random() < 0.01) {
+        microStrobe = 0.4;
+      }
+
+      // spawn branches
+      if (Math.random() < 0.04 * pulseAmp) {
+        spawnCentralBurst(0.5 + 0.5 * Math.random());
+      }
+      if (Math.random() < 0.02) {
+        spawnPerimeterIntrusion();
+      }
+
+      // camera transform for immersion
+      ctx.save();
+      ctx.translate(w / 2, h / 2);
+      ctx.scale(camZoom, camZoom);
+      ctx.translate(-w / 2 + camOffsetX, -h / 2 + camOffsetY);
+
+      drawBackgroundFlicker(t);
+      drawOrbitalNetwork(t);
+      drawCore(t);
+
+      // update and draw branches
+      branches.forEach(b => {
+        b.update();
+        b.draw();
+      });
+      branches = branches.filter(b => !b.dead());
+
+      ctx.restore();
+
+      // flash overlay
+      if (flashAlpha > 0) {
+        ctx.globalAlpha = flashAlpha;
+        ctx.fillStyle = "#fff";
+        ctx.fillRect(0, 0, w, h);
+        ctx.globalAlpha = 1;
+      }
+
+      if (microStrobe > 0) {
+        ctx.globalAlpha = microStrobe * 0.4;
+        ctx.fillStyle = "#fff";
+        ctx.fillRect(0, 0, w, h);
+        ctx.globalAlpha = 1;
+      }
+
+      if (running) frameId = requestAnimationFrame(animate);
+    }
+
+    function start() {
+      if (running) return;
+      running = true;
+      document.getElementById("instructions").style.opacity = "0.25";
+      animate();
+    }
+
+    function stop() {
+      running = false;
+      if (frameId) cancelAnimationFrame(frameId);
+      ctx.fillStyle = "#000";
+      ctx.fillRect(0, 0, w, h);
+      document.getElementById("instructions").style.opacity = "0.8";
+      pulseAmp = 1;
+      pulseTarget = 1;
+      camZoom = 1;
+      camZoomTarget = 1;
+      camOffsetX = camOffsetY = 0;
+      camOffsetTargetX = camOffsetTargetY = 0;
+      flashAlpha = 0;
+      microStrobe = 0;
+      branches = [];
+      t = 0;
+    }
+
+    document.addEventListener("keydown", (e) => {
+      if (e.code === "Space") {
+        e.preventDefault();
+        running ? stop() : start();
+      }
+    });
+
+    canvas.addEventListener("click", (e) => {
+      // overload spike: stronger pulse + zoom + central burst
+      pulseTarget = 2.8;
+      camZoomTarget = 1.25;
+      spawnCentralBurst(1.6);
+      flashAlpha = 0.9;
+      microStrobe = 0.6;
+
+      setTimeout(() => {
+        pulseTarget = 1.1;
+        camZoomTarget = 1.02;
+      }, 450);
+    });
+
+    // initial clear
+    ctx.fillStyle = "#000";
+    ctx.fillRect(0, 0, w, h);
+  </script>
+</body>
+</html>
