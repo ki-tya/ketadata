@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Searing White Fractal</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background: #000000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+        #canvas {
+            display: block;
+        }
+        #instructions {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: rgba(255, 255, 255, 0.6);
+            font-family: Arial, sans-serif;
+            font-size: 14px;
+            text-align: center;
+            z-index: 10;
+            pointer-events: none;
+            transition: opacity 1s;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="canvas"></canvas>
+    <div id="instructions">Press SPACE to start/stop</div>
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        
+        let isAnimating = false;
+        let animationFrame;
+        let time = 0;
+        
+        function drawFractalBranch(x, y, length, angle, depth, intensity) {
+            if (depth === 0 || length < 2) return;
+            
+            const endX = x + length * Math.cos(angle);
+            const endY = y + length * Math.sin(angle);
+            
+            // Searing white with intensity
+            const alpha = intensity * (depth / 8);
+            const glow = 20 + intensity * 30;
+            
+            ctx.shadowBlur = glow;
+            ctx.shadowColor = `rgba(255, 255, 255, ${alpha * 0.8})`;
+            ctx.strokeStyle = `rgba(255, 255, 255, ${alpha})`;
+            ctx.lineWidth = depth * 0.8;
+            
+            ctx.beginPath();
+            ctx.moveTo(x, y);
+            ctx.lineTo(endX, endY);
+            ctx.stroke();
+            
+            // Add extra bright points at branch tips
+            if (depth <= 2) {
+                ctx.shadowBlur = 30;
+                ctx.fillStyle = `rgba(255, 255, 255, ${alpha * 1.2})`;
+                ctx.beginPath();
+                ctx.arc(endX, endY, 2, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            
+            // Recursive branches with dynamic angles
+            const angleOffset1 = Math.sin(time * 0.005 + depth) * 0.3;
+            const angleOffset2 = Math.cos(time * 0.008 + depth) * 0.3;
+            
+            drawFractalBranch(endX, endY, length * 0.7, angle - 0.5 + angleOffset1, depth - 1, intensity * 0.95);
+            drawFractalBranch(endX, endY, length * 0.7, angle + 0.5 + angleOffset2, depth - 1, intensity * 0.95);
+            
+            // Add third branch occasionally for complexity
+            if (depth > 4 && Math.sin(time * 0.012 + depth) > 0.3) {
+                drawFractalBranch(endX, endY, length * 0.5, angle + angleOffset1 * 2, depth - 1, intensity * 0.9);
+            }
+        }
+        
+        function drawMandelbrotZoom(centerX, centerY, zoom, maxIterations) {
+            const width = canvas.width;
+            const height = canvas.height;
+            const step = 4; // Pixel step for performance
+            
+            for (let px = 0; px < width; px += step) {
+                for (let py = 0; py < height; py += step) {
+                    const x0 = (px - width / 2) / (zoom) + centerX;
+                    const y0 = (py - height / 2) / (zoom) + centerY;
+                    
+                    let x = 0, y = 0;
+                    let iteration = 0;
+                    
+                    while (x * x + y * y <= 4 && iteration < maxIterations) {
+                        const xtemp = x * x - y * y + x0;
+                        y = 2 * x * y + y0;
+                        x = xtemp;
+                        iteration++;
+                    }
+                    
+                    if (iteration < maxIterations) {
+                        const intensity = iteration / maxIterations;
+                        const brightness = Math.pow(intensity, 0.5) * 255;
+                        
+                        ctx.fillStyle = `rgba(${brightness}, ${brightness}, ${brightness}, ${intensity * 0.8})`;
+                        ctx.fillRect(px, py, step, step);
+                    }
+                }
+            }
+        }
+        
+        function drawSierpinskiTriangle(x1, y1, x2, y2, x3, y3, depth, intensity) {
+            if (depth === 0) {
+                const alpha = intensity;
+                ctx.shadowBlur = 15 + intensity * 20;
+                ctx.shadowColor = `rgba(255, 255, 255, ${alpha * 0.7})`;
+                ctx.strokeStyle = `rgba(255, 255, 255, ${alpha})`;
+                ctx.lineWidth = 2;
+                
+                ctx.beginPath();
+                ctx.moveTo(x1, y1);
+                ctx.lineTo(x2, y2);
+                ctx.lineTo(x3, y3);
+                ctx.closePath();
+                ctx.stroke();
+                
+                return;
+            }
+            
+            const midX1 = (x1 + x2) / 2;
+            const midY1 = (y1 + y2) / 2;
+            const midX2 = (x2 + x3) / 2;
+            const midY2 = (y2 + y3) / 2;
+            const midX3 = (x3 + x1) / 2;
+            const midY3 = (y3 + y1) / 2;
+            
+            drawSierpinskiTriangle(x1, y1, midX1, midY1, midX3, midY3, depth - 1, intensity * 0.95);
+            drawSierpinskiTriangle(midX1, midY1, x2, y2, midX2, midY2, depth - 1, intensity * 0.95);
+            drawSierpinskiTriangle(midX3, midY3, midX2, midY2, x3, y3, depth - 1, intensity * 0.95);
+        }
+        
+        function animate() {
+            // Fade trail effect
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.08)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            time++;
+            const pulse = Math.sin(time * 0.008) * 0.5 + 0.5;
+            
+            // Rotating fractal trees
+            const numTrees = 6;
+            for (let i = 0; i < numTrees; i++) {
+                const angle = (Math.PI * 2 / numTrees) * i + time * 0.003;
+                const radius = Math.min(canvas.width, canvas.height) * 0.15;
+                const centerX = canvas.width / 2 + Math.cos(angle) * radius;
+                const centerY = canvas.height / 2 + Math.sin(angle) * radius;
+                
+                drawFractalBranch(
+                    centerX,
+                    centerY,
+                    60 + pulse * 20,
+                    angle + Math.PI,
+                    6,
+                    0.8 + pulse * 0.2
+                );
+            }
+            
+            // Central pulsing Sierpinski triangle
+            const triangleSize = 200 + pulse * 100;
+            const triangleY = canvas.height / 2;
+            drawSierpinskiTriangle(
+                canvas.width / 2,
+                triangleY - triangleSize * 0.866,
+                canvas.width / 2 - triangleSize,
+                triangleY + triangleSize * 0.5,
+                canvas.width / 2 + triangleSize,
+                triangleY + triangleSize * 0.5,
+                Math.floor(3 + pulse * 2),
+                0.6 + pulse * 0.3
+            );
+            
+            // Mandelbrot detail in corners
+            if (time % 3 === 0) {
+                const zoomLevel = 200 + Math.sin(time * 0.012) * 100;
+                ctx.globalAlpha = 0.3;
+                drawMandelbrotZoom(-0.5, 0, zoomLevel, 20);
+                ctx.globalAlpha = 1.0;
+            }
+            
+            // Add glowing particles
+            for (let i = 0; i < 3; i++) {
+                const px = canvas.width / 2 + Math.cos(time * 0.012 + i * 2) * 300;
+                const py = canvas.height / 2 + Math.sin(time * 0.015 + i * 2) * 300;
+                
+                ctx.shadowBlur = 40;
+                ctx.shadowColor = 'rgba(255, 255, 255, 0.9)';
+                ctx.fillStyle = `rgba(255, 255, 255, ${0.6 + pulse * 0.3})`;
+                ctx.beginPath();
+                ctx.arc(px, py, 4 + pulse * 3, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            
+            ctx.shadowBlur = 0;
+            animationFrame = requestAnimationFrame(animate);
+        }
+        
+        function start() {
+            document.getElementById('instructions').style.opacity = '0';
+            animate();
+        }
+        
+        function stop() {
+            cancelAnimationFrame(animationFrame);
+            ctx.fillStyle = '#000000';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            document.getElementById('instructions').style.opacity = '0.6';
+            time = 0;
+        }
+        
+        document.addEventListener("keydown", (event) => {
+            if (event.key === " " || event.code === "Space") {
+                event.preventDefault();
+                if (isAnimating) {
+                    stop();
+                } else {
+                    start();
+                }
+                isAnimating = !isAnimating;
+            }
+        });
+        
+        window.addEventListener('resize', () => {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        });
+    </script>
+</body>
+</html>
