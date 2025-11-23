@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Searing White Core</title>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      background: radial-gradient(circle at center, #050505 0%, #000 55%, #000 100%);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      font-family: Arial, sans-serif;
+      color: #fff;
+    }
+    #canvas {
+      display: block;
+      image-rendering: crisp-edges;
+    }
+    #instructions {
+      position: absolute;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      color: rgba(255, 255, 255, 0.7);
+      font-size: 13px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      text-align: center;
+      pointer-events: none;
+      z-index: 10;
+      transition: opacity 1s ease;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="canvas"></canvas>
+  <div id="instructions">SPACE — TOGGLE • CLICK — SPIKE</div>
+
+  <script>
+    const canvas = document.getElementById("canvas");
+    const ctx = canvas.getContext("2d");
+
+    let w = canvas.width = window.innerWidth;
+    let h = canvas.height = window.innerHeight;
+
+    let running = false;
+    let frameId = null;
+    let t = 0;
+
+    let pulseAmp = 1;
+    let pulseTarget = 1;
+
+    function resize() {
+      w = canvas.width = window.innerWidth;
+      h = canvas.height = window.innerHeight;
+    }
+    window.addEventListener("resize", resize);
+
+    function lerp(a, b, f) {
+      return a + (b - a) * f;
+    }
+
+    function drawCorePattern(time) {
+      const cx = w / 2;
+      const cy = h / 2;
+
+      // subtle trail
+      ctx.fillStyle = "rgba(0, 0, 0, 0.18)";
+      ctx.fillRect(0, 0, w, h);
+
+      const baseRadius = Math.min(w, h) * 0.08;
+      const layers = 4;
+      const spokes = 120;
+      const spin = time * 0.0025;
+
+      pulseAmp = lerp(pulseAmp, pulseTarget, 0.05);
+
+      for (let layer = 0; layer < layers; layer++) {
+        const layerFrac = layer / (layers - 1 || 1);
+        const layerOffset = spin * (layer % 2 === 0 ? 1 : -1);
+        const radiusScale = 1 + layerFrac * 3 * pulseAmp;
+
+        for (let i = 0; i < spokes; i++) {
+          const frac = i / spokes;
+          const angle =
+            frac * Math.PI * 2 +
+            layerOffset +
+            Math.sin(time * 0.0015 + layer * 1.7) * 0.3;
+
+          const r =
+            baseRadius * radiusScale *
+            (1 + 0.35 * Math.sin(time * 0.006 + i * 0.12 + layer * 0.9));
+
+          const x = cx + Math.cos(angle) * r;
+          const y = cy + Math.sin(angle) * r;
+
+          const distNorm = r / (baseRadius * (1 + 3 * pulseAmp)) || 0;
+          const intensity = Math.max(0, 1 - distNorm);
+
+          const alpha = 0.12 + intensity * 0.55;
+          const width = 1.5 + intensity * 3;
+
+          ctx.strokeStyle = `rgba(255,255,255,${alpha})`;
+          ctx.lineWidth = width;
+
+          const innerR = r * (0.3 + 0.2 * layerFrac);
+          const ix = cx + Math.cos(angle) * innerR;
+          const iy = cy + Math.sin(angle) * innerR;
+
+          ctx.beginPath();
+          ctx.moveTo(ix, iy);
+          ctx.lineTo(x, y);
+          ctx.stroke();
+        }
+      }
+
+      // core disk
+      const corePulse =
+        1 + 0.3 * Math.sin(time * 0.01) + 0.2 * Math.sin(time * 0.045 + 1.3);
+      const coreR = baseRadius * 0.9 * corePulse;
+
+      const glowStrength = 55 * pulseAmp + 25;
+      ctx.shadowBlur = glowStrength;
+      ctx.shadowColor = "rgba(255,255,255,0.95)";
+      const coreAlpha = 0.9;
+      ctx.fillStyle = `rgba(255,255,255,${coreAlpha})`;
+      ctx.beginPath();
+      ctx.arc(cx, cy, coreR, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+
+      // inner "pupil"
+      const pupilR = coreR * 0.3;
+      ctx.fillStyle = "rgba(0,0,0,0.9)";
+      ctx.beginPath();
+      ctx.arc(cx, cy, pupilR, 0, Math.PI * 2);
+      ctx.fill();
+
+      // fine halo ring
+      ctx.strokeStyle = "rgba(255,255,255,0.45)";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.arc(cx, cy, coreR * 1.4, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
+    function tick() {
+      t++;
+      drawCorePattern(t);
+      if (running) frameId = requestAnimationFrame(tick);
+    }
+
+    function start() {
+      if (running) return;
+      running = true;
+      document.getElementById("instructions").style.opacity = "0.25";
+      tick();
+    }
+
+    function stop() {
+      running = false;
+      if (frameId) cancelAnimationFrame(frameId);
+      ctx.fillStyle = "#000";
+      ctx.fillRect(0, 0, w, h);
+      document.getElementById("instructions").style.opacity = "0.75";
+      pulseAmp = 1;
+      pulseTarget = 1;
+      t = 0;
+    }
+
+    document.addEventListener("keydown", (e) => {
+      if (e.code === "Space") {
+        e.preventDefault();
+        running ? stop() : start();
+      }
+    });
+
+    canvas.addEventListener("click", () => {
+      // spike then relax
+      pulseTarget = 2.2;
+      setTimeout(() => {
+        pulseTarget = 1.0;
+      }, 400);
+    });
+
+    // initial clear
+    ctx.fillStyle = "#000";
+    ctx.fillRect(0, 0, w, h);
+  </script>
+</body>
+</html>
