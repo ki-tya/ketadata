@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Searing White Organism – Continuous Trap</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      background: #000;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      font-family: Arial, sans-serif;
+      color: #fff;
+    }
+    #canvas {
+      display: block;
+      image-rendering: crisp-edges;
+    }
+    #instructions {
+      position: absolute;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      color: rgba(255, 255, 255, 0.7);
+      font-size: 13px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      text-align: center;
+      pointer-events: none;
+      z-index: 10;
+      transition: opacity 1s ease;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="canvas"></canvas>
+  <div id="instructions">SPACE — TOGGLE • CLICK — OVERLOAD • MOVE — IT FOLLOWS</div>
+
+  <script>
+    const canvas = document.getElementById("canvas");
+    const ctx = canvas.getContext("2d");
+
+    let w = canvas.width = window.innerWidth;
+    let h = canvas.height = window.innerHeight;
+
+    let running = false;
+    let frameId = null;
+    let t = 0;
+
+    // trap cycle: 0–1 mapped to LURE → SYNC → BREAK → DOMINATE
+    const CYCLE_FRAMES = 800;
+
+    // camera
+    let camZoom = 1;
+    let camZoomTarget = 1;
+    let camOffsetX = 0;
+    let camOffsetY = 0;
+    let camOffsetTargetX = 0;
+    let camOffsetTargetY = 0;
+
+    // core pulse
+    let pulseAmp = 1;
+    let pulseTarget = 1.2;
+
+    // flashes
+    let flashAlpha = 0;
+    let microStrobe = 0;
+
+    // mouse “gaze”
+    let mouseX = w / 2;
+    let mouseY = h / 2;
+
+    // branch filaments – fixed count, no growth = smooth FPS
+    const MAX_BRANCHES = 80;
+    const MAX_POINTS = 40;
+
+    class Branch {
+      constructor(x, y, angle, strength = 1) {
+        this.points = [{ x, y }];
+        this.angle = angle;
+        this.strength = strength;
+        this.life = 0;
+        this.maxLife = 600; // long lived, recycled feel
+      }
+      update(intensity) {
+        this.life++;
+        const last = this.points[this.points.length - 1];
+
+        const jitter = (Math.random() - 0.5) * 0.35 * intensity * this.strength;
+        this.angle += jitter;
+
+        const step = (5 + Math.random() * 4) * (0.8 + 0.6 * intensity);
+        const nx = last.x + Math.cos(this.angle) * step;
+        const ny = last.y + Math.sin(this.angle) * step;
+
+        this.points.push({ x: nx, y: ny });
+        if (this.points.length > MAX_POINTS) {
+          this.points.shift(); // sliding window, constant complexity
+        }
+
+        if (this.life > this.maxLife) {
+          // softly reset to center with new direction
+          const cx = w / 2;
+          const cy = h / 2;
+          this.points = [{ x: cx, y: cy }];
+          this.life = 0;
+          this.angle = Math.random() * Math.PI * 2;
+        }
+      }
+      draw(intensity) {
+        if (this.points.length < 2) return;
+
+        ctx.beginPath();
+        ctx.moveTo(this.points[0].x, this.points[0].y);
+        for (let i = 1; i < this.points.length; i++) {
+          const p = this.points[i];
+          ctx.lineTo(p.x, p.y);
+        }
+
+        const alpha = 0.13 + 0.25 * intensity * this.strength;
+        const width = 1.4 + 1.2 * intensity * this.strength;
+
+        ctx.strokeStyle = `rgba(255,255,255,${alpha})`;
+        ctx.lineWidth = width;
+        ctx.shadowBlur = 18 * intensity * this.strength;
+        ctx.shadowColor = `rgba(255,255,255,${0.8 * alpha})`;
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+      }
+    }
+
+    let branches = [];
+
+    function initBranches() {
+      branches = [];
+      const cx = w / 2;
+      const cy = h / 2;
+      for (let i = 0; i < MAX_BRANCHES; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const strength = 0.6 + Math.random() * 0.7;
+        branches.push(new Branch(cx, cy, angle, strength));
+      }
+    }
+
+    function resize() {
+      w = canvas.width = window.innerWidth;
+      h = canvas.height = window.innerHeight;
+      initBranches();
+    }
+    window.addEventListener("resize", resize);
+
+    function lerp(a, b, f) {
+      return a + (b - a) * f;
+    }
+
+    function softStep(edge0, edge1, x) {
+      const t = Math.min(1, Math.max(0, (x - edge0) / (edge1 - edge0)));
+      return t * t * (3 - 2 * t);
+    }
+
+    // get phase weights from normalized cycle position (0–1)
+    function getPhaseWeights(norm) {
+      // segments: 0–0.25 LURE, 0.25–0.5 SYNC, 0.5–0.75 BREAK, 0.75–1 DOMINATE
+      const lure = 1 - softStep(0.2, 0.3, norm);
+      const sync = Math.min(
+        softStep(0.2, 0.3, norm),
+        1 - softStep(0.45, 0.55, norm)
+      );
+      const brk = Math.min(
+        softStep(0.45, 0.55, norm),
+        1 - softStep(0.7, 0.8, norm)
+      );
+      const dom = softStep(0.7, 0.85, norm);
+      const sum = lure + sync + brk + dom || 1;
+      return {
+        lure: lure / sum,
+        sync: sync / sum,
+        brk: brk / sum,
+        dom: dom / sum,
+      };
+    }
+
+    function drawCore(time, breath, weights) {
+      const cx = w / 2;
+      const cy = h / 2;
+
+      const targetX = lerp(cx, mouseX, 0.18);
+      const targetY = lerp(cy, mouseY, 0.18);
+
+      const baseR = Math.min(w, h) * 0.08;
+      const breathInfluence = 0.3;
+      const coreR = baseR * (1 + breath * breathInfluence) * pulseAmp;
+
+      const spikeBase = 80;
+      const spikeCount =
+        spikeBase +
+        Math.floor(
+          40 * weights.sync + 60 * weights.brk + 80 * weights.dom
+        );
+
+      const spinBase =
+        0.0023 +
+        0.0012 * weights.sync +
+        0.002 * weights.brk +
+        0.0032 * weights.dom;
+      const spin = time * spinBase;
+
+      for (let i = 0; i < spikeCount; i++) {
+        const frac = i / spikeCount;
+        const jitter =
+          (weights.brk + weights.dom) *
+          Math.sin(time * 0.004 + i * 0.32) *
+          0.45;
+        const angle =
+          frac * Math.PI * 2 +
+          spin +
+          (weights.lure * 0.1 + weights.sync * 0.2) *
+            Math.sin(time * 0.0025 + i * 0.18) +
+          jitter;
+
+        const innerR =
+          coreR * (0.7 + 0.12 * Math.sin(time * 0.015 + i));
+        const outerR =
+          coreR *
+          (1.7 +
+            (0.7 + 0.5 * (weights.brk + weights.dom)) *
+              Math.sin(time * 0.019 + i * 0.31));
+
+        const ix = cx + Math.cos(angle) * innerR;
+        const iy = cy + Math.sin(angle) * innerR;
+        const ox = cx + Math.cos(angle) * outerR;
+        const oy = cy + Math.sin(angle) * outerR;
+
+        const alphaBase =
+          0.12 +
+          0.06 * weights.sync +
+          0.12 * weights.brk +
+          0.18 * weights.dom;
+        const alpha = alphaBase + Math.random() * 0.4;
+        ctx.strokeStyle = `rgba(255,255,255,${alpha})`;
+        ctx.lineWidth =
+          0.7 +
+          (1.3 + 0.8 * weights.dom) *
+            (0.3 + 0.7 * Math.random());
+        ctx.beginPath();
+        ctx.moveTo(ix, iy);
+        ctx.lineTo(ox, oy);
+        ctx.stroke();
+      }
+
+      ctx.shadowBlur =
+        55 * pulseAmp * (1 + 0.3 * (weights.brk + weights.dom));
+      ctx.shadowColor = "rgba(255,255,255,0.98)";
+      ctx.fillStyle = "rgba(255,255,255,0.99)";
+      ctx.beginPath();
+      ctx.arc(cx, cy, coreR, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+
+      const dx = targetX - cx;
+      const dy = targetY - cy;
+      const angleToMouse = Math.atan2(dy, dx);
+      const pupilOffset = coreR * 0.25;
+
+      const pupilCx = cx + Math.cos(angleToMouse) * pupilOffset;
+      const pupilCy = cy + Math.sin(angleToMouse) * pupilOffset;
+
+      const pupilR =
+        coreR *
+        (0.26 +
+          0.08 * Math.sin(time * 0.035 + 0.7) +
+          0.05 * (weights.brk + weights.dom) *
+            Math.sin(time * 0.07));
+
+      ctx.fillStyle = "rgba(0,0,0,0.96)";
+      ctx.beginPath();
+      ctx.arc(pupilCx, pupilCy, pupilR, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.strokeStyle = "rgba(255,255,255,0.6)";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.arc(cx, cy, coreR * 1.45, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
+    function drawOrbitalNetwork(time, breath, weights) {
+      const cx = w / 2;
+      const cy = h / 2;
+
+      const outerR = Math.min(w, h) * 0.46;
+      const innerR = outerR * 0.6;
+
+      const nodesBase =
+        8 * weights.lure + 6 * weights.sync + 7 * weights.brk + 6 * weights.dom;
+      const nodes = Math.round(nodesBase);
+
+      for (let ring = 0; ring < 2; ring++) {
+        const r =
+          ring === 0
+            ? innerR * (1 + 0.08 * breath)
+            : outerR * (1 + 0.1 * (weights.brk ? -breath : breath));
+
+        const dir = ring === 0 ? 1 : -1;
+        const baseSpeed = ring === 0 ? 0.002 : 0.0035;
+        const speed =
+          baseSpeed *
+          (1 +
+            0.7 * weights.sync +
+            1.2 * weights.brk +
+            1.8 * weights.dom);
+
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.rotate(time * speed * dir);
+        for (let i = 0; i < nodes; i++) {
+          const ang = (Math.PI * 2 * i) / nodes;
+          const x = Math.cos(ang) * r;
+          const y = Math.sin(ang) * r;
+
+          const baseAlpha =
+            0.5 +
+            0.1 * weights.sync +
+            0.2 * weights.brk +
+            0.3 * weights.dom;
+          const mod =
+            weights.lure || weights.sync
+              ? (breath + 1) / 2
+              : Math.abs(Math.sin(time * 0.02 + i * 0.7));
+          const nodeAlpha = baseAlpha + 0.3 * mod;
+
+          ctx.shadowBlur = 24;
+          ctx.shadowColor = `rgba(255,255,255,${nodeAlpha})`;
+          ctx.fillStyle = `rgba(255,255,255,${nodeAlpha})`;
+          const size =
+            7 +
+            (5 + 4 * weights.dom) * mod;
+          ctx.beginPath();
+          ctx.arc(x, y, size, 0, Math.PI * 2);
+          ctx.fill();
+
+          const nextAng =
+            (Math.PI * 2 * ((i + 1) % nodes)) / nodes;
+          const nx = Math.cos(nextAng) * r;
+          const ny = Math.sin(nextAng) * r;
+          ctx.shadowBlur = 12;
+          ctx.strokeStyle = `rgba(255,255,255,${0.45 + 0.22 * ring})`;
+          ctx.lineWidth = 4.4 + 1.4 * weights.dom;
+          ctx.beginPath();
+          ctx.moveTo(x, y);
+          ctx.lineTo(nx, ny);
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
+      ctx.shadowBlur = 0;
+    }
+
+    function drawBackgroundFlicker(weights) {
+      const baseCount =
+        14 +
+        Math.floor(
+          10 * weights.lure +
+          18 * weights.sync +
+          24 * weights.brk +
+          32 * weights.dom
+        );
+
+      for (let i = 0; i < baseCount; i++) {
+        const x = Math.random() * w;
+        const y = Math.random() * h;
+        const alpha = 0.02 + 0.05 * (weights.brk + weights.dom) + Math.random() * 0.04;
+        ctx.fillStyle = `rgba(255,255,255,${alpha})`;
+        ctx.fillRect(x, y, 1, 1);
+      }
+    }
+
+    function animate() {
+      t++;
+
+      const cyclePos = (t % CYCLE_FRAMES) / CYCLE_FRAMES;
+      const weights = getPhaseWeights(cyclePos);
+
+      // 6 breaths/minute at ~60fps
+      const breath = Math.sin((Math.PI * 2 * t) / 600);
+
+      const fadeBase =
+        0.13 +
+        0.04 * weights.sync +
+        0.08 * weights.brk +
+        0.1 * weights.dom;
+      const trailFade = fadeBase + 0.03 * Math.sin(t * 0.01);
+      ctx.fillStyle = `rgba(0,0,0,${trailFade})`;
+      ctx.fillRect(0, 0, w, h);
+
+      pulseAmp = lerp(pulseAmp, pulseTarget, 0.04);
+      camZoom = lerp(camZoom, camZoomTarget, 0.03);
+      camOffsetX = lerp(camOffsetX, camOffsetTargetX, 0.03);
+      camOffsetY = lerp(camOffsetY, camOffsetTargetY, 0.03);
+
+      if (Math.abs(camOffsetX - camOffsetTargetX) < 0.5) camOffsetTargetX *= 0.6;
+      if (Math.abs(camOffsetY - camOffsetTargetY) < 0.5) camOffsetTargetY *= 0.6;
+
+      const driftChance =
+        0.002 +
+        0.004 * weights.sync +
+        0.007 * weights.brk +
+        0.01 * weights.dom;
+      if (Math.random() < driftChance) {
+        const spread = 70 + 70 * (weights.brk + weights.dom);
+        camOffsetTargetX = (Math.random() - 0.5) * spread;
+        camOffsetTargetY = (Math.random() - 0.5) * spread;
+      }
+
+      // smooth camera zoom behaviour – never totally calm
+      camZoomTarget =
+        1.03 +
+        0.03 * breath * (weights.lure + weights.sync) +
+        0.07 * Math.sin(t * 0.02) * (weights.brk + weights.dom);
+
+      pulseTarget =
+        1.2 +
+        0.25 * ((breath + 1) / 2) * (weights.lure + weights.sync) +
+        0.4 * Math.sin(t * 0.025) * (weights.brk + weights.dom);
+
+      // flashes: softer, continuous but modulated by phase
+      if (weights.brk + weights.dom > 0.15 && Math.random() < 0.006) {
+        flashAlpha = 0.5 + 0.4 * (weights.dom + weights.brk);
+      }
+      flashAlpha = Math.max(0, flashAlpha - 0.02);
+
+      microStrobe = Math.max(0, microStrobe - 0.14);
+      if (weights.sync > 0.2) {
+        if (breath > 0.97 && t % 10 === 0) microStrobe = 0.28;
+      }
+      if (weights.brk > 0.15 && Math.random() < 0.05) microStrobe = 0.45;
+      if (weights.dom > 0.15 && Math.random() < 0.07) microStrobe = 0.65;
+
+      const intensity =
+        0.4 * weights.lure +
+        0.7 * weights.sync +
+        0.9 * weights.brk +
+        1.1 * weights.dom;
+
+      ctx.save();
+      ctx.translate(w / 2, h / 2);
+      ctx.scale(camZoom, camZoom);
+      ctx.translate(-w / 2 + camOffsetX, -h / 2 + camOffsetY);
+
+      drawBackgroundFlicker(weights);
+      drawOrbitalNetwork(t, breath, weights);
+      drawCore(t, breath, weights);
+
+      branches.forEach(b => {
+        b.update(intensity);
+        b.draw(intensity);
+      });
+
+      ctx.restore();
+
+      if (flashAlpha > 0) {
+        ctx.globalAlpha = flashAlpha * 0.6;
+        ctx.fillStyle = "#fff";
+        ctx.fillRect(0, 0, w, h);
+        ctx.globalAlpha = 1;
+      }
+
+      if (microStrobe > 0) {
+        ctx.globalAlpha = microStrobe * 0.45;
+        ctx.fillStyle = "#fff";
+        ctx.fillRect(0, 0, w, h);
+        ctx.globalAlpha = 1;
+      }
+
+      if (running) frameId = requestAnimationFrame(animate);
+    }
+
+    function start() {
+      if (running) return;
+      running = true;
+      document.getElementById("instructions").style.opacity = "0.3";
+      animate();
+    }
+
+    function stop() {
+      running = false;
+      if (frameId) cancelAnimationFrame(frameId);
+      ctx.fillStyle = "#000";
+      ctx.fillRect(0, 0, w, h);
+      document.getElementById("instructions").style.opacity = "0.85";
+
+      pulseAmp = 1;
+      pulseTarget = 1.2;
+      camZoom = 1;
+      camZoomTarget = 1;
+      camOffsetX = camOffsetY = 0;
+      camOffsetTargetX = camOffsetTargetY = 0;
+      flashAlpha = 0;
+      microStrobe = 0;
+      t = 0;
+      initBranches();
+    }
+
+    document.addEventListener("keydown", (e) => {
+      if (e.code === "Space") {
+        e.preventDefault();
+        running ? stop() : start();
+      }
+    });
+
+    canvas.addEventListener("click", () => {
+      // overload spike – but still smooth (eased by lerp)
+      pulseTarget += 0.8;
+      camZoomTarget += 0.18;
+      flashAlpha = Math.min(1, flashAlpha + 0.7);
+      microStrobe = Math.max(microStrobe, 0.6);
+
+      setTimeout(() => {
+        pulseTarget = 1.4;
+        camZoomTarget = 1.08;
+      }, 420);
+    });
+
+    canvas.addEventListener("mousemove", (e) => {
+      mouseX = e.clientX;
+      mouseY = e.clientY;
+    });
+
+    // init
+    initBranches();
+    ctx.fillStyle = "#000";
+    ctx.fillRect(0, 0, w, h);
+  </script>
+</body>
+</html>
