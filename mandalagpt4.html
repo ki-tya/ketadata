@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Searing White Bloom</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      background: #020308;
+      cursor: none;
+    }
+    canvas {
+      display: block;
+      filter: contrast(1.35) saturate(1.1);
+    }
+  </style>
+</head>
+<body>
+  <canvas id="bloom"></canvas>
+
+  <script>
+    const canvas = document.getElementById("bloom");
+    const ctx = canvas.getContext("2d");
+
+    let time = 0;
+    let speed = 0.02;
+
+    function resize() {
+      canvas.width = innerWidth;
+      canvas.height = innerHeight;
+    }
+
+    resize();
+    addEventListener("resize", resize);
+
+    function getC() {
+      return { x: canvas.width / 2, y: canvas.height / 2 };
+    }
+
+    const symmetry = 22;
+    const base = 140;
+
+    // --- BACKGROUND: soft charcoal vignette with subtle color drift ---
+    function drawBackground(c) {
+      const r = Math.hypot(canvas.width, canvas.height) * 0.7;
+      const t = time * 0.25;
+
+      const g = ctx.createRadialGradient(c.x, c.y, 0, c.x, c.y, r);
+      g.addColorStop(0, "rgba(10, 10, 20, 1)");
+      g.addColorStop(0.5, "rgba(5, 5, 12, 1)");
+      g.addColorStop(1, "rgba(1, 1, 6, 1)");
+
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // faint slow color wash to keep it alive
+      ctx.save();
+      ctx.globalAlpha = 0.08;
+      const hue = (t * 30) % 360;
+      const wash = ctx.createRadialGradient(c.x, c.y, r * 0.2, c.x, c.y, r);
+      wash.addColorStop(0, `hsla(${hue}, 40%, 70%, 0.9)`);
+      wash.addColorStop(1, "hsla(0, 0%, 0%, 0)");
+      ctx.fillStyle = wash;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.restore();
+    }
+
+    // Utility: mostly white with slight tint
+    function whiteTint(hShift, alpha, light = 90) {
+      const h = (hShift % 360 + 360) % 360;
+      return `hsla(${h}, 40%, ${light}%, ${alpha})`;
+    }
+
+    // --- OUTER BACKBONE RING (everything connects into this) ---
+    function outerBackbone(r, phase) {
+      const pts = 160;
+      ctx.beginPath();
+      for (let i = 0; i <= pts; i++) {
+        const a = (i / pts) * Math.PI * 2;
+        const wob =
+          Math.sin(a * 4 + phase * 1.5) * 8 +
+          Math.cos(a * 6 - phase * 1.2) * 5;
+        const rr = r + wob;
+        const x = Math.cos(a) * rr;
+        const y = Math.sin(a) * rr;
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.closePath();
+      ctx.strokeStyle = whiteTint(20 + phase * 20, 0.6, 88);
+      ctx.lineWidth = 3;
+      ctx.stroke();
+    }
+
+    // --- PETAL RING (soft, lacy, all connected) ---
+    function petalRing(r, layers, phase) {
+      const petals = 52;
+
+      for (let L = 0; L < layers; L++) {
+        const R = r + L * 18;
+        ctx.beginPath();
+
+        for (let i = 0; i <= petals; i++) {
+          const t = i / petals;
+          const ang = t * Math.PI * 2;
+
+          const n =
+            Math.sin(ang * 3 + phase + L * 0.4) * 18 +
+            Math.cos(ang * 6 - phase * 0.6 + L) * 11 +
+            Math.sin(ang * 9 + phase * 1.2 + L) * 7;
+
+          const rr = R + n;
+          const x = Math.cos(ang) * rr;
+          const y = Math.sin(ang) * rr;
+
+          if (i === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        }
+
+        ctx.closePath();
+        const alpha = 0.7 - L * 0.15;
+        ctx.strokeStyle = whiteTint(40 + phase * 15 + L * 10, alpha, 94 - L * 4);
+        ctx.lineWidth = 2.2 - L * 0.25;
+        ctx.stroke();
+      }
+    }
+
+    // --- RADIAL FRACTALS (center → outer ring, no dead ends) ---
+    function radialFractals(inner, outer, branches, phase) {
+      for (let i = 0; i < branches; i++) {
+        const a =
+          (i / branches) * Math.PI * 2 +
+          phase * 0.5 +
+          Math.sin(time * 1.8 + i) * 0.08;
+
+        const steps = 6;
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+
+        for (let s = 1; s <= steps; s++) {
+          const t = s / steps;
+          const rr = inner + (outer - inner) * t;
+
+          const wob =
+            Math.sin(time * 3.5 + i * 0.7 + s) * 5 +
+            Math.cos(time * 2.6 + i * 1.1) * 3;
+
+          const x = Math.cos(a + wob * 0.002) * (rr + wob);
+          const y = Math.sin(a + wob * 0.002) * (rr + wob);
+          ctx.lineTo(x, y);
+        }
+
+        const alpha = 0.55 + Math.sin(time * 3 + i) * 0.15;
+        ctx.strokeStyle = whiteTint(10 + i * 3, alpha, 96);
+        ctx.lineWidth = 1.2;
+        ctx.stroke();
+      }
+    }
+
+    // --- ARC RINGS (curving spokes that join the backbone) ---
+    function spiralArcs(innerR, outerR, bands, phase) {
+      for (let b = 0; b < bands; b++) {
+        const r = innerR + (outerR - innerR) * (b / bands);
+        const segs = 26;
+
+        for (let i = 0; i < segs; i++) {
+          const a1 =
+            (Math.PI * 2 * i) / segs +
+            phase * 0.7 +
+            b * 0.18;
+          const a2 = a1 + Math.PI / 9;
+
+          const x1 = Math.cos(a1) * r;
+          const y1 = Math.sin(a1) * r;
+          const x2 = Math.cos(a2) * (r + 28);
+          const y2 = Math.sin(a2) * (r + 28);
+
+          ctx.beginPath();
+          ctx.moveTo(x1, y1);
+          ctx.lineTo(x2, y2);
+
+          const alpha = 0.32 + b * 0.06;
+          ctx.strokeStyle = whiteTint(30 + b * 12 + i, alpha, 92);
+          ctx.lineWidth = 4.5 - b * 0.4;
+          ctx.stroke();
+        }
+      }
+    }
+
+    // --- HALO PARTICLES (soft white sparks, all hugging a ring) ---
+    function haloParticles(r, count, phase) {
+      for (let i = 0; i < count; i++) {
+        const a =
+          (Math.PI * 2 * i) / count +
+          phase * 0.4 +
+          Math.sin(time * 4 + i * 0.4) * 0.05;
+        const jitter =
+          Math.sin(time * 6 + i * 0.9) * 10 +
+          Math.cos(time * 3.1 + i * 0.7) * 6;
+
+        const rr = r + jitter;
+        const x = Math.cos(a) * rr;
+        const y = Math.sin(a) * rr;
+
+        const size =
+          2.2 +
+          Math.sin(time * 5 + i * 0.7) * 1.2;
+
+        const g = ctx.createRadialGradient(x, y, 0, x, y, size * 3.2);
+        g.addColorStop(0, "rgba(255,255,255,0.95)");
+        g.addColorStop(0.4, "rgba(255,255,255,0.7)");
+        g.addColorStop(1, "rgba(255,255,255,0)");
+
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.arc(x, y, size * 3.2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    // --- SEARING CORE ---
+    function core() {
+      // outer soft rings
+      for (let i = 0; i < 8; i++) {
+        const t = i / 7;
+        const r = 30 + t * 26;
+        const alpha = 0.7 - t * 0.7;
+
+        ctx.beginPath();
+        const pts = 80;
+        for (let p = 0; p <= pts; p++) {
+          const a = (p / pts) * Math.PI * 2;
+          const wob =
+            Math.sin(a * 5 + time * 6 + i) * 2 +
+            Math.cos(a * 7 - time * 4 + i * 0.5) * 1.5;
+          const rr = r + wob;
+          const x = Math.cos(a) * rr;
+          const y = Math.sin(a) * rr;
+          if (p === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        }
+        ctx.closePath();
+        ctx.strokeStyle = whiteTint(60 + i * 5, alpha, 96);
+        ctx.lineWidth = 2.5 - t * 2;
+        ctx.stroke();
+      }
+
+      // blinding center glow
+      const flash = Math.sin(time * 8) * 0.4 + 0.9;
+      const g = ctx.createRadialGradient(0, 0, 0, 0, 0, 34);
+      g.addColorStop(0, `rgba(255,255,255,${1.0 * flash})`);
+      g.addColorStop(0.4, `rgba(255,249,240,${0.9 * flash})`);
+      g.addColorStop(1, "rgba(255,240,220,0)");
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(0, 0, 34, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    function draw() {
+      const c = getC();
+      drawBackground(c);
+
+      ctx.save();
+      ctx.translate(c.x, c.y);
+
+      // additive-ish look for searing overlaps
+      ctx.globalCompositeOperation = "lighter";
+
+      const phase = time * 1.3;
+
+      const outerR = base * 2.1;
+
+      outerBackbone(outerR, phase);
+      spiralArcs(base * 1.1, outerR, 4, phase);
+      radialFractals(base * 0.9, outerR, symmetry, phase);
+      haloParticles(base * 1.8, 220, phase);
+      petalRing(base, 4, phase);
+      core();
+
+      ctx.restore();
+
+      time += speed;
+      requestAnimationFrame(draw);
+    }
+
+    draw();
+  </script>
+</body>
+</html>
