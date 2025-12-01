@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Hypnotic Fractal Bloom – v2</title>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      background: #000;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      cursor: none;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    canvas {
+      display: block;
+      filter: contrast(1.25) saturate(1.35);
+    }
+
+    #speedControl {
+      position: fixed;
+      bottom: 30px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(5, 5, 15, 0.92);
+      padding: 12px 20px;
+      border-radius: 999px;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
+      opacity: 0;
+      transition: opacity 0.25s ease;
+      pointer-events: none;
+      z-index: 1000;
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      backdrop-filter: blur(10px);
+    }
+
+    #speedControl.visible {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    #speedLabel {
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: rgba(255, 255, 255, 0.65);
+      margin-bottom: 6px;
+    }
+
+    #speedSlider {
+      width: 220px;
+      height: 6px;
+      border-radius: 3px;
+      background: linear-gradient(to right, #2f80ed, #9b51e0, #f2994a, #eb5757);
+      outline: none;
+      -webkit-appearance: none;
+      display: block;
+    }
+
+    #speedSlider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: #f2f2f2;
+      cursor: pointer;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+      border: 1px solid rgba(255, 255, 255, 0.5);
+    }
+
+    #speedSlider::-moz-range-thumb {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: #f2f2f2;
+      cursor: pointer;
+      border: 1px solid rgba(255, 255, 255, 0.5);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+    }
+  </style>
+</head>
+<body>
+  <canvas id="bloom"></canvas>
+
+  <div id="speedControl">
+    <div id="speedLabel">Pulse / Drift</div>
+    <input type="range" id="speedSlider" min="20" max="260" value="120" />
+  </div>
+
+  <script>
+    const canvas = document.getElementById("bloom");
+    const ctx = canvas.getContext("2d");
+    const speedControl = document.getElementById("speedControl");
+    const speedSlider = document.getElementById("speedSlider");
+
+    let time = 0;
+    let speedMultiplier = 1.2;
+    let hideTimeout;
+
+    function resizeCanvas() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    }
+
+    resizeCanvas();
+    window.addEventListener("resize", resizeCanvas);
+
+    function getCenter() {
+      return { x: canvas.width / 2, y: canvas.height / 2 };
+    }
+
+    // Show / hide control + cursor
+    document.addEventListener("mousemove", () => {
+      speedControl.classList.add("visible");
+      document.body.style.cursor = "auto";
+
+      clearTimeout(hideTimeout);
+      hideTimeout = setTimeout(() => {
+        speedControl.classList.remove("visible");
+        document.body.style.cursor = "none";
+      }, 2000);
+    });
+
+    // Slider -> speed
+    speedSlider.addEventListener("input", (e) => {
+      const v = e.target.value / 120;
+      speedMultiplier = Math.pow(v, 1.4);
+    });
+
+    function hsla(h, s, l, a) {
+      return `hsla(${h}, ${s}%, ${l}%, ${a})`;
+    }
+
+    const symmetry = 20;
+    const baseRadius = 120;
+
+    function drawBreathingBackground(center) {
+      const maxR = Math.hypot(canvas.width, canvas.height) * 0.7;
+      const t = time * 0.4;
+      const pulse = Math.sin(t) * 0.2 + 0.45;
+
+      const gradient = ctx.createRadialGradient(
+        center.x,
+        center.y,
+        maxR * 0.05,
+        center.x,
+        center.y,
+        maxR
+      );
+
+      const hueA = (t * 40) % 360;
+      const hueB = (t * 40 + 120) % 360;
+      const hueC = (t * 40 + 240) % 360;
+
+      gradient.addColorStop(0, hsla(hueA, 90, 55 + pulse * 15, 1));
+      gradient.addColorStop(0.4, hsla(hueB, 80, 25 + pulse * 15, 1));
+      gradient.addColorStop(1, hsla(hueC, 70, 7 + pulse * 10, 1));
+
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
+
+    function drawFractalPetalRing(radius, layers, phase) {
+      const petals = 42;
+      for (let layer = 0; layer < layers; layer++) {
+        const r = radius + layer * 16;
+        const localPhase = phase + layer * 0.5;
+        const hueShift = (time * 60 + layer * 25) % 360;
+        const alphaBase = 0.6 - layer * 0.06;
+
+        ctx.beginPath();
+        for (let i = 0; i <= petals; i++) {
+          const t = i / petals;
+          const angle = t * Math.PI * 2;
+
+          const n1 = Math.sin(angle * 3 + localPhase * 1.3) * 24;
+          const n2 = Math.cos(angle * 5 - localPhase * 0.9) * 16;
+          const n3 = Math.sin(angle * 9 + localPhase * 2.1) * 10;
+
+          const rr = r + n1 + n2 + n3;
+          const x = Math.cos(angle) * rr;
+          const y = Math.sin(angle) * rr;
+
+          if (i === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        }
+        ctx.closePath();
+
+        const hue = (hueShift + layer * 10) % 360;
+        ctx.strokeStyle = hsla(hue, 90, 70, alphaBase);
+        ctx.lineWidth = 2.2 - layer * 0.15;
+        ctx.stroke();
+      }
+    }
+
+    function drawSpiralArcs(radius, bands, phase) {
+      for (let band = 0; band < bands; band++) {
+        const r = radius + band * 34;
+        const thickness = 16 + Math.sin(time * 2 + band) * 6;
+        const hueBase = (time * 80 + band * 40) % 360;
+        const segments = 24;
+
+        for (let i = 0; i < segments; i++) {
+          const startAngle = (Math.PI * 2 * i) / segments + phase * 0.7 + band * 0.12;
+          const endAngle = startAngle + Math.PI / 9;
+
+          const wobble =
+            Math.sin(time * 4 + i * 1.5 + band * 0.9) * 12;
+          const rr = r + wobble;
+
+          const grad = ctx.createRadialGradient(
+            Math.cos(startAngle) * rr * 1.05,
+            Math.sin(startAngle) * rr * 1.05,
+            rr * 0.4,
+            Math.cos(startAngle) * rr,
+            Math.sin(startAngle) * rr,
+            rr * 1.4
+          );
+
+          grad.addColorStop(0, hsla((hueBase + i * 5) % 360, 95, 82, 0.95));
+          grad.addColorStop(0.4, hsla((hueBase + i * 5 + 40) % 360, 90, 60, 0.8));
+          grad.addColorStop(1, hsla((hueBase + i * 5 + 80) % 360, 80, 32, 0));
+
+          ctx.strokeStyle = grad;
+          ctx.lineWidth = thickness;
+          ctx.beginPath();
+          ctx.arc(0, 0, rr, startAngle, endAngle);
+          ctx.stroke();
+        }
+      }
+    }
+
+    function drawNoiseHalo(radius, count, phase) {
+      for (let i = 0; i < count; i++) {
+        const angle =
+          (Math.PI * 2 * i) / count +
+          phase +
+          Math.sin(time * 5 + i * 0.37) * 0.12;
+        const jitter =
+          Math.sin(time * 7 + i * 1.1) * 20 +
+          Math.cos(time * 3.5 + i * 0.7) * 12;
+        const r = radius + jitter;
+
+        const x = Math.cos(angle) * r;
+        const y = Math.sin(angle) * r;
+
+        const size =
+          3 +
+          Math.sin(time * 6 + i * 0.9) * 1.8 +
+          Math.random() * 0.8;
+
+        const hue = (time * 120 + i * 3) % 360;
+        const alpha = 0.32 + Math.sin(time * 4 + i) * 0.16;
+
+        const grad = ctx.createRadialGradient(x, y, 0, x, y, size * 3.4);
+        grad.addColorStop(0, hsla(hue, 95, 85, alpha));
+        grad.addColorStop(0.5, hsla(hue, 85, 55, alpha * 0.75));
+        grad.addColorStop(1, hsla(hue, 70, 25, 0));
+
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.arc(x, y, size * 3.4, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    function drawCorePortal() {
+      const rings = 20;
+      const maxR = 80;
+
+      for (let i = 0; i < rings; i++) {
+        const t = i / (rings - 1);
+        const wobble =
+          Math.sin(time * 5 - i * 0.5) * 3 +
+          Math.cos(time * 3.2 + i * 0.7) * 2;
+        const r = t * maxR + wobble;
+
+        const hue = (time * 180 + i * 12) % 360;
+        const alpha = 1 - t;
+
+        ctx.beginPath();
+        const points = 90;
+        for (let p = 0; p <= points; p++) {
+          const a = (Math.PI * 2 * p) / points;
+          const innerNoise =
+            Math.sin(a * 6 + time * 7 + i * 0.6) * (2 + t * 5);
+          const rr = r + innerNoise;
+          const x = Math.cos(a) * rr;
+          const y = Math.sin(a) * rr;
+          if (p === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        }
+        ctx.closePath();
+
+        ctx.strokeStyle = hsla(hue, 95, 80, alpha * 0.85);
+        ctx.lineWidth = 3 - t * 2.4;
+        ctx.stroke();
+      }
+
+      // Bright center
+      const flashPulse = Math.sin(time * 8) * 0.5 + 0.8;
+      const grad = ctx.createRadialGradient(0, 0, 0, 0, 0, 30);
+      grad.addColorStop(0, `rgba(255, 255, 255, ${0.98 * flashPulse})`);
+      grad.addColorStop(0.4, `rgba(255, 245, 230, ${0.8 * flashPulse})`);
+      grad.addColorStop(1, "rgba(255, 225, 190, 0)");
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(0, 0, 30, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    function drawRadialFractals(radius, branches, phase) {
+      for (let i = 0; i < branches; i++) {
+        const baseAngle =
+          (Math.PI * 2 * i) / branches +
+          phase +
+          Math.sin(time * 2.7 + i * 0.5) * 0.09;
+
+        const length = radius;
+        const segments = 6;
+        let x = 0;
+        let y = 0;
+        let angle = baseAngle;
+
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+
+        for (let s = 0; s < segments; s++) {
+          const segLen = length * (0.18 + 0.13 * s);
+          angle += Math.sin(time * 3 + i * 0.7 + s * 0.8) * 0.4;
+          x += Math.cos(angle) * segLen;
+          y += Math.sin(angle) * segLen;
+          ctx.lineTo(x, y);
+        }
+
+        const hue = (time * 90 + i * 9) % 360;
+        const alpha = 0.65 + Math.sin(time * 5 + i) * 0.25;
+
+        ctx.strokeStyle = hsla(hue, 96, 82, alpha);
+        ctx.lineWidth = 1.3;
+        ctx.stroke();
+      }
+    }
+
+    function drawBloom() {
+      const center = getCenter();
+
+      // erratic speed modulation
+      const erratic = Math.sin(time * 1.5) * 0.35 + Math.sin(time * 0.37) * 0.15;
+      const dt = 0.02 * speedMultiplier * (1 + erratic * 0.5);
+
+      drawBreathingBackground(center);
+
+      ctx.save();
+      ctx.translate(center.x, center.y);
+
+      const phase = time * 1.6;
+
+      // symmetric petals
+      const rotationSym = (Math.PI * 2) / symmetry;
+      for (let i = 0; i < symmetry; i++) {
+        ctx.save();
+        ctx.rotate(rotationSym * i);
+        drawFractalPetalRing(baseRadius, 4, phase + i * 0.18);
+        drawRadialFractals(baseRadius * 1.3, 3, phase * 0.9 + i * 0.25);
+        ctx.restore();
+      }
+
+      drawSpiralArcs(baseRadius * 1.5, 5, phase * 0.7);
+      drawNoiseHalo(baseRadius * 2.3, 240, phase * 0.4);
+      drawCorePortal();
+
+      ctx.restore();
+
+      time += dt;
+      requestAnimationFrame(drawBloom);
+    }
+
+    drawBloom();
+  </script>
+</body>
+</html>
