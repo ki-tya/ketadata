@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>WHITE FLOW FIELD</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+  <style>
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #000;
+      cursor: none;
+    }
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      filter: contrast(1.4);
+    }
+  </style>
+</head>
+<body>
+  <canvas id="flow"></canvas>
+
+  <script>
+    const canvas = document.getElementById("flow");
+    const ctx = canvas.getContext("2d");
+
+    function resize() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    }
+    resize();
+    window.addEventListener("resize", resize);
+
+    const PARTICLES = 1500;
+    const particles = [];
+    let t = 0;
+
+    function rand(a, b) {
+      return a + Math.random() * (b - a);
+    }
+
+    function initParticles() {
+      particles.length = 0;
+      const { width: w, height: h } = canvas;
+      for (let i = 0; i < PARTICLES; i++) {
+        particles.push({
+          x: rand(0, w),
+          y: rand(0, h),
+          life: rand(40, 260),
+          age: rand(0, 260),
+          speed: rand(0.8, 2.2),
+          width: rand(0.4, 1.8)
+        });
+      }
+    }
+
+    initParticles();
+
+    // Smooth-ish vector field based on position + time
+    function field(x, y, t) {
+      const { width: w, height: h } = canvas;
+      const nx = (x / w) * 2 - 1;
+      const ny = (y / h) * 2 - 1;
+
+      const r = Math.sqrt(nx * nx + ny * ny) + 0.0001;
+      const angleBase = Math.atan2(ny, nx);
+
+      const k1 = Math.sin(nx * 3.7 + t * 0.9) + Math.cos(ny * 4.1 - t * 1.2);
+      const k2 = Math.sin(r * 6.3 - t * 1.4) + Math.cos((nx - ny) * 5.5 + t * 0.7);
+
+      const swirl = angleBase + k1 * 0.8;
+      const radial = k2 * 0.6;
+
+      const vx = Math.cos(swirl) * (0.8 + radial) - ny * 0.4;
+      const vy = Math.sin(swirl) * (0.8 + radial) + nx * 0.4;
+
+      return { vx, vy };
+    }
+
+    function step() {
+      const { width: w, height: h } = canvas;
+
+      // trail – partial clear only
+      ctx.fillStyle = "rgba(0,0,0,0.12)";
+      ctx.fillRect(0, 0, w, h);
+
+      ctx.save();
+      ctx.globalCompositeOperation = "lighter";
+
+      for (let i = 0; i < particles.length; i++) {
+        const p = particles[i];
+
+        const fx = p.x;
+        const fy = p.y;
+        const { vx, vy } = field(fx, fy, t);
+
+        const px = p.x;
+        const py = p.y;
+
+        p.x += vx * p.speed;
+        p.y += vy * p.speed;
+
+        p.age += 1;
+        const lifeRatio = p.age / p.life;
+
+        // reset if dead or out of bounds
+        if (
+          p.age > p.life ||
+          p.x < -50 || p.x > w + 50 ||
+          p.y < -50 || p.y > h + 50
+        ) {
+          p.x = rand(0, w);
+          p.y = rand(0, h);
+          p.life = rand(40, 260);
+          p.age = 0;
+          p.speed = rand(0.8, 2.2);
+          p.width = rand(0.4, 1.8);
+          continue;
+        }
+
+        const alpha = Math.min(1, 0.15 + (1 - lifeRatio) * 0.85);
+
+        ctx.strokeStyle = `rgba(255,255,255,${alpha})`;
+        ctx.lineWidth = p.width;
+        ctx.beginPath();
+        ctx.moveTo(px, py);
+        ctx.lineTo(p.x, p.y);
+        ctx.stroke();
+      }
+
+      ctx.restore();
+
+      t += 0.005;
+      requestAnimationFrame(step);
+    }
+
+    step();
+  </script>
+</body>
+</html>
