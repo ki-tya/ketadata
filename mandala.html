@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hypnotic Kaleidoscope</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background: #ffffff;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+        
+        canvas {
+            display: block;
+            filter: contrast(1.1) brightness(1.05);
+        }
+    </style>
+</head>
+<body>
+    <canvas id="kaleidoscope"></canvas>
+    
+    <script>
+        const canvas = document.getElementById('kaleidoscope');
+        const ctx = canvas.getContext('2d');
+        
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        
+        resizeCanvas();
+        
+        function getCenter() {
+            return {
+                x: canvas.width / 2,
+                y: canvas.height / 2
+            };
+        }
+        const segments = 16;
+        let time = 0;
+        
+        class Particle {
+            constructor(radius, speed, offset) {
+                this.radius = radius;
+                this.speed = speed;
+                this.offset = offset;
+                this.angle = 0;
+            }
+            
+            update() {
+                this.angle += this.speed;
+            }
+        }
+        
+        const particles = [];
+        for (let i = 0; i < 8; i++) {
+            particles.push(new Particle(80 + i * 40, 0.02 + i * 0.005, i * 0.5));
+        }
+        
+        function drawComplexPattern(baseAngle, radius, complexity) {
+            const points = 24;
+            ctx.beginPath();
+            
+            for (let i = 0; i <= points; i++) {
+                const angle = (Math.PI * 2 * i) / points;
+                const wave1 = Math.sin(angle * 3 + time * 2) * 8;
+                const wave2 = Math.cos(angle * 5 - time * 3) * 6;
+                const wave3 = Math.sin(angle * 7 + time * 1.5) * 4;
+                const r = radius + wave1 + wave2 + wave3;
+                const x = Math.cos(angle + baseAngle) * r;
+                const y = Math.sin(angle + baseAngle) * r;
+                
+                if (i === 0) ctx.moveTo(x, y);
+                else ctx.lineTo(x, y);
+            }
+            
+            ctx.closePath();
+        }
+        
+        function drawSpiral(startRadius, endRadius, turns, direction) {
+            ctx.beginPath();
+            const steps = 100;
+            
+            for (let i = 0; i <= steps; i++) {
+                const progress = i / steps;
+                const angle = progress * Math.PI * 2 * turns * direction + time;
+                const r = startRadius + (endRadius - startRadius) * progress;
+                const wave = Math.sin(progress * 10 + time * 3) * 5;
+                const x = Math.cos(angle) * (r + wave);
+                const y = Math.sin(angle) * (r + wave);
+                
+                if (i === 0) ctx.moveTo(x, y);
+                else ctx.lineTo(x, y);
+            }
+        }
+        
+        function drawKaleidoscope() {
+            // Create pulsing background
+            const pulse = Math.sin(time * 0.5) * 5 + 250;
+            ctx.fillStyle = `rgb(${pulse}, ${pulse}, ${pulse})`;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            const center = getCenter();
+            ctx.save();
+            ctx.translate(center.x, center.y);
+            
+            // Draw main kaleidoscope segments
+            for (let i = 0; i < segments; i++) {
+                ctx.save();
+                ctx.rotate((Math.PI * 2 * i) / segments);
+                
+                // Layer 1: Outer spirals
+                for (let s = 0; s < 3; s++) {
+                    const spiralOffset = s * Math.PI / 3;
+                    ctx.save();
+                    ctx.rotate(spiralOffset + time * 0.3);
+                    
+                    drawSpiral(200, 350, 3, 1);
+                    const opacity1 = 0.15 + Math.sin(time + s) * 0.1;
+                    ctx.strokeStyle = `rgba(180, 180, 180, ${opacity1})`;
+                    ctx.lineWidth = 3;
+                    ctx.stroke();
+                    
+                    ctx.restore();
+                }
+                
+                // Layer 2: Orbiting particles with trails
+                particles.forEach((p, idx) => {
+                    p.update();
+                    const numOrbs = 6 + idx;
+                    
+                    for (let j = 0; j < numOrbs; j++) {
+                        const orbAngle = (Math.PI * 2 * j) / numOrbs + p.angle + p.offset;
+                        const wobble = Math.sin(time * 2 + idx) * 10;
+                        const x = Math.cos(orbAngle) * (p.radius + wobble);
+                        const y = Math.sin(orbAngle) * (p.radius + wobble);
+                        
+                        // Draw trailing effect
+                        for (let t = 0; t < 5; t++) {
+                            const trailAngle = orbAngle - t * 0.1;
+                            const tx = Math.cos(trailAngle) * (p.radius + wobble);
+                            const ty = Math.sin(trailAngle) * (p.radius + wobble);
+                            const trailOpacity = (0.3 - t * 0.05) * (0.5 + Math.sin(time + idx) * 0.3);
+                            
+                            const gradient = ctx.createRadialGradient(tx, ty, 0, tx, ty, 12 - t * 2);
+                            gradient.addColorStop(0, `rgba(255, 255, 255, ${trailOpacity})`);
+                            gradient.addColorStop(0.5, `rgba(220, 220, 220, ${trailOpacity * 0.7})`);
+                            gradient.addColorStop(1, `rgba(180, 180, 180, 0)`);
+                            
+                            ctx.fillStyle = gradient;
+                            ctx.beginPath();
+                            ctx.arc(tx, ty, 12 - t * 2, 0, Math.PI * 2);
+                            ctx.fill();
+                        }
+                    }
+                });
+                
+                // Layer 3: Complex geometric patterns
+                for (let layer = 0; layer < 6; layer++) {
+                    const baseRadius = 60 + layer * 35;
+                    const rotationSpeed = 0.02 + layer * 0.01;
+                    
+                    ctx.save();
+                    ctx.rotate(time * rotationSpeed * (layer % 2 ? 1 : -1));
+                    
+                    drawComplexPattern(time * layer * 0.1, baseRadius, layer);
+                    
+                    const opacity = 0.2 + Math.sin(time + layer) * 0.15;
+                    const gradient = ctx.createRadialGradient(0, 0, baseRadius - 20, 0, 0, baseRadius + 20);
+                    gradient.addColorStop(0, `rgba(240, 240, 240, ${opacity})`);
+                    gradient.addColorStop(0.5, `rgba(200, 200, 200, ${opacity * 0.8})`);
+                    gradient.addColorStop(1, `rgba(160, 160, 160, ${opacity * 0.5})`);
+                    
+                    ctx.fillStyle = gradient;
+                    ctx.fill();
+                    
+                    ctx.strokeStyle = `rgba(140, 140, 140, ${opacity * 1.2})`;
+                    ctx.lineWidth = 2;
+                    ctx.stroke();
+                    
+                    ctx.restore();
+                }
+                
+                // Layer 4: Pulsing mandalas
+                for (let m = 0; m < 4; m++) {
+                    const mandalaPulse = Math.sin(time * 2 + m) * 0.2 + 1;
+                    const mandalaRadius = (50 + m * 30) * mandalaPulse;
+                    const petals = 8 + m * 2;
+                    
+                    ctx.save();
+                    ctx.rotate(time * (m % 2 ? 0.5 : -0.5));
+                    
+                    for (let p = 0; p < petals; p++) {
+                        const petalAngle = (Math.PI * 2 * p) / petals;
+                        const px = Math.cos(petalAngle) * mandalaRadius;
+                        const py = Math.sin(petalAngle) * mandalaRadius;
+                        
+                        const petalSize = 15 + Math.sin(time * 3 + p) * 5;
+                        const gradient = ctx.createRadialGradient(px, py, 0, px, py, petalSize);
+                        gradient.addColorStop(0, 'rgba(255, 255, 255, 0.4)');
+                        gradient.addColorStop(0.6, 'rgba(200, 200, 200, 0.3)');
+                        gradient.addColorStop(1, 'rgba(150, 150, 150, 0)');
+                        
+                        ctx.fillStyle = gradient;
+                        ctx.beginPath();
+                        ctx.arc(px, py, petalSize, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
+                    
+                    ctx.restore();
+                }
+                
+                ctx.restore();
+            }
+            
+            // Center focal point - hypnotic core
+            for (let c = 0; c < 12; c++) {
+                const coreRadius = 5 + c * 8;
+                const corePulse = Math.sin(time * 3 - c * 0.3) * 0.3 + 0.7;
+                const coreOpacity = (0.5 - c * 0.035) * corePulse;
+                
+                ctx.strokeStyle = `rgba(${120 + c * 10}, ${120 + c * 10}, ${120 + c * 10}, ${coreOpacity})`;
+                ctx.lineWidth = 4 - c * 0.2;
+                ctx.beginPath();
+                ctx.arc(0, 0, coreRadius * corePulse, 0, Math.PI * 2);
+                ctx.stroke();
+                
+                // Rotating core elements
+                const coreElements = 12;
+                for (let e = 0; e < coreElements; e++) {
+                    const elementAngle = (Math.PI * 2 * e) / coreElements + time * 2;
+                    const ex = Math.cos(elementAngle) * coreRadius;
+                    const ey = Math.sin(elementAngle) * coreRadius;
+                    
+                    ctx.fillStyle = `rgba(180, 180, 180, ${coreOpacity})`;
+                    ctx.beginPath();
+                    ctx.arc(ex, ey, 3, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            }
+            
+            // Outer ring decorations
+            for (let ring = 0; ring < 3; ring++) {
+                const ringRadius = 320 + ring * 60;
+                const elements = 24 + ring * 8;
+                
+                for (let e = 0; e < elements; e++) {
+                    const elementAngle = (Math.PI * 2 * e) / elements + time * (0.5 - ring * 0.15);
+                    const ex = Math.cos(elementAngle) * ringRadius;
+                    const ey = Math.sin(elementAngle) * ringRadius;
+                    const size = 8 + Math.sin(time * 2 + e) * 4;
+                    
+                    const gradient = ctx.createRadialGradient(ex, ey, 0, ex, ey, size);
+                    gradient.addColorStop(0, 'rgba(255, 255, 255, 0.3)');
+                    gradient.addColorStop(1, 'rgba(180, 180, 180, 0)');
+                    
+                    ctx.fillStyle = gradient;
+                    ctx.beginPath();
+                    ctx.arc(ex, ey, size, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            }
+            
+            ctx.restore();
+            
+            time += 0.02;
+            requestAnimationFrame(drawKaleidoscope);
+        }
+        
+        drawKaleidoscope();
+        
+        window.addEventListener('resize', () => {
+            resizeCanvas();
+        });
+    </script>
+</body>
+</html>
