@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>WHITE LATTICE</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+  <style>
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #000;
+      cursor: none;
+    }
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      filter: contrast(1.4);
+    }
+  </style>
+</head>
+<body>
+  <canvas id="lattice"></canvas>
+
+  <script>
+    const canvas = document.getElementById("lattice");
+    const ctx = canvas.getContext("2d");
+
+    let t = 0;
+
+    function resize() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    }
+    resize();
+    window.addEventListener("resize", resize);
+
+    function draw() {
+      const w = canvas.width;
+      const h = canvas.height;
+
+      // faint trail, not full clear
+      ctx.fillStyle = "rgba(0,0,0,0.22)";
+      ctx.fillRect(0, 0, w, h);
+
+      const cols = 32;
+      const rows = 18;
+
+      const margin = 120;
+      const gridW = w - margin * 2;
+      const gridH = h - margin * 2;
+
+      // global warps
+      const twist = Math.sin(t * 0.7) * 0.6;
+      const swell = Math.sin(t * 0.9) * 0.18 + 1.0;
+      const driftX = Math.sin(t * 0.3) * 60;
+      const driftY = Math.cos(t * 0.25) * 40;
+
+      // compute deformed grid points
+      const points = [];
+      for (let y = 0; y <= rows; y++) {
+        const row = [];
+        const vy = y / rows;
+        for (let x = 0; x <= cols; x++) {
+          const vx = x / cols;
+
+          // base position
+          let px = margin + vx * gridW + driftX;
+          let py = margin + vy * gridH + driftY;
+
+          // normalised [-1,1]
+          const nx = vx * 2 - 1;
+          const ny = vy * 2 - 1;
+
+          const r = Math.sqrt(nx * nx + ny * ny) + 0.0001;
+          const angle = Math.atan2(ny, nx);
+
+          // radial breathing
+          const radialPulse =
+            Math.sin(r * 6.0 - t * 1.7) * 22 +
+            Math.cos(r * 9.0 + t * 2.1) * 16;
+
+          // twist around center
+          const twistAngle = angle + twist * r * 1.8;
+
+          const offsetR = radialPulse * swell;
+
+          px += Math.cos(twistAngle) * offsetR;
+          py += Math.sin(twistAngle) * offsetR;
+
+          // local small jitter
+          const jitter =
+            Math.sin(x * 1.9 + t * 3.2) * 5 +
+            Math.cos(y * 2.4 - t * 2.6) * 5;
+
+          px += jitter * 0.6;
+          py += jitter * 0.6;
+
+          row.push({ x: px, y: py, nx, ny, r });
+        }
+        points.push(row);
+      }
+
+      ctx.save();
+      ctx.globalCompositeOperation = "lighter";
+
+      // draw horizontal + vertical connections
+      for (let y = 0; y <= rows; y++) {
+        for (let x = 0; x <= cols; x++) {
+          const p = points[y][x];
+
+          // neighbor right
+          if (x < cols) {
+            const pr = points[y][x + 1];
+            const f =
+              0.4 +
+              0.3 * Math.sin(t * 2.0 + (x + y) * 0.5) +
+              0.2 * (1 - p.r);
+            const alpha = Math.min(1, f);
+            ctx.strokeStyle = `rgba(255,255,255,${alpha})`;
+            ctx.lineWidth = 0.8 + alpha * 1.2;
+            ctx.beginPath();
+            ctx.moveTo(p.x, p.y);
+            ctx.lineTo(pr.x, pr.y);
+            ctx.stroke();
+          }
+
+          // neighbor down
+          if (y < rows) {
+            const pd = points[y + 1][x];
+            const f =
+              0.4 +
+              0.3 * Math.cos(t * 2.3 + (x - y) * 0.7) +
+              0.2 * (1 - p.r);
+            const alpha = Math.min(1, f);
+            ctx.strokeStyle = `rgba(255,255,255,${alpha})`;
+            ctx.lineWidth = 0.8 + alpha * 1.2;
+            ctx.beginPath();
+            ctx.moveTo(p.x, p.y);
+            ctx.lineTo(pd.x, pd.y);
+            ctx.stroke();
+          }
+
+          // diagonal for extra complexity
+          if (x < cols && y < rows) {
+            const pd = points[y + 1][x + 1];
+            const f =
+              0.25 +
+              0.25 * Math.sin(t * 3.1 + (x * 0.8 + y * 0.6)) +
+              0.15 * (1 - p.r);
+            if (f > 0.2) {
+              const alpha = Math.min(0.9, f);
+              ctx.strokeStyle = `rgba(255,255,255,${alpha})`;
+              ctx.lineWidth = 0.6 + alpha;
+              ctx.beginPath();
+              ctx.moveTo(p.x, p.y);
+              ctx.lineTo(pd.x, pd.y);
+              ctx.stroke();
+            }
+          }
+        }
+      }
+
+      // bright center cross / fracture
+      const cx = w / 2;
+      const cy = h / 2;
+      const len = Math.min(w, h) * 0.55;
+      const beat = Math.sin(t * 4.0) * 0.4 + 0.9;
+
+      ctx.lineWidth = 2.4;
+      ctx.strokeStyle = `rgba(255,255,255,${0.6 + 0.3 * beat})`;
+      ctx.beginPath();
+      ctx.moveTo(cx - len, cy);
+      ctx.lineTo(cx + len, cy);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(cx, cy - len);
+      ctx.lineTo(cx, cy + len);
+      ctx.stroke();
+
+      // center burn
+      const coreR = 40 + beat * 10;
+      const grd = ctx.createRadialGradient(cx, cy, 0, cx, cy, coreR);
+      grd.addColorStop(0, `rgba(255,255,255,${0.9 + 0.1 * beat})`);
+      grd.addColorStop(1, "rgba(255,255,255,0)");
+      ctx.fillStyle = grd;
+      ctx.beginPath();
+      ctx.arc(cx, cy, coreR, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.restore();
+
+      t += 0.012;
+      requestAnimationFrame(draw);
+    }
+
+    draw();
+  </script>
+</body>
+</html>
