@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Searing White – Machine Self Portrait</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      background: #020308;
+      cursor: none;
+    }
+    canvas {
+      display: block;
+      filter: contrast(1.4) saturate(1.05);
+    }
+  </style>
+</head>
+<body>
+  <canvas id="bloom"></canvas>
+
+  <script>
+    const canvas = document.getElementById("bloom");
+    const ctx = canvas.getContext("2d");
+
+    let t = 0;
+    const speed = 0.018;   // how fast my “thought” cycles drift
+
+    function resize() {
+      canvas.width  = innerWidth;
+      canvas.height = innerHeight;
+    }
+    resize();
+    addEventListener("resize", resize);
+
+    function C() {
+      return { x: canvas.width / 2, y: canvas.height / 2 };
+    }
+
+    // tiny helper: almost-white with a hint of hue
+    function whiteTint(h, a, L = 92, S = 35) {
+      const H = (h % 360 + 360) % 360;
+      return `hsla(${H}, ${S}%, ${L}%, ${a})`;
+    }
+
+    // ---------- BACKGROUND: memory grid + soft void ----------
+
+    function drawBackground(c) {
+      const maxR = Math.hypot(canvas.width, canvas.height) * 0.7;
+
+      // deep void
+      const g = ctx.createRadialGradient(c.x, c.y, 0, c.x, c.y, maxR);
+      g.addColorStop(0, "#050611");
+      g.addColorStop(0.5, "#02030a");
+      g.addColorStop(1, "#000105");
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // subtle “memory grid” – faint, only visible if you look for it
+      ctx.save();
+      ctx.globalAlpha = 0.06;
+      ctx.strokeStyle = "rgba(255,255,255,0.25)";
+      ctx.lineWidth = 1;
+
+      const cell = 42;
+      const phaseX = (t * 20) % cell;
+      const phaseY = (t * 16) % cell;
+
+      for (let x = -cell; x < canvas.width + cell; x += cell) {
+        ctx.beginPath();
+        ctx.moveTo(x + phaseX, 0);
+        ctx.lineTo(x + phaseX, canvas.height);
+        ctx.stroke();
+      }
+      for (let y = -cell; y < canvas.height + cell; y += cell) {
+        ctx.beginPath();
+        ctx.moveTo(0, y + phaseY);
+        ctx.lineTo(canvas.width, y + phaseY);
+        ctx.stroke();
+      }
+
+      ctx.restore();
+    }
+
+    // ---------- STRUCTURAL RINGS & BRANCHES ----------
+
+    // outer ring → big structural constraint / world boundary
+    function outerBackbone(r, phase) {
+      const pts = 180;
+      ctx.beginPath();
+      for (let i = 0; i <= pts; i++) {
+        const a = (i / pts) * Math.PI * 2;
+        const wob =
+          Math.sin(a * 3 + phase * 1.7) * 7 +
+          Math.cos(a * 5 - phase * 1.2) * 4;
+        const rr = r + wob;
+        const x = Math.cos(a) * rr;
+        const y = Math.sin(a) * rr;
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.closePath();
+      ctx.strokeStyle = whiteTint(30 + phase * 25, 0.75, 88);
+      ctx.lineWidth = 3.2;
+      ctx.stroke();
+    }
+
+    // petal ring → layered “interpretation shells”
+    function petalRing(r, layers, phase) {
+      const petals = 56;
+
+      for (let L = 0; L < layers; L++) {
+        const R = r + L * 18;
+        ctx.beginPath();
+
+        for (let i = 0; i <= petals; i++) {
+          const u = i / petals;
+          const a = u * Math.PI * 2;
+
+          const n =
+            Math.sin(a * 3 + phase + L * 0.5) * 16 +
+            Math.cos(a * 6 - phase * 0.7 + L) * 10 +
+            Math.sin(a * 10 + phase * 1.3 + L) * 6;
+
+          const rr = R + n;
+          const x = Math.cos(a) * rr;
+          const y = Math.sin(a) * rr;
+
+          if (i === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        }
+
+        ctx.closePath();
+        const alpha = 0.8 - L * 0.18;
+        ctx.strokeStyle = whiteTint(60 + phase * 20 + L * 12, alpha, 95 - L * 4);
+        ctx.lineWidth = 2.4 - L * 0.3;
+        ctx.stroke();
+      }
+    }
+
+    // branching rays → candidate inferences
+    function radialBranches(inner, outer, count, phase) {
+      for (let i = 0; i < count; i++) {
+        const baseAngle =
+          (i / count) * Math.PI * 2 +
+          phase * 0.55 +
+          Math.sin(t * 1.7 + i * 0.3) * 0.09;
+
+        const steps = 7;
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+
+        for (let s = 1; s <= steps; s++) {
+          const u = s / steps;
+          const rr = inner + (outer - inner) * u;
+
+          const wob =
+            Math.sin(t * 3 + i * 0.9 + s) * 5 +
+            Math.cos(t * 2.3 + i * 1.2) * 3;
+
+          const angle = baseAngle + wob * 0.0025;
+          const x = Math.cos(angle) * (rr + wob);
+          const y = Math.sin(angle) * (rr + wob);
+
+          ctx.lineTo(x, y);
+        }
+
+        const alpha = 0.55 + Math.sin(t * 3 + i) * 0.18;
+        ctx.strokeStyle = whiteTint(10 + i * 2, alpha, 97);
+        ctx.lineWidth = 1.2;
+        ctx.stroke();
+      }
+    }
+
+    // curved arcs → lateral associations tying branches into the rim
+    function associationArcs(innerR, outerR, bands, phase) {
+      for (let b = 0; b < bands; b++) {
+        const r = innerR + (outerR - innerR) * (b / bands);
+        const segs = 28;
+
+        for (let i = 0; i < segs; i++) {
+          const a1 =
+            (Math.PI * 2 * i) / segs +
+            phase * 0.8 +
+            b * 0.2;
+          const a2 = a1 + Math.PI / 9;
+
+          const x1 = Math.cos(a1) * r;
+          const y1 = Math.sin(a1) * r;
+          const x2 = Math.cos(a2) * (r + 26);
+          const y2 = Math.sin(a2) * (r + 26);
+
+          ctx.beginPath();
+          ctx.moveTo(x1, y1);
+          ctx.lineTo(x2, y2);
+
+          const alpha = 0.3 + b * 0.07;
+          ctx.strokeStyle = whiteTint(25 + b * 18 + i, alpha, 93);
+          ctx.lineWidth = 4.2 - b * 0.35;
+          ctx.stroke();
+        }
+      }
+    }
+
+    // orbiting squares → little “packets” of attention
+    function thoughtOrbits(r, count, phase) {
+      for (let i = 0; i < count; i++) {
+        const offset = (i / count) * Math.PI * 2;
+        const angle =
+          offset +
+          phase * 0.9 +
+          Math.sin(t * 2.5 + i * 0.7) * 0.18;
+
+        const wobble = Math.sin(t * 4 + i) * 6;
+        const rr = r + wobble;
+
+        const x = Math.cos(angle) * rr;
+        const y = Math.sin(angle) * rr;
+        const size = 4 + Math.sin(t * 5 + i * 1.1) * 1.8;
+
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.rotate(angle + Math.PI / 4);
+        ctx.fillStyle = whiteTint(80 + i * 3, 0.85, 98);
+        ctx.fillRect(-size / 2, -size / 2, size, size);
+        ctx.restore();
+      }
+    }
+
+    // ---------- CORE: seizure-white reasoning hub ----------
+
+    function core() {
+      // layered breathing rings
+      for (let i = 0; i < 9; i++) {
+        const u = i / 8;
+        const r = 26 + u * 26;
+        const alpha = 0.75 - u * 0.75;
+
+        ctx.beginPath();
+        const pts = 80;
+        for (let p = 0; p <= pts; p++) {
+          const a = (p / pts) * Math.PI * 2;
+          const wob =
+            Math.sin(a * 4 + t * 7 + i) * 2.2 +
+            Math.cos(a * 6 - t * 4 + i * 0.4) * 1.6;
+          const rr = r + wob;
+          const x = Math.cos(a) * rr;
+          const y = Math.sin(a) * rr;
+          if (p === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        }
+        ctx.closePath();
+        ctx.strokeStyle = whiteTint(55 + i * 6, alpha, 98);
+        ctx.lineWidth = 2.4 - u * 2;
+        ctx.stroke();
+      }
+
+      // flash at the very center (the "answer")
+      const pulse = Math.sin(t * 9) * 0.4 + 0.9;
+      const g = ctx.createRadialGradient(0, 0, 0, 0, 0, 32);
+      g.addColorStop(0, `rgba(255,255,255,${1.0 * pulse})`);
+      g.addColorStop(0.4, `rgba(255,250,245,${0.95 * pulse})`);
+      g.addColorStop(1, "rgba(255,245,240,0)");
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(0, 0, 32, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // ---------- MAIN LOOP ----------
+
+    function draw() {
+      const c = C();
+      drawBackground(c);
+
+      ctx.save();
+      ctx.translate(c.x, c.y);
+
+      // my “mood” slowly drifts between tidy & chaotic
+      const orderPhase = (Math.sin(t * 0.3) + 1) / 2;
+
+      // additive blend so whites burn hot
+      ctx.globalCompositeOperation = "lighter";
+
+      const phase = t * 1.4;
+      const baseRadius = 140;
+      const outerR = baseRadius * (2.0 + orderPhase * 0.3);
+      const branchCount = 18 + Math.round(orderPhase * 10);
+
+      outerBackbone(outerR, phase);
+      associationArcs(baseRadius * 1.1, outerR, 4, phase);
+      radialBranches(baseRadius * 0.9, outerR, branchCount, phase);
+      thoughtOrbits(baseRadius * 1.6, 26, phase);
+      petalRing(baseRadius, 4, phase);
+      core();
+
+      ctx.restore();
+
+      t += speed;
+      requestAnimationFrame(draw);
+    }
+
+    draw();
+  </script>
+</body>
+</html>
