@@ -1,384 +1,379 @@
-import React, { useState, useEffect, useRef } from 'react';
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>VAPE – DRIVE</title>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
 
-const SmokeBubbleUI = () => {
-  const canvasRef = useRef(null);
-  const ripplesRef = useRef([]);
-  const timeRef = useRef(0);
-  const animationFrameRef = useRef(null);
+    body {
+      margin: 0;
+      padding: 0;
+      background: #000;
+      color: #fff;
+      font-family: "Courier New", monospace;
+      height: 100vh;
+      overflow: hidden;
+    }
 
-  class Ripple {
-    constructor(x, y, delay = 0) {
-      this.x = x;
-      this.y = y;
-      this.radius = 0;
-      this.maxRadius = Math.random() * 150 + 200;
-      this.speed = Math.random() * 0.5 + 0.8;
-      this.delay = delay;
-      this.age = 0;
-      this.opacity = Math.random() * 0.4 + 0.6;
+    /* Canvas as animated background */
+    #canvas {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      display: block;
+      z-index: 0;
     }
-    
-    update() {
-      if (this.delay > 0) {
-        this.delay--;
-        return;
-      }
-      this.age++;
-      this.radius += this.speed;
-    }
-    
-    draw(ctx) {
-      if (this.delay > 0 || this.radius > this.maxRadius || this.radius < 1) return;
-      
-      let progress = this.radius / this.maxRadius;
-      let alpha = (1 - progress) * this.opacity;
-      let heatGlow = Math.sin(this.age * 0.1) * 0.5 + 0.5;
-      
-      // Outer heat distortion rings
-      for (let i = 0; i < 6; i++) {
-        let offset = i * 5;
-        let ringRadius = this.radius - offset;
-        if (ringRadius < 1) continue;
-        
-        let r = 245 + i * 2;
-        let g = 245 + i * 2;
-        let b = 250 + i * 2;
-        
-        if (i < 2) {
-          r = 255;
-          g = 250 - i * 5;
-          b = 240 - i * 10;
-        }
-        
-        ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, ${alpha * (0.95 - i * 0.12)})`;
-        ctx.lineWidth = 5 - i * 0.6;
-        ctx.beginPath();
-        ctx.arc(this.x, this.y, ringRadius, 0, Math.PI * 2);
-        ctx.stroke();
-      }
-      
-      // Intense liquid metal glow
-      if (this.radius >= 5) {
-        ctx.shadowBlur = 40;
-        ctx.shadowColor = `rgba(220, 235, 255, ${alpha * 0.9})`;
-        ctx.strokeStyle = `rgba(255, 255, 255, ${alpha * 0.9})`;
-        ctx.lineWidth = 4;
-        ctx.beginPath();
-        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
-        ctx.stroke();
-        
-        let midRadius = this.radius + 4;
-        if (midRadius >= 1) {
-          ctx.shadowBlur = 25;
-          ctx.shadowColor = `rgba(255, 255, 255, ${alpha * 0.8})`;
-          ctx.strokeStyle = `rgba(255, 252, 245, ${alpha * 0.7})`;
-          ctx.lineWidth = 2.5;
-          ctx.beginPath();
-          ctx.arc(this.x, this.y, midRadius, 0, Math.PI * 2);
-          ctx.stroke();
-        }
-        
-        let innerRadius = this.radius - 3;
-        if (innerRadius >= 1) {
-          ctx.shadowBlur = 20;
-          ctx.shadowColor = `rgba(255, 248, 240, ${alpha * heatGlow})`;
-          ctx.strokeStyle = `rgba(255, 250, 240, ${alpha * 0.6})`;
-          ctx.lineWidth = 2;
-          ctx.beginPath();
-          ctx.arc(this.x, this.y, innerRadius, 0, Math.PI * 2);
-          ctx.stroke();
-        }
-        
-        ctx.shadowBlur = 0;
-      }
-    }
-    
-    isDead() {
-      return this.radius > this.maxRadius;
-    }
-  }
 
-  const createRipplePattern = (canvas) => {
-    if (Math.random() > 0.85) {
-      let x = Math.random() * canvas.width;
-      let y = Math.random() * canvas.height;
-      ripplesRef.current.push(new Ripple(x, y));
+    /* Dark top gradient like your mock */
+    .top-gradient {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 40vh;
+      background: linear-gradient(to bottom, #000000, rgba(0, 0, 0, 0));
+      z-index: 1;
+      pointer-events: none;
     }
-    
-    if (timeRef.current % 80 === 0) {
-      for (let i = 0; i < 5; i++) {
-        let x = (canvas.width / 6) * (i + 1);
-        let y = canvas.height / 2 + Math.sin(timeRef.current * 0.02 + i) * 150;
-        ripplesRef.current.push(new Ripple(x, y, i * 10));
+
+    /* UI overlay */
+    .overlay {
+      position: relative;
+      z-index: 2;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: space-between;
+      padding: 60px 20px 80px;
+      text-align: center;
+    }
+
+    .title {
+      font-size: clamp(28px, 5vw, 40px);
+      letter-spacing: 0.4em;
+      text-indent: 0.4em;
+    }
+
+    .subtitle {
+      margin-top: 40px;
+      font-size: 16px;
+      letter-spacing: 0.2em;
+    }
+
+    .form {
+      margin-top: 40px;
+      width: 100%;
+      max-width: 320px;
+      display: flex;
+      flex-direction: column;
+      gap: 22px;
+    }
+
+    .input-box {
+      background: #ffffff;
+      color: #000000;
+      padding: 10px 14px;
+      font-size: 16px;
+      text-align: center;
+      text-transform: lowercase;
+      border: none;
+      outline: none;
+      width: 100%;
+    }
+
+    .helper {
+      margin-top: 4px;
+      font-size: 13px;
+      letter-spacing: 0.12em;
+    }
+
+    .helper-btn {
+      background: none;
+      border: none;
+      color: #ffffff;
+      font: inherit;
+      cursor: pointer;
+      text-transform: lowercase;
+    }
+
+    .enter-btn {
+      margin-top: 60px;
+      padding: 14px 36px;
+      font-size: 20px;
+      letter-spacing: 0.25em;
+      text-indent: 0.25em;
+      border: 1px solid #ffffff;
+      background: rgba(0, 0, 0, 0.75);
+      color: #ffffff;
+      cursor: pointer;
+      text-transform: uppercase;
+    }
+
+    .enter-btn:hover {
+      background: rgba(255, 255, 255, 0.08);
+    }
+
+    @media (max-height: 650px) {
+      .overlay {
+        padding-top: 40px;
+        padding-bottom: 40px;
+      }
+      .enter-btn {
+        margin-top: 40px;
       }
     }
-    
-    if (timeRef.current % 150 === 0) {
-      let centerX = canvas.width / 2;
-      let centerY = canvas.height / 2;
-      for (let i = 0; i < 8; i++) {
-        let angle = (Math.PI * 2 / 8) * i;
-        let distance = 150;
-        let x = centerX + Math.cos(angle) * distance;
-        let y = centerY + Math.sin(angle) * distance;
-        ripplesRef.current.push(new Ripple(x, y, i * 8));
-      }
-    }
-  };
+  </style>
+</head>
+<body>
+  <canvas id="canvas"></canvas>
+  <div class="top-gradient"></div>
 
-  const animate = () => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    
-    const ctx = canvas.getContext('2d');
-    
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.05)';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    
-    timeRef.current++;
-    
-    createRipplePattern(canvas);
-    
-    ripplesRef.current.forEach(ripple => {
-      ripple.update();
-      ripple.draw(ctx);
-    });
-    
-    ripplesRef.current = ripplesRef.current.filter(ripple => !ripple.isDead());
-    
-    // Metallic droplets
-    if (Math.random() > 0.8) {
-      let x = Math.random() * canvas.width;
-      let y = Math.random() * canvas.height;
-      let size = Math.random() * 3 + 1.5;
-      
-      ctx.shadowBlur = 15;
-      ctx.shadowColor = 'rgba(255, 255, 255, 0.9)';
-      ctx.fillStyle = `rgba(255, 252, 245, ${Math.random() * 0.7 + 0.3})`;
-      ctx.beginPath();
-      ctx.arc(x, y, size, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.shadowBlur = 0;
-    }
-    
-    // Streaming reflections
-    if (Math.random() > 0.95) {
-      let x = Math.random() * canvas.width;
-      let y = Math.random() * canvas.height;
-      
-      ctx.shadowBlur = 20;
-      ctx.shadowColor = 'rgba(240, 245, 255, 0.6)';
-      ctx.strokeStyle = `rgba(255, 255, 255, ${Math.random() * 0.5 + 0.3})`;
-      ctx.lineWidth = Math.random() * 2 + 1;
-      ctx.beginPath();
-      ctx.moveTo(x, y);
-      ctx.lineTo(x + Math.random() * 40 - 20, y + Math.random() * 40 - 20);
-      ctx.stroke();
-      ctx.shadowBlur = 0;
-    }
-    
-    animationFrameRef.current = requestAnimationFrame(animate);
-  };
+  <div class="overlay">
+    <div>
+      <div class="title">VAPE - DRIVE</div>
+      <div class="subtitle">NEW USER LOGIN</div>
 
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
-    
-    const handleResize = () => {
+      <form class="form" onsubmit="event.preventDefault();">
+        <input
+          type="text"
+          class="input-box"
+          placeholder="username"
+          name="username"
+          autocomplete="off"
+        />
+        <input
+          type="tel"
+          class="input-box"
+          placeholder="phone number"
+          name="phone"
+          autocomplete="tel"
+        />
+
+        <div class="helper">
+          <button type="button" class="helper-btn">
+            send code
+          </button>
+        </div>
+      </form>
+    </div>
+
+    <button class="enter-btn" type="button">
+      ENTER
+    </button>
+  </div>
+
+  <script>
+    // ===== MERCURY SILVER RIPPLES BACKGROUND =====
+    const canvas = document.getElementById("canvas");
+    const ctx = canvas.getContext("2d");
+
+    function resizeCanvas() {
       canvas.width = window.innerWidth;
       canvas.height = window.innerHeight;
-    };
-    
-    const handleClick = (e) => {
-      ripplesRef.current.push(new Ripple(e.clientX, e.clientY));
-    };
-    
-    window.addEventListener('resize', handleResize);
-    canvas.addEventListener('click', handleClick);
-    
-    animate();
-    
-    return () => {
-      window.removeEventListener('resize', handleResize);
-      canvas.removeEventListener('click', handleClick);
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
+    }
+    resizeCanvas();
+
+    let isAnimating = false;
+    let animationFrame;
+    let time = 0;
+    let ripples = [];
+
+    class Ripple {
+      constructor(x, y, delay = 0) {
+        this.x = x;
+        this.y = y;
+        this.radius = 0;
+        this.maxRadius = Math.random() * 150 + 200;
+        this.speed = Math.random() * 0.5 + 0.8;
+        this.delay = delay;
+        this.age = 0;
+        this.opacity = Math.random() * 0.4 + 0.6;
+        this.hue = Math.random() * 20 - 10;
       }
-    };
-  }, []);
 
-  return (
-    <div style={{
-      position: 'fixed',
-      top: 0,
-      left: 0,
-      width: '100vw',
-      height: '100vh',
-      backgroundColor: '#000',
-      overflow: 'hidden',
-    }}>
-      <canvas 
-        ref={canvasRef}
-        style={{
-          display: 'block',
-          cursor: 'crosshair',
-        }}
-      />
+      update() {
+        if (this.delay > 0) {
+          this.delay--;
+          return;
+        }
+        this.age++;
+        this.radius += this.speed;
+      }
 
-      {/* Logo */}
-      <div style={{
-        position: 'absolute',
-        top: '50%',
-        left: '50%',
-        transform: 'translate(-50%, -50%)',
-        marginTop: '-250px',
-        zIndex: 10,
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        pointerEvents: 'none',
-      }}>
-        <h1 style={{
-          fontSize: '48px',
-          fontWeight: 'bold',
-          color: '#fff',
-          letterSpacing: '4px',
-          marginBottom: '8px',
-          fontFamily: 'monospace',
-        }}>
-          VAPE-DRIVE
-        </h1>
-        <p style={{
-          fontSize: '14px',
-          color: '#888',
-          letterSpacing: '2px',
-          fontFamily: 'monospace',
-        }}>
-          open vape database
-        </p>
-      </div>
+      draw() {
+        if (this.delay > 0 || this.radius > this.maxRadius || this.radius < 1)
+          return;
 
-      {/* Login Form */}
-      <div style={{
-        position: 'absolute',
-        top: '50%',
-        left: '50%',
-        transform: 'translate(-50%, -50%)',
-        width: '90%',
-        maxWidth: '400px',
-        padding: '24px',
-        pointerEvents: 'auto',
-        zIndex: 10,
-      }}>
-        <input
-          type="text"
-          placeholder="username"
-          style={{
-            width: '100%',
-            padding: '16px',
-            marginBottom: '12px',
-            backgroundColor: '#fff',
-            border: 'none',
-            borderRadius: '4px',
-            fontSize: '14px',
-            fontFamily: 'monospace',
-            outline: 'none',
-          }}
-        />
-        <input
-          type="text"
-          placeholder="phone number"
-          style={{
-            width: '100%',
-            padding: '16px',
-            marginBottom: '12px',
-            backgroundColor: '#fff',
-            border: 'none',
-            borderRadius: '4px',
-            fontSize: '14px',
-            fontFamily: 'monospace',
-            outline: 'none',
-          }}
-        />
-        <button
-          style={{
-            width: '100%',
-            padding: '16px',
-            backgroundColor: '#fff',
-            border: 'none',
-            borderRadius: '4px',
-            fontSize: '14px',
-            fontWeight: 'bold',
-            fontFamily: 'monospace',
-            cursor: 'pointer',
-            letterSpacing: '2px',
-            transition: 'transform 0.1s',
-          }}
-          onMouseDown={(e) => e.currentTarget.style.transform = 'scale(0.98)'}
-          onMouseUp={(e) => e.currentTarget.style.transform = 'scale(1)'}
-        >
-          SEND CODE
-        </button>
-        <p style={{
-          textAlign: 'center',
-          marginTop: '16px',
-          fontSize: '12px',
-          color: '#666',
-          fontFamily: 'monospace',
-        }}>
-          returning user? login
-        </p>
-      </div>
+        let progress = this.radius / this.maxRadius;
+        let alpha = (1 - progress) * this.opacity;
+        let heatGlow = Math.sin(this.age * 0.1) * 0.5 + 0.5;
 
-      {/* Tap instruction */}
-      <div style={{
-        position: 'absolute',
-        top: '50%',
-        left: '50%',
-        transform: 'translate(-50%, -50%)',
-        marginTop: '200px',
-        zIndex: 5,
-        pointerEvents: 'none',
-      }}>
-        <p style={{
-          fontSize: '13px',
-          color: '#555',
-          fontStyle: 'italic',
-          fontFamily: 'monospace',
-          textAlign: 'center',
-          animation: 'pulse 2s ease-in-out infinite',
-        }}>
-          tap the ripples
-        </p>
-        <style>
-          {`
-            @keyframes pulse {
-              0%, 100% { opacity: 0.4; }
-              50% { opacity: 0.8; }
-            }
-          `}
-        </style>
-      </div>
+        for (let i = 0; i < 6; i++) {
+          let offset = i * 5;
+          let ringRadius = this.radius - offset;
+          if (ringRadius < 1) continue;
 
-      {/* Footer */}
-      <div style={{
-        position: 'absolute',
-        bottom: '20px',
-        left: '50%',
-        transform: 'translateX(-50%)',
-        fontSize: '11px',
-        color: '#444',
-        fontStyle: 'italic',
-        fontFamily: 'monospace',
-        pointerEvents: 'none',
-      }}>
-        powered by ketadata
-      </div>
-    </div>
-  );
-};
+          let r = 245 + i * 2;
+          let g = 245 + i * 2;
+          let b = 250 + i * 2;
 
-export default SmokeBubbleUI;
+          if (i < 2) {
+            r = 255;
+            g = 250 - i * 5;
+            b = 240 - i * 10;
+          }
+
+          ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, ${
+            alpha * (0.95 - i * 0.12)
+          })`;
+          ctx.lineWidth = 5 - i * 0.6;
+          ctx.beginPath();
+          ctx.arc(this.x, this.y, ringRadius, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+
+        if (this.radius >= 5) {
+          ctx.shadowBlur = 40;
+          ctx.shadowColor = `rgba(220, 235, 255, ${alpha * 0.9})`;
+          ctx.strokeStyle = `rgba(255, 255, 255, ${alpha * 0.9})`;
+          ctx.lineWidth = 4;
+          ctx.beginPath();
+          ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+          ctx.stroke();
+
+          let midRadius = this.radius + 4;
+          if (midRadius >= 1) {
+            ctx.shadowBlur = 25;
+            ctx.shadowColor = `rgba(255, 255, 255, ${alpha * 0.8})`;
+            ctx.strokeStyle = `rgba(255, 252, 245, ${alpha * 0.7})`;
+            ctx.lineWidth = 2.5;
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, midRadius, 0, Math.PI * 2);
+            ctx.stroke();
+          }
+
+          let innerRadius = this.radius - 3;
+          if (innerRadius >= 1) {
+            ctx.shadowBlur = 20;
+            ctx.shadowColor = `rgba(255, 248, 240, ${alpha * heatGlow})`;
+            ctx.strokeStyle = `rgba(255, 250, 240, ${alpha * 0.6})`;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, innerRadius, 0, Math.PI * 2);
+            ctx.stroke();
+          }
+          ctx.shadowBlur = 0;
+        }
+      }
+
+      isDead() {
+        return this.radius > this.maxRadius;
+      }
+    }
+
+    function createRipplePattern() {
+      if (Math.random() > 0.85) {
+        let x = Math.random() * canvas.width;
+        let y = Math.random() * canvas.height;
+        ripples.push(new Ripple(x, y));
+      }
+
+      if (time % 80 === 0) {
+        for (let i = 0; i < 5; i++) {
+          let x = (canvas.width / 6) * (i + 1);
+          let y =
+            canvas.height / 2 + Math.sin(time * 0.02 + i) * 150;
+          ripples.push(new Ripple(x, y, i * 10));
+        }
+      }
+
+      if (time % 150 === 0) {
+        let centerX = canvas.width / 2;
+        let centerY = canvas.height / 2;
+        for (let i = 0; i < 8; i++) {
+          let angle = ((Math.PI * 2) / 8) * i;
+          let distance = 150;
+          let x = centerX + Math.cos(angle) * distance;
+          let y = centerY + Math.sin(angle) * distance;
+          ripples.push(new Ripple(x, y, i * 8));
+        }
+      }
+    }
+
+    function drawRipples() {
+      ctx.fillStyle = "rgba(13, 13, 13, 0.05)";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      time++;
+      createRipplePattern();
+
+      ripples.forEach(ripple => {
+        ripple.update();
+        ripple.draw();
+      });
+
+      ripples = ripples.filter(ripple => !ripple.isDead());
+
+      if (Math.random() > 0.8) {
+        let x = Math.random() * canvas.width;
+        let y = Math.random() * canvas.height;
+        let size = Math.random() * 3 + 1.5;
+
+        ctx.shadowBlur = 15;
+        ctx.shadowColor = "rgba(255, 255, 255, 0.9)";
+        ctx.fillStyle = `rgba(255, 252, 245, ${
+          Math.random() * 0.7 + 0.3
+        })`;
+        ctx.beginPath();
+        ctx.arc(x, y, size, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+      }
+
+      if (Math.random() > 0.95) {
+        let x = Math.random() * canvas.width;
+        let y = Math.random() * canvas.height;
+
+        ctx.shadowBlur = 20;
+        ctx.shadowColor = "rgba(240, 245, 255, 0.6)";
+        ctx.strokeStyle = `rgba(255, 255, 255, ${
+          Math.random() * 0.5 + 0.3
+        })`;
+        ctx.lineWidth = Math.random() * 2 + 1;
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        ctx.lineTo(
+          x + Math.random() * 40 - 20,
+          y + Math.random() * 40 - 20
+        );
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+      }
+
+      animationFrame = requestAnimationFrame(drawRipples);
+    }
+
+    function start() {
+      isAnimating = true;
+      drawRipples();
+    }
+
+    window.addEventListener("resize", resizeCanvas);
+
+    // Optional: click to spawn a ripple where user taps
+    canvas.addEventListener("click", event => {
+      if (!isAnimating) return;
+      ripples.push(new Ripple(event.clientX, event.clientY));
+    });
+
+    // Start animation immediately on load
+    start();
+  </script>
+</body>
+</html>
