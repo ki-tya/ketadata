@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>SLOPSTREAM – AI Meditation</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #050308;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif;
+      color: #f5f5f5;
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    /* Text overlay */
+    #hud {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: space-between;
+      padding: 24px 20px;
+      mix-blend-mode: screen;
+    }
+
+    #hud-top {
+      text-align: center;
+      font-size: 11px;
+      letter-spacing: 0.25em;
+      text-transform: uppercase;
+      opacity: 0.8;
+    }
+
+    #hud-middle {
+      text-align: center;
+      font-size: clamp(16px, 2vw, 20px);
+      text-transform: uppercase;
+      letter-spacing: 0.25em;
+      opacity: 0.8;
+    }
+
+    #hud-bottom {
+      text-align: center;
+      font-size: 10px;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      opacity: 0.5;
+    }
+
+    .pill {
+      display: inline-flex;
+      padding: 4px 10px;
+      border-radius: 999px;
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      background: radial-gradient(circle at top left, rgba(255,255,255,0.2), rgba(0,0,0,0.1));
+      backdrop-filter: blur(8px);
+    }
+
+    #hud-middle .pill {
+      margin-top: 10px;
+      font-size: 9px;
+    }
+
+    /* Hint text */
+    #hint {
+      position: fixed;
+      left: 16px;
+      bottom: 16px;
+      font-size: 10px;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      opacity: 0.4;
+      pointer-events: none;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      canvas {
+        animation: none !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <canvas id="slopCanvas"></canvas>
+
+  <div id="hud">
+    <div id="hud-top">
+      <span class="pill">SLOPSTREAM // AI MEDITATION</span>
+    </div>
+    <div id="hud-middle">
+      FOR PEOPLE WHO CANNOT RELAX
+      <div class="pill">NO GOALS · NO HEALING · JUST SOFT CHAOS</div>
+    </div>
+    <div id="hud-bottom">
+      STREAM RUNNING · YOU ARE PERMITTED TO DISSOLVE
+    </div>
+  </div>
+
+  <div id="hint">[ SPACE ] toggle text · [ M ] mute text layer</div>
+
+  <script>
+    const canvas = document.getElementById("slopCanvas");
+    const ctx = canvas.getContext("2d");
+
+    function resize() {
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width = window.innerWidth * dpr;
+      canvas.height = window.innerHeight * dpr;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+
+    window.addEventListener("resize", resize);
+    resize();
+
+    // Time base
+    let t = 0;
+
+    // Floating blobs (slop textures)
+    const blobs = [];
+    const BLOBS_COUNT = 18;
+
+    function initBlobs() {
+      blobs.length = 0;
+      for (let i = 0; i < BLOBS_COUNT; i++) {
+        blobs.push({
+          x: Math.random(),
+          y: Math.random(),
+          r: 80 + Math.random() * 260,
+          speedX: (Math.random() - 0.5) * 0.0008,
+          speedY: (Math.random() - 0.5) * 0.0008,
+          phase: Math.random() * Math.PI * 2,
+          hueShift: Math.random() * 360
+        });
+      }
+    }
+
+    initBlobs();
+
+    // Floating meditation phrases
+    const phrases = [
+      "INHALE WHATEVER IS LEFT",
+      "EXHALE THE PERFORMANCE",
+      "YOU ARE NOT A SYSTEM",
+      "MELT INTO THE FLOOR",
+      "DRIFT OUTSIDE OF TIME",
+      "NO IMPROVEMENT REQUIRED",
+      "REST IN THE STATIC",
+      "YOU ARE PERMITTED TO BE SLOP",
+      "LET THE WORLD CONTINUE WITHOUT YOU",
+      "FLOAT INSIDE THE FOG",
+      "YOU CAN VANISH A LITTLE",
+      "LET THE EDGES BLUR"
+    ];
+
+    const floatingText = [];
+    const MAX_TEXT = 6;
+
+    function spawnText() {
+      if (floatingText.length >= MAX_TEXT) return;
+      const text = phrases[Math.floor(Math.random() * phrases.length)];
+      floatingText.push({
+        text,
+        x: Math.random(),           // 0–1 (normalized)
+        y: Math.random(),           // 0–1
+        life: 0,
+        maxLife: 9000 + Math.random() * 9000,
+        driftX: (Math.random() - 0.5) * 0.00004,
+        driftY: (Math.random() - 0.5) * 0.00004,
+        size: 14 + Math.random() * 10
+      });
+    }
+
+    let textVisible = true;
+    let textMuted = false;
+
+    // Noise helper
+    function smoothNoise(x, y, seed) {
+      return (
+        Math.sin(x * 1.7 + seed * 0.37 + Math.cos(y * 0.9 + seed * 0.53)) +
+        Math.sin(x * 0.6 + seed * 1.23 + Math.sin(y * 1.4 + seed * 0.11))
+      ) * 0.5;
+    }
+
+    function drawBackground(width, height) {
+      const w = width;
+      const h = height;
+
+      // Base gradient
+      const grad = ctx.createLinearGradient(0, 0, w, h);
+      grad.addColorStop(0, "hsl(270, 70%, 6%)");
+      grad.addColorStop(1, "hsl(200, 90%, 4%)");
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, w, h);
+
+      // Drift streaks (chromatic sludge)
+      const bands = 36;
+      for (let i = 0; i < bands; i++) {
+        const y = (h / bands) * i;
+        const n = smoothNoise(i * 0.22, t * 0.0004, 7.3);
+        const hue = 190 + n * 70 + Math.sin(t * 0.00012 + i * 0.18) * 40;
+        const alpha = 0.15 + (n + 1) * 0.08;
+        ctx.globalAlpha = alpha;
+        const bandGrad = ctx.createLinearGradient(0, y, w, y + h / bands);
+        bandGrad.addColorStop(0, `hsla(${hue}, 80%, 50%, 0.0)`);
+        bandGrad.addColorStop(0.5, `hsla(${hue}, 85%, 58%, 0.5)`);
+        bandGrad.addColorStop(1, `hsla(${hue + 40}, 90%, 65%, 0.0)`);
+        ctx.fillStyle = bandGrad;
+        ctx.fillRect(0, y - 40, w, h / bands + 80);
+      }
+
+      ctx.globalAlpha = 1;
+    }
+
+    function drawBlobs(width, height) {
+      const w = width;
+      const h = height;
+      ctx.globalCompositeOperation = "screen";
+
+      for (const b of blobs) {
+        b.x += b.speedX;
+        b.y += b.speedY;
+        b.phase += 0.00035;
+
+        // wrap around
+        if (b.x < -0.2) b.x = 1.2;
+        if (b.x > 1.2) b.x = -0.2;
+        if (b.y < -0.2) b.y = 1.2;
+        if (b.y > 1.2) b.y = -0.2;
+
+        const cx = b.x * w;
+        const cy = b.y * h;
+
+        const pulse = 0.6 + Math.sin(b.phase + t * 0.00012) * 0.4;
+        const radius = b.r * (0.8 + pulse * 0.5);
+
+        const hueBase =
+          200 +
+          Math.sin(t * 0.00008 + b.hueShift) * 60 +
+          Math.sin(b.phase * 2.1) * 40;
+
+        const grad = ctx.createRadialGradient(cx, cy, radius * 0.1, cx, cy, radius);
+        grad.addColorStop(0, `hsla(${hueBase}, 90%, 75%, 0.95)`);
+        grad.addColorStop(0.4, `hsla(${hueBase + 40}, 90%, 60%, 0.8)`);
+        grad.addColorStop(1, `hsla(${hueBase + 80}, 90%, 45%, 0.0)`);
+
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      ctx.globalCompositeOperation = "source-over";
+    }
+
+    function drawGrain(width, height) {
+      const w = width;
+      const h = height;
+      const density = 0.09; // 0–1
+      const step = 4;
+
+      ctx.globalAlpha = 0.16;
+      ctx.fillStyle = "#000000";
+
+      for (let y = 0; y < h; y += step) {
+        for (let x = 0; x < w; x += step) {
+          if (Math.random() < density) {
+            const n = smoothNoise(x * 0.07, y * 0.07, t * 0.0007);
+            ctx.globalAlpha = 0.08 + (n + 1) * 0.06;
+            ctx.fillRect(x, y, step, step);
+          }
+        }
+      }
+
+      ctx.globalAlpha = 1;
+    }
+
+    function drawFloatingText(width, height, deltaMs) {
+      if (!textVisible || textMuted) return;
+
+      // Occasionally spawn new text
+      if (Math.random() < 0.007) {
+        spawnText();
+      }
+
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.font = "16px system-ui";
+
+      for (let i = floatingText.length - 1; i >= 0; i--) {
+        const item = floatingText[i];
+        item.life += deltaMs;
+        item.x += item.driftX * deltaMs;
+        item.y += item.driftY * deltaMs;
+
+        const lifeRatio = item.life / item.maxLife;
+        const alpha = Math.sin(Math.PI * lifeRatio); // fade in + out
+
+        if (lifeRatio >= 1) {
+          floatingText.splice(i, 1);
+          continue;
+        }
+
+        const x = item.x * width;
+        const y = item.y * height;
+
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.shadowBlur = 24;
+        ctx.shadowColor = "rgba(0,0,0,0.8)";
+        ctx.font = `600 ${item.size}px system-ui, -apple-system, BlinkMacSystemFont, sans-serif`;
+
+        // subtle chromatic split
+        ctx.globalAlpha = alpha * 0.35;
+        ctx.fillStyle = "#ff9cf7";
+        ctx.fillText(item.text, -2, -1);
+
+        ctx.globalAlpha = alpha * 0.35;
+        ctx.fillStyle = "#a7fffb";
+        ctx.fillText(item.text, 2, 2);
+
+        ctx.globalAlpha = alpha * 0.9;
+        ctx.fillStyle = "#f5f5f5";
+        ctx.fillText(item.text, 0, 0);
+
+        ctx.restore();
+      }
+    }
+
+    let lastTime = performance.now();
+
+    function loop(now) {
+      const deltaMs = now - lastTime;
+      lastTime = now;
+      t += deltaMs;
+
+      const width = window.innerWidth;
+      const height = window.innerHeight;
+
+      // Main passes
+      drawBackground(width, height);
+      drawBlobs(width, height);
+      drawGrain(width, height);
+      drawFloatingText(width, height, deltaMs);
+
+      requestAnimationFrame(loop);
+    }
+
+    requestAnimationFrame(loop);
+
+    // Keyboard controls
+    window.addEventListener("keydown", (e) => {
+      if (e.code === "Space") {
+        textVisible = !textVisible;
+        e.preventDefault();
+      }
+      if (e.key.toLowerCase() === "m") {
+        textMuted = !textMuted;
+      }
+    });
+  </script>
+</body>
+</html>
