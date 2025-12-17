@@ -1,0 +1,346 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>KETADATA CCTV WALL</title>
+  <style>
+    :root{
+      --bg:#050607;
+      --frame:#0b0f12;
+      --stroke:#1f2a33;
+      --txt:#cfd6dd;
+      --muted:#7f8a95;
+      --accent:#9fb3c8;
+      --gap:10px;
+      --radius:14px;
+    }
+    *{ box-sizing:border-box; font-family: ui-sans-serif, system-ui, -apple-system, Arial; }
+    body{
+      margin:0; background:var(--bg); color:var(--txt);
+      min-height:100vh; display:flex; flex-direction:column;
+    }
+    header{
+      padding:14px 16px; display:flex; gap:12px; align-items:center; justify-content:space-between;
+      border-bottom:1px solid #121a20; background:linear-gradient(180deg, #06090b, #050607);
+      position:sticky; top:0; z-index:10;
+    }
+    .brand{
+      display:flex; flex-direction:column; gap:2px;
+    }
+    .brand .t{ font-size:12px; letter-spacing:2px; opacity:.85; }
+    .brand .s{ font-size:11px; color:var(--muted); }
+    .controls{
+      display:flex; flex-wrap:wrap; gap:10px; align-items:center; justify-content:flex-end;
+    }
+    select, button, input{
+      background:#0a0f13; color:var(--txt);
+      border:1px solid #16202a; border-radius:10px;
+      padding:8px 10px; font-size:12px;
+      outline:none;
+    }
+    button{ cursor:pointer; }
+    button:hover{ border-color:#233240; }
+    .hint{ font-size:11px; color:var(--muted); max-width:520px; line-height:1.35; }
+    main{ padding:16px; flex:1; }
+
+    .grid{
+      display:grid;
+      gap:var(--gap);
+    }
+    .grid.g-2x3{ grid-template-columns: repeat(3, minmax(220px, 1fr)); }
+    .grid.g-3x3{ grid-template-columns: repeat(3, minmax(220px, 1fr)); }
+    @media (max-width: 980px){
+      .grid.g-2x3, .grid.g-3x3{ grid-template-columns: repeat(2, minmax(220px, 1fr)); }
+    }
+    @media (max-width: 640px){
+      .grid.g-2x3, .grid.g-3x3{ grid-template-columns: 1fr; }
+    }
+
+    .monitor{
+      background:var(--frame);
+      border:1px solid var(--stroke);
+      border-radius:var(--radius);
+      overflow:hidden;
+      position:relative;
+      box-shadow: 0 10px 30px rgba(0,0,0,.35);
+      min-height:220px;
+    }
+    .topbar{
+      display:flex; gap:8px; align-items:center;
+      padding:10px 10px 8px 10px;
+      border-bottom:1px solid #111922;
+      background:linear-gradient(180deg, #0a0f13, #070b0e);
+    }
+    .slot{
+      font-size:11px; letter-spacing:1px; color:var(--accent);
+      padding:4px 8px; border:1px solid #1b2732; border-radius:999px;
+      opacity:.9;
+    }
+    .url{
+      flex:1;
+      font-size:12px;
+    }
+    .btn{
+      padding:8px 10px;
+      border-radius:10px;
+      font-size:12px;
+      white-space:nowrap;
+    }
+
+    .screen{
+      position:relative;
+      aspect-ratio: 16/9;
+      background:#000;
+    }
+    .screen iframe{
+      width:100%;
+      height:100%;
+      border:0;
+      display:block;
+    }
+
+    /* CCTV overlays */
+    .overlay{
+      pointer-events:none;
+      position:absolute; inset:0;
+      mix-blend-mode:screen;
+      opacity:.22;
+      background:
+        repeating-linear-gradient(
+          to bottom,
+          rgba(255,255,255,.05),
+          rgba(255,255,255,.05) 1px,
+          rgba(0,0,0,.0) 2px,
+          rgba(0,0,0,.0) 4px
+        );
+    }
+    .vignette{
+      pointer-events:none;
+      position:absolute; inset:0;
+      background:radial-gradient(ellipse at center, rgba(0,0,0,0) 40%, rgba(0,0,0,.55) 100%);
+      opacity:.7;
+    }
+    .stamp{
+      position:absolute; left:10px; bottom:10px;
+      font-size:11px; color:#cfe7ff;
+      text-shadow: 0 1px 2px rgba(0,0,0,.8);
+      opacity:.85;
+      letter-spacing:1px;
+      user-select:none;
+    }
+    .stamp .muted{ color:#9fb3c8; opacity:.9; }
+
+    /* subtle flicker */
+    @keyframes flicker {
+      0%, 100% { opacity:1; }
+      50% { opacity:.96; }
+      70% { opacity:.99; }
+    }
+    .screen{ animation:flicker 3.5s infinite; }
+
+    footer{
+      padding:12px 16px; border-top:1px solid #121a20; color:var(--muted); font-size:11px;
+    }
+    .row{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+    .spacer{ width:8px; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <div class="t">KETADATA CCTV WALL</div>
+      <div class="s">6–9 monitors · YouTube embeds · local presets</div>
+    </div>
+
+    <div class="controls">
+      <div class="row">
+        <label style="font-size:11px;color:var(--muted);">Layout</label>
+        <select id="layout">
+          <option value="2x3">2×3 (6 screens)</option>
+          <option value="3x3">3×3 (9 screens)</option>
+        </select>
+        <button id="save" class="btn">Save Wall</button>
+        <button id="load" class="btn">Load Wall</button>
+        <button id="clear" class="btn">Clear</button>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <div class="hint">
+      Paste any YouTube URL or video ID into a monitor and hit <span style="color:var(--txt);">LOAD</span>.
+      If a video refuses to play, it likely has embedding disabled by the uploader.
+    </div>
+    <div style="height:12px;"></div>
+    <div id="grid" class="grid g-2x3"></div>
+  </main>
+
+  <footer>
+    Tip: You can paste short links (youtu.be/...), watch links, or raw IDs. This page stores your wall config in localStorage.
+  </footer>
+
+<script>
+  const gridEl = document.getElementById('grid');
+  const layoutEl = document.getElementById('layout');
+  const STORAGE_KEY = 'ketadata_cctv_wall_v1';
+
+  function nowStamp(){
+    const d = new Date();
+    const pad = (n)=> String(n).padStart(2,'0');
+    return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+  }
+
+  function parseYouTubeId(input){
+    if(!input) return null;
+    const s = input.trim();
+
+    // If they already pasted an 11-char ID (common), accept
+    if(/^[a-zA-Z0-9_-]{11}$/.test(s)) return s;
+
+    try{
+      const url = new URL(s);
+      // youtu.be/<id>
+      if(url.hostname.includes('youtu.be')){
+        const id = url.pathname.replace('/','').trim();
+        if(/^[a-zA-Z0-9_-]{11}$/.test(id)) return id;
+      }
+      // youtube.com/watch?v=<id>
+      if(url.searchParams.get('v')){
+        const id = url.searchParams.get('v').trim();
+        if(/^[a-zA-Z0-9_-]{11}$/.test(id)) return id;
+      }
+      // youtube.com/embed/<id>
+      const m = url.pathname.match(/\/embed\/([a-zA-Z0-9_-]{11})/);
+      if(m) return m[1];
+      // shorts/<id>
+      const sh = url.pathname.match(/\/shorts\/([a-zA-Z0-9_-]{11})/);
+      if(sh) return sh[1];
+    } catch(e){
+      // not a URL
+    }
+    return null;
+  }
+
+  function buildEmbedSrc(videoId){
+    // modestbranding/rel for a cleaner look; mute=1 makes autoplay more likely if you enable it
+    const params = new URLSearchParams({
+      modestbranding: '1',
+      rel: '0',
+      playsinline: '1'
+    });
+    return `https://www.youtube-nocookie.com/embed/${videoId}?${params.toString()}`;
+  }
+
+  function renderMonitors(count){
+    gridEl.innerHTML = '';
+    for(let i=0;i<count;i++){
+      const mon = document.createElement('div');
+      mon.className = 'monitor';
+      mon.dataset.index = String(i);
+
+      mon.innerHTML = `
+        <div class="topbar">
+          <div class="slot">CAM ${String(i+1).padStart(2,'0')}</div>
+          <input class="url" placeholder="YouTube URL or ID" />
+          <button class="btn load">LOAD</button>
+        </div>
+        <div class="screen">
+          <iframe allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+          <div class="overlay"></div>
+          <div class="vignette"></div>
+          <div class="stamp"><span class="muted">REC</span> • <span class="ts"></span></div>
+        </div>
+      `;
+      gridEl.appendChild(mon);
+
+      // stamp update
+      const tsEl = mon.querySelector('.ts');
+      tsEl.textContent = nowStamp();
+      setInterval(()=> { tsEl.textContent = nowStamp(); }, 1000);
+
+      // load action
+      const btn = mon.querySelector('button.load');
+      btn.addEventListener('click', ()=>{
+        const input = mon.querySelector('input.url').value;
+        const id = parseYouTubeId(input);
+        const iframe = mon.querySelector('iframe');
+        if(!id){
+          iframe.removeAttribute('src');
+          alert('Invalid YouTube URL/ID for this monitor.');
+          return;
+        }
+        iframe.src = buildEmbedSrc(id);
+        // store the normalized id in a data attribute for saving
+        mon.dataset.videoId = id;
+      });
+    }
+  }
+
+  function applyLayout(layout){
+    if(layout === '2x3'){
+      gridEl.className = 'grid g-2x3';
+      renderMonitors(6);
+    } else {
+      gridEl.className = 'grid g-3x3';
+      renderMonitors(9);
+    }
+  }
+
+  function saveWall(){
+    const layout = layoutEl.value;
+    const monitors = [...gridEl.querySelectorAll('.monitor')].map(mon => ({
+      index: Number(mon.dataset.index),
+      videoId: mon.dataset.videoId || null,
+      raw: mon.querySelector('input.url').value || ''
+    }));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ layout, monitors }));
+    alert('Wall saved.');
+  }
+
+  function loadWall(){
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if(!raw){
+      alert('No saved wall found.');
+      return;
+    }
+    const data = JSON.parse(raw);
+    layoutEl.value = data.layout || '2x3';
+    applyLayout(layoutEl.value);
+
+    // After re-render, repopulate
+    const mons = [...gridEl.querySelectorAll('.monitor')];
+    for(const item of (data.monitors || [])){
+      const mon = mons[item.index];
+      if(!mon) continue;
+      const input = mon.querySelector('input.url');
+      input.value = item.raw || (item.videoId || '');
+      if(item.videoId){
+        mon.dataset.videoId = item.videoId;
+        mon.querySelector('iframe').src = buildEmbedSrc(item.videoId);
+      }
+    }
+    alert('Wall loaded.');
+  }
+
+  function clearWall(){
+    localStorage.removeItem(STORAGE_KEY);
+    // clear current
+    [...gridEl.querySelectorAll('.monitor')].forEach(mon=>{
+      mon.dataset.videoId = '';
+      mon.querySelector('input.url').value = '';
+      mon.querySelector('iframe').removeAttribute('src');
+    });
+  }
+
+  // wiring
+  layoutEl.addEventListener('change', ()=> applyLayout(layoutEl.value));
+  document.getElementById('save').addEventListener('click', saveWall);
+  document.getElementById('load').addEventListener('click', loadWall);
+  document.getElementById('clear').addEventListener('click', clearWall);
+
+  // init
+  applyLayout(layoutEl.value);
+</script>
+</body>
+</html>
