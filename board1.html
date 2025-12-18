@@ -1,0 +1,815 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>KETADATA BOARD</title>
+  <style>
+    :root{
+      --bg:#000;
+      --ink:rgba(255,255,255,.86);
+      --muted:rgba(255,255,255,.45);
+      --line:rgba(255,255,255,.14);
+      --uiLine:rgba(255,255,255,.18);
+      --mono: ui-sans-serif, system-ui, -apple-system, Arial, Helvetica, sans-serif;
+    }
+    *{ box-sizing:border-box; font-family:var(--mono); }
+    html,body{ height:100%; }
+    body{ margin:0; background:var(--bg); color:var(--ink); overflow:hidden; }
+
+    .top{
+      position:fixed; top:0; left:0; right:0; z-index:50;
+      display:flex; gap:10px; align-items:center; flex-wrap:wrap;
+      padding:10px 12px;
+      border-bottom:1px solid var(--line);
+      background:rgba(0,0,0,.92);
+      backdrop-filter: blur(6px);
+    }
+    .brand{
+      font-size:12px; letter-spacing:2px; text-transform:uppercase;
+      color:var(--muted); white-space:nowrap;
+    }
+    .controls{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; flex:1; }
+    label{ font-size:11px; letter-spacing:1px; text-transform:uppercase; color:var(--muted); }
+    button, input[type="range"], input[type="text"], select{
+      background:rgba(255,255,255,.02);
+      border:1px solid var(--uiLine);
+      color:var(--ink);
+      padding:7px 9px;
+      border-radius:0;
+      font-size:12px;
+      outline:none;
+    }
+    button{ cursor:pointer; }
+    button:hover{ border-color:rgba(255,255,255,.34); }
+    .sep{ width:1px; height:26px; background:var(--line); }
+    input[type="range"]{ padding:0; height:26px; width:140px; background:transparent; }
+    .hint{ font-size:11px; color:var(--muted); }
+
+    .stage{
+      position:absolute;
+      top:62px; left:0; right:0; bottom:0;
+      background:#000;
+      overflow:hidden;
+      touch-action:none;
+    }
+    .viewport{
+      position:absolute; inset:0;
+      transform-origin: 0 0;
+    }
+
+    .item{
+      position:absolute;
+      border:1px solid transparent;
+      user-select:none;
+      transform-origin:center center;
+    }
+    .item.selected{ border-color:rgba(255,255,255,.24); }
+    .item .content{ display:block; width:100%; height:100%; }
+    .item img{ width:100%; height:100%; object-fit:contain; display:block; pointer-events:none; }
+
+    .item .text{
+      width:100%; height:100%;
+      padding:10px 12px;
+      color:rgba(255,255,255,.92);
+      font-size:24px;
+      line-height:1.15;
+      white-space:pre-wrap;
+      outline:none;
+      background:rgba(0,0,0,0);
+      border:0;
+    }
+
+    /* HANDLE IMPROVEMENTS:
+       - bigger
+       - placed further out
+       - transparent hitbox using box-shadow spread
+    */
+    .handle{
+      position:absolute;
+      width:18px; height:18px;
+      border:1px solid rgba(255,255,255,.38);
+      background:rgba(0,0,0,.78);
+      /* makes it MUCH easier to grab without changing visuals much */
+      box-shadow: 0 0 0 10px rgba(0,0,0,0);
+    }
+    .h-nw{ left:-12px; top:-12px; cursor:nwse-resize; }
+    .h-ne{ right:-12px; top:-12px; cursor:nesw-resize; }
+    .h-sw{ left:-12px; bottom:-12px; cursor:nesw-resize; }
+    .h-se{ right:-12px; bottom:-12px; cursor:nwse-resize; }
+
+    .rot{
+      position:absolute; left:50%; top:-38px; transform:translateX(-50%);
+      width:18px; height:18px; border-radius:50%;
+      border:1px solid rgba(255,255,255,.38);
+      background:rgba(0,0,0,.82);
+      cursor:grab;
+      box-shadow: 0 0 0 12px rgba(0,0,0,0);
+    }
+
+    #drawCanvas{
+      position:absolute; inset:0;
+      pointer-events:none;
+    }
+
+    .panel{
+      position:fixed; right:0; top:62px; bottom:0; width:280px;
+      border-left:1px solid var(--line);
+      background:rgba(0,0,0,.92);
+      padding:12px;
+      display:flex; flex-direction:column; gap:12px;
+    }
+    .panel h3{
+      margin:0; font-size:11px; letter-spacing:2px; text-transform:uppercase;
+      color:var(--muted);
+      font-weight:normal;
+    }
+    .row{ display:flex; justify-content:space-between; align-items:center; gap:10px; }
+    .row input[type="range"]{ width:160px; }
+    .small{ font-size:11px; color:var(--muted); }
+
+    @media (max-width: 960px){
+      .panel{ display:none; }
+      .stage{ top:98px; }
+      .top{ padding-bottom:12px; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="top">
+    <div class="brand">KETADATA BOARD</div>
+
+    <div class="controls">
+      <label>Upload</label>
+      <input id="file" type="file" accept="image/*" multiple />
+
+      <button id="addText">Add Text</button>
+
+      <div class="sep"></div>
+
+      <label>Mode</label>
+      <select id="mode">
+        <option value="select">Select / Move</option>
+        <option value="draw">Draw</option>
+        <option value="pan">Pan</option>
+      </select>
+
+      <label>Zoom</label>
+      <input id="zoom" type="range" min="25" max="250" step="1" value="100" />
+      <span class="hint" id="zoomLabel">100%</span>
+
+      <button id="center">Center</button>
+
+      <div class="sep"></div>
+
+      <button id="save">Save</button>
+      <button id="load">Load</button>
+      <button id="export">Export PNG</button>
+      <button id="clear">Clear</button>
+
+      <span class="hint">Wheel = zoom. Space = pan hold.</span>
+    </div>
+  </div>
+
+  <div class="stage" id="stage">
+    <div class="viewport" id="viewport">
+      <canvas id="drawCanvas"></canvas>
+      <div id="board"></div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h3>Selection</h3>
+
+    <div class="row"><span class="small">Label</span></div>
+    <input id="label" type="text" placeholder="optional label" />
+
+    <div class="row">
+      <span class="small">Opacity</span>
+      <input id="opacity" type="range" min="5" max="100" step="1" value="100" />
+    </div>
+
+    <div class="row">
+      <span class="small">Layer</span>
+      <div>
+        <button id="front">Front</button>
+        <button id="back">Back</button>
+      </div>
+    </div>
+
+    <div class="row">
+      <span class="small">Text Size</span>
+      <input id="font" type="range" min="10" max="96" step="1" value="24" />
+    </div>
+
+    <div class="row">
+      <span class="small">Delete</span>
+      <button id="del">Delete Item</button>
+    </div>
+
+    <h3>Draw</h3>
+    <div class="row">
+      <span class="small">Brush</span>
+      <input id="brush" type="range" min="1" max="30" step="1" value="6" />
+    </div>
+    <div class="row">
+      <span class="small">Alpha</span>
+      <input id="ink" type="range" min="5" max="100" step="1" value="65" />
+    </div>
+    <button id="clearInk">Clear Drawing</button>
+
+    <div class="small">
+      Export PNG includes drawing + items. Local images only.
+    </div>
+  </div>
+
+<script>
+(() => {
+  const STORAGE_KEY = "ketadata_board_v1";
+
+  // IMPORT TUNING (you asked for larger + spiral)
+  const IMPORT_W = 720;       // default image box width (larger than before)
+  const IMPORT_H = 460;       // default image box height
+  const SPIRAL_STEP = 120;    // controls spacing; increase for looser spiral
+  const GOLDEN_ANGLE = 2.399963229728653; // radians (~137.5°), stable spiral
+
+  const stage = document.getElementById("stage");
+  const viewport = document.getElementById("viewport");
+  const board = document.getElementById("board");
+  const file = document.getElementById("file");
+
+  const modeEl = document.getElementById("mode");
+  const zoomEl = document.getElementById("zoom");
+  const zoomLabel = document.getElementById("zoomLabel");
+
+  const addTextBtn = document.getElementById("addText");
+  const centerBtn = document.getElementById("center");
+
+  const saveBtn = document.getElementById("save");
+  const loadBtn = document.getElementById("load");
+  const exportBtn = document.getElementById("export");
+  const clearBtn = document.getElementById("clear");
+
+  // Selection panel
+  const labelEl = document.getElementById("label");
+  const opacityEl = document.getElementById("opacity");
+  const fontEl = document.getElementById("font");
+  const frontBtn = document.getElementById("front");
+  const backBtn = document.getElementById("back");
+  const delBtn = document.getElementById("del");
+
+  // Drawing
+  const drawCanvas = document.getElementById("drawCanvas");
+  const brushEl = document.getElementById("brush");
+  const inkEl = document.getElementById("ink");
+  const clearInkBtn = document.getElementById("clearInk");
+
+  // Viewport transform
+  let scale = 1;
+  let panX = 0;
+  let panY = 0;
+
+  // State
+  let items = [];
+  let selectedId = null;
+
+  // Pointer state
+  let drag = null;
+  let spaceDown = false;
+
+  // Drawing state
+  let drawMode = false;
+  let isDrawing = false;
+  let ctx = drawCanvas.getContext("2d");
+
+  function uid(){ return Math.random().toString(16).slice(2) + Date.now().toString(16); }
+  function clamp(n,a,b){ return Math.max(a, Math.min(b, n)); }
+
+  function applyViewport(){
+    viewport.style.transform = `translate(${panX}px, ${panY}px) scale(${scale})`;
+    zoomLabel.textContent = `${Math.round(scale*100)}%`;
+    syncCanvasSize();
+  }
+
+  function syncCanvasSize(){
+    const rect = stage.getBoundingClientRect();
+    drawCanvas.width = Math.floor(rect.width);
+    drawCanvas.height = Math.floor(rect.height);
+    drawCanvas.style.width = rect.width + "px";
+    drawCanvas.style.height = rect.height + "px";
+  }
+  window.addEventListener("resize", () => { syncCanvasSize(); });
+
+  function screenToWorld(clientX, clientY){
+    const r = stage.getBoundingClientRect();
+    const sx = clientX - r.left;
+    const sy = clientY - r.top;
+    const wx = (sx - panX) / scale;
+    const wy = (sy - panY) / scale;
+    return { x: wx, y: wy, sx, sy };
+  }
+
+  function render(){
+    board.innerHTML = "";
+    const sorted = [...items].sort((a,b)=> (a.z||0)-(b.z||0));
+
+    for(const it of sorted){
+      const el = document.createElement("div");
+      el.className = "item" + (it.id === selectedId ? " selected" : "");
+      el.dataset.id = it.id;
+
+      el.style.left = it.x + "px";
+      el.style.top = it.y + "px";
+      el.style.width = it.w + "px";
+      el.style.height = it.h + "px";
+      el.style.opacity = (it.opacity ?? 1).toString();
+      el.style.transform = `rotate(${it.r || 0}deg)`;
+      el.style.zIndex = String(it.z ?? 0);
+
+      const content = document.createElement("div");
+      content.className = "content";
+
+      if(it.type === "image"){
+        const img = document.createElement("img");
+        img.src = it.dataUrl;
+        img.alt = it.label || "";
+        content.appendChild(img);
+      } else if(it.type === "text"){
+        const div = document.createElement("div");
+        div.className = "text";
+        div.contentEditable = "true";
+        div.spellcheck = false;
+        div.textContent = it.text || "";
+        div.style.fontSize = (it.fontSize || 24) + "px";
+        div.addEventListener("input", () => {
+          const item = items.find(x=>x.id===it.id);
+          if(item) item.text = div.textContent;
+        });
+        content.appendChild(div);
+      }
+
+      el.appendChild(content);
+
+      if(it.id === selectedId){
+        ["nw","ne","sw","se"].forEach(pos=>{
+          const h = document.createElement("div");
+          h.className = `handle h-${pos}`;
+          h.dataset.handle = pos;
+          el.appendChild(h);
+        });
+        const rot = document.createElement("div");
+        rot.className = "rot";
+        rot.dataset.handle = "rot";
+        el.appendChild(rot);
+      }
+
+      el.addEventListener("pointerdown", onItemPointerDown);
+      board.appendChild(el);
+    }
+
+    syncPanel();
+  }
+
+  function select(id){
+    selectedId = id;
+    render();
+  }
+
+  function syncPanel(){
+    const it = items.find(x=>x.id===selectedId);
+    const has = !!it;
+    labelEl.disabled = !has;
+    opacityEl.disabled = !has;
+    fontEl.disabled = !(has && it.type==="text");
+    frontBtn.disabled = !has;
+    backBtn.disabled = !has;
+    delBtn.disabled = !has;
+
+    if(!has){
+      labelEl.value = "";
+      opacityEl.value = "100";
+      fontEl.value = "24";
+      return;
+    }
+    labelEl.value = it.label || "";
+    opacityEl.value = String(Math.round((it.opacity ?? 1)*100));
+    if(it.type==="text") fontEl.value = String(it.fontSize || 24);
+  }
+
+  function readAsDataURL(file){
+    return new Promise((res, rej)=>{
+      const fr = new FileReader();
+      fr.onload = () => res(fr.result);
+      fr.onerror = rej;
+      fr.readAsDataURL(file);
+    });
+  }
+
+  function nextZ(){
+    return (items.reduce((m,it)=>Math.max(m, it.z||0), 0) + 1);
+  }
+
+  // Spiral placement (√n growth = “Pythagorean” distance law)
+  function spiralPos(n, cx, cy){
+    // n = 0,1,2...
+    const r = SPIRAL_STEP * Math.sqrt(Math.max(0, n));
+    const t = n * GOLDEN_ANGLE;
+    return {
+      x: cx + r * Math.cos(t),
+      y: cy + r * Math.sin(t)
+    };
+  }
+
+  // Upload images -> spiral formation + larger default size
+  file.addEventListener("change", async (e)=>{
+    const files = [...e.target.files || []];
+    if(!files.length) return;
+
+    const rect = stage.getBoundingClientRect();
+    const c = screenToWorld(rect.left + rect.width/2, rect.top + rect.height/2);
+
+    // start spiral index from current count to keep continuous formation
+    let baseIndex = items.filter(it => it.type === "image").length;
+
+    for(let i=0;i<files.length;i++){
+      const f = files[i];
+      const dataUrl = await readAsDataURL(f);
+      const id = uid();
+
+      const p = spiralPos(baseIndex + i, c.x, c.y);
+
+      items.push({
+        id, type:"image",
+        x: p.x - (IMPORT_W/2),
+        y: p.y - (IMPORT_H/2),
+        w: IMPORT_W,
+        h: IMPORT_H,
+        r: 0,
+        opacity: 1,
+        z: nextZ(),
+        label: f.name,
+        dataUrl
+      });
+
+      selectedId = id;
+    }
+
+    file.value = "";
+    render();
+  });
+
+  // Add text item
+  addTextBtn.addEventListener("click", ()=>{
+    const rect = stage.getBoundingClientRect();
+    const c = screenToWorld(rect.left + rect.width/2, rect.top + rect.height/2);
+    const id = uid();
+    items.push({
+      id, type:"text",
+      x: c.x - 220, y: c.y - 90,
+      w: 440, h: 180,
+      r: 0, opacity: 1, z: nextZ(),
+      label: "TEXT",
+      text: "TYPE",
+      fontSize: 28
+    });
+    selectedId = id;
+    render();
+  });
+
+  // Panel controls
+  labelEl.addEventListener("input", ()=>{
+    const it = items.find(x=>x.id===selectedId);
+    if(it) it.label = labelEl.value;
+  });
+
+  opacityEl.addEventListener("input", ()=>{
+    const it = items.find(x=>x.id===selectedId);
+    if(it) it.opacity = clamp(Number(opacityEl.value)/100, 0.05, 1);
+    render();
+  });
+
+  fontEl.addEventListener("input", ()=>{
+    const it = items.find(x=>x.id===selectedId);
+    if(it && it.type==="text"){
+      it.fontSize = Number(fontEl.value);
+      render();
+    }
+  });
+
+  frontBtn.addEventListener("click", ()=>{
+    const it = items.find(x=>x.id===selectedId);
+    if(it){ it.z = nextZ(); render(); }
+  });
+
+  backBtn.addEventListener("click", ()=>{
+    const it = items.find(x=>x.id===selectedId);
+    if(it){ it.z = 0; render(); }
+  });
+
+  delBtn.addEventListener("click", ()=>{
+    if(!selectedId) return;
+    items = items.filter(x=>x.id!==selectedId);
+    selectedId = null;
+    render();
+  });
+
+  // Mode switching
+  modeEl.addEventListener("change", ()=>{
+    drawMode = modeEl.value === "draw";
+    drawCanvas.style.pointerEvents = drawMode ? "auto" : "none";
+  });
+
+  // Zoom slider
+  zoomEl.addEventListener("input", ()=>{
+    scale = clamp(Number(zoomEl.value)/100, 0.25, 2.5);
+    applyViewport();
+  });
+
+  // Wheel zoom anchored to cursor
+  stage.addEventListener("wheel", (e)=>{
+    e.preventDefault();
+    const delta = -Math.sign(e.deltaY) * 0.08;
+    const before = screenToWorld(e.clientX, e.clientY);
+    scale = clamp(scale * (1 + delta), 0.25, 2.5);
+    zoomEl.value = String(Math.round(scale*100));
+    const after = screenToWorld(e.clientX, e.clientY);
+    panX += (after.sx - before.sx);
+    panY += (after.sy - before.sy);
+    applyViewport();
+  }, { passive:false });
+
+  // Center view
+  centerBtn.addEventListener("click", ()=>{
+    panX = 0; panY = 0;
+    scale = 1;
+    zoomEl.value = "100";
+    applyViewport();
+  });
+
+  // Space-to-pan hold
+  document.addEventListener("keydown", (e)=>{ if(e.code==="Space") spaceDown = true; });
+  document.addEventListener("keyup", (e)=>{ if(e.code==="Space") spaceDown = false; });
+
+  // Stage pointerdown for pan or deselect
+  stage.addEventListener("pointerdown", (e)=>{
+    if(drawMode) return;
+    const isPanMode = (modeEl.value==="pan") || spaceDown;
+    const targetIsItem = e.target.closest && e.target.closest(".item");
+    if(targetIsItem) return;
+
+    if(isPanMode){
+      drag = { type:"pan", sx:e.clientX, sy:e.clientY, px:panX, py:panY };
+      stage.setPointerCapture(e.pointerId);
+      return;
+    }
+
+    selectedId = null;
+    render();
+  });
+
+  stage.addEventListener("pointermove", (e)=>{
+    if(!drag) return;
+    if(drag.type === "pan"){
+      panX = drag.px + (e.clientX - drag.sx);
+      panY = drag.py + (e.clientY - drag.sy);
+      applyViewport();
+    }
+  });
+
+  stage.addEventListener("pointerup", ()=>{ drag = null; });
+
+  function onItemPointerDown(e){
+    if(drawMode) return;
+    const el = e.currentTarget;
+    const id = el.dataset.id;
+    select(id);
+
+    const it = items.find(x=>x.id===id);
+    if(!it) return;
+
+    const handle = e.target.dataset && e.target.dataset.handle;
+    const pt = screenToWorld(e.clientX, e.clientY);
+
+    if(handle === "rot"){
+      const cx = it.x + it.w/2;
+      const cy = it.y + it.h/2;
+      const ang0 = Math.atan2(pt.y - cy, pt.x - cx);
+      drag = { type:"rotate", id, ang0, r0: it.r || 0, cx, cy };
+      el.setPointerCapture(e.pointerId);
+      return;
+    }
+
+    if(handle){
+      drag = { type:"resize", id, handle, x0:it.x, y0:it.y, w0:it.w, h0:it.h, p0:pt };
+      el.setPointerCapture(e.pointerId);
+      return;
+    }
+
+    const isPanMode = (modeEl.value==="pan") || spaceDown;
+    if(isPanMode){
+      drag = { type:"pan", sx:e.clientX, sy:e.clientY, px:panX, py:panY };
+      stage.setPointerCapture(e.pointerId);
+      return;
+    }
+
+    drag = { type:"move", id, x0:it.x, y0:it.y, p0:pt };
+    el.setPointerCapture(e.pointerId);
+  }
+
+  stage.addEventListener("pointermove", (e)=>{
+    if(!drag || drag.type==="pan") return;
+
+    const it = items.find(x=>x.id===drag.id);
+    if(!it) return;
+
+    const pt = screenToWorld(e.clientX, e.clientY);
+
+    if(drag.type==="move"){
+      it.x = drag.x0 + (pt.x - drag.p0.x);
+      it.y = drag.y0 + (pt.y - drag.p0.y);
+      render();
+    }
+
+    if(drag.type==="resize"){
+      const dx = pt.x - drag.p0.x;
+      const dy = pt.y - drag.p0.y;
+
+      let x = drag.x0, y = drag.y0, w = drag.w0, h = drag.h0;
+
+      if(drag.handle==="se"){ w = drag.w0 + dx; h = drag.h0 + dy; }
+      if(drag.handle==="sw"){ x = drag.x0 + dx; w = drag.w0 - dx; h = drag.h0 + dy; }
+      if(drag.handle==="ne"){ y = drag.y0 + dy; w = drag.w0 + dx; h = drag.h0 - dy; }
+      if(drag.handle==="nw"){ x = drag.x0 + dx; y = drag.y0 + dy; w = drag.w0 - dx; h = drag.h0 - dy; }
+
+      it.x = x; it.y = y;
+      it.w = clamp(w, 60, 6000);
+      it.h = clamp(h, 60, 6000);
+      render();
+    }
+
+    if(drag.type==="rotate"){
+      const ang = Math.atan2(pt.y - drag.cy, pt.x - drag.cx);
+      const deg = (drag.r0 + (ang - drag.ang0) * 180/Math.PI);
+      it.r = deg;
+      render();
+    }
+  });
+
+  stage.addEventListener("pointerup", ()=>{ drag = null; });
+
+  // Drawing (white marker)
+  function drawPoint(e){
+    const r = stage.getBoundingClientRect();
+    return { x: e.clientX - r.left, y: e.clientY - r.top };
+  }
+  function setBrush(){
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.strokeStyle = `rgba(255,255,255,${clamp(Number(inkEl.value)/100, 0.05, 1)})`;
+    ctx.lineWidth = Number(brushEl.value);
+  }
+
+  drawCanvas.addEventListener("pointerdown", (e)=>{
+    if(!drawMode) return;
+    isDrawing = true;
+    setBrush();
+    const p = drawPoint(e);
+    ctx.beginPath();
+    ctx.moveTo(p.x, p.y);
+    drawCanvas.setPointerCapture(e.pointerId);
+  });
+  drawCanvas.addEventListener("pointermove", (e)=>{
+    if(!drawMode || !isDrawing) return;
+    const p = drawPoint(e);
+    ctx.lineTo(p.x, p.y);
+    ctx.stroke();
+  });
+  drawCanvas.addEventListener("pointerup", ()=>{ isDrawing = false; });
+  clearInkBtn.addEventListener("click", ()=>{ ctx.clearRect(0,0,drawCanvas.width, drawCanvas.height); });
+
+  // Save / Load
+  function snapshotDrawing(){ return drawCanvas.toDataURL("image/png"); }
+  function restoreDrawing(dataUrl){
+    if(!dataUrl){ ctx.clearRect(0,0,drawCanvas.width, drawCanvas.height); return; }
+    const img = new Image();
+    img.onload = ()=>{
+      ctx.clearRect(0,0,drawCanvas.width, drawCanvas.height);
+      ctx.drawImage(img, 0, 0);
+    };
+    img.src = dataUrl;
+  }
+
+  saveBtn.addEventListener("click", ()=>{
+    const data = { version: 2, view: { scale, panX, panY }, items, drawing: snapshotDrawing() };
+    localStorage.setItem("ketadata_board_v1", JSON.stringify(data));
+    alert("SAVED.");
+  });
+
+  loadBtn.addEventListener("click", ()=>{
+    const raw = localStorage.getItem("ketadata_board_v1");
+    if(!raw){ alert("NO SAVE FOUND."); return; }
+    const data = JSON.parse(raw);
+    items = data.items || [];
+    selectedId = null;
+
+    scale = clamp(data.view?.scale ?? 1, 0.25, 2.5);
+    panX = data.view?.panX ?? 0;
+    panY = data.view?.panY ?? 0;
+    zoomEl.value = String(Math.round(scale*100));
+    applyViewport();
+
+    render();
+    restoreDrawing(data.drawing);
+    alert("LOADED.");
+  });
+
+  clearBtn.addEventListener("click", ()=>{
+    if(!confirm("CLEAR BOARD?")) return;
+    items = [];
+    selectedId = null;
+    ctx.clearRect(0,0,drawCanvas.width, drawCanvas.height);
+    render();
+  });
+
+  // Export PNG
+  exportBtn.addEventListener("click", async ()=>{
+    const rect = stage.getBoundingClientRect();
+    const out = document.createElement("canvas");
+    out.width = Math.floor(rect.width);
+    out.height = Math.floor(rect.height);
+    const octx = out.getContext("2d");
+    octx.fillStyle = "#000";
+    octx.fillRect(0,0,out.width,out.height);
+
+    const sorted = [...items].sort((a,b)=> (a.z||0)-(b.z||0));
+    for(const it of sorted){
+      const cx = (it.x + it.w/2) * scale + panX;
+      const cy = (it.y + it.h/2) * scale + panY;
+      const w = it.w * scale;
+      const h = it.h * scale;
+
+      octx.save();
+      octx.globalAlpha = it.opacity ?? 1;
+      octx.translate(cx, cy);
+      octx.rotate((it.r||0) * Math.PI/180);
+
+      if(it.type==="image"){
+        const img = await loadImage(it.dataUrl);
+        const iw = img.width, ih = img.height;
+        const s = Math.min(w/iw, h/ih);
+        const dw = iw*s, dh = ih*s;
+        octx.drawImage(img, -dw/2, -dh/2, dw, dh);
+      } else if(it.type==="text"){
+        const fs = (it.fontSize || 24) * scale;
+        octx.fillStyle = "rgba(255,255,255,.92)";
+        octx.font = `${Math.max(10, fs)}px ${getComputedStyle(document.body).fontFamily}`;
+        octx.textBaseline = "top";
+        const pad = 12 * scale;
+        const lines = (it.text || "").split("\n");
+        let y = -h/2 + pad;
+        for(const line of lines){
+          octx.fillText(line, -w/2 + pad, y);
+          y += fs * 1.18;
+        }
+      }
+      octx.restore();
+    }
+
+    octx.drawImage(drawCanvas, 0, 0);
+
+    const a = document.createElement("a");
+    a.download = "ketadata-board.png";
+    a.href = out.toDataURL("image/png");
+    a.click();
+  });
+
+  function loadImage(src){
+    return new Promise((res, rej)=>{
+      const img = new Image();
+      img.onload = ()=> res(img);
+      img.onerror = rej;
+      img.src = src;
+    });
+  }
+
+  // Delete / escape
+  document.addEventListener("keydown", (e)=>{
+    if((e.key==="Backspace" || e.key==="Delete") && selectedId){
+      const active = document.activeElement;
+      if(active && active.classList && active.classList.contains("text")) return;
+      items = items.filter(x=>x.id!==selectedId);
+      selectedId = null;
+      render();
+    }
+    if(e.key==="Escape"){ selectedId=null; render(); }
+  });
+
+  // init
+  syncCanvasSize();
+  applyViewport();
+  render();
+})();
+</script>
+</body>
+</html>
