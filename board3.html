@@ -822,43 +822,89 @@
   });
   stage.addEventListener("pointerup", ()=>{ drag = null; });
 
-  function onItemPointerDown(e){
-    if(drawMode) return;
+function onItemPointerDown(e){
+  if(drawMode) return;
 
-    const el = e.currentTarget;
-    const id = el.dataset.id;
+  const el = e.currentTarget;
+  const id = el.dataset.id;
 
-    if(modeEl.value === "link"){
-      e.preventDefault();
-      e.stopPropagation();
+  // If user clicked inside an editable text region, allow typing.
+  // Do NOT start drag or pointer-capture.
+  const clickedEditable = e.target && e.target.closest && e.target.closest(".text");
+  if(clickedEditable){
+    selectItem(id);           // keep selection border
+    // Let the browser focus caret inside contentEditable
+    return;
+  }
 
-      if(!linkFromId){
-        linkFromId = id;
-        selectedId = id;
-        selectedEdgeId = null;
-        render();
-        return;
-      }
-      if(linkFromId === id){
-        linkFromId = null;
-        render();
-        return;
-      }
+  // LINK MODE: click A then B creates link
+  if(modeEl.value === "link"){
+    e.preventDefault();
+    e.stopPropagation();
 
-      const newEdge = {
-        id: uid(),
-        from: linkFromId,
-        to: id,
-        label: (linkLabelEl.value || "").trim(),
-        note: ""
-      };
-      edges.push(newEdge);
-      linkFromId = null;
-      selectedEdgeId = newEdge.id;
-      selectedId = null;
+    if(!linkFromId){
+      linkFromId = id;
+      selectedId = id;
+      selectedEdgeId = null;
       render();
       return;
     }
+    if(linkFromId === id){
+      linkFromId = null;
+      render();
+      return;
+    }
+
+    const newEdge = {
+      id: uid(),
+      from: linkFromId,
+      to: id,
+      label: (linkLabelEl.value || "").trim(),
+      note: ""
+    };
+    edges.push(newEdge);
+    linkFromId = null;
+    selectedEdgeId = newEdge.id;
+    selectedId = null;
+    render();
+    return;
+  }
+
+  // SELECT/MOVE/RESIZE/ROTATE
+  selectItem(id);
+
+  const it = getItem(id);
+  if(!it) return;
+
+  const handle = e.target.dataset && e.target.dataset.handle;
+  const pt = screenToWorld(e.clientX, e.clientY);
+
+  if(handle === "rot"){
+    const cx = it.x + it.w/2;
+    const cy = it.y + it.h/2;
+    const ang0 = Math.atan2(pt.y - cy, pt.x - cx);
+    drag = { type:"rotate", id, ang0, r0: it.r || 0, cx, cy };
+    el.setPointerCapture(e.pointerId);
+    return;
+  }
+
+  if(handle){
+    drag = { type:"resize", id, handle, x0:it.x, y0:it.y, w0:it.w, h0:it.h, p0:pt };
+    el.setPointerCapture(e.pointerId);
+    return;
+  }
+
+  const isPanMode = (modeEl.value==="pan") || spaceDown;
+  if(isPanMode){
+    drag = { type:"pan", sx:e.clientX, sy:e.clientY, px:panX, py:panY };
+    stage.setPointerCapture(e.pointerId);
+    return;
+  }
+
+  drag = { type:"move", id, x0:it.x, y0:it.y, p0:pt };
+  el.setPointerCapture(e.pointerId);
+}
+
 
     selectItem(id);
 
