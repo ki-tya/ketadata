@@ -1,0 +1,1238 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>KETADATA /// CIRCLE EDITOR</title>
+<style>
+:root{
+  --bg:#000;
+  --ink:rgba(255,255,255,.86);
+  --muted:rgba(255,255,255,.48);
+  --line:rgba(255,255,255,.12);
+  --line2:rgba(255,255,255,.20);
+  --panel:rgba(0,0,0,.92);
+  --panel2:rgba(255,255,255,.02);
+  --mono: ui-sans-serif, system-ui, -apple-system, Arial, Helvetica, sans-serif;
+}
+*{ box-sizing:border-box; font-family:var(--mono); }
+html,body{ height:100%; margin:0; background:var(--bg); color:var(--ink); overflow:hidden; }
+
+.top{
+  position:fixed; top:0; left:0; right:0; height:46px;
+  display:flex; align-items:center; justify-content:space-between;
+  padding:0 10px;
+  border-bottom:1px solid var(--line);
+  background:var(--panel);
+  backdrop-filter:blur(6px);
+  z-index:100;
+}
+.brand{
+  font-size:11px; letter-spacing:2px; text-transform:uppercase;
+  color:var(--muted);
+  display:flex; gap:10px; align-items:center; user-select:none;
+}
+.top .actions{ display:flex; gap:8px; align-items:center; }
+button, input[type="text"], input[type="range"], select, textarea{
+  background:var(--panel2);
+  border:1px solid var(--line2);
+  color:var(--ink);
+  padding:7px 9px;
+  border-radius:0;
+  font-size:12px;
+  outline:none;
+}
+button{ cursor:pointer; }
+button:hover{ border-color:rgba(255,255,255,.34); }
+.ghost{ border-color:rgba(255,255,255,.10); color:rgba(255,255,255,.62); }
+
+.shell{
+  position:absolute; top:46px; left:0; right:0; bottom:0;
+  display:grid;
+  grid-template-columns: 260px 1fr 280px;
+  grid-template-rows: 1fr 180px;
+  grid-template-areas:
+    "left center right"
+    "left bottom right";
+}
+
+.dock{
+  min-width:0; min-height:0;
+  border-right:1px solid var(--line);
+  background:var(--panel);
+  display:flex; flex-direction:column;
+  overflow:hidden;
+}
+.dock.right{ border-right:none; border-left:1px solid var(--line); }
+.dock.bottom{
+  grid-area:bottom;
+  border-top:1px solid var(--line);
+  border-right:none;
+}
+
+.left{ grid-area:left; }
+.center{ grid-area:center; position:relative; overflow:hidden; background:#000; }
+.right{ grid-area:right; }
+.bottom{ grid-area:bottom; }
+
+.dockHeader{
+  height:40px;
+  padding:0 10px;
+  display:flex; align-items:center; justify-content:space-between;
+  border-bottom:1px solid var(--line);
+  user-select:none;
+}
+.dockHeader .title{
+  font-size:11px; letter-spacing:2px; text-transform:uppercase;
+  color:var(--muted);
+}
+.dockBody{
+  flex:1; min-height:0; overflow:auto;
+  padding:10px;
+}
+.group{
+  border:1px solid rgba(255,255,255,.10);
+  background:rgba(255,255,255,.02);
+  padding:10px;
+  margin-bottom:10px;
+}
+.groupTitle{
+  font-size:11px; letter-spacing:2px; text-transform:uppercase;
+  color:rgba(255,255,255,.48);
+  margin-bottom:8px;
+}
+.row{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+.kv{
+  display:grid;
+  grid-template-columns: 90px 1fr;
+  gap:8px;
+  align-items:center;
+}
+.k{ font-size:11px; color:rgba(255,255,255,.45); letter-spacing:1px; text-transform:uppercase; }
+.v{ font-size:12px; color:rgba(255,255,255,.82); }
+input[type="range"]{ height:26px; padding:0; background:transparent; width:100%; }
+.tiny{ font-size:11px; color:rgba(255,255,255,.48); }
+
+#stage{
+  position:absolute; inset:0;
+  overflow:hidden;
+  touch-action:none;
+}
+#viewport{
+  position:absolute; inset:0;
+  transform-origin:0 0;
+}
+.circle{
+  position:absolute;
+  border:2px solid rgba(255,255,255,.35);
+  border-radius:50%;
+  pointer-events:auto;
+  cursor:move;
+}
+.circle.selected{ border-color:rgba(255,255,255,.65); border-width:3px; }
+.circle .label{
+  position:absolute;
+  left:50%; top:50%;
+  transform:translate(-50%,-50%);
+  color:rgba(255,255,255,.75);
+  font-size:12px;
+  letter-spacing:1px;
+  text-transform:uppercase;
+  text-align:center;
+  pointer-events:none;
+  user-select:none;
+  white-space:nowrap;
+}
+.handle{
+  position:absolute;
+  width:12px; height:12px;
+  border:1px solid rgba(255,255,255,.45);
+  background:rgba(0,0,0,.85);
+  border-radius:50%;
+  cursor:nwse-resize;
+}
+
+.textbox{
+  position:absolute;
+  min-width:120px;
+  max-width:520px;
+  padding:8px 10px;
+  border:1px solid rgba(255,255,255,.18);
+  background:rgba(0,0,0,.55);
+  color:rgba(255,255,255,.82);
+  cursor:move;
+  user-select:none;
+  white-space:pre-wrap;
+  line-height:1.25;
+}
+.textbox.selected{
+  border-color:rgba(255,255,255,.42);
+  box-shadow:0 0 0 1px rgba(255,255,255,.14) inset;
+}
+.textbox[contenteditable="true"]{
+  cursor:text;
+  user-select:text;
+  outline:none;
+  border-color:rgba(255,255,255,.55);
+  background:rgba(0,0,0,.72);
+}
+
+#toast{
+  position:fixed; left:50%; bottom:12px; transform:translateX(-50%);
+  padding:8px 10px;
+  border:1px solid rgba(255,255,255,.16);
+  background:rgba(0,0,0,.92);
+  color:rgba(255,255,255,.72);
+  font-size:12px;
+  display:none;
+  z-index:200;
+}
+#toast.show{ display:block; }
+</style>
+</head>
+<body>
+
+<div class="top">
+  <div class="brand">
+    <span>KETADATA /// CIRCLE EDITOR</span>
+    <span class="tiny">cognitive structuring tool</span>
+  </div>
+  <div class="actions">
+    <button id="btnCenter">Center View</button>
+    <button id="btnSave" class="ghost">Save</button>
+    <button id="btnLoad" class="ghost">Load</button>
+    <button id="btnExportPNG" class="ghost">Export PNG</button>
+    <button id="btnExportPrompt" class="ghost">Export Prompt</button>
+    <button id="btnClear" class="ghost">Clear</button>
+  </div>
+</div>
+
+<div class="shell">
+  <aside class="dock left">
+    <div class="dockHeader">
+      <div class="title">MODES + CONTROLS</div>
+    </div>
+    <div class="dockBody">
+      <div class="group">
+        <div class="groupTitle">Mode</div>
+        <select id="mode">
+          <option value="concentric">Concentric (nested)</option>
+          <option value="venn">Venn (overlap)</option>
+          <option value="orbital">Orbital (center + satellites)</option>
+          <option value="radial">Radial (branching)</option>
+          <option value="time">Time Rings (temporal)</option>
+        </select>
+        <div class="tiny" style="margin-top:8px;">
+          Concentric: hierarchical nesting<br/>
+          Venn: overlap logic<br/>
+          Orbital: core + periphery<br/>
+          Radial: idea → branches<br/>
+          Time: past → present → future
+        </div>
+      </div>
+
+      <div class="group">
+        <div class="groupTitle">Objects</div>
+        <div class="row">
+          <button id="btnAdd">Add Circle</button>
+          <button id="btnAddText" class="ghost">Add Text Box</button>
+        </div>
+        <div style="height:10px"></div>
+        <div class="row">
+          <button id="btnDelete" class="ghost">Delete Selected</button>
+        </div>
+        <div style="height:10px"></div>
+        <div class="kv">
+          <div class="k">Circles</div>
+          <div class="v" id="circleCount">0</div>
+          <div class="k">Text</div>
+          <div class="v" id="textCount">0</div>
+        </div>
+        <div class="tiny" style="margin-top:8px;">
+          Tip: Double-click a text box to edit.
+        </div>
+      </div>
+
+      <div class="group">
+        <div class="groupTitle">Snap + Align</div>
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+          <input type="checkbox" id="snapConcentric"/>
+          <span class="tiny">Snap to concentric</span>
+        </label>
+        <div style="height:8px"></div>
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+          <input type="checkbox" id="showIntersections"/>
+          <span class="tiny">Show intersections (Venn)</span>
+        </label>
+      </div>
+
+      <div class="group">
+        <div class="groupTitle">Quick Actions</div>
+        <div class="row">
+          <button id="btnAutoArrange" class="ghost">Auto-Arrange</button>
+        </div>
+        <div class="tiny" style="margin-top:8px;">
+          Auto-arrange based on current mode
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <main class="center">
+    <div id="stage">
+      <div id="viewport">
+        <svg id="intersectionLayer" style="position:absolute;inset:0;pointer-events:none;"></svg>
+        <div id="board"></div>
+      </div>
+    </div>
+  </main>
+
+  <aside class="dock right">
+    <div class="dockHeader">
+      <div class="title">INSPECTOR</div>
+    </div>
+    <div class="dockBody">
+      <div class="group">
+        <div class="groupTitle">Selection</div>
+        <div class="kv">
+          <div class="k">Type</div>
+          <div class="v" id="selType">None</div>
+          <div class="k">ID</div>
+          <div class="v" id="selId">—</div>
+        </div>
+      </div>
+
+      <div class="group">
+        <div class="groupTitle">Circle</div>
+        <div class="kv">
+          <div class="k">Label</div>
+          <div class="v"><input id="labelInput" type="text" placeholder="circle label"/></div>
+          <div class="k">Radius</div>
+          <div class="v">
+            <input id="radiusSlider" type="range" min="40" max="400" value="100"/>
+            <span id="radiusLabel" class="tiny">100</span>
+          </div>
+          <div class="k">Color</div>
+          <div class="v">
+            <select id="colorSelect">
+              <option value="rgba(255,255,255,.35)">White</option>
+              <option value="rgba(255,80,80,.55)">Red</option>
+              <option value="rgba(80,200,255,.45)">Cyan</option>
+              <option value="rgba(150,80,255,.45)">Violet</option>
+              <option value="rgba(80,255,150,.45)">Green</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div class="group">
+        <div class="groupTitle">Text Box</div>
+        <div class="kv">
+          <div class="k">Text</div>
+          <div class="v"><textarea id="textInput" rows="4" placeholder="type here"></textarea></div>
+          <div class="k">Size</div>
+          <div class="v">
+            <input id="textSize" type="range" min="10" max="42" value="14"/>
+            <span id="textSizeLabel" class="tiny">14</span>
+          </div>
+          <div class="k">Opacity</div>
+          <div class="v">
+            <input id="textOpacity" type="range" min="20" max="100" value="82"/>
+            <span id="textOpacityLabel" class="tiny">82</span>
+          </div>
+        </div>
+        <div class="tiny" style="margin-top:8px;">
+          Editing here updates the selected text box (and vice versa).
+        </div>
+      </div>
+
+      <div class="group">
+        <div class="groupTitle">Export Options</div>
+        <div class="tiny">
+          PNG: visual diagram<br/>
+          JSON: data structure<br/>
+          Markdown: text outline<br/>
+          Prompt: AI-ready format
+        </div>
+        <div style="height:10px"></div>
+        <div class="row">
+          <button id="btnExportJSON" class="ghost">Export JSON</button>
+          <button id="btnExportMD" class="ghost">Export MD</button>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <section class="dock bottom">
+    <div class="dockHeader">
+      <div class="title">PROMPT PREVIEW (LIVE)</div>
+    </div>
+    <div class="dockBody">
+      <textarea id="promptPreview" spellcheck="false" style="width:100%;height:100%;font-family:ui-monospace,monospace;font-size:12px;line-height:1.3;background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.10);color:rgba(255,255,255,.82);padding:10px;resize:none;" readonly></textarea>
+    </div>
+  </section>
+</div>
+
+<div id="toast"></div>
+
+<script>
+(() => {
+  const KEY = "ketadata_circle_editor_v2";
+
+  const stage = document.getElementById("stage");
+  const viewport = document.getElementById("viewport");
+  const board = document.getElementById("board");
+  const intersectionLayer = document.getElementById("intersectionLayer");
+
+  const mode = document.getElementById("mode");
+  const btnAdd = document.getElementById("btnAdd");
+  const btnAddText = document.getElementById("btnAddText");
+  const btnDelete = document.getElementById("btnDelete");
+  const btnAutoArrange = document.getElementById("btnAutoArrange");
+  const btnCenter = document.getElementById("btnCenter");
+  const btnSave = document.getElementById("btnSave");
+  const btnLoad = document.getElementById("btnLoad");
+  const btnExportPNG = document.getElementById("btnExportPNG");
+  const btnExportJSON = document.getElementById("btnExportJSON");
+  const btnExportMD = document.getElementById("btnExportMD");
+  const btnExportPrompt = document.getElementById("btnExportPrompt");
+  const btnClear = document.getElementById("btnClear");
+
+  const circleCount = document.getElementById("circleCount");
+  const textCount = document.getElementById("textCount");
+  const snapConcentric = document.getElementById("snapConcentric");
+  const showIntersections = document.getElementById("showIntersections");
+
+  const selType = document.getElementById("selType");
+  const selId = document.getElementById("selId");
+
+  const labelInput = document.getElementById("labelInput");
+  const radiusSlider = document.getElementById("radiusSlider");
+  const radiusLabel = document.getElementById("radiusLabel");
+  const colorSelect = document.getElementById("colorSelect");
+
+  const textInput = document.getElementById("textInput");
+  const textSize = document.getElementById("textSize");
+  const textSizeLabel = document.getElementById("textSizeLabel");
+  const textOpacity = document.getElementById("textOpacity");
+  const textOpacityLabel = document.getElementById("textOpacityLabel");
+
+  const promptPreview = document.getElementById("promptPreview");
+  const toast = document.getElementById("toast");
+
+  let view = { scale:1, panX:0, panY:0 };
+  let circles = [];
+  let texts = [];
+
+  // selection: {type:'circle'|'text', id:string} | null
+  let selected = null;
+  let drag = null;
+
+  function uid(){ return Math.random().toString(16).slice(2) + Date.now().toString(16); }
+  function clamp(n,a,b){ return Math.max(a, Math.min(b,n)); }
+
+  function showToast(msg){
+    toast.textContent = msg;
+    toast.className = "show";
+    setTimeout(()=> toast.className = "", 900);
+  }
+
+  function applyView(){
+    viewport.style.transform = `translate(${view.panX}px, ${view.panY}px) scale(${view.scale})`;
+  }
+
+  function screenToWorld(clientX, clientY){
+    const r = stage.getBoundingClientRect();
+    const sx = clientX - r.left;
+    const sy = clientY - r.top;
+    return { x:(sx - view.panX)/view.scale, y:(sy - view.panY)/view.scale };
+  }
+
+  function getCircle(id){ return circles.find(c=>c.id===id) || null; }
+  function getText(id){ return texts.find(t=>t.id===id) || null; }
+
+  function clearSelection(){
+    selected = null;
+  }
+
+  function render(){
+    board.innerHTML = "";
+
+    // circles
+    for(const c of circles){
+      const el = document.createElement("div");
+      const isSel = selected && selected.type === "circle" && selected.id === c.id;
+      el.className = "circle" + (isSel ? " selected" : "");
+      el.dataset.id = c.id;
+      el.dataset.type = "circle";
+      el.style.left = (c.x - c.r) + "px";
+      el.style.top = (c.y - c.r) + "px";
+      el.style.width = (c.r*2) + "px";
+      el.style.height = (c.r*2) + "px";
+      el.style.borderColor = c.color;
+
+      const label = document.createElement("div");
+      label.className = "label";
+      label.textContent = c.label || "";
+      el.appendChild(label);
+
+      if(isSel){
+        const handle = document.createElement("div");
+        handle.className = "handle";
+        handle.style.right = "-6px";
+        handle.style.bottom = "-6px";
+        el.appendChild(handle);
+      }
+
+      el.addEventListener("mousedown", onObjectDown);
+      board.appendChild(el);
+    }
+
+    // text boxes
+    for(const t of texts){
+      const el = document.createElement("div");
+      const isSel = selected && selected.type === "text" && selected.id === t.id;
+      el.className = "textbox" + (isSel ? " selected" : "");
+      el.dataset.id = t.id;
+      el.dataset.type = "text";
+      el.style.left = t.x + "px";
+      el.style.top = t.y + "px";
+      el.style.fontSize = (t.size || 14) + "px";
+      el.style.color = `rgba(255,255,255,${(t.opacity ?? 82)/100})`;
+      el.textContent = t.text || "";
+      el.setAttribute("contenteditable", "false");
+
+      el.addEventListener("mousedown", onObjectDown);
+      el.addEventListener("dblclick", (e)=>{
+        e.stopPropagation();
+        startInlineEdit(t.id);
+      });
+
+      board.appendChild(el);
+    }
+
+    circleCount.textContent = circles.length;
+    textCount.textContent = texts.length;
+
+    syncInspector();
+    updatePromptPreview();
+    renderIntersections();
+  }
+
+  function startInlineEdit(textId){
+    const t = getText(textId);
+    if(!t) return;
+
+    // ensure selected
+    selected = { type:"text", id:textId };
+    render();
+
+    const el = [...board.querySelectorAll(".textbox")].find(n => n.dataset.id === textId);
+    if(!el) return;
+
+    el.setAttribute("contenteditable", "true");
+    el.focus();
+
+    // place caret at end
+    const range = document.createRange();
+    range.selectNodeContents(el);
+    range.collapse(false);
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+
+    const commit = () => {
+      el.setAttribute("contenteditable", "false");
+      t.text = el.textContent || "";
+      syncInspector();
+      updatePromptPreview();
+      showToast("TEXT UPDATED");
+      window.removeEventListener("mousedown", outsideCommit, true);
+      el.removeEventListener("blur", commit);
+      el.removeEventListener("keydown", onKey);
+    };
+
+    const onKey = (e) => {
+      if(e.key === "Escape"){ e.preventDefault(); el.textContent = t.text || ""; commit(); }
+      if(e.key === "Enter" && (e.metaKey || e.ctrlKey)){ e.preventDefault(); commit(); }
+    };
+
+    const outsideCommit = (e) => {
+      if(e.target === el) return;
+      if(el.contains(e.target)) return;
+      commit();
+    };
+
+    el.addEventListener("blur", commit);
+    el.addEventListener("keydown", onKey);
+    window.addEventListener("mousedown", outsideCommit, true);
+  }
+
+  function renderIntersections(){
+    if(!showIntersections.checked || mode.value !== "venn"){
+      intersectionLayer.innerHTML = "";
+      return;
+    }
+    intersectionLayer.innerHTML = "";
+    for(let i=0; i<circles.length; i++){
+      for(let j=i+1; j<circles.length; j++){
+        const a = circles[i];
+        const b = circles[j];
+        const dist = Math.sqrt((a.x-b.x)**2 + (a.y-b.y)**2);
+        if(dist < (a.r + b.r)){
+          const line = document.createElementNS("http://www.w3.org/2000/svg","line");
+          line.setAttribute("x1", a.x);
+          line.setAttribute("y1", a.y);
+          line.setAttribute("x2", b.x);
+          line.setAttribute("y2", b.y);
+          line.setAttribute("stroke", "rgba(255,80,80,.35)");
+          line.setAttribute("stroke-width", "1");
+          line.setAttribute("stroke-dasharray", "4 2");
+          intersectionLayer.appendChild(line);
+        }
+      }
+    }
+  }
+
+  function setInspectorEnabled(circleEnabled, textEnabled){
+    labelInput.disabled = !circleEnabled;
+    radiusSlider.disabled = !circleEnabled;
+    colorSelect.disabled = !circleEnabled;
+
+    textInput.disabled = !textEnabled;
+    textSize.disabled = !textEnabled;
+    textOpacity.disabled = !textEnabled;
+  }
+
+  function syncInspector(){
+    if(!selected){
+      selType.textContent = "None";
+      selId.textContent = "—";
+      labelInput.value = "";
+      radiusSlider.value = "100";
+      radiusLabel.textContent = "100";
+      colorSelect.value = "rgba(255,255,255,.35)";
+      textInput.value = "";
+      textSize.value = "14";
+      textSizeLabel.textContent = "14";
+      textOpacity.value = "82";
+      textOpacityLabel.textContent = "82";
+      setInspectorEnabled(false,false);
+      return;
+    }
+
+    selType.textContent = selected.type;
+    selId.textContent = selected.id;
+
+    if(selected.type === "circle"){
+      const c = getCircle(selected.id);
+      if(!c){ clearSelection(); syncInspector(); return; }
+      setInspectorEnabled(true,false);
+      labelInput.value = c.label || "";
+      radiusSlider.value = String(c.r);
+      radiusLabel.textContent = String(c.r);
+      if([...colorSelect.options].some(o => o.value === c.color)) colorSelect.value = c.color;
+    } else {
+      const t = getText(selected.id);
+      if(!t){ clearSelection(); syncInspector(); return; }
+      setInspectorEnabled(false,true);
+      textInput.value = t.text || "";
+      textSize.value = String(t.size ?? 14);
+      textSizeLabel.textContent = String(t.size ?? 14);
+      textOpacity.value = String(t.opacity ?? 82);
+      textOpacityLabel.textContent = String(t.opacity ?? 82);
+    }
+  }
+
+  function updatePromptPreview(){
+    const m = mode.value;
+    let out = [];
+    out.push("KETADATA CIRCLE PROMPT PACK");
+    out.push("MODE: " + m.toUpperCase());
+    out.push("");
+
+    if(!circles.length && !texts.length){
+      promptPreview.value = "No objects yet. Add circles and/or text boxes.";
+      return;
+    }
+
+    if(circles.length){
+      if(m === "concentric"){
+        const sorted = [...circles].sort((a,b)=> b.r - a.r);
+        out.push("CIRCLES (OUTER → INNER):");
+        sorted.forEach((c,i)=>{
+          const indent = " ".repeat(i*2);
+          out.push(`${indent}${i+1}. ${c.label || "unlabeled"} (r=${c.r})`);
+        });
+      } else if(m === "venn"){
+        out.push("CIRCLES:");
+        circles.forEach((c,i)=> out.push(`${i+1}. ${c.label || "unlabeled"}`));
+        out.push("");
+        out.push("INTERSECTIONS:");
+        let any = false;
+        for(let i=0; i<circles.length; i++){
+          for(let j=i+1; j<circles.length; j++){
+            const a = circles[i];
+            const b = circles[j];
+            const dist = Math.sqrt((a.x-b.x)**2 + (a.y-b.y)**2);
+            if(dist < (a.r + b.r)){
+              any = true;
+              out.push(`- ${(a.label||"A")} ∩ ${(b.label||"B")}`);
+            }
+          }
+        }
+        if(!any) out.push("- (none detected)");
+      } else if(m === "orbital"){
+        const sorted = [...circles].sort((a,b)=> a.r - b.r);
+        if(sorted.length){
+          out.push("CENTER: " + (sorted[0].label || "core"));
+          out.push("SATELLITES:");
+          sorted.slice(1).forEach((c,i)=> out.push(`${i+1}. ${c.label || "unlabeled"}`));
+        }
+      } else if(m === "radial"){
+        out.push("BRANCHES:");
+        circles.forEach((c,i)=> out.push(`${i+1}. ${c.label || "branch"}`));
+      } else if(m === "time"){
+        const sorted = [...circles].sort((a,b)=> a.r - b.r);
+        out.push("TEMPORAL LAYERS:");
+        sorted.forEach((c,i)=>{
+          const phase = i===0 ? "CORE/NOW" : i===sorted.length-1 ? "OUTER/FUTURE" : "MID";
+          out.push(`${i+1}. ${c.label || phase} (r=${c.r})`);
+        });
+      }
+      out.push("");
+    }
+
+    if(texts.length){
+      out.push("TEXT BOXES:");
+      texts.forEach((t,i)=>{
+        const txt = (t.text || "").trim().replace(/\s+/g," ").slice(0,180);
+        out.push(`${i+1}. ${txt || "(empty)"}`);
+      });
+      out.push("");
+    }
+
+    out.push("PROMPT TEMPLATE:");
+    out.push("Use circles for structural logic; use text boxes for notes, constraints, or declarative rules.");
+    out.push("If you need an AI prompt, paste the above and specify output format.");
+    promptPreview.value = out.join("\n");
+  }
+
+  function downloadText(filename, content){
+    const blob = new Blob([content], {type:"text/plain;charset=utf-8"});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  function exportJSON(){
+    const payload = {
+      version: 2,
+      mode: mode.value,
+      view,
+      circles,
+      texts
+    };
+    downloadText("ketadata-circles.json", JSON.stringify(payload, null, 2));
+    showToast("EXPORTED JSON");
+  }
+
+  function exportMD(){
+    const m = mode.value;
+    const lines = [];
+    lines.push("# KETADATA Circle Editor");
+    lines.push("");
+    lines.push(`- Mode: **${m}**`);
+    lines.push(`- Circles: **${circles.length}**`);
+    lines.push(`- Text boxes: **${texts.length}**`);
+    lines.push("");
+
+    if(circles.length){
+      if(m === "concentric" || m === "time"){
+        const sorted = [...circles].sort((a,b)=> b.r - a.r);
+        lines.push("## Circles (outer → inner)");
+        sorted.forEach((c,i)=>{
+          const label = c.label || `Circle ${i+1}`;
+          lines.push(`${"  ".repeat(i)}- ${label} (r=${c.r})`);
+        });
+      } else if(m === "orbital"){
+        const sorted = [...circles].sort((a,b)=> a.r - b.r);
+        const core = sorted[0];
+        lines.push("## Center");
+        lines.push(`- ${core?.label || "core"}`);
+        lines.push("");
+        lines.push("## Satellites");
+        sorted.slice(1).forEach((c,i)=>{
+          lines.push(`- ${c.label || `Satellite ${i+1}`}`);
+        });
+      } else if(m === "radial"){
+        lines.push("## Branches");
+        circles.forEach((c,i)=> lines.push(`- ${c.label || `Branch ${i+1}`}`));
+      } else if(m === "venn"){
+        lines.push("## Circles");
+        circles.forEach((c,i)=> lines.push(`- ${c.label || `Circle ${i+1}`}`));
+        lines.push("");
+        lines.push("## Intersections (detected)");
+        let any = false;
+        for(let i=0; i<circles.length; i++){
+          for(let j=i+1; j<circles.length; j++){
+            const a = circles[i], b = circles[j];
+            const dist = Math.sqrt((a.x-b.x)**2 + (a.y-b.y)**2);
+            if(dist < (a.r + b.r)){
+              any = true;
+              lines.push(`- ${(a.label||"A")} ∩ ${(b.label||"B")}`);
+            }
+          }
+        }
+        if(!any) lines.push("- (none detected)");
+      }
+      lines.push("");
+    }
+
+    if(texts.length){
+      lines.push("## Text Boxes");
+      texts.forEach((t,i)=>{
+        lines.push(`- Text ${i+1}:`);
+        lines.push("");
+        lines.push("```");
+        lines.push(t.text || "");
+        lines.push("```");
+        lines.push("");
+      });
+    }
+
+    downloadText("ketadata-circles.md", lines.join("\n"));
+    showToast("EXPORTED MD");
+  }
+
+  function exportPrompt(){
+    downloadText("ketadata-prompt.txt", promptPreview.value || "");
+    showToast("EXPORTED PROMPT");
+  }
+
+  function exportPNG(){
+    const r = stage.getBoundingClientRect();
+    const W = Math.max(1, Math.floor(r.width));
+    const H = Math.max(1, Math.floor(r.height));
+
+    const s = view.scale;
+    const tx = view.panX;
+    const ty = view.panY;
+
+    const esc = (str) =>
+      (str || "")
+        .replace(/&/g,"&amp;")
+        .replace(/</g,"&lt;")
+        .replace(/>/g,"&gt;");
+
+    const svgParts = [];
+    svgParts.push(`<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">`);
+    svgParts.push(`<rect width="100%" height="100%" fill="#000"/>`);
+    svgParts.push(`<g transform="translate(${tx},${ty}) scale(${s})">`);
+
+    if(showIntersections.checked && mode.value === "venn"){
+      for(let i=0; i<circles.length; i++){
+        for(let j=i+1; j<circles.length; j++){
+          const a = circles[i], b = circles[j];
+          const dist = Math.sqrt((a.x-b.x)**2 + (a.y-b.y)**2);
+          if(dist < (a.r + b.r)){
+            svgParts.push(
+              `<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="rgba(255,80,80,.35)" stroke-width="1" stroke-dasharray="4 2" />`
+            );
+          }
+        }
+      }
+    }
+
+    circles.forEach(c=>{
+      const stroke = c.color || "rgba(255,255,255,.35)";
+      const label = esc(c.label || "");
+      svgParts.push(`<circle cx="${c.x}" cy="${c.y}" r="${c.r}" fill="none" stroke="${stroke}" stroke-width="2" />`);
+      if(label){
+        svgParts.push(`<text x="${c.x}" y="${c.y}" text-anchor="middle" dominant-baseline="middle" fill="rgba(255,255,255,.75)" font-family="ui-monospace, monospace" font-size="12" letter-spacing="1">${label}</text>`);
+      }
+    });
+
+    texts.forEach(t=>{
+      const x = t.x, y = t.y;
+      const size = t.size ?? 14;
+      const op = (t.opacity ?? 82)/100;
+      const content = esc(t.text || "");
+      const lines = content.split(/\n/);
+
+      // background rect (approx)
+      const padX = 10, padY = 8;
+      const lineH = Math.round(size * 1.25);
+      const h = padY*2 + lines.length * lineH;
+
+      svgParts.push(`<rect x="${x}" y="${y}" width="520" height="${h}" fill="rgba(0,0,0,.55)" stroke="rgba(255,255,255,.18)" stroke-width="1" />`);
+      lines.forEach((ln, i)=>{
+        svgParts.push(`<text x="${x+padX}" y="${y+padY + (i+1)*lineH - (lineH*0.25)}" text-anchor="start" fill="rgba(255,255,255,${op})" font-family="ui-monospace, monospace" font-size="${size}">${ln || " "}</text>`);
+      });
+    });
+
+    svgParts.push(`</g></svg>`);
+    const svg = svgParts.join("");
+
+    const img = new Image();
+    const svgBlob = new Blob([svg], {type:"image/svg+xml;charset=utf-8"});
+    const url = URL.createObjectURL(svgBlob);
+
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = W;
+      canvas.height = H;
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(img, 0, 0);
+      URL.revokeObjectURL(url);
+
+      canvas.toBlob((blob)=>{
+        if(!blob){ showToast("PNG FAILED"); return; }
+        const pngUrl = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = pngUrl;
+        a.download = "ketadata-circles.png";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(()=> URL.revokeObjectURL(pngUrl), 500);
+        showToast("EXPORTED PNG");
+      }, "image/png");
+    };
+
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      showToast("PNG FAILED");
+    };
+
+    img.src = url;
+  }
+
+  // Inspector bindings (circle)
+  labelInput.addEventListener("input", ()=>{
+    if(!selected || selected.type !== "circle") return;
+    const c = getCircle(selected.id);
+    if(c) c.label = labelInput.value;
+    render();
+  });
+
+  radiusSlider.addEventListener("input", ()=>{
+    if(!selected || selected.type !== "circle") return;
+    const c = getCircle(selected.id);
+    if(c) c.r = Number(radiusSlider.value);
+    radiusLabel.textContent = radiusSlider.value;
+    render();
+  });
+
+  colorSelect.addEventListener("change", ()=>{
+    if(!selected || selected.type !== "circle") return;
+    const c = getCircle(selected.id);
+    if(c) c.color = colorSelect.value;
+    render();
+  });
+
+  // Inspector bindings (text)
+  textInput.addEventListener("input", ()=>{
+    if(!selected || selected.type !== "text") return;
+    const t = getText(selected.id);
+    if(t){
+      t.text = textInput.value;
+      render();
+    }
+  });
+
+  textSize.addEventListener("input", ()=>{
+    textSizeLabel.textContent = textSize.value;
+    if(!selected || selected.type !== "text") return;
+    const t = getText(selected.id);
+    if(t){
+      t.size = Number(textSize.value);
+      render();
+    }
+  });
+
+  textOpacity.addEventListener("input", ()=>{
+    textOpacityLabel.textContent = textOpacity.value;
+    if(!selected || selected.type !== "text") return;
+    const t = getText(selected.id);
+    if(t){
+      t.opacity = Number(textOpacity.value);
+      render();
+    }
+  });
+
+  mode.addEventListener("change", ()=>{
+    updatePromptPreview();
+    renderIntersections();
+  });
+
+  showIntersections.addEventListener("change", ()=> renderIntersections());
+
+  btnAdd.addEventListener("click", ()=>{
+    const rect = stage.getBoundingClientRect();
+    const c = screenToWorld(rect.left + rect.width/2, rect.top + rect.height/2);
+    const newCircle = {
+      id: uid(),
+      x: c.x,
+      y: c.y,
+      r: 100,
+      label: "",
+      color: "rgba(255,255,255,.35)"
+    };
+    circles.push(newCircle);
+    selected = { type:"circle", id:newCircle.id };
+    render();
+  });
+
+  btnAddText.addEventListener("click", ()=>{
+    const rect = stage.getBoundingClientRect();
+    const p = screenToWorld(rect.left + rect.width/2, rect.top + rect.height/2);
+    const newText = {
+      id: uid(),
+      x: p.x - 80,
+      y: p.y - 20,
+      text: "TYPE HERE",
+      size: 14,
+      opacity: 82
+    };
+    texts.push(newText);
+    selected = { type:"text", id:newText.id };
+    render();
+    // immediately edit
+    startInlineEdit(newText.id);
+  });
+
+  btnDelete.addEventListener("click", ()=>{
+    if(!selected) return;
+    if(selected.type === "circle"){
+      circles = circles.filter(c=>c.id!==selected.id);
+    } else {
+      texts = texts.filter(t=>t.id!==selected.id);
+    }
+    clearSelection();
+    render();
+  });
+
+  btnAutoArrange.addEventListener("click", ()=>{
+    if(!circles.length) return;
+    const rect = stage.getBoundingClientRect();
+    const cx = rect.width/2;
+    const cy = rect.height/2;
+
+    const m = mode.value;
+    if(m === "concentric"){
+      circles.forEach(c=>{ c.x=cx; c.y=cy; });
+    } else if(m === "orbital"){
+      const sorted = [...circles].sort((a,b)=> a.r - b.r);
+      if(sorted.length > 0){
+        sorted[0].x = cx; sorted[0].y = cy;
+        const orbitR = 180;
+        const denom = Math.max(1, (sorted.length-1));
+        sorted.slice(1).forEach((c,i)=>{
+          const angle = (i / denom) * Math.PI * 2;
+          c.x = cx + orbitR * Math.cos(angle);
+          c.y = cy + orbitR * Math.sin(angle);
+        });
+      }
+    } else if(m === "radial"){
+      circles.forEach((c,i)=>{
+        const angle = (i / circles.length) * Math.PI * 2;
+        const dist = 140;
+        c.x = cx + dist * Math.cos(angle);
+        c.y = cy + dist * Math.sin(angle);
+      });
+    } else if(m === "time"){
+      circles.forEach(c=>{ c.x=cx; c.y=cy; });
+    } else if(m === "venn"){
+      const n = circles.length;
+      if(n === 2){
+        circles[0].x = cx - 60; circles[0].y = cy;
+        circles[1].x = cx + 60; circles[1].y = cy;
+      } else if(n === 3){
+        circles[0].x = cx; circles[0].y = cy - 60;
+        circles[1].x = cx - 60; circles[1].y = cy + 30;
+        circles[2].x = cx + 60; circles[2].y = cy + 30;
+      } else {
+        circles.forEach((c,i)=>{
+          const angle = (i / n) * Math.PI * 2;
+          c.x = cx + 120 * Math.cos(angle);
+          c.y = cy + 120 * Math.sin(angle);
+        });
+      }
+    }
+
+    render();
+    showToast("AUTO-ARRANGED");
+  });
+
+  btnCenter.addEventListener("click", ()=>{
+    view = { scale:1, panX:0, panY:0 };
+    applyView();
+    showToast("CENTERED");
+  });
+
+  stage.addEventListener("wheel", (e)=>{
+    e.preventDefault();
+    const delta = -Math.sign(e.deltaY) * 0.10;
+    const before = screenToWorld(e.clientX, e.clientY);
+    view.scale = clamp(view.scale * (1 + delta), 0.25, 2.5);
+    const after = screenToWorld(e.clientX, e.clientY);
+    view.panX += (before.x - after.x) * view.scale;
+    view.panY += (before.y - after.y) * view.scale;
+    applyView();
+  }, {passive:false});
+
+  let spaceDown = false;
+  document.addEventListener("keydown", (e)=>{
+    if(e.code==="Space") spaceDown = true;
+    if(e.key==="Escape"){
+      // if editing a textbox, let blur handler commit; otherwise clear selection
+      const editing = board.querySelector('.textbox[contenteditable="true"]');
+      if(!editing){
+        clearSelection();
+        render();
+      }
+    }
+  });
+  document.addEventListener("keyup", (e)=>{ if(e.code==="Space") spaceDown=false; });
+
+  stage.addEventListener("mousedown", (e)=>{
+    const onObj = e.target.closest && (e.target.closest(".circle") || e.target.closest(".textbox"));
+    if(onObj) return;
+    if(spaceDown){
+      drag = { type:"pan", sx:e.clientX, sy:e.clientY, px:view.panX, py:view.panY };
+    } else {
+      clearSelection();
+      render();
+    }
+  });
+
+  window.addEventListener("mousemove", (e)=>{
+    if(!drag) return;
+    if(drag.type==="pan"){
+      view.panX = drag.px + (e.clientX - drag.sx);
+      view.panY = drag.py + (e.clientY - drag.sy);
+      applyView();
+    } else if(drag.type==="moveCircle"){
+      const pt = screenToWorld(e.clientX, e.clientY);
+      const c = getCircle(drag.id);
+      if(c){
+        c.x = drag.x0 + (pt.x - drag.p0.x);
+        c.y = drag.y0 + (pt.y - drag.p0.y);
+
+        if(snapConcentric.checked && mode.value==="concentric"){
+          const rect = stage.getBoundingClientRect();
+          const cx = rect.width/2;
+          const cy = rect.height/2;
+          c.x = cx;
+          c.y = cy;
+        }
+
+        render();
+      }
+    } else if(drag.type==="resize"){
+      const pt = screenToWorld(e.clientX, e.clientY);
+      const c = getCircle(drag.id);
+      if(c){
+        const dx = pt.x - c.x;
+        const dy = pt.y - c.y;
+        c.r = clamp(Math.sqrt(dx*dx + dy*dy), 40, 400);
+        render();
+      }
+    } else if(drag.type==="moveText"){
+      const pt = screenToWorld(e.clientX, e.clientY);
+      const t = getText(drag.id);
+      if(t){
+        t.x = drag.x0 + (pt.x - drag.p0.x);
+        t.y = drag.y0 + (pt.y - drag.p0.y);
+        render();
+      }
+    }
+  });
+
+  window.addEventListener("mouseup", ()=> drag=null);
+
+  function onObjectDown(e){
+    const el = e.currentTarget;
+    const type = el.dataset.type;
+    const id = el.dataset.id;
+
+    // if user clicks a textbox while it's contenteditable, don't start drag
+    if(type === "text"){
+      const editing = el.getAttribute("contenteditable") === "true";
+      if(editing) return;
+    }
+
+    selected = { type, id };
+
+    const isHandle = e.target.classList && e.target.classList.contains("handle");
+    const pt = screenToWorld(e.clientX, e.clientY);
+
+    if(type === "circle"){
+      const c = getCircle(id);
+      if(!c) return;
+      if(isHandle){
+        drag = { type:"resize", id };
+        e.stopPropagation();
+      } else {
+        drag = { type:"moveCircle", id, x0:c.x, y0:c.y, p0:pt };
+      }
+    } else {
+      const t = getText(id);
+      if(!t) return;
+      drag = { type:"moveText", id, x0:t.x, y0:t.y, p0:pt };
+    }
+
+    render();
+  }
+
+  btnSave.addEventListener("click", ()=>{
+    const data = { version:2, mode: mode.value, view, circles, texts };
+    localStorage.setItem(KEY, JSON.stringify(data));
+    showToast("SAVED");
+  });
+
+  btnLoad.addEventListener("click", ()=>{
+    const raw = localStorage.getItem(KEY);
+    if(!raw){ showToast("NO SAVE"); return; }
+    try{
+      const data = JSON.parse(raw);
+      view = data.view || view;
+      circles = data.circles || [];
+      texts = data.texts || [];
+      if(data.mode && typeof data.mode === "string") mode.value = data.mode;
+      clearSelection();
+      applyView();
+      render();
+      showToast("LOADED");
+    } catch(err){
+      console.error(err);
+      showToast("LOAD ERROR");
+    }
+  });
+
+  btnClear.addEventListener("click", ()=>{
+    circles = [];
+    texts = [];
+    clearSelection();
+    render();
+    showToast("CLEARED");
+  });
+
+  btnExportJSON.addEventListener("click", exportJSON);
+  btnExportMD.addEventListener("click", exportMD);
+  btnExportPrompt.addEventListener("click", exportPrompt);
+  btnExportPNG.addEventListener("click", exportPNG);
+
+  // initial
+  applyView();
+  render();
+})();
+</script>
+</body>
+</html>
