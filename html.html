@@ -1,0 +1,654 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>KETADATA /// HTML RENDERER</title>
+  <style>
+    :root{
+      --bg:#0a0a0a;
+      --panel:#0b0b0b;
+      --ink:rgba(255,255,255,.86);
+      --muted:rgba(255,255,255,.48);
+      --line:rgba(255,255,255,.12);
+      --line2:rgba(255,255,255,.18);
+      --mono: ui-sans-serif, system-ui, -apple-system, Arial, Helvetica, sans-serif;
+    }
+    *{ box-sizing:border-box; font-family:var(--mono); }
+    html,body{ height:100%; margin:0; background:var(--bg); color:var(--ink); overflow:hidden; }
+
+    .top{
+      height:46px;
+      display:flex; align-items:center; justify-content:space-between;
+      padding:0 10px;
+      border-bottom:1px solid var(--line);
+      background:rgba(0,0,0,.92);
+      backdrop-filter: blur(6px);
+    }
+    .brand{
+      font-size:11px; letter-spacing:2px; text-transform:uppercase;
+      color:var(--muted);
+      display:flex; gap:10px; align-items:center;
+      user-select:none;
+    }
+    .btnRow{ display:flex; gap:8px; align-items:center; }
+    button, input[type="text"], select{
+      background:rgba(255,255,255,.02);
+      border:1px solid var(--line2);
+      color:var(--ink);
+      padding:7px 9px;
+      border-radius:0;
+      font-size:12px;
+      outline:none;
+    }
+    button{ cursor:pointer; }
+    button:hover{ border-color:rgba(255,255,255,.30); }
+    .ghost{ border-color:rgba(255,255,255,.10); color:rgba(255,255,255,.62); }
+    .danger:hover{ border-color:rgba(255,100,100,.55); }
+    .hint{ font-size:11px; color:var(--muted); margin-left:10px; }
+
+    .shell{
+      height:calc(100% - 46px);
+      display:grid;
+      grid-template-columns: 300px 1fr;
+    }
+
+    /* Left: doc list like your screenshot */
+    .left{
+      border-right:1px solid var(--line);
+      background:rgba(0,0,0,.90);
+      overflow:hidden;
+      display:flex;
+      flex-direction:column;
+    }
+    .leftHeader{
+      padding:10px;
+      border-bottom:1px solid var(--line);
+      display:flex; gap:8px; align-items:center;
+    }
+    .search{
+      width:100%;
+      padding:8px 10px;
+      border:1px solid rgba(255,255,255,.10);
+      background:rgba(255,255,255,.02);
+      color:rgba(255,255,255,.80);
+      outline:none;
+      font-size:12px;
+    }
+    .docList{
+      overflow:auto;
+      padding:8px;
+    }
+    .docRow{
+      display:flex; align-items:center; justify-content:space-between;
+      gap:10px;
+      padding:8px 10px;
+      margin-bottom:6px;
+      border:1px solid rgba(255,255,255,.08);
+      background:rgba(255,255,255,.02);
+      cursor:pointer;
+      user-select:none;
+    }
+    .docRow:hover{ border-color:rgba(255,255,255,.18); }
+    .docRow.active{
+      border-color:rgba(255,255,255,.28);
+      background:rgba(255,255,255,.04);
+    }
+    .docTitle{
+      font-size:12px;
+      color:rgba(255,255,255,.82);
+      overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+      max-width:190px;
+    }
+    .docMeta{
+      font-size:10px;
+      color:rgba(255,255,255,.44);
+      letter-spacing:1px;
+      text-transform:uppercase;
+      white-space:nowrap;
+    }
+
+    /* Right: tabs + editor + preview */
+    .right{
+      overflow:hidden;
+      display:flex;
+      flex-direction:column;
+      background:#000;
+    }
+
+    .tabs{
+      height:38px;
+      border-bottom:1px solid var(--line);
+      display:flex;
+      align-items:end;
+      gap:6px;
+      padding:6px 10px 0 10px;
+      overflow:auto;
+      background:rgba(0,0,0,.92);
+    }
+    .tab{
+      display:flex; align-items:center; gap:8px;
+      padding:7px 10px;
+      border:1px solid rgba(255,255,255,.10);
+      border-bottom:none;
+      background:rgba(255,255,255,.02);
+      color:rgba(255,255,255,.70);
+      cursor:pointer;
+      user-select:none;
+      white-space:nowrap;
+    }
+    .tab.active{
+      border-color:rgba(255,255,255,.26);
+      background:rgba(255,255,255,.04);
+      color:rgba(255,255,255,.86);
+    }
+    .tab .x{
+      color:rgba(255,255,255,.40);
+      border:1px solid rgba(255,255,255,.12);
+      padding:0 6px;
+      line-height:18px;
+      height:18px;
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+    }
+    .tab .x:hover{ border-color:rgba(255,255,255,.26); color:rgba(255,255,255,.70); }
+
+    .workHeader{
+      height:44px;
+      display:flex; align-items:center; justify-content:space-between;
+      padding:8px 10px;
+      border-bottom:1px solid var(--line);
+      background:rgba(0,0,0,.94);
+      gap:10px;
+    }
+    .titleEdit{
+      flex:1;
+      display:flex;
+      gap:8px;
+      align-items:center;
+      min-width:200px;
+    }
+    .titleEdit input{
+      width:100%;
+      padding:8px 10px;
+      border:1px solid rgba(255,255,255,.12);
+      background:rgba(255,255,255,.02);
+      color:rgba(255,255,255,.86);
+    }
+    .modeRow{ display:flex; gap:8px; align-items:center; }
+    .chip{
+      font-size:11px;
+      letter-spacing:2px;
+      text-transform:uppercase;
+      color:rgba(255,255,255,.46);
+      border:1px solid rgba(255,255,255,.10);
+      padding:6px 8px;
+    }
+
+    .split{
+      flex:1;
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      min-height:0;
+    }
+    .pane{
+      min-height:0;
+      display:flex;
+      flex-direction:column;
+      border-right:1px solid var(--line);
+    }
+    .pane:last-child{ border-right:none; }
+    .paneTop{
+      height:34px;
+      display:flex; align-items:center; justify-content:space-between;
+      padding:0 10px;
+      border-bottom:1px solid var(--line);
+      background:rgba(255,255,255,.02);
+      color:rgba(255,255,255,.55);
+      font-size:11px;
+      letter-spacing:2px;
+      text-transform:uppercase;
+    }
+    textarea{
+      flex:1;
+      width:100%;
+      min-height:0;
+      resize:none;
+      border:0;
+      outline:none;
+      background:#000;
+      color:rgba(255,255,255,.86);
+      padding:12px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      font-size:12px;
+      line-height:1.35;
+    }
+    iframe{
+      flex:1;
+      width:100%;
+      border:0;
+      background:#fff;
+    }
+
+    .toast{
+      position:fixed; bottom:12px; left:50%; transform:translateX(-50%);
+      padding:8px 10px;
+      border:1px solid rgba(255,255,255,.16);
+      background:rgba(0,0,0,.92);
+      color:rgba(255,255,255,.72);
+      font-size:12px;
+      display:none;
+      z-index:100;
+    }
+    .toast.show{ display:block; }
+
+    @media (max-width: 980px){
+      .shell{ grid-template-columns: 1fr; }
+      .left{ display:none; }
+      .split{ grid-template-columns: 1fr; }
+      .pane{ border-right:none; border-bottom:1px solid var(--line); }
+      .pane:last-child{ border-bottom:none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="top">
+    <div class="brand">
+      <span>KETADATA /// HTML RENDERER</span>
+      <span class="hint">tabs + live preview + autosave</span>
+    </div>
+    <div class="btnRow">
+      <button id="newDoc">New</button>
+      <button id="dupDoc" class="ghost">Duplicate</button>
+      <button id="delDoc" class="ghost danger">Delete</button>
+      <span style="width:1px;height:22px;background:rgba(255,255,255,.12)"></span>
+      <button id="exportAll" class="ghost">Export Workspace</button>
+      <button id="importAll" class="ghost">Import Workspace</button>
+    </div>
+  </div>
+
+  <div class="shell">
+    <aside class="left">
+      <div class="leftHeader">
+        <input id="search" class="search" placeholder="Search docs…" />
+      </div>
+      <div id="docList" class="docList"></div>
+    </aside>
+
+    <main class="right">
+      <div id="tabs" class="tabs"></div>
+
+      <div class="workHeader">
+        <div class="titleEdit">
+          <span class="chip">DOC</span>
+          <input id="docTitle" type="text" placeholder="Document title" />
+        </div>
+
+        <div class="modeRow">
+          <span class="chip">PREVIEW</span>
+          <select id="previewMode" title="Preview mode">
+            <option value="iframe">iframe (recommended)</option>
+            <option value="inline">inline (dangerous)</option>
+          </select>
+          <button id="run" title="Render preview">Render</button>
+        </div>
+      </div>
+
+      <section class="split">
+        <div class="pane">
+          <div class="paneTop">
+            <span>HTML INPUT</span>
+            <span id="status" style="color:rgba(255,255,255,.40);font-size:11px;letter-spacing:1px;text-transform:uppercase;">—</span>
+          </div>
+          <textarea id="editor" spellcheck="false"></textarea>
+        </div>
+
+        <div class="pane">
+          <div class="paneTop">
+            <span>RENDER</span>
+            <span style="color:rgba(255,255,255,.40);font-size:11px;letter-spacing:1px;text-transform:uppercase;">live</span>
+          </div>
+          <iframe id="frame" sandbox="allow-scripts allow-forms allow-modals allow-pointer-lock allow-popups"></iframe>
+          <div id="inlinePreview" style="display:none;flex:1;overflow:auto;background:#fff;color:#000;"></div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div id="toast" class="toast"></div>
+
+<script>
+(() => {
+  const KEY = "ketadata_html_renderer_workspace_v1";
+
+  const docListEl = document.getElementById("docList");
+  const tabsEl = document.getElementById("tabs");
+  const searchEl = document.getElementById("search");
+
+  const docTitleEl = document.getElementById("docTitle");
+  const editorEl = document.getElementById("editor");
+  const previewModeEl = document.getElementById("previewMode");
+  const runBtn = document.getElementById("run");
+  const statusEl = document.getElementById("status");
+
+  const frame = document.getElementById("frame");
+  const inlinePreview = document.getElementById("inlinePreview");
+
+  const newBtn = document.getElementById("newDoc");
+  const dupBtn = document.getElementById("dupDoc");
+  const delBtn = document.getElementById("delDoc");
+  const exportBtn = document.getElementById("exportAll");
+  const importBtn = document.getElementById("importAll");
+
+  const toast = document.getElementById("toast");
+
+  const uid = () => Math.random().toString(16).slice(2) + Date.now().toString(16);
+  const now = () => Date.now();
+
+  // Workspace model:
+  // docs: [{id, title, html, updatedAt}]
+  // openTabs: [docId...]
+  // activeTab: docId
+  let workspace = null;
+
+  function defaultDoc(title="Untitled"){
+    return {
+      id: uid(),
+      title,
+      html: `<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>${title}</title>
+  <style>
+    body{ margin:0; padding:24px; font-family:system-ui,-apple-system,Arial; background:#fff; color:#111; }
+    .k{ letter-spacing:2px; text-transform:uppercase; opacity:.6; font-size:12px; }
+    h1{ margin:10px 0 0; font-size:28px; }
+    p{ max-width:70ch; line-height:1.45; }
+  </style>
+</head>
+<body>
+  <div class="k">KETADATA</div>
+  <h1>${title}</h1>
+  <p>Edit HTML on the left. Render on the right.</p>
+</body>
+</html>`,
+      updatedAt: now()
+    };
+  }
+
+  function defaultWorkspace(){
+    const a = defaultDoc("KETA /// DATA");
+    const b = defaultDoc("STYLEBOOK");
+    return {
+      version: 1,
+      docs: [a,b],
+      openTabs: [a.id,b.id],
+      activeTab: a.id
+    };
+  }
+
+  function save(){
+    localStorage.setItem(KEY, JSON.stringify(workspace));
+    statusEl.textContent = "saved";
+    setTimeout(()=> statusEl.textContent = "—", 700);
+  }
+
+  function load(){
+    const raw = localStorage.getItem(KEY);
+    if(!raw){
+      workspace = defaultWorkspace();
+      save();
+      return;
+    }
+    try{
+      workspace = JSON.parse(raw);
+      if(!workspace || !workspace.docs) throw new Error("bad");
+    }catch{
+      workspace = defaultWorkspace();
+      save();
+    }
+  }
+
+  function toastMsg(msg){
+    toast.textContent = msg;
+    toast.classList.add("show");
+    setTimeout(()=> toast.classList.remove("show"), 950);
+  }
+
+  function getDoc(id){
+    return workspace.docs.find(d => d.id === id) || null;
+  }
+
+  function setActive(id){
+    if(!workspace.openTabs.includes(id)) workspace.openTabs.push(id);
+    workspace.activeTab = id;
+    renderUI();
+    loadDocToEditor();
+    renderPreview(); // keep it feeling “docs-like”
+    save();
+  }
+
+  function closeTab(id){
+    workspace.openTabs = workspace.openTabs.filter(x => x !== id);
+    if(workspace.activeTab === id){
+      workspace.activeTab = workspace.openTabs[0] || (workspace.docs[0]?.id || null);
+    }
+    renderUI();
+    loadDocToEditor();
+    renderPreview();
+    save();
+  }
+
+  function renderUI(){
+    // Left list
+    const q = (searchEl.value || "").trim().toLowerCase();
+    docListEl.innerHTML = "";
+    for(const d of workspace.docs){
+      if(q && !(d.title||"").toLowerCase().includes(q)) continue;
+      const row = document.createElement("div");
+      row.className = "docRow" + (d.id === workspace.activeTab ? " active" : "");
+      row.innerHTML = `
+        <div style="min-width:0">
+          <div class="docTitle">${escapeHtml(d.title || "Untitled")}</div>
+          <div class="docMeta">${new Date(d.updatedAt).toLocaleString()}</div>
+        </div>
+        <div class="docMeta">${d.html?.length || 0}c</div>
+      `;
+      row.addEventListener("click", ()=> setActive(d.id));
+      docListEl.appendChild(row);
+    }
+
+    // Tabs
+    tabsEl.innerHTML = "";
+    for(const id of workspace.openTabs){
+      const d = getDoc(id);
+      if(!d) continue;
+      const tab = document.createElement("div");
+      tab.className = "tab" + (id === workspace.activeTab ? " active" : "");
+      const title = (d.title || "Untitled").slice(0, 36);
+      tab.innerHTML = `<span>${escapeHtml(title)}</span><span class="x" title="Close">×</span>`;
+      tab.addEventListener("click", (e)=>{
+        if(e.target.classList.contains("x")) return;
+        setActive(id);
+      });
+      tab.querySelector(".x").addEventListener("click", (e)=>{
+        e.stopPropagation();
+        closeTab(id);
+      });
+      tabsEl.appendChild(tab);
+    }
+  }
+
+  function loadDocToEditor(){
+    const d = getDoc(workspace.activeTab);
+    if(!d){
+      editorEl.value = "";
+      docTitleEl.value = "";
+      return;
+    }
+    docTitleEl.value = d.title || "";
+    editorEl.value = d.html || "";
+  }
+
+  function renderPreview(){
+    const d = getDoc(workspace.activeTab);
+    if(!d) return;
+
+    const mode = previewModeEl.value;
+    if(mode === "iframe"){
+      frame.style.display = "block";
+      inlinePreview.style.display = "none";
+      // srcdoc renders HTML safely in iframe
+      frame.srcdoc = d.html || "";
+    } else {
+      // inline mode: inject into DOM (dangerous if doc includes scripts)
+      frame.style.display = "none";
+      inlinePreview.style.display = "block";
+      inlinePreview.innerHTML = d.html || "";
+    }
+  }
+
+  function escapeHtml(s){
+    return (s||"")
+      .replaceAll("&","&amp;")
+      .replaceAll("<","&lt;")
+      .replaceAll(">","&gt;");
+  }
+
+  // Actions
+  newBtn.addEventListener("click", ()=>{
+    const d = defaultDoc("Untitled");
+    workspace.docs.unshift(d);
+    workspace.openTabs.unshift(d.id);
+    workspace.activeTab = d.id;
+    renderUI();
+    loadDocToEditor();
+    renderPreview();
+    save();
+    toastMsg("NEW DOC");
+  });
+
+  dupBtn.addEventListener("click", ()=>{
+    const d = getDoc(workspace.activeTab);
+    if(!d) return;
+    const copy = {
+      id: uid(),
+      title: (d.title || "Untitled") + " (copy)",
+      html: d.html || "",
+      updatedAt: now()
+    };
+    workspace.docs.unshift(copy);
+    workspace.openTabs.unshift(copy.id);
+    workspace.activeTab = copy.id;
+    renderUI();
+    loadDocToEditor();
+    renderPreview();
+    save();
+    toastMsg("DUPLICATED");
+  });
+
+  delBtn.addEventListener("click", ()=>{
+    const d = getDoc(workspace.activeTab);
+    if(!d) return;
+    const ok = confirm(`Delete "${d.title || "Untitled"}"?`);
+    if(!ok) return;
+    workspace.docs = workspace.docs.filter(x => x.id !== d.id);
+    workspace.openTabs = workspace.openTabs.filter(x => x !== d.id);
+    workspace.activeTab = workspace.openTabs[0] || workspace.docs[0]?.id || null;
+    renderUI();
+    loadDocToEditor();
+    renderPreview();
+    save();
+    toastMsg("DELETED");
+  });
+
+  runBtn.addEventListener("click", ()=>{
+    renderPreview();
+    toastMsg("RENDERED");
+  });
+
+  // Live edit with debounce autosave
+  let t = null;
+  function commitEdits(){
+    const d = getDoc(workspace.activeTab);
+    if(!d) return;
+    d.title = docTitleEl.value || "Untitled";
+    d.html = editorEl.value || "";
+    d.updatedAt = now();
+    save();
+    renderUI(); // update list+tab labels
+  }
+
+  docTitleEl.addEventListener("input", ()=>{
+    clearTimeout(t);
+    t = setTimeout(()=> { commitEdits(); renderPreview(); }, 250);
+  });
+  editorEl.addEventListener("input", ()=>{
+    clearTimeout(t);
+    t = setTimeout(()=> { commitEdits(); renderPreview(); }, 350);
+  });
+
+  previewModeEl.addEventListener("change", ()=> renderPreview());
+  searchEl.addEventListener("input", ()=> renderUI());
+
+  // Export / Import
+  exportBtn.addEventListener("click", ()=>{
+    const payload = JSON.stringify(workspace, null, 2);
+    const blob = new Blob([payload], {type:"application/json"});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "ketadata-html-workspace.json";
+    a.click();
+    URL.revokeObjectURL(url);
+  });
+
+  importBtn.addEventListener("click", async ()=>{
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "application/json";
+    input.onchange = async () => {
+      const f = input.files?.[0];
+      if(!f) return;
+      const txt = await f.text();
+      try{
+        const obj = JSON.parse(txt);
+        if(!obj || !Array.isArray(obj.docs)) throw new Error("bad");
+        workspace = obj;
+        if(!workspace.openTabs?.length) workspace.openTabs = [workspace.docs[0]?.id].filter(Boolean);
+        if(!workspace.activeTab) workspace.activeTab = workspace.openTabs[0] || workspace.docs[0]?.id || null;
+        save();
+        renderUI();
+        loadDocToEditor();
+        renderPreview();
+        toastMsg("IMPORTED");
+      }catch{
+        alert("Invalid workspace JSON.");
+      }
+    };
+    input.click();
+  });
+
+  // Keyboard: Cmd/Ctrl+S renders + saves
+  document.addEventListener("keydown", (e)=>{
+    const isSave = (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s";
+    if(isSave){
+      e.preventDefault();
+      commitEdits();
+      renderPreview();
+      toastMsg("SAVED");
+    }
+  });
+
+  // init
+  load();
+  renderUI();
+  loadDocToEditor();
+  renderPreview();
+})();
+</script>
+</body>
+</html>
