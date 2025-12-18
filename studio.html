@@ -1,0 +1,2187 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>KETADATA STUDIO /// MVP</title>
+<style>
+  :root{
+    --bg:#000;
+    --ink:rgba(255,255,255,.86);
+    --muted:rgba(255,255,255,.48);
+    --line:rgba(255,255,255,.12);
+    --line2:rgba(255,255,255,.20);
+    --panel:rgba(0,0,0,.92);
+    --panel2:rgba(255,255,255,.02);
+    --mono: ui-sans-serif, system-ui, -apple-system, Arial, Helvetica, sans-serif;
+    --mono2: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  }
+  *{ box-sizing:border-box; font-family:var(--mono); }
+  html,body{ height:100%; margin:0; background:var(--bg); color:var(--ink); overflow:hidden; }
+
+  /* Top bar */
+  .top{
+    position:fixed; top:0; left:0; right:0; height:46px;
+    display:flex; align-items:center; justify-content:space-between;
+    padding:0 10px;
+    border-bottom:1px solid var(--line);
+    background:var(--panel);
+    backdrop-filter: blur(6px);
+    z-index:100;
+  }
+  .brand{
+    font-size:11px; letter-spacing:2px; text-transform:uppercase;
+    color:var(--muted);
+    display:flex; gap:10px; align-items:center; user-select:none;
+  }
+  .top .actions{ display:flex; gap:8px; align-items:center; }
+  button, input[type="text"], input[type="file"], textarea, select{
+    background:var(--panel2);
+    border:1px solid var(--line2);
+    color:var(--ink);
+    padding:7px 9px;
+    border-radius:0;
+    font-size:12px;
+    outline:none;
+  }
+  button{ cursor:pointer; }
+  button:hover{ border-color:rgba(255,255,255,.34); }
+  .ghost{ border-color:rgba(255,255,255,.10); color:rgba(255,255,255,.62); }
+  .danger:hover{ border-color:rgba(255,120,120,.55); }
+  .hint{ font-size:11px; color:var(--muted); }
+
+  /* Layout: left | center | right, bottom dock for log */
+  .shell{
+    position:absolute; top:46px; left:0; right:0; bottom:0;
+    display:grid;
+    grid-template-columns: 320px 6px 1fr 6px 320px;
+    grid-template-rows: 1fr 6px 220px;
+    grid-template-areas:
+      "left  v1 center v2 right"
+      "left  v1 h1     v2 right"
+      "left  v1 bottom v2 right";
+  }
+
+  .dock{
+    min-width:0; min-height:0;
+    border-right:1px solid var(--line);
+    background:var(--panel);
+    display:flex; flex-direction:column;
+    overflow:hidden;
+  }
+  .dock.right{ border-right:none; border-left:1px solid var(--line); }
+  .dock.bottom{
+    grid-area:bottom;
+    border-top:1px solid var(--line);
+    border-right:none;
+    border-left:none;
+  }
+
+  .left{ grid-area:left; }
+  .center{ grid-area:center; position:relative; overflow:hidden; background:#000; }
+  .right{ grid-area:right; }
+  .bottom{ grid-area:bottom; }
+
+  .resizer{
+    background:rgba(255,255,255,.06);
+    z-index:50;
+  }
+  .resizer:hover{ background:rgba(255,255,255,.10); }
+  .v1{ grid-area:v1; cursor:col-resize; }
+  .v2{ grid-area:v2; cursor:col-resize; }
+  .h1{ grid-area:h1; cursor:row-resize; }
+
+  .dockHeader{
+    height:40px;
+    padding:0 10px;
+    display:flex; align-items:center; justify-content:space-between;
+    border-bottom:1px solid var(--line);
+    user-select:none;
+  }
+  .dockHeader .title{
+    font-size:11px; letter-spacing:2px; text-transform:uppercase;
+    color:var(--muted);
+    display:flex; gap:8px; align-items:center;
+  }
+  .dockHeader .controls{ display:flex; gap:8px; align-items:center; }
+  .tabbar{
+    display:flex; gap:6px; padding:8px 10px;
+    border-bottom:1px solid var(--line);
+    overflow:auto;
+  }
+  .tab{
+    padding:6px 8px;
+    border:1px solid rgba(255,255,255,.10);
+    background:rgba(255,255,255,.02);
+    color:rgba(255,255,255,.62);
+    font-size:11px;
+    letter-spacing:2px;
+    text-transform:uppercase;
+    cursor:pointer;
+    user-select:none;
+    white-space:nowrap;
+  }
+  .tab.active{
+    border-color:rgba(255,255,255,.26);
+    background:rgba(255,255,255,.04);
+    color:rgba(255,255,255,.82);
+  }
+  .dockBody{
+    flex:1; min-height:0; overflow:auto;
+    padding:10px;
+  }
+  .group{
+    border:1px solid rgba(255,255,255,.10);
+    background:rgba(255,255,255,.02);
+    padding:10px;
+    margin-bottom:10px;
+  }
+  .groupTitle{
+    font-size:11px; letter-spacing:2px; text-transform:uppercase;
+    color:rgba(255,255,255,.48);
+    margin-bottom:8px;
+  }
+  .row{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .row > *{ flex:0 0 auto; }
+  .row .grow{ flex:1 1 auto; min-width:0; }
+
+  .kv{
+    display:grid;
+    grid-template-columns: 90px 1fr;
+    gap:8px;
+    align-items:center;
+  }
+  .k{ font-size:11px; color:rgba(255,255,255,.45); letter-spacing:1px; text-transform:uppercase; }
+  .v{ font-size:12px; color:rgba(255,255,255,.82); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+
+  input[type="range"]{ height:26px; padding:0; background:transparent; }
+  .tiny{ font-size:11px; color:rgba(255,255,255,.48); }
+
+  /* Center board */
+  #stage{
+    position:absolute; inset:0;
+    overflow:hidden;
+    touch-action:none;
+  }
+  #viewport{
+    position:absolute; inset:0;
+    transform-origin:0 0;
+  }
+  #board{
+    position:absolute; inset:0;
+  }
+  .item{
+    position:absolute;
+    border:1px solid transparent;
+    user-select:none;
+    transform-origin:center center;
+  }
+  .item.selected{ border-color:rgba(255,255,255,.22); }
+  .item img{
+    width:100%; height:100%;
+    object-fit:contain; display:block;
+    pointer-events:none;
+  }
+  .item .text{
+    width:100%; height:100%;
+    background:transparent;
+    border:0;
+    outline:none;
+    color:rgba(255,255,255,.90);
+    padding:10px 12px;
+    font-family:var(--mono2);
+    font-size:14px;
+    white-space:pre-wrap;
+    line-height:1.3;
+  }
+
+  /* Handles (bigger, easier) */
+  .handle{
+    position:absolute;
+    width:18px; height:18px;
+    border:1px solid rgba(255,255,255,.40);
+    background:rgba(0,0,0,.78);
+  }
+  .h-nw{ left:-10px; top:-10px; cursor:nwse-resize; }
+  .h-ne{ right:-10px; top:-10px; cursor:nesw-resize; }
+  .h-sw{ left:-10px; bottom:-10px; cursor:nesw-resize; }
+  .h-se{ right:-10px; bottom:-10px; cursor:nwse-resize; }
+  .rot{
+    position:absolute; left:50%; top:-34px; transform:translateX(-50%);
+    width:18px; height:18px; border-radius:50%;
+    border:1px solid rgba(255,255,255,.40);
+    background:rgba(0,0,0,.82);
+    cursor:grab;
+  }
+
+  /* Link layer */
+  #linkLayer{
+    position:absolute; inset:0;
+    pointer-events:auto;
+  }
+  #linkLayer.hidden{ display:none; }
+  #linkSvg{ width:100%; height:100%; display:block; }
+  .edge{ stroke: rgba(255,255,255,.18); stroke-width:1; }
+  .edge.selected{ stroke: rgba(255,255,255,.42); stroke-width:2; }
+  .edgeHit{ stroke: rgba(255,255,255,0); stroke-width:10; cursor:pointer; }
+  .edgeLabel{
+    fill: rgba(255,255,255,.52);
+    font-size: 11px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    user-select:none;
+  }
+
+  /* YouTube windows */
+  .ytWin{
+    position:absolute;
+    width:280px; height:160px;
+    border:1px solid rgba(255,255,255,.14);
+    background:rgba(0,0,0,.82);
+    z-index:80;
+    overflow:hidden;
+  }
+  .ytHead{
+    height:26px;
+    display:flex; align-items:center; justify-content:space-between;
+    padding:0 8px;
+    border-bottom:1px solid rgba(255,255,255,.10);
+    cursor:move;
+    user-select:none;
+    color:rgba(255,255,255,.60);
+    font-size:10px;
+    letter-spacing:2px;
+    text-transform:uppercase;
+  }
+  .ytHead .btn{
+    padding:2px 6px;
+    border:1px solid rgba(255,255,255,.12);
+    background:rgba(255,255,255,.02);
+    color:rgba(255,255,255,.55);
+    font-size:10px;
+    cursor:pointer;
+  }
+  .ytHead .btn:hover{ border-color:rgba(255,255,255,.26); color:rgba(255,255,255,.75); }
+  .ytBody{ height:calc(100% - 26px); }
+  .ytBody iframe{ width:100%; height:100%; border:0; background:#000; }
+  .ytResize{
+    position:absolute; right:-10px; bottom:-10px;
+    width:20px; height:20px;
+    border:1px solid rgba(255,255,255,.34);
+    background:rgba(0,0,0,.70);
+    cursor:nwse-resize;
+  }
+
+  /* Toast */
+  #toast{
+    position:fixed; left:50%; bottom:12px; transform:translateX(-50%);
+    padding:8px 10px;
+    border:1px solid rgba(255,255,255,.16);
+    background:rgba(0,0,0,.92);
+    color:rgba(255,255,255,.72);
+    font-size:12px;
+    display:none;
+    z-index:200;
+  }
+  #toast.show{ display:block; }
+
+  /* UI Notes */
+  .notesBtn{
+    position:fixed; top:10px; right:10px; z-index:220;
+    padding:6px 8px;
+    font-size:11px;
+    letter-spacing:2px;
+    text-transform:uppercase;
+    color:rgba(255,255,255,.55);
+    background:rgba(255,255,255,.02);
+    border:1px solid rgba(255,255,255,.10);
+  }
+  .notesBtn:hover{ border-color:rgba(255,255,255,.22); color:rgba(255,255,255,.70); }
+  .notepad{
+    position:fixed; right:10px; top:44px; width:360px; height:340px;
+    z-index:230;
+    background:rgba(0,0,0,.92);
+    border:1px solid rgba(255,255,255,.14);
+    display:none;
+    resize: both;
+    overflow:hidden;
+    min-width:260px;
+    min-height:220px;
+  }
+  .notepad.open{ display:block; }
+  .npHeader{
+    display:flex; align-items:center; justify-content:space-between; gap:10px;
+    padding:8px 10px;
+    border-bottom:1px solid rgba(255,255,255,.10);
+    cursor:move;
+    user-select:none;
+    color:rgba(255,255,255,.62);
+    font-size:11px;
+    letter-spacing:2px;
+    text-transform:uppercase;
+  }
+  .npActions{ display:flex; gap:8px; align-items:center; }
+  .npActions button{
+    padding:5px 7px;
+    font-size:11px;
+    letter-spacing:1px;
+    color:rgba(255,255,255,.60);
+    border:1px solid rgba(255,255,255,.12);
+    background:rgba(255,255,255,.02);
+  }
+  .npActions button:hover{ border-color:rgba(255,255,255,.26); color:rgba(255,255,255,.78); }
+  .npBody{ height:calc(100% - 41px); padding:10px; }
+  .npText{
+    width:100%;
+    height:100%;
+    border:1px solid rgba(255,255,255,.10);
+    background:rgba(255,255,255,.02);
+    color:rgba(255,255,255,.82);
+    font-size:12px;
+    line-height:1.25;
+    letter-spacing:.2px;
+    padding:10px;
+    outline:none;
+    resize:none;
+    font-family:var(--mono2);
+  }
+
+  /* Collapsed docks */
+  .collapsed{ display:none !important; }
+
+  @media (max-width: 1040px){
+    /* keep functional on smaller screens */
+    .shell{
+      grid-template-columns: 1fr;
+      grid-template-rows: 1fr 6px 220px;
+      grid-template-areas:
+        "center"
+        "h1"
+        "bottom";
+    }
+    .left,.right,.v1,.v2{ display:none; }
+  }
+</style>
+</head>
+<body>
+
+<div class="top">
+  <div class="brand">
+    <span>KETADATA STUDIO /// MVP</span>
+    <span class="hint">single-screen multimodal production cockpit</span>
+  </div>
+  <div class="actions">
+    <button id="btnAddText" class="ghost">Add Text</button>
+    <button id="btnLinkMode" class="ghost">Link Mode: Off</button>
+    <button id="btnExportSel" class="ghost">Export Selection</button>
+    <button id="btnSave" class="ghost">Save Session</button>
+    <button id="btnLoad" class="ghost">Load Session</button>
+    <button id="btnClear" class="ghost danger">Clear</button>
+  </div>
+</div>
+
+<button id="notesBtn" class="notesBtn" title="Open notes">NOTES</button>
+<div id="notepad" class="notepad">
+  <div id="npHeader" class="npHeader">
+    <div>UI NOTES</div>
+    <div class="npActions">
+      <button id="npCopy" title="Copy notes">COPY</button>
+      <button id="npExport" title="Export notes to .txt">EXPORT</button>
+      <button id="npClear" title="Clear notes">CLEAR</button>
+      <button id="npClose" title="Close">X</button>
+    </div>
+  </div>
+  <div class="npBody">
+    <textarea id="npText" class="npText" placeholder="Write edits here. Export with screenshots."></textarea>
+  </div>
+</div>
+
+<div class="shell" id="shell">
+  <!-- LEFT DOCK -->
+  <aside class="dock left" id="leftDock">
+    <div class="dockHeader">
+      <div class="title">LEFT DOCK</div>
+      <div class="controls">
+        <button id="collapseLeft" class="ghost" title="Collapse">–</button>
+      </div>
+    </div>
+    <div class="tabbar">
+      <div class="tab active" data-lefttab="assets">ASSETS</div>
+      <div class="tab" data-lefttab="effects">EFFECTS</div>
+    </div>
+    <div class="dockBody" id="leftBody">
+      <div id="left_assets">
+        <div class="group">
+          <div class="groupTitle">Import</div>
+          <div class="row">
+            <input id="fileImages" type="file" accept="image/*" multiple />
+          </div>
+          <div class="tiny" style="margin-top:8px;">
+            Import places images in a spiral. Drag to reposition. Wheel = zoom. Space = pan.
+          </div>
+        </div>
+
+        <div class="group">
+          <div class="groupTitle">YouTube</div>
+          <div class="row">
+            <input id="ytUrl" class="grow" type="text" placeholder="Paste YouTube URL" />
+            <button id="btnAddYT">Add</button>
+          </div>
+          <div class="tiny" style="margin-top:8px;">
+            Adds a small movable/resizable player window in the workspace.
+          </div>
+        </div>
+
+        <div class="group">
+          <div class="groupTitle">Quick Actions</div>
+          <div class="row">
+            <button id="btnCenter" class="ghost">Center View</button>
+            <button id="btnDeselect" class="ghost">Deselect</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="left_effects" style="display:none;">
+        <div class="group">
+          <div class="groupTitle">KETADATA EFFECTS</div>
+          <div class="tiny">Select an image, choose an effect, adjust intensity, then Export Selection.</div>
+          <div style="height:10px"></div>
+
+          <div class="kv">
+            <div class="k">Intensity</div>
+            <div class="v">
+              <input id="fxIntensity" type="range" min="0" max="100" step="1" value="55"/>
+              <span id="fxIntensityLabel" class="tiny">55</span>
+            </div>
+          </div>
+
+          <div style="height:10px"></div>
+
+          <div class="row" style="gap:6px">
+            <button class="fx" data-fx="invert">INVERT</button>
+            <button class="fx" data-fx="xray">X-RAY</button>
+            <button class="fx" data-fx="double">DOUBLE</button>
+            <button class="fx" data-fx="mono">MONO</button>
+            <button class="fx" data-fx="flood">FLOOD</button>
+            <button class="fx" data-fx="infra">INFRA</button>
+            <button class="fx" data-fx="night">NIGHT</button>
+            <button class="fx" data-fx="fried">FRIED</button>
+            <button class="fx" data-fx="lofi">LO-FI</button>
+            <button class="fx" data-fx="seccam">SEC CAM</button>
+          </div>
+
+          <div style="height:10px"></div>
+
+          <div class="row">
+            <button id="btnFxReset" class="ghost">Reset To Original</button>
+          </div>
+        </div>
+
+        <div class="group">
+          <div class="groupTitle">Export Marks</div>
+          <div class="tiny">Exports include a subtle corner mark to carry the effect identity off-site.</div>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- RESIZERS -->
+  <div class="resizer v1" id="resizerV1"></div>
+
+  <!-- CENTER -->
+  <main class="center">
+    <div id="stage">
+      <div id="viewport">
+        <div id="linkLayer">
+          <svg id="linkSvg" xmlns="http://www.w3.org/2000/svg"></svg>
+        </div>
+        <div id="board"></div>
+      </div>
+    </div>
+  </main>
+
+  <div class="resizer v2" id="resizerV2"></div>
+
+  <!-- RIGHT DOCK -->
+  <aside class="dock right" id="rightDock">
+    <div class="dockHeader">
+      <div class="title">RIGHT DOCK</div>
+      <div class="controls">
+        <button id="collapseRight" class="ghost" title="Collapse">–</button>
+      </div>
+    </div>
+    <div class="tabbar">
+      <div class="tab active" data-righttab="inspector">INSPECTOR</div>
+      <div class="tab" data-righttab="prompt">PROMPT PACK</div>
+    </div>
+    <div class="dockBody">
+      <div id="right_inspector">
+        <div class="group">
+          <div class="groupTitle">Selection</div>
+          <div class="kv">
+            <div class="k">Type</div><div class="v" id="selType">—</div>
+            <div class="k">Label</div><div class="v"><input id="selLabel" type="text" placeholder="label"/></div>
+            <div class="k">Opacity</div>
+            <div class="v">
+              <input id="selOpacity" type="range" min="5" max="100" step="1" value="100"/>
+              <span id="selOpacityLabel" class="tiny">100</span>
+            </div>
+          </div>
+          <div style="height:10px"></div>
+          <div class="row">
+            <button id="btnFront" class="ghost">Front</button>
+            <button id="btnBack" class="ghost">Back</button>
+            <button id="btnDelete" class="ghost danger">Delete</button>
+          </div>
+        </div>
+
+        <div class="group">
+          <div class="groupTitle">Linking</div>
+          <div class="tiny">Toggle Link Mode, then click Item A then Item B. Click a line to select it.</div>
+          <div style="height:10px"></div>
+          <div class="row">
+            <input id="linkLabel" class="grow" type="text" placeholder="link label (optional)" />
+            <button id="btnLinksToggle" class="ghost">Links: On</button>
+          </div>
+          <div style="height:10px"></div>
+          <div class="row">
+            <input id="edgeNote" class="grow" type="text" placeholder="link note (selected link)" />
+            <button id="btnDelLink" class="ghost danger">Delete Link</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="right_prompt" style="display:none;">
+        <div class="group">
+          <div class="groupTitle">Prompt Pack</div>
+          <div class="tiny">Auto-generated from selection. Copy into AI. Paste AI instructions into UI NOTES.</div>
+          <div style="height:10px"></div>
+          <textarea id="promptPack" style="width:100%;height:260px;font-family:var(--mono2);font-size:12px;line-height:1.25;"></textarea>
+          <div style="height:10px"></div>
+          <div class="row">
+            <button id="btnCopyPrompt" class="ghost">Copy</button>
+            <button id="btnRefreshPrompt" class="ghost">Refresh</button>
+          </div>
+        </div>
+
+        <div class="group">
+          <div class="groupTitle">Export</div>
+          <div class="tiny">Export Selection outputs a discrete asset file. Use it as the unit of iteration.</div>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- BOTTOM DOCK -->
+  <div class="resizer h1" id="resizerH1"></div>
+  <section class="dock bottom" id="bottomDock">
+    <div class="dockHeader">
+      <div class="title">LOG</div>
+      <div class="controls">
+        <button id="collapseBottom" class="ghost" title="Collapse">–</button>
+      </div>
+    </div>
+    <div class="dockBody">
+      <textarea id="log" spellcheck="false" style="width:100%;height:100%;font-family:var(--mono2);font-size:12px;line-height:1.3;"></textarea>
+    </div>
+  </section>
+</div>
+
+<div id="toast"></div>
+
+<script>
+(() => {
+  /* =========================
+     STORAGE KEYS
+  ========================= */
+  const KEY_SESSION = "ketadata_studio_session_v1";
+  const KEY_NOTES = "ketadata_studio_ui_notes_v1";
+  const KEY_NOTES_POS = "ketadata_studio_ui_notes_pos_v1";
+
+  /* =========================
+     DOM
+  ========================= */
+  const toast = document.getElementById("toast");
+
+  const shell = document.getElementById("shell");
+  const leftDock = document.getElementById("leftDock");
+  const rightDock = document.getElementById("rightDock");
+  const bottomDock = document.getElementById("bottomDock");
+
+  const resizerV1 = document.getElementById("resizerV1");
+  const resizerV2 = document.getElementById("resizerV2");
+  const resizerH1 = document.getElementById("resizerH1");
+
+  const collapseLeft = document.getElementById("collapseLeft");
+  const collapseRight = document.getElementById("collapseRight");
+  const collapseBottom = document.getElementById("collapseBottom");
+
+  const fileImages = document.getElementById("fileImages");
+  const btnAddText = document.getElementById("btnAddText");
+  const btnExportSel = document.getElementById("btnExportSel");
+  const btnSave = document.getElementById("btnSave");
+  const btnLoad = document.getElementById("btnLoad");
+  const btnClear = document.getElementById("btnClear");
+
+  const btnCenter = document.getElementById("btnCenter");
+  const btnDeselect = document.getElementById("btnDeselect");
+
+  const ytUrl = document.getElementById("ytUrl");
+  const btnAddYT = document.getElementById("btnAddYT");
+
+  const stage = document.getElementById("stage");
+  const viewport = document.getElementById("viewport");
+  const board = document.getElementById("board");
+
+  const linkLayer = document.getElementById("linkLayer");
+  const linkSvg = document.getElementById("linkSvg");
+
+  const btnLinkMode = document.getElementById("btnLinkMode");
+  const linkLabel = document.getElementById("linkLabel");
+  const btnLinksToggle = document.getElementById("btnLinksToggle");
+  const edgeNote = document.getElementById("edgeNote");
+  const btnDelLink = document.getElementById("btnDelLink");
+
+  const selType = document.getElementById("selType");
+  const selLabel = document.getElementById("selLabel");
+  const selOpacity = document.getElementById("selOpacity");
+  const selOpacityLabel = document.getElementById("selOpacityLabel");
+  const btnFront = document.getElementById("btnFront");
+  const btnBack = document.getElementById("btnBack");
+  const btnDelete = document.getElementById("btnDelete");
+
+  const fxIntensity = document.getElementById("fxIntensity");
+  const fxIntensityLabel = document.getElementById("fxIntensityLabel");
+  const btnFxReset = document.getElementById("btnFxReset");
+
+  const promptPack = document.getElementById("promptPack");
+  const btnCopyPrompt = document.getElementById("btnCopyPrompt");
+  const btnRefreshPrompt = document.getElementById("btnRefreshPrompt");
+
+  const log = document.getElementById("log");
+
+  // UI Notes
+  const notesBtn = document.getElementById("notesBtn");
+  const notepad = document.getElementById("notepad");
+  const npHeader = document.getElementById("npHeader");
+  const npText = document.getElementById("npText");
+  const npClose = document.getElementById("npClose");
+  const npCopy = document.getElementById("npCopy");
+  const npExport = document.getElementById("npExport");
+  const npClear = document.getElementById("npClear");
+
+  /* =========================
+     UTIL
+  ========================= */
+  function showToast(msg){
+    toast.textContent = msg;
+    toast.className = "show";
+    setTimeout(()=> toast.className = "", 900);
+  }
+  function uid(){
+    return Math.random().toString(16).slice(2) + Date.now().toString(16);
+  }
+  function clamp(n,a,b){ return Math.max(a, Math.min(b,n)); }
+
+  function parseYouTubeId(url){
+    try{
+      const u = new URL(url);
+      if(u.hostname.includes("youtu.be")) return u.pathname.slice(1);
+      if(u.searchParams.get("v")) return u.searchParams.get("v");
+      const m = u.pathname.match(/\/embed\/([^\/]+)/);
+      if(m) return m[1];
+    }catch{}
+    return null;
+  }
+
+  /* =========================
+     DOCK TABS
+  ========================= */
+  function bindTabGroup(selector, map){
+    document.querySelectorAll(selector).forEach(tab=>{
+      tab.addEventListener("click", ()=>{
+        const key = Object.keys(map).find(k => tab.dataset[k] !== undefined);
+        if(!key) return;
+        const val = tab.dataset[key];
+        // activate
+        tab.parentElement.querySelectorAll(".tab").forEach(t=>t.classList.remove("active"));
+        tab.classList.add("active");
+        // show/hide bodies
+        for(const [bodyId, wants] of Object.entries(map)){
+          const el = document.getElementById(bodyId);
+          if(!el) continue;
+          el.style.display = (wants === val) ? "block" : "none";
+        }
+      });
+    });
+  }
+  bindTabGroup('[data-lefttab]', { left_assets:"assets", left_effects:"effects" });
+  bindTabGroup('[data-righttab]', { right_inspector:"inspector", right_prompt:"prompt" });
+
+  /* =========================
+     RESIZERS (left/right/bottom)
+  ========================= */
+  let layout = {
+    leftW: 320,
+    rightW: 320,
+    bottomH: 220,
+    leftCollapsed:false,
+    rightCollapsed:false,
+    bottomCollapsed:false
+  };
+
+  function applyLayout(){
+    const cols = [
+      layout.leftCollapsed ? "0px" : layout.leftW + "px",
+      layout.leftCollapsed ? "0px" : "6px",
+      "1fr",
+      layout.rightCollapsed ? "0px" : "6px",
+      layout.rightCollapsed ? "0px" : layout.rightW + "px",
+    ].join(" ");
+
+    const rows = [
+      "1fr",
+      layout.bottomCollapsed ? "0px" : "6px",
+      layout.bottomCollapsed ? "0px" : layout.bottomH + "px",
+    ].join(" ");
+
+    shell.style.gridTemplateColumns = cols;
+    shell.style.gridTemplateRows = rows;
+
+    leftDock.classList.toggle("collapsed", layout.leftCollapsed);
+    rightDock.classList.toggle("collapsed", layout.rightCollapsed);
+    bottomDock.classList.toggle("collapsed", layout.bottomCollapsed);
+
+    resizerV1.classList.toggle("collapsed", layout.leftCollapsed);
+    resizerV2.classList.toggle("collapsed", layout.rightCollapsed);
+    resizerH1.classList.toggle("collapsed", layout.bottomCollapsed);
+  }
+
+  function startDragResizer(kind, e){
+    e.preventDefault();
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const start = {...layout};
+    const onMove = (ev)=>{
+      if(kind === "left"){
+        layout.leftW = clamp(start.leftW + (ev.clientX - startX), 220, 560);
+      } else if(kind === "right"){
+        layout.rightW = clamp(start.rightW - (ev.clientX - startX), 220, 560);
+      } else if(kind === "bottom"){
+        layout.bottomH = clamp(start.bottomH - (ev.clientY - startY), 120, 420);
+      }
+      applyLayout();
+    };
+    const onUp = ()=>{
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+      saveSession(false);
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  }
+
+  resizerV1.addEventListener("mousedown", (e)=> startDragResizer("left", e));
+  resizerV2.addEventListener("mousedown", (e)=> startDragResizer("right", e));
+  resizerH1.addEventListener("mousedown", (e)=> startDragResizer("bottom", e));
+
+  collapseLeft.addEventListener("click", ()=>{
+    layout.leftCollapsed = !layout.leftCollapsed;
+    applyLayout(); saveSession(false);
+  });
+  collapseRight.addEventListener("click", ()=>{
+    layout.rightCollapsed = !layout.rightCollapsed;
+    applyLayout(); saveSession(false);
+  });
+  collapseBottom.addEventListener("click", ()=>{
+    layout.bottomCollapsed = !layout.bottomCollapsed;
+    applyLayout(); saveSession(false);
+  });
+
+  /* =========================
+     BOARD VIEWPORT (pan/zoom)
+  ========================= */
+  let view = { scale:1, panX:0, panY:0 };
+  let spaceDown = false;
+
+  function applyView(){
+    viewport.style.transform = `translate(${view.panX}px, ${view.panY}px) scale(${view.scale})`;
+    renderLinks();
+  }
+
+  function screenToWorld(clientX, clientY){
+    const r = stage.getBoundingClientRect();
+    const sx = clientX - r.left;
+    const sy = clientY - r.top;
+    const x = (sx - view.panX) / view.scale;
+    const y = (sy - view.panY) / view.scale;
+    return { x,y,sx,sy };
+  }
+
+  document.addEventListener("keydown", (e)=>{
+    if(e.code==="Space") spaceDown = true;
+    if((e.ctrlKey || e.metaKey) && e.key.toLowerCase()==="s"){
+      e.preventDefault();
+      saveSession(true);
+    }
+  });
+  document.addEventListener("keyup", (e)=>{
+    if(e.code==="Space") spaceDown = false;
+  });
+
+  stage.addEventListener("wheel", (e)=>{
+    e.preventDefault();
+    const delta = -Math.sign(e.deltaY) * 0.10;
+    const before = screenToWorld(e.clientX, e.clientY);
+    view.scale = clamp(view.scale * (1 + delta), 0.25, 2.5);
+    // keep cursor stable
+    const after = screenToWorld(e.clientX, e.clientY);
+    view.panX += (after.sx - before.sx);
+    view.panY += (after.sy - before.sy);
+    applyView();
+  }, { passive:false });
+
+  let dragView = null;
+  stage.addEventListener("mousedown", (e)=>{
+    const onItem = e.target.closest && e.target.closest(".item");
+    const onYT = e.target.closest && e.target.closest(".ytWin");
+    if(onItem || onYT) return;
+    if(spaceDown){
+      dragView = { sx:e.clientX, sy:e.clientY, px:view.panX, py:view.panY };
+    } else {
+      // deselect on blank click (unless link mode waiting)
+      if(!linkMode || !linkFromId){
+        selectItem(null);
+        selectEdge(null);
+      }
+    }
+  });
+  window.addEventListener("mousemove", (e)=>{
+    if(!dragView) return;
+    view.panX = dragView.px + (e.clientX - dragView.sx);
+    view.panY = dragView.py + (e.clientY - dragView.sy);
+    applyView();
+  });
+  window.addEventListener("mouseup", ()=> dragView=null);
+
+  btnCenter.addEventListener("click", ()=>{
+    view = { scale:1, panX:0, panY:0 };
+    applyView();
+    showToast("CENTERED");
+  });
+
+  /* =========================
+     ITEMS + LINKS STATE
+  ========================= */
+  let items = []; // {id,type,image:{original,processed,fx,intensity}, x,y,w,h,r,opacity,label,z, text}
+  let edges = []; // {id,from,to,label,note}
+  let selectedId = null;
+  let selectedEdgeId = null;
+  let linkMode = false;
+  let linkFromId = null;
+  let linksVisible = true;
+
+  function nextZ(){
+    return items.reduce((m,it)=> Math.max(m, it.z||0), 0) + 1;
+  }
+  function getItem(id){ return items.find(x=>x.id===id) || null; }
+  function itemCenter(it){ return { x: it.x + it.w/2, y: it.y + it.h/2 }; }
+
+  function selectItem(id){
+    selectedId = id;
+    if(id !== null) selectedEdgeId = null;
+    syncInspector();
+    render();
+    refreshPromptPack();
+  }
+  function selectEdge(id){
+    selectedEdgeId = id;
+    if(id !== null) selectedId = null;
+    syncInspector();
+    renderLinks();
+    refreshPromptPack();
+  }
+
+  function render(){
+    board.innerHTML = "";
+    const sorted = [...items].sort((a,b)=> (a.z||0)-(b.z||0));
+    for(const it of sorted){
+      const el = document.createElement("div");
+      el.className = "item" + (it.id === selectedId ? " selected" : "");
+      el.dataset.id = it.id;
+      el.style.left = it.x + "px";
+      el.style.top = it.y + "px";
+      el.style.width = it.w + "px";
+      el.style.height = it.h + "px";
+      el.style.opacity = String(it.opacity ?? 1);
+      el.style.transform = `rotate(${it.r || 0}deg)`;
+      el.style.zIndex = String(it.z || 0);
+
+      if(it.type === "image"){
+        const img = document.createElement("img");
+        img.src = it.image.processed || it.image.original;
+        el.appendChild(img);
+      } else {
+        const div = document.createElement("div");
+        div.className = "text";
+        div.contentEditable = "true";
+        div.spellcheck = false;
+        div.textContent = it.text || "";
+        div.addEventListener("input", ()=>{
+          const x = getItem(it.id); if(x) x.text = div.textContent;
+          queueAutosave();
+          refreshPromptPack();
+        });
+        // ensure typing works: do not let parent drag handler steal the click
+        div.addEventListener("pointerdown", (ev)=> ev.stopPropagation());
+        el.appendChild(div);
+      }
+
+      if(it.id === selectedId){
+        ["nw","ne","sw","se"].forEach(pos=>{
+          const h = document.createElement("div");
+          h.className = `handle h-${pos}`;
+          h.dataset.handle = pos;
+          el.appendChild(h);
+        });
+        const rot = document.createElement("div");
+        rot.className = "rot";
+        rot.dataset.handle = "rot";
+        el.appendChild(rot);
+      }
+
+      el.addEventListener("mousedown", onItemDown);
+      board.appendChild(el);
+    }
+    renderLinks();
+  }
+
+  function renderLinks(){
+    linkLayer.classList.toggle("hidden", !linksVisible);
+    linkSvg.innerHTML = "";
+    if(!linksVisible) return;
+
+    for(const e of edges){
+      const a = getItem(e.from);
+      const b = getItem(e.to);
+      if(!a || !b) continue;
+
+      const ca = itemCenter(a);
+      const cb = itemCenter(b);
+      const midx = (ca.x + cb.x)/2;
+      const midy = (ca.y + cb.y)/2;
+
+      const isSel = (e.id === selectedEdgeId);
+
+      const line = document.createElementNS("http://www.w3.org/2000/svg","line");
+      line.setAttribute("x1", ca.x);
+      line.setAttribute("y1", ca.y);
+      line.setAttribute("x2", cb.x);
+      line.setAttribute("y2", cb.y);
+      line.setAttribute("class", "edge" + (isSel ? " selected" : ""));
+      linkSvg.appendChild(line);
+
+      const hit = document.createElementNS("http://www.w3.org/2000/svg","line");
+      hit.setAttribute("x1", ca.x);
+      hit.setAttribute("y1", ca.y);
+      hit.setAttribute("x2", cb.x);
+      hit.setAttribute("y2", cb.y);
+      hit.setAttribute("class", "edgeHit");
+      hit.addEventListener("mousedown", (ev)=>{
+        ev.stopPropagation();
+        selectEdge(e.id);
+      });
+      linkSvg.appendChild(hit);
+
+      const label = (e.label || "").trim();
+      if(label){
+        const t = document.createElementNS("http://www.w3.org/2000/svg","text");
+        t.setAttribute("x", midx + 6);
+        t.setAttribute("y", midy - 6);
+        t.setAttribute("class", "edgeLabel");
+        t.textContent = label.toUpperCase();
+        linkSvg.appendChild(t);
+      }
+    }
+  }
+
+  /* =========================
+     SPIRAL IMPORT
+  ========================= */
+  const GOLDEN_ANGLE = 2.399963229728653;
+  const SPIRAL_STEP = 92;
+
+  function spiralPos(n, cx, cy){
+    const r = SPIRAL_STEP * Math.sqrt(Math.max(0, n));
+    const t = n * GOLDEN_ANGLE;
+    return { x: cx + r*Math.cos(t), y: cy + r*Math.sin(t) };
+  }
+
+  function readAsDataURL(file){
+    return new Promise((res, rej)=>{
+      const fr = new FileReader();
+      fr.onload = ()=> res(fr.result);
+      fr.onerror = rej;
+      fr.readAsDataURL(file);
+    });
+  }
+
+  fileImages.addEventListener("change", async (ev)=>{
+    const files = [...ev.target.files || []];
+    if(!files.length) return;
+
+    const rect = stage.getBoundingClientRect();
+    const c = screenToWorld(rect.left + rect.width/2, rect.top + rect.height/2);
+
+    let base = items.filter(it => it.type==="image").length;
+
+    for(let i=0;i<files.length;i++){
+      const f = files[i];
+      const dataUrl = await readAsDataURL(f);
+
+      // medium import size (not huge)
+      const W = 420, H = 270;
+      const p = spiralPos(base + i, c.x, c.y);
+
+      const it = {
+        id: uid(),
+        type:"image",
+        x: p.x - W/2,
+        y: p.y - H/2,
+        w: W,
+        h: H,
+        r: 0,
+        opacity: 1,
+        z: nextZ(),
+        label: f.name,
+        image: {
+          original: dataUrl,
+          processed: dataUrl,
+          fx: null,
+          intensity: 0
+        }
+      };
+      items.push(it);
+      selectedId = it.id;
+    }
+
+    ev.target.value = "";
+    render();
+    syncInspector();
+    refreshPromptPack();
+    queueAutosave();
+    showToast("IMPORTED");
+  });
+
+  /* =========================
+     TEXT
+  ========================= */
+  btnAddText.addEventListener("click", ()=>{
+    const rect = stage.getBoundingClientRect();
+    const c = screenToWorld(rect.left + rect.width/2, rect.top + rect.height/2);
+    const it = {
+      id: uid(),
+      type:"text",
+      x: c.x - 220,
+      y: c.y - 90,
+      w: 440,
+      h: 180,
+      r: 0,
+      opacity: 1,
+      z: nextZ(),
+      label: "TEXT",
+      text: "TYPE"
+    };
+    items.push(it);
+    selectItem(it.id);
+    queueAutosave();
+    showToast("TEXT ADDED");
+  });
+
+  /* =========================
+     MOVE/RESIZE/ROTATE
+  ========================= */
+  let dragItem = null;
+
+  function onItemDown(e){
+    const el = e.currentTarget;
+    const id = el.dataset.id;
+
+    // Link Mode behavior
+    if(linkMode){
+      e.preventDefault();
+      e.stopPropagation();
+
+      if(!linkFromId){
+        linkFromId = id;
+        selectItem(id);
+        showToast("LINK: SELECT TARGET");
+        return;
+      }
+      if(linkFromId === id){
+        linkFromId = null;
+        showToast("LINK: CANCEL");
+        return;
+      }
+      const newEdge = {
+        id: uid(),
+        from: linkFromId,
+        to: id,
+        label: (linkLabel.value || "").trim(),
+        note: ""
+      };
+      edges.push(newEdge);
+      linkFromId = null;
+      selectEdge(newEdge.id);
+      queueAutosave();
+      showToast("LINKED");
+      return;
+    }
+
+    // If click inside editable text, do not drag/capture (typing must work)
+    const clickedEditable = e.target && e.target.closest && e.target.closest(".text");
+    if(clickedEditable){
+      selectItem(id);
+      return;
+    }
+
+    selectItem(id);
+
+    const it = getItem(id);
+    if(!it) return;
+
+    const handle = e.target.dataset && e.target.dataset.handle;
+    const pt = screenToWorld(e.clientX, e.clientY);
+
+    if(handle === "rot"){
+      const cx = it.x + it.w/2;
+      const cy = it.y + it.h/2;
+      const ang0 = Math.atan2(pt.y - cy, pt.x - cx);
+      dragItem = { type:"rot", id, cx, cy, ang0, r0: it.r||0 };
+      window.addEventListener("mousemove", onItemMove);
+      window.addEventListener("mouseup", onItemUp);
+      return;
+    }
+
+    if(handle){
+      dragItem = {
+        type:"resize", id, handle,
+        x0:it.x, y0:it.y, w0:it.w, h0:it.h,
+        p0:pt
+      };
+      window.addEventListener("mousemove", onItemMove);
+      window.addEventListener("mouseup", onItemUp);
+      return;
+    }
+
+    dragItem = { type:"move", id, x0:it.x, y0:it.y, p0:pt };
+    window.addEventListener("mousemove", onItemMove);
+    window.addEventListener("mouseup", onItemUp);
+  }
+
+  function onItemMove(e){
+    if(!dragItem) return;
+    const it = getItem(dragItem.id);
+    if(!it) return;
+    const pt = screenToWorld(e.clientX, e.clientY);
+
+    if(dragItem.type==="move"){
+      it.x = dragItem.x0 + (pt.x - dragItem.p0.x);
+      it.y = dragItem.y0 + (pt.y - dragItem.p0.y);
+      renderLinks();
+      render();
+    }
+
+    if(dragItem.type==="resize"){
+      const dx = pt.x - dragItem.p0.x;
+      const dy = pt.y - dragItem.p0.y;
+
+      let x = dragItem.x0, y = dragItem.y0, w = dragItem.w0, h = dragItem.h0;
+
+      if(dragItem.handle==="se"){ w = dragItem.w0 + dx; h = dragItem.h0 + dy; }
+      if(dragItem.handle==="sw"){ x = dragItem.x0 + dx; w = dragItem.w0 - dx; h = dragItem.h0 + dy; }
+      if(dragItem.handle==="ne"){ y = dragItem.y0 + dy; w = dragItem.w0 + dx; h = dragItem.h0 - dy; }
+      if(dragItem.handle==="nw"){ x = dragItem.x0 + dx; y = dragItem.y0 + dy; w = dragItem.w0 - dx; h = dragItem.h0 - dy; }
+
+      it.x = x; it.y = y;
+      it.w = clamp(w, 80, 5000);
+      it.h = clamp(h, 80, 5000);
+      render();
+    }
+
+    if(dragItem.type==="rot"){
+      const ang = Math.atan2(pt.y - dragItem.cy, pt.x - dragItem.cx);
+      it.r = dragItem.r0 + (ang - dragItem.ang0) * 180/Math.PI;
+      render();
+    }
+  }
+  function onItemUp(){
+    if(!dragItem) return;
+    dragItem = null;
+    window.removeEventListener("mousemove", onItemMove);
+    window.removeEventListener("mouseup", onItemUp);
+    queueAutosave();
+  }
+
+  /* =========================
+     LINK MODE + LINKS TOGGLE
+  ========================= */
+  btnLinkMode.addEventListener("click", ()=>{
+    linkMode = !linkMode;
+    linkFromId = null;
+    btnLinkMode.textContent = "Link Mode: " + (linkMode ? "On" : "Off");
+    showToast(linkMode ? "LINK MODE" : "SELECT MODE");
+  });
+
+  btnLinksToggle.addEventListener("click", ()=>{
+    linksVisible = !linksVisible;
+    btnLinksToggle.textContent = "Links: " + (linksVisible ? "On" : "Off");
+    renderLinks();
+    queueAutosave();
+  });
+
+  btnDelLink.addEventListener("click", ()=>{
+    if(!selectedEdgeId) return;
+    edges = edges.filter(e => e.id !== selectedEdgeId);
+    selectEdge(null);
+    queueAutosave();
+    showToast("LINK DELETED");
+  });
+
+  edgeNote.addEventListener("input", ()=>{
+    const e = edges.find(x=>x.id===selectedEdgeId);
+    if(e) e.note = edgeNote.value;
+    queueAutosave();
+    refreshPromptPack();
+  });
+
+  /* =========================
+     INSPECTOR
+  ========================= */
+  function syncInspector(){
+    const it = getItem(selectedId);
+    const edge = edges.find(x=>x.id===selectedEdgeId) || null;
+
+    if(edge){
+      selType.textContent = "LINK";
+      selLabel.value = edge.label || "";
+      selOpacity.disabled = true;
+      selLabel.disabled = false;
+      edgeNote.disabled = false;
+      btnDelLink.disabled = false;
+      edgeNote.value = edge.note || "";
+      return;
+    }
+
+    edgeNote.disabled = true;
+    btnDelLink.disabled = true;
+
+    if(!it){
+      selType.textContent = "—";
+      selLabel.value = "";
+      selOpacity.value = "100";
+      selOpacityLabel.textContent = "100";
+      selLabel.disabled = true;
+      selOpacity.disabled = true;
+      btnFront.disabled = true;
+      btnBack.disabled = true;
+      btnDelete.disabled = true;
+      return;
+    }
+
+    selType.textContent = it.type.toUpperCase();
+    selLabel.disabled = false;
+    selOpacity.disabled = false;
+    btnFront.disabled = false;
+    btnBack.disabled = false;
+    btnDelete.disabled = false;
+
+    selLabel.value = it.label || "";
+    selOpacity.value = String(Math.round((it.opacity ?? 1)*100));
+    selOpacityLabel.textContent = selOpacity.value;
+  }
+
+  selLabel.addEventListener("input", ()=>{
+    const it = getItem(selectedId);
+    const edge = edges.find(x=>x.id===selectedEdgeId) || null;
+    if(it){ it.label = selLabel.value; renderLinks(); render(); }
+    if(edge){ edge.label = selLabel.value; renderLinks(); }
+    refreshPromptPack();
+    queueAutosave();
+  });
+
+  selOpacity.addEventListener("input", ()=>{
+    const it = getItem(selectedId);
+    if(!it) return;
+    it.opacity = clamp(Number(selOpacity.value)/100, 0.05, 1);
+    selOpacityLabel.textContent = selOpacity.value;
+    render();
+    queueAutosave();
+  });
+
+  btnFront.addEventListener("click", ()=>{
+    const it = getItem(selectedId); if(!it) return;
+    it.z = nextZ();
+    render();
+    queueAutosave();
+  });
+  btnBack.addEventListener("click", ()=>{
+    const it = getItem(selectedId); if(!it) return;
+    it.z = 0;
+    render();
+    queueAutosave();
+  });
+  btnDelete.addEventListener("click", ()=>{
+    if(!selectedId) return;
+    const id = selectedId;
+    items = items.filter(x=>x.id!==id);
+    edges = edges.filter(e=> e.from!==id && e.to!==id);
+    selectItem(null);
+    queueAutosave();
+    showToast("DELETED");
+  });
+
+  btnDeselect.addEventListener("click", ()=>{
+    selectItem(null);
+    selectEdge(null);
+    showToast("DESELECTED");
+  });
+
+  /* =========================
+     EFFECTS (10)
+  ========================= */
+  fxIntensity.addEventListener("input", ()=>{
+    fxIntensityLabel.textContent = fxIntensity.value;
+  });
+
+  document.querySelectorAll("button.fx").forEach(btn=>{
+    btn.addEventListener("click", async ()=>{
+      const it = getItem(selectedId);
+      if(!it || it.type!=="image"){
+        showToast("SELECT AN IMAGE");
+        return;
+      }
+      const fx = btn.dataset.fx;
+      const intensity = Number(fxIntensity.value);
+      await applyEffectToItem(it, fx, intensity);
+      render();
+      syncInspector();
+      refreshPromptPack();
+      queueAutosave();
+      showToast(fx.toUpperCase());
+    });
+  });
+
+  btnFxReset.addEventListener("click", ()=>{
+    const it = getItem(selectedId);
+    if(!it || it.type!=="image") return;
+    it.image.processed = it.image.original;
+    it.image.fx = null;
+    it.image.intensity = 0;
+    render();
+    refreshPromptPack();
+    queueAutosave();
+    showToast("RESET");
+  });
+
+  async function applyEffectToItem(it, fx, intensity){
+    it.image.fx = fx;
+    it.image.intensity = intensity;
+    const out = await renderEffect(it.image.original, fx, intensity);
+    it.image.processed = out;
+  }
+
+  function loadImage(src){
+    return new Promise((res, rej)=>{
+      const img = new Image();
+      img.onload = ()=> res(img);
+      img.onerror = rej;
+      img.src = src;
+    });
+  }
+
+  // Core effect renderer: returns dataURL
+  async function renderEffect(dataUrl, fx, intensity){
+    const img = await loadImage(dataUrl);
+
+    // base canvas scaled for effect quality (keep responsive)
+    const maxSide = 1400;
+    let w = img.naturalWidth || img.width;
+    let h = img.naturalHeight || img.height;
+    const s = Math.min(1, maxSide / Math.max(w,h));
+    w = Math.max(1, Math.round(w*s));
+    h = Math.max(1, Math.round(h*s));
+
+    const c = document.createElement("canvas");
+    c.width = w; c.height = h;
+    const ctx = c.getContext("2d", { willReadFrequently:true });
+    ctx.drawImage(img, 0, 0, w, h);
+
+    const imgData = ctx.getImageData(0,0,w,h);
+    const d = imgData.data;
+
+    // helpers
+    const I = clamp(intensity/100, 0, 1);
+
+    // pixel ops
+    function toGray(r,g,b){ return 0.2126*r + 0.7152*g + 0.0722*b; }
+
+    // ordered dither (4x4)
+    const bayer4 = [
+      0,  8,  2, 10,
+      12, 4, 14, 6,
+      3, 11, 1, 9,
+      15, 7, 13, 5
+    ];
+
+    // vignette
+    function vignette(){
+      const cx = w/2, cy = h/2;
+      const maxR = Math.sqrt(cx*cx + cy*cy);
+      const v = ctx.getImageData(0,0,w,h);
+      const p = v.data;
+      for(let y=0;y<h;y++){
+        for(let x=0;x<w;x++){
+          const i = (y*w + x)*4;
+          const dx = x-cx, dy = y-cy;
+          const r = Math.sqrt(dx*dx + dy*dy) / maxR;
+          const k = 1 - (0.55*I)*Math.pow(r, 1.8);
+          p[i]   = p[i]*k;
+          p[i+1] = p[i+1]*k;
+          p[i+2] = p[i+2]*k;
+        }
+      }
+      ctx.putImageData(v,0,0);
+    }
+
+    // scanlines
+    function scanlines(){
+      ctx.save();
+      ctx.globalAlpha = 0.18 + 0.25*I;
+      ctx.fillStyle = "#000";
+      const step = Math.round(3 - 1*I);
+      for(let y=0;y<h;y+=step){
+        ctx.fillRect(0,y,w,1);
+      }
+      ctx.restore();
+    }
+
+    // noise
+    function noise(){
+      const v = ctx.getImageData(0,0,w,h);
+      const p = v.data;
+      const amt = 18 + 44*I;
+      for(let i=0;i<p.length;i+=4){
+        const n = (Math.random()*2-1)*amt;
+        p[i]   = clamp(p[i]   + n, 0, 255);
+        p[i+1] = clamp(p[i+1] + n, 0, 255);
+        p[i+2] = clamp(p[i+2] + n, 0, 255);
+      }
+      ctx.putImageData(v,0,0);
+    }
+
+    // edge (sobel-ish, simplified)
+    function edgesToAlpha(mult=1){
+      const src = ctx.getImageData(0,0,w,h);
+      const p = src.data;
+      const out = ctx.createImageData(w,h);
+      const o = out.data;
+
+      function gAt(x,y){
+        x = clamp(x,0,w-1); y = clamp(y,0,h-1);
+        const i = (y*w+x)*4;
+        return toGray(p[i],p[i+1],p[i+2]);
+      }
+
+      for(let y=0;y<h;y++){
+        for(let x=0;x<w;x++){
+          const gx =
+            -1*gAt(x-1,y-1) + 1*gAt(x+1,y-1) +
+            -2*gAt(x-1,y)   + 2*gAt(x+1,y) +
+            -1*gAt(x-1,y+1) + 1*gAt(x+1,y+1);
+          const gy =
+            -1*gAt(x-1,y-1) + -2*gAt(x,y-1) + -1*gAt(x+1,y-1) +
+             1*gAt(x-1,y+1) +  2*gAt(x,y+1) +  1*gAt(x+1,y+1);
+          const mag = clamp(Math.sqrt(gx*gx + gy*gy) * (0.18 + 0.50*I) * mult, 0, 255);
+          const i = (y*w+x)*4;
+          o[i] = 255; o[i+1]=255; o[i+2]=255; o[i+3]=mag;
+        }
+      }
+      return out;
+    }
+
+    // false color ramp for INFRA
+    function infraMap(v){
+      // v in [0,255]
+      const t = v/255;
+      // black -> deep blue -> magenta -> red -> orange -> yellow/white
+      // piecewise
+      let r=0,g=0,b=0;
+      if(t < 0.20){
+        const u = t/0.20;
+        r = 0; g = 0; b = 40 + 160*u;
+      } else if(t < 0.45){
+        const u = (t-0.20)/0.25;
+        r = 120*u; g = 0; b = 200 - 70*u;
+      } else if(t < 0.70){
+        const u = (t-0.45)/0.25;
+        r = 120 + 135*u; g = 0 + 50*u; b = 130 - 130*u;
+      } else if(t < 0.90){
+        const u = (t-0.70)/0.20;
+        r = 255; g = 50 + 140*u; b = 0;
+      } else {
+        const u = (t-0.90)/0.10;
+        r = 255; g = 190 + 65*u; b = 0 + 80*u;
+      }
+      return [r,g,b];
+    }
+
+    // Downscale-upscale for lo-fi/fried artifacting
+    function downUp(factor){
+      const tw = Math.max(1, Math.round(w*factor));
+      const th = Math.max(1, Math.round(h*factor));
+      const tmp = document.createElement("canvas");
+      tmp.width = tw; tmp.height = th;
+      const tctx = tmp.getContext("2d");
+      tctx.imageSmoothingEnabled = false;
+      tctx.drawImage(c, 0,0, tw, th);
+      ctx.imageSmoothingEnabled = false;
+      ctx.clearRect(0,0,w,h);
+      ctx.drawImage(tmp, 0,0, w, h);
+      ctx.imageSmoothingEnabled = true;
+    }
+
+    // apply effect
+    if(fx === "invert"){
+      for(let i=0;i<d.length;i+=4){
+        d[i]   = 255 - d[i];
+        d[i+1] = 255 - d[i+1];
+        d[i+2] = 255 - d[i+2];
+      }
+      ctx.putImageData(imgData,0,0);
+    }
+
+    if(fx === "xray"){
+      // grayscale, high contrast, invert-ish, edges overlay
+      for(let i=0;i<d.length;i+=4){
+        const g = toGray(d[i],d[i+1],d[i+2]);
+        let v = g;
+        // contrast curve
+        v = (v-128)*(1.2 + 1.6*I) + 128;
+        // invert bias
+        v = 255 - clamp(v + 20*I, 0, 255);
+        d[i]=d[i+1]=d[i+2]=clamp(v,0,255);
+      }
+      ctx.putImageData(imgData,0,0);
+      const edge = edgesToAlpha(1.1 + 1.2*I);
+      ctx.putImageData(edge,0,0);
+      ctx.globalCompositeOperation = "screen";
+      ctx.globalAlpha = 0.55;
+      ctx.putImageData(edge,0,0);
+      ctx.globalCompositeOperation = "source-over";
+      ctx.globalAlpha = 1;
+    }
+
+    if(fx === "double"){
+      // base slightly desaturated + ghost offset
+      for(let i=0;i<d.length;i+=4){
+        const g = toGray(d[i],d[i+1],d[i+2]);
+        const mix = 0.25 + 0.35*I;
+        d[i]   = d[i]*(1-mix) + g*mix;
+        d[i+1] = d[i+1]*(1-mix) + g*mix;
+        d[i+2] = d[i+2]*(1-mix) + g*mix;
+      }
+      ctx.putImageData(imgData,0,0);
+
+      const off = Math.round(10 + 28*I);
+      ctx.globalAlpha = 0.55;
+      ctx.globalCompositeOperation = "screen";
+      ctx.drawImage(c, -off, 0);
+      ctx.drawImage(c, off, 0);
+      ctx.globalCompositeOperation = "source-over";
+      ctx.globalAlpha = 1;
+    }
+
+    if(fx === "mono"){
+      // two-tone mapping (industrial)
+      // toneA: deep graphite, toneB: bright bone
+      const a = [18,18,18];
+      const b = [235,235,235];
+      for(let i=0;i<d.length;i+=4){
+        const g = toGray(d[i],d[i+1],d[i+2]);
+        // threshold shifts with intensity
+        const t = 120 - 40*I;
+        const u = g < t ? 0 : 1;
+        const mix = 0.25 + 0.75*I;
+        const rr = (u?b[0]:a[0]) * mix + d[i]*(1-mix);
+        const gg = (u?b[1]:a[1]) * mix + d[i+1]*(1-mix);
+        const bb = (u?b[2]:a[2]) * mix + d[i+2]*(1-mix);
+        d[i]=rr; d[i+1]=gg; d[i+2]=bb;
+      }
+      ctx.putImageData(imgData,0,0);
+    }
+
+    if(fx === "flood"){
+      // channel blowout, intensity selects how aggressive (default floods red)
+      const ch = 0; // 0=R. You can extend to cycle channels later.
+      for(let i=0;i<d.length;i+=4){
+        d[i+ch] = clamp(d[i+ch] + 80 + 140*I, 0, 255);
+        d[i+((ch+1)%3)] = clamp(d[i+((ch+1)%3)] * (0.92 - 0.25*I), 0, 255);
+        d[i+((ch+2)%3)] = clamp(d[i+((ch+2)%3)] * (0.92 - 0.25*I), 0, 255);
+      }
+      ctx.putImageData(imgData,0,0);
+    }
+
+    if(fx === "infra"){
+      // grayscale -> false-color ramp
+      for(let i=0;i<d.length;i+=4){
+        const g = toGray(d[i],d[i+1],d[i+2]);
+        const [r,g2,b] = infraMap(g);
+        const mix = 0.55 + 0.40*I;
+        d[i]   = d[i]*(1-mix) + r*mix;
+        d[i+1] = d[i+1]*(1-mix) + g2*mix;
+        d[i+2] = d[i+2]*(1-mix) + b*mix;
+      }
+      ctx.putImageData(imgData,0,0);
+    }
+
+    if(fx === "night"){
+      // grayscale -> green tint + noise + mild vignette
+      for(let i=0;i<d.length;i+=4){
+        const g = toGray(d[i],d[i+1],d[i+2]);
+        const lift = 18 + 44*I;
+        const v = clamp(g + lift, 0, 255);
+        d[i] = v*0.18;
+        d[i+1] = v*1.05;
+        d[i+2] = v*0.22;
+      }
+      ctx.putImageData(imgData,0,0);
+      noise();
+      vignette();
+    }
+
+    if(fx === "fried"){
+      // posterize + sharpen-ish + chroma split + blockiness
+      // 1) down/up for blockiness
+      downUp(0.55 - 0.25*I);
+      // 2) posterize
+      const id2 = ctx.getImageData(0,0,w,h);
+      const p = id2.data;
+      const steps = Math.round(10 - 6*I); // fewer steps => harsher
+      for(let i=0;i<p.length;i+=4){
+        for(let k=0;k<3;k++){
+          const v = p[i+k];
+          const q = Math.round((v/255)*steps)/steps*255;
+          p[i+k] = q;
+        }
+      }
+      ctx.putImageData(id2,0,0);
+      // 3) chroma split
+      ctx.globalCompositeOperation = "screen";
+      ctx.globalAlpha = 0.35 + 0.35*I;
+      ctx.drawImage(c, Math.round(3 + 8*I), 0);
+      ctx.drawImage(c, 0, Math.round(2 + 6*I));
+      ctx.globalAlpha = 1;
+      ctx.globalCompositeOperation = "source-over";
+      noise();
+    }
+
+    if(fx === "lofi"){
+      // soft blur by down/up + ordered dither
+      downUp(0.42 - 0.18*I);
+      const id2 = ctx.getImageData(0,0,w,h);
+      const p = id2.data;
+      const amt = 18 + 36*I;
+      for(let y=0;y<h;y++){
+        for(let x=0;x<w;x++){
+          const i = (y*w + x)*4;
+          const g = toGray(p[i],p[i+1],p[i+2]);
+          const t = (bayer4[(y%4)*4 + (x%4)] / 15 - 0.5) * amt;
+          const v = clamp(g + t, 0, 255);
+          // keep slightly colored
+          p[i]   = p[i]*0.45 + v*0.55;
+          p[i+1] = p[i+1]*0.45 + v*0.55;
+          p[i+2] = p[i+2]*0.45 + v*0.55;
+        }
+      }
+      ctx.putImageData(id2,0,0);
+      vignette();
+    }
+
+    if(fx === "seccam"){
+      // grayscale + lifted blacks + scanlines + timestamp + noise + vignette
+      for(let i=0;i<d.length;i+=4){
+        let g = toGray(d[i],d[i+1],d[i+2]);
+        g = clamp(g*(0.95 + 0.25*I) + (18 + 32*I), 0, 255);
+        d[i]=d[i+1]=d[i+2]=g;
+      }
+      ctx.putImageData(imgData,0,0);
+      scanlines();
+      noise();
+      vignette();
+
+      // timestamp
+      ctx.save();
+      ctx.globalAlpha = 0.70;
+      ctx.fillStyle = "rgba(255,255,255,.85)";
+      ctx.font = `${Math.max(12, Math.round(14 + 10*I))}px ${getComputedStyle(document.body).fontFamily}`;
+      ctx.textBaseline = "bottom";
+      const stamp = new Date().toISOString().replace("T"," ").slice(0,19);
+      ctx.fillText(stamp, 10, h-10);
+      ctx.restore();
+    }
+
+    // subtle corner mark (ketadata carry)
+    drawCornerMark(ctx, w, h, fx);
+
+    return c.toDataURL("image/png");
+  }
+
+  function drawCornerMark(ctx, w, h, fx){
+    const map = {
+      invert:"IV",
+      xray:"XR",
+      double:"DB",
+      mono:"MN",
+      flood:"FD",
+      infra:"IF",
+      night:"NV",
+      fried:"FR",
+      lofi:"LF",
+      seccam:"SC"
+    };
+    const tag = map[fx] || "KD";
+    ctx.save();
+    ctx.globalAlpha = 0.58;
+    ctx.fillStyle = "rgba(255,255,255,.85)";
+    ctx.font = `12px ${getComputedStyle(document.body).fontFamily}`;
+    ctx.textBaseline = "top";
+    const pad = 10;
+    ctx.fillText(`KETA`, pad, pad);
+    ctx.globalAlpha = 0.50;
+    ctx.fillText(`${tag}`, pad, pad+14);
+    ctx.restore();
+  }
+
+  /* =========================
+     EXPORT SELECTION
+  ========================= */
+  btnExportSel.addEventListener("click", async ()=>{
+    const it = getItem(selectedId);
+    if(!it){
+      showToast("NO SELECTION");
+      return;
+    }
+    if(it.type === "image"){
+      const dataUrl = it.image.processed || it.image.original;
+      const a = document.createElement("a");
+      const safe = (it.label || "ketadata").replace(/[^\w\-]+/g,"_").slice(0,48);
+      const fx = it.image.fx ? it.image.fx.toUpperCase() : "RAW";
+      a.download = `${safe}__${fx}.png`;
+      a.href = dataUrl;
+      a.click();
+      showToast("EXPORTED PNG");
+      return;
+    }
+    if(it.type === "text"){
+      const blob = new Blob([it.text || ""], { type:"text/plain;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.download = `${(it.label||"text").replace(/[^\w\-]+/g,"_").slice(0,48)}.txt`;
+      a.href = url;
+      a.click();
+      URL.revokeObjectURL(url);
+      showToast("EXPORTED TXT");
+      return;
+    }
+  });
+
+  /* =========================
+     PROMPT PACK
+  ========================= */
+  function refreshPromptPack(){
+    const it = getItem(selectedId);
+    const edge = edges.find(x=>x.id===selectedEdgeId) || null;
+
+    let out = [];
+    out.push("KETADATA PROMPT PACK");
+    out.push("—");
+    out.push(`SESSION: local, single-screen cockpit`);
+    out.push(`INTENT: discrete asset iteration`);
+    out.push("");
+
+    if(edge){
+      out.push("SELECTION: LINK");
+      out.push(`LABEL: ${(edge.label||"").trim() || "—"}`);
+      out.push(`NOTE: ${(edge.note||"").trim() || "—"}`);
+      out.push(`FROM: ${(getItem(edge.from)?.label||edge.from)}`);
+      out.push(`TO: ${(getItem(edge.to)?.label||edge.to)}`);
+      promptPack.value = out.join("\n");
+      return;
+    }
+
+    if(!it){
+      out.push("SELECTION: —");
+      out.push("ACTION: select an image or text block.");
+      promptPack.value = out.join("\n");
+      return;
+    }
+
+    out.push(`SELECTION: ${it.type.toUpperCase()}`);
+    out.push(`LABEL: ${(it.label||"").trim() || "—"}`);
+    out.push(`OPACITY: ${Math.round((it.opacity??1)*100)}%`);
+    out.push(`ROTATION: ${Math.round(it.r||0)}deg`);
+    out.push(`SIZE: ${Math.round(it.w)} x ${Math.round(it.h)}`);
+    out.push("");
+
+    if(it.type === "image"){
+      out.push("IMAGE PIPELINE");
+      out.push(`EFFECT: ${it.image.fx ? it.image.fx.toUpperCase() : "NONE (RAW)"}`);
+      out.push(`INTENSITY: ${Math.round(it.image.intensity||0)}`);
+      out.push("");
+      out.push("REQUEST TEMPLATE");
+      out.push("- keep composition");
+      out.push("- propose 2 variants: subtler + more aggressive");
+      out.push("- preserve ketadata industrial mechanical signature");
+      out.push("- return: effect recipe + UI adjustments");
+    } else {
+      out.push("TEXT");
+      out.push((it.text||"").slice(0,800));
+      out.push("");
+      out.push("REQUEST TEMPLATE");
+      out.push("- restructure without changing tone");
+      out.push("- provide: 3 headings, 5 bullets, 1 tagline");
+    }
+
+    promptPack.value = out.join("\n");
+  }
+
+  btnRefreshPrompt.addEventListener("click", ()=>{
+    refreshPromptPack();
+    showToast("REFRESHED");
+  });
+  btnCopyPrompt.addEventListener("click", async ()=>{
+    try{
+      await navigator.clipboard.writeText(promptPack.value || "");
+      showToast("COPIED");
+    }catch{
+      showToast("COPY FAILED");
+    }
+  });
+
+  /* =========================
+     YOUTUBE WINDOWS
+  ========================= */
+  let ytWindows = []; // {id,x,y,w,h,videoId}
+  function addYTWindow(videoId){
+    const win = { id: uid(), x: 80, y: 80, w: 320, h: 190, videoId };
+    ytWindows.push(win);
+    renderYT();
+    queueAutosave();
+  }
+
+  btnAddYT.addEventListener("click", ()=>{
+    const id = parseYouTubeId(ytUrl.value.trim());
+    if(!id){
+      showToast("BAD URL");
+      return;
+    }
+    addYTWindow(id);
+    ytUrl.value = "";
+    showToast("YOUTUBE ADDED");
+  });
+
+  function renderYT(){
+    // remove existing
+    document.querySelectorAll(".ytWin").forEach(n=> n.remove());
+
+    for(const w of ytWindows){
+      const el = document.createElement("div");
+      el.className = "ytWin";
+      el.style.left = w.x + "px";
+      el.style.top = w.y + "px";
+      el.style.width = w.w + "px";
+      el.style.height = w.h + "px";
+
+      const head = document.createElement("div");
+      head.className = "ytHead";
+      head.innerHTML = `<span>YOUTUBE</span><div style="display:flex;gap:6px;align-items:center;">
+        <button class="btn" data-act="mute">MUTE</button>
+        <button class="btn" data-act="close">X</button>
+      </div>`;
+
+      const body = document.createElement("div");
+      body.className = "ytBody";
+      const iframe = document.createElement("iframe");
+      iframe.allow = "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share";
+      iframe.referrerPolicy = "strict-origin-when-cross-origin";
+      iframe.src = `https://www.youtube.com/embed/${w.videoId}?autoplay=0&controls=1&modestbranding=1&rel=0`;
+      body.appendChild(iframe);
+
+      const rz = document.createElement("div");
+      rz.className = "ytResize";
+
+      el.appendChild(head);
+      el.appendChild(body);
+      el.appendChild(rz);
+      stage.appendChild(el);
+
+      // drag
+      let drag = null;
+      head.addEventListener("mousedown", (e)=>{
+        drag = { sx:e.clientX, sy:e.clientY, x0:w.x, y0:w.y };
+        e.preventDefault();
+      });
+      window.addEventListener("mousemove", (e)=>{
+        if(!drag) return;
+        w.x = drag.x0 + (e.clientX - drag.sx);
+        w.y = drag.y0 + (e.clientY - drag.sy);
+        el.style.left = w.x + "px";
+        el.style.top = w.y + "px";
+      });
+      window.addEventListener("mouseup", ()=>{
+        if(!drag) return;
+        drag = null;
+        queueAutosave();
+      });
+
+      // resize
+      let rdrag = null;
+      rz.addEventListener("mousedown", (e)=>{
+        rdrag = { sx:e.clientX, sy:e.clientY, w0:w.w, h0:w.h };
+        e.preventDefault();
+        e.stopPropagation();
+      });
+      window.addEventListener("mousemove", (e)=>{
+        if(!rdrag) return;
+        w.w = clamp(rdrag.w0 + (e.clientX - rdrag.sx), 220, 960);
+        w.h = clamp(rdrag.h0 + (e.clientY - rdrag.sy), 140, 720);
+        el.style.width = w.w + "px";
+        el.style.height = w.h + "px";
+      });
+      window.addEventListener("mouseup", ()=>{
+        if(!rdrag) return;
+        rdrag = null;
+        queueAutosave();
+      });
+
+      // actions
+      head.addEventListener("click", (e)=>{
+        const btn = e.target.closest && e.target.closest("button");
+        if(!btn) return;
+        const act = btn.dataset.act;
+        if(act === "close"){
+          ytWindows = ytWindows.filter(x=>x.id!==w.id);
+          renderYT();
+          queueAutosave();
+          showToast("YOUTUBE CLOSED");
+        }
+        if(act === "mute"){
+          // simple: reload embed without audio control is nontrivial; use player volume in UI
+          showToast("USE PLAYER VOLUME");
+        }
+      });
+    }
+  }
+
+  /* =========================
+     SESSION SAVE/LOAD
+  ========================= */
+  function saveSession(withToast=true){
+    const payload = {
+      version: 1,
+      layout,
+      view,
+      items,
+      edges,
+      linksVisible,
+      ytWindows,
+      log: log.value || ""
+    };
+    localStorage.setItem(KEY_SESSION, JSON.stringify(payload));
+    if(withToast) showToast("SAVED");
+  }
+
+  function loadSession(withToast=true){
+    const raw = localStorage.getItem(KEY_SESSION);
+    if(!raw){
+      if(withToast) showToast("NO SAVE");
+      return;
+    }
+    try{
+      const p = JSON.parse(raw);
+      layout = p.layout || layout;
+      view = p.view || view;
+      items = p.items || [];
+      edges = p.edges || [];
+      linksVisible = (p.linksVisible !== undefined) ? p.linksVisible : true;
+      ytWindows = p.ytWindows || [];
+      log.value = p.log || "";
+      applyLayout();
+      applyView();
+      render();
+      renderYT();
+      syncInspector();
+      refreshPromptPack();
+      if(withToast) showToast("LOADED");
+    }catch{
+      if(withToast) showToast("LOAD FAIL");
+    }
+  }
+
+  btnSave.addEventListener("click", ()=> saveSession(true));
+  btnLoad.addEventListener("click", ()=> loadSession(true));
+
+  btnClear.addEventListener("click", ()=>{
+    if(!confirm("CLEAR SESSION?")) return;
+    items = [];
+    edges = [];
+    ytWindows = [];
+    selectedId = null;
+    selectedEdgeId = null;
+    linkFromId = null;
+    log.value = "";
+    render();
+    renderYT();
+    syncInspector();
+    refreshPromptPack();
+    saveSession(false);
+    showToast("CLEARED");
+  });
+
+  let autosaveTimer = null;
+  function queueAutosave(){
+    clearTimeout(autosaveTimer);
+    autosaveTimer = setTimeout(()=> saveSession(false), 450);
+  }
+
+  log.addEventListener("input", queueAutosave);
+
+  /* =========================
+     KEYBOARD DELETE / ESC
+  ========================= */
+  document.addEventListener("keydown", (e)=>{
+    if(e.key === "Escape"){
+      linkFromId = null;
+      selectItem(null);
+      selectEdge(null);
+      return;
+    }
+    if(e.key === "Delete" || e.key === "Backspace"){
+      const active = document.activeElement;
+      if(active && (active.tagName==="INPUT" || active.tagName==="TEXTAREA" || active.isContentEditable)) return;
+
+      if(selectedEdgeId){
+        edges = edges.filter(x=>x.id!==selectedEdgeId);
+        selectEdge(null);
+        queueAutosave();
+        showToast("LINK DELETED");
+        return;
+      }
+      if(selectedId){
+        const id = selectedId;
+        items = items.filter(x=>x.id!==id);
+        edges = edges.filter(e=> e.from!==id && e.to!==id);
+        selectItem(null);
+        queueAutosave();
+        showToast("DELETED");
+      }
+    }
+  });
+
+  /* =========================
+     UI NOTES
+  ========================= */
+  function openNotes(){ notepad.classList.add("open"); }
+  function closeNotes(){ notepad.classList.remove("open"); }
+
+  notesBtn.addEventListener("click", ()=>{
+    if(notepad.classList.contains("open")) closeNotes();
+    else openNotes();
+  });
+  npClose.addEventListener("click", closeNotes);
+
+  // restore notes text
+  npText.value = localStorage.getItem(KEY_NOTES) || "";
+  npText.addEventListener("input", ()=>{
+    localStorage.setItem(KEY_NOTES, npText.value);
+  });
+
+  npClear.addEventListener("click", ()=>{
+    if(!confirm("CLEAR NOTES?")) return;
+    npText.value = "";
+    localStorage.setItem(KEY_NOTES, "");
+  });
+
+  npCopy.addEventListener("click", async ()=>{
+    try{
+      await navigator.clipboard.writeText(npText.value || "");
+      showToast("NOTES COPIED");
+    }catch{
+      showToast("COPY FAIL");
+    }
+  });
+
+  npExport.addEventListener("click", ()=>{
+    const blob = new Blob([npText.value], { type:"text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "ketadata-ui-notes.txt";
+    a.click();
+    URL.revokeObjectURL(url);
+  });
+
+  // draggable notepad + remember position
+  let npDrag = null;
+  function setNotepadPos(x,y){
+    notepad.style.left = x + "px";
+    notepad.style.top = y + "px";
+    notepad.style.right = "auto";
+    localStorage.setItem(KEY_NOTES_POS, JSON.stringify({x,y}));
+  }
+  const savedPos = localStorage.getItem(KEY_NOTES_POS);
+  if(savedPos){
+    try{
+      const {x,y} = JSON.parse(savedPos);
+      setNotepadPos(x,y);
+    }catch{}
+  }
+  npHeader.addEventListener("mousedown", (e)=>{
+    if(e.target.closest("button")) return;
+    const r = notepad.getBoundingClientRect();
+    npDrag = { dx: e.clientX - r.left, dy: e.clientY - r.top };
+    e.preventDefault();
+  });
+  window.addEventListener("mousemove", (e)=>{
+    if(!npDrag) return;
+    const x = clamp(e.clientX - npDrag.dx, 0, window.innerWidth - 120);
+    const y = clamp(e.clientY - npDrag.dy, 0, window.innerHeight - 80);
+    setNotepadPos(x,y);
+  });
+  window.addEventListener("mouseup", ()=> npDrag=null);
+
+  /* =========================
+     INIT
+  ========================= */
+  fxIntensityLabel.textContent = fxIntensity.value;
+  btnLinksToggle.textContent = "Links: On";
+  selLabel.disabled = true;
+  selOpacity.disabled = true;
+  edgeNote.disabled = true;
+  btnDelLink.disabled = true;
+
+  // persist previous session if exists
+  applyLayout();
+  applyView();
+  loadSession(false);
+  render();
+  renderYT();
+  syncInspector();
+  refreshPromptPack();
+
+})();
+</script>
+
+</body>
+</html>
