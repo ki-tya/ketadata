@@ -1,0 +1,974 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>KETADATA // ROOM SORTER</title>
+  <style>
+    :root{
+      --bg:#000000;                 /* PURE BLACK GROUND */
+      --panel:rgba(255,255,255,.04); /* Apple-Notes-ish: subtle */
+      --panel2:rgba(255,255,255,.02);
+      --line:rgba(255,255,255,.10);
+      --line2:rgba(255,255,255,.16);
+      --text:rgba(255,255,255,.92);
+      --muted:rgba(255,255,255,.62);
+      --faint:rgba(255,255,255,.40);
+      --focus:rgba(140,190,255,.90);
+      --danger:rgba(255,90,90,.85);
+      --r:0px;
+      --shadow: 0 16px 50px rgba(0,0,0,.55);
+      --font: Arial, Helvetica, sans-serif;
+    }
+    *{ box-sizing:border-box; font-family: var(--font) !important; }
+    html,body{ height:100%; }
+    body{
+      margin:0;
+      background: var(--bg);
+      color:var(--text);
+      overflow:hidden;
+    }
+
+    /* Top bar */
+    .topbar{
+      height:56px;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      padding: 0 14px;
+      border-bottom:1px solid rgba(255,255,255,.10);
+      background: rgba(0,0,0,.92);
+    }
+    .brand{
+      display:flex; flex-direction:column; gap:2px;
+      text-transform:uppercase;
+      letter-spacing:.10em;
+      font-weight:700;
+      font-size:12px;
+    }
+    .sub{
+      font-size:11px;
+      letter-spacing:.02em;
+      text-transform:none;
+      color:var(--muted);
+      font-weight:400;
+    }
+    .bar-actions{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+    .btn{
+      appearance:none;
+      border:1px solid var(--line);
+      background: rgba(255,255,255,.04);
+      color:var(--text);
+      padding:8px 10px;
+      font-size:12px;
+      cursor:pointer;
+      border-radius: var(--r);
+      text-transform:lowercase;
+    }
+    .btn:hover{ border-color: var(--line2); }
+    .btn.primary{ background: rgba(140,190,255,.10); border-color: rgba(255,255,255,.16); }
+    .btn.danger{ background: rgba(255,90,90,.10); border-color: rgba(255,255,255,.14); color: rgba(255,210,210,.95); }
+    .pill{
+      border:1px solid var(--line);
+      background: rgba(255,255,255,.03);
+      padding:6px 8px;
+      font-size:11px;
+      color:var(--muted);
+      border-radius: var(--r);
+      text-transform:lowercase;
+      white-space:nowrap;
+    }
+
+    /* Main layout: SOURCES LEFT, ROOMS RIGHT */
+    .main{
+      height: calc(100vh - 56px);
+      display:grid;
+      grid-template-columns: 380px 1fr; /* sources | rooms */
+      gap: 10px;
+      padding: 10px;
+    }
+
+    /* Sources (left) */
+    .sources{
+      border:1px solid rgba(255,255,255,.10);
+      background: rgba(255,255,255,.02);
+      box-shadow: var(--shadow);
+      overflow:hidden;
+      display:flex;
+      flex-direction:column;
+      min-width: 320px;
+    }
+    .sources .hdr{
+      padding:10px;
+      border-bottom:1px solid rgba(255,255,255,.08);
+      background: rgba(255,255,255,.02);
+      display:flex;
+      align-items:baseline;
+      justify-content:space-between;
+      gap:10px;
+    }
+    .sources .hdr .ttl{
+      font-weight:700;
+      letter-spacing:.08em;
+      text-transform:uppercase;
+      font-size:12px;
+    }
+    .sources .hdr .meta{
+      font-size:11px;
+      color: var(--muted);
+      text-transform:lowercase;
+    }
+    .sources .body{
+      padding:10px;
+      overflow:auto;
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+    }
+
+    /* Rooms (right) */
+    .rooms{
+      border:1px solid rgba(255,255,255,.10);
+      background: rgba(255,255,255,.02);
+      box-shadow: var(--shadow);
+      overflow:auto;
+      padding:10px;
+    }
+    .rooms-hdr{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      padding: 4px 2px 10px;
+      border-bottom:1px solid rgba(255,255,255,.08);
+      margin-bottom:10px;
+    }
+    .rooms-hdr .ttl{
+      font-weight:700;
+      letter-spacing:.08em;
+      text-transform:uppercase;
+      font-size:12px;
+    }
+    .rooms-hdr .hint{
+      font-size:11px;
+      color: var(--muted);
+    }
+    .rooms-grid{
+      display:grid;
+      grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+      gap: 10px;
+      align-items:start;
+    }
+
+    /* Fields */
+    .field label{
+      display:block;
+      font-size:11px;
+      color: var(--muted);
+      margin:0 0 4px;
+      text-transform:lowercase;
+      letter-spacing:.02em;
+    }
+    input[type="text"], textarea{
+      width:100%;
+      border:1px solid rgba(255,255,255,.10);
+      background: rgba(255,255,255,.03);
+      color: rgba(255,255,255,.92);
+      padding:8px 9px;
+      font-size:12px;
+      outline:none;
+      border-radius: var(--r);
+    }
+    textarea{ resize:vertical; min-height: 90px; }
+    input:focus, textarea:focus{
+      border-color: rgba(140,190,255,.60);
+      box-shadow: 0 0 0 2px rgba(140,190,255,.14) inset;
+    }
+
+    /* Source list */
+    .source-list{
+      border:1px solid rgba(255,255,255,.10);
+      background: rgba(255,255,255,.02);
+      padding:8px;
+      display:flex;
+      flex-direction:column;
+      gap:6px;
+      max-height: 340px;
+      overflow:auto;
+    }
+    .src{
+      display:flex;
+      gap:8px;
+      align-items:center;
+      justify-content:space-between;
+      padding:6px 6px;
+      border:1px solid rgba(255,255,255,.08);
+      background: rgba(255,255,255,.02);
+    }
+    .src .left{
+      min-width:0;
+      display:flex;
+      flex-direction:column;
+      gap:2px;
+    }
+    .src .url{
+      font-size:11px;
+      color: rgba(255,255,255,.86);
+      overflow:hidden;
+      text-overflow:ellipsis;
+      white-space:nowrap;
+      max-width: 250px;
+    }
+    .src .host{
+      font-size:10px;
+      color: var(--muted);
+      overflow:hidden;
+      text-overflow:ellipsis;
+      white-space:nowrap;
+      max-width: 250px;
+    }
+    .src .acts{ display:flex; gap:6px; align-items:center; flex-wrap:wrap; }
+
+    /* Rooms */
+    .room{
+      border:1px solid rgba(255,255,255,.10);
+      background: rgba(255,255,255,.02);
+      box-shadow: var(--shadow);
+      overflow:hidden;
+    }
+    .room .hdr{
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap:10px;
+      padding:10px;
+      border-bottom:1px solid rgba(255,255,255,.08);
+      background: rgba(255,255,255,.02);
+    }
+    .radio{
+      display:flex; gap:8px; align-items:center;
+      font-size:11px; color: var(--muted);
+      white-space:nowrap;
+    }
+    .radio input{ accent-color: rgba(200,220,255,.85); }
+    .room-title{
+      font-weight:700;
+      text-transform:uppercase;
+      letter-spacing:.08em;
+      font-size:12px;
+      overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+      max-width: 220px;
+    }
+    .mini{
+      border:1px solid rgba(255,255,255,.12);
+      background: rgba(255,255,255,.03);
+      color: rgba(255,255,255,.80);
+      padding:5px 7px;
+      font-size:11px;
+      cursor:pointer;
+      border-radius: var(--r);
+      text-transform:lowercase;
+    }
+    .mini:hover{ border-color: rgba(255,255,255,.24); }
+    .mini.danger{ background: rgba(255,90,90,.10); }
+    .room .body{ padding:10px; display:flex; flex-direction:column; gap:10px; }
+
+    .items{ display:flex; flex-direction:column; gap:10px; }
+    .item{
+      border:1px solid rgba(255,255,255,.10);
+      background: rgba(255,255,255,.02);
+      padding:10px;
+    }
+    .item-top{
+      display:flex;
+      justify-content:space-between;
+      align-items:flex-start;
+      gap:10px;
+      margin-bottom:10px;
+    }
+    .item-top .name{
+      font-weight:700;
+      font-size:12px;
+      text-transform:uppercase;
+      letter-spacing:.06em;
+      color: rgba(255,255,255,.90);
+      min-width:0;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      white-space:nowrap;
+      max-width: 260px;
+    }
+    .item-top .actions{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+    .item-grid{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap:10px;
+    }
+
+    /* Screenshot */
+    .shot{
+      border:1px solid rgba(255,255,255,.10);
+      background: rgba(255,255,255,.02);
+      padding:8px;
+    }
+    .drop{
+      border:1px dashed rgba(255,255,255,.18);
+      background: rgba(255,255,255,.02);
+      min-height: 120px;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      text-align:center;
+      padding:10px;
+      cursor:pointer;
+      overflow:hidden;
+      color: var(--muted);
+      font-size:11px;
+    }
+    .drop:hover{ border-color: rgba(255,255,255,.30); }
+    .shot img{ max-width:100%; display:block; border:1px solid rgba(255,255,255,.10); }
+    .shot .tools{ margin-top:8px; display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+
+    .small{ font-size:11px; color: var(--muted); }
+    .divider{ height:1px; background: rgba(255,255,255,.08); margin: 6px 0; }
+
+    /* Modal */
+    .modal{
+      position:fixed; inset:0; z-index:200;
+      display:none;
+      align-items:center;
+      justify-content:center;
+      padding:18px;
+      background: rgba(0,0,0,.78);
+    }
+    .modal.show{ display:flex; }
+    .panel{
+      width:min(1100px, 100%);
+      background: rgba(0,0,0,.92);
+      border:1px solid rgba(255,255,255,.14);
+      border-radius: var(--r);
+      box-shadow: 0 30px 90px rgba(0,0,0,.75);
+      overflow:hidden;
+    }
+    .panel .phdr{
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap:12px;
+      padding:10px 12px;
+      border-bottom:1px solid rgba(255,255,255,.10);
+      background: rgba(255,255,255,.02);
+    }
+    .panel .pttl{
+      font-weight:700;
+      letter-spacing:.06em;
+      text-transform:uppercase;
+      font-size:12px;
+      color: rgba(255,255,255,.90);
+    }
+    .panel .pacts{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+    .panel textarea{
+      width:100%;
+      min-height: 520px;
+      border:none;
+      border-top:1px solid rgba(255,255,255,.10);
+      background: rgba(255,255,255,.02);
+      color: rgba(255,255,255,.92);
+      padding:12px;
+      outline:none;
+      font-size:12px;
+      line-height:1.35;
+      border-radius: var(--r);
+    }
+
+    @media (max-width: 1100px){
+      body{ overflow:auto; }
+      .main{ height:auto; grid-template-columns: 1fr; }
+      .sources{ height: 520px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="brand">
+      <div>KETADATA // ROOM SORTER</div>
+      <div class="sub">Apple Notes expanded into a thinking apparatus. File links into rooms. Add rooms. Export prompts.</div>
+    </div>
+    <div class="bar-actions">
+      <button class="btn primary" id="btnAddRoom">add room module</button>
+      <span class="pill" id="roomCount">rooms: 0</span>
+      <span class="pill" id="selectedRoom">target: none</span>
+      <button class="btn" id="btnExportAll">export prompts (all)</button>
+      <button class="btn" id="btnCopyAll">copy prompts</button>
+      <button class="btn" id="btnExportJSON">export.json</button>
+      <button class="btn" id="btnImportJSON">import.json</button>
+      <button class="btn danger" id="btnReset">reset</button>
+    </div>
+  </div>
+
+  <div class="main">
+    <div class="sources">
+      <div class="hdr">
+        <div>
+          <div class="ttl">source links</div>
+          <div class="meta">paste all site links here · one per line</div>
+        </div>
+        <div class="meta"><span id="srcCount">0</span> links</div>
+      </div>
+      <div class="body">
+        <div class="field">
+          <label>input</label>
+          <textarea id="srcInput" placeholder="https://ketadata.com/system.html&#10;https://ketadata.com/observatory.html&#10;..."></textarea>
+        </div>
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+          <button class="btn" id="btnParse">parse</button>
+          <button class="btn" id="btnClearSrc">clear</button>
+          <span class="pill">select target room → click add→room</span>
+        </div>
+        <div class="source-list" id="srcList"></div>
+        <div class="small">Left = raw index. Right = curated room modules.</div>
+      </div>
+    </div>
+
+    <div class="rooms">
+      <div class="rooms-hdr">
+        <div>
+          <div class="ttl">room modules</div>
+          <div class="hint">Rooms are addable. Each room contains pages (link + screenshot + html + notes).</div>
+        </div>
+        <div><span class="pill">local-first · screenshots stored as data URLs</span></div>
+      </div>
+      <div class="rooms-grid" id="roomsGrid"></div>
+    </div>
+  </div>
+
+  <input type="file" id="jsonFile" accept="application/json" style="display:none"/>
+  <input type="file" id="imgFile" accept="image/*" style="display:none"/>
+
+  <div class="modal" id="modal">
+    <div class="panel">
+      <div class="phdr">
+        <div class="pttl" id="modalTitle">export prompts</div>
+        <div class="pacts">
+          <span class="pill" id="charCount">0 chars</span>
+          <button class="btn" id="btnDownload">download.txt</button>
+          <button class="btn" id="btnClose">close (esc)</button>
+        </div>
+      </div>
+      <textarea id="out" spellcheck="false"></textarea>
+    </div>
+  </div>
+
+<script>
+(() => {
+  const LS = "ketadata_room_sorter_v2";
+  const $ = (id) => document.getElementById(id);
+
+  const roomsGrid = $("roomsGrid");
+  const srcInput = $("srcInput");
+  const srcList = $("srcList");
+  const srcCount = $("srcCount");
+
+  const modal = $("modal");
+  const out = $("out");
+  const charCount = $("charCount");
+  const modalTitle = $("modalTitle");
+
+  const jsonFile = $("jsonFile");
+  const imgFile = $("imgFile");
+
+  const state = load() || seed();
+
+  function seed(){
+    const rooms = [];
+    for(let i=1;i<=9;i++){
+      rooms.push({ id: uid(), order: i, name: `module ${i}`, notes: "", items: [] });
+    }
+    return { version:1, selectedRoomId: rooms[0].id, sourcesRaw:"", sources:[], rooms };
+  }
+
+  function uid(){ return Math.random().toString(16).slice(2) + Date.now().toString(16); }
+
+  function load(){
+    try{ const raw = localStorage.getItem(LS); return raw ? JSON.parse(raw) : null; }
+    catch(e){ return null; }
+  }
+
+  function save(){
+    try{ localStorage.setItem(LS, JSON.stringify(state)); }catch(e){}
+    renderHeaderMeta();
+  }
+
+  function renderHeaderMeta(){
+    $("roomCount").textContent = `rooms: ${state.rooms.length}`;
+    const r = state.rooms.find(x => x.id === state.selectedRoomId);
+    $("selectedRoom").textContent = `target: ${r ? r.name : "none"}`;
+  }
+
+  function safeHost(url){
+    try{ return (new URL(url)).host; }catch(e){ return "unknown"; }
+  }
+
+  function parseSources(){
+    const raw = (srcInput.value || "").trim();
+    state.sourcesRaw = raw;
+    const lines = raw.split(/\\r?\\n/).map(s => s.trim()).filter(Boolean);
+    const uniq = [];
+    const seen = new Set();
+    for(const l of lines){ if(seen.has(l)) continue; seen.add(l); uniq.push(l); }
+    state.sources = uniq.map(u => ({ id: uid(), url: u, host: safeHost(u) }));
+    save();
+    renderSources();
+  }
+
+  async function copyText(text){
+    try{ await navigator.clipboard.writeText(text); return true; }
+    catch(e){
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      document.body.appendChild(ta);
+      ta.select();
+      try{ document.execCommand("copy"); }catch(_){}
+      ta.remove();
+      return true;
+    }
+  }
+
+  function download(filename, content, mime="text/plain"){
+    const blob = new Blob([content], { type: mime });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  }
+
+  function openModal(title, text){
+    modalTitle.textContent = title;
+    out.value = text;
+    charCount.textContent = `${text.length} chars`;
+    modal.classList.add("show");
+    out.focus();
+    out.setSelectionRange(0,0);
+  }
+  function closeModal(){ modal.classList.remove("show"); }
+
+  function addRoom(){
+    const next = state.rooms.length + 1;
+    state.rooms.push({ id: uid(), order: next, name: `module ${next}`, notes:"", items:[] });
+    save(); renderRooms();
+  }
+
+  function removeRoom(id){
+    if(state.rooms.length <= 1) return;
+    state.rooms = state.rooms.filter(r => r.id !== id);
+    if(state.selectedRoomId === id){ state.selectedRoomId = state.rooms[0].id; }
+    save(); renderRooms();
+  }
+
+  function setSelectedRoom(id){ state.selectedRoomId = id; save(); renderRooms(); }
+
+  function addItemToRoom(roomId, prefill = {}){
+    const r = state.rooms.find(x => x.id === roomId);
+    if(!r) return;
+    r.items.push({
+      id: uid(),
+      title: prefill.title || "",
+      link: prefill.link || "",
+      html: prefill.html || "",
+      notes: prefill.notes || "",
+      screenshotDataUrl: "",
+      screenshotName: ""
+    });
+    save(); renderRooms();
+  }
+
+  function removeItem(roomId, itemId){
+    const r = state.rooms.find(x => x.id === roomId);
+    if(!r) return;
+    r.items = r.items.filter(it => it.id !== itemId);
+    save(); renderRooms();
+  }
+
+  function setRoomField(roomId, key, val){
+    const r = state.rooms.find(x => x.id === roomId);
+    if(!r) return;
+    r[key] = val;
+    save();
+  }
+
+  function setItemField(roomId, itemId, key, val){
+    const r = state.rooms.find(x => x.id === roomId);
+    if(!r) return;
+    const it = r.items.find(x => x.id === itemId);
+    if(!it) return;
+    it[key] = val;
+    save();
+  }
+
+  function pickScreenshot(roomId, itemId){
+    imgFile.value = "";
+    imgFile.onchange = () => {
+      const f = imgFile.files && imgFile.files[0];
+      if(!f) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        setItemField(roomId, itemId, "screenshotDataUrl", reader.result);
+        setItemField(roomId, itemId, "screenshotName", f.name || "screenshot");
+        renderRooms();
+      };
+      reader.readAsDataURL(f);
+    };
+    imgFile.click();
+  }
+
+  function clearScreenshot(roomId, itemId){
+    setItemField(roomId, itemId, "screenshotDataUrl", "");
+    setItemField(roomId, itemId, "screenshotName", "");
+    renderRooms();
+  }
+
+  function bindDrop(dropEl, roomId, itemId){
+    dropEl.addEventListener("dragover", (e) => { e.preventDefault(); dropEl.style.borderColor = "rgba(140,190,255,.60)"; });
+    dropEl.addEventListener("dragleave", () => { dropEl.style.borderColor = "rgba(255,255,255,.18)"; });
+    dropEl.addEventListener("drop", (e) => {
+      e.preventDefault();
+      dropEl.style.borderColor = "rgba(255,255,255,.18)";
+      const f = e.dataTransfer.files && e.dataTransfer.files[0];
+      if(!f || !f.type.startsWith("image/")) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        setItemField(roomId, itemId, "screenshotDataUrl", reader.result);
+        setItemField(roomId, itemId, "screenshotName", f.name || "screenshot");
+        renderRooms();
+      };
+      reader.readAsDataURL(f);
+    });
+  }
+
+  function escapeTripleBackticks(s){ return (s || "").replace(/```/g, "``\\\\`"); }
+
+  function buildPromptForRoom(r){
+    const header = [
+      "KETADATA LAB // ROOM MODULE EXPORT",
+      `ROOM: ${r.name}`,
+      "Task: Evaluate these pages. Extract reusable primitives, bugs, duplications, and consolidation opportunities. Propose: (1) shared components, (2) style rules, (3) a cleanup plan, (4) an implementation sequence.",
+      "Output constraints: be direct, actionable, non-poetic.",
+      "---",
+      ""
+    ].join("\\n");
+
+    const roomNotes = (r.notes || "").trim();
+    const roomNotesBlock = `ROOM NOTES:\\n${roomNotes || "[none]"}\\n---\\n`;
+
+    const blocks = r.items.map((it, idx) => {
+      const n = idx + 1;
+      const title = (it.title || "").trim() || `[untitled ${n}]`;
+      const link = (it.link || "").trim() || "[no link]";
+      const shot = it.screenshotName ? it.screenshotName : "[not provided]";
+      const notes = (it.notes || "").trim() || "[none]";
+      const html = (it.html || "").trim();
+
+      const htmlBlock = html
+        ? `HTML:\\n\\\`\\\`\\\`html\\n${escapeTripleBackticks(html)}\\n\\\`\\\`\\\`\\n`
+        : `HTML: [not provided]\\n`;
+
+      return [
+        `PAGE ${n}`,
+        `TITLE: ${title}`,
+        `LINK: ${link}`,
+        `SCREENSHOT: ${shot}`,
+        htmlBlock.trimEnd(),
+        `NOTES:\\n${notes}`,
+        "---",
+        ""
+      ].join("\\n");
+    }).join("\\n");
+
+    return header + roomNotesBlock + blocks;
+  }
+
+  function buildPromptAll(){
+    const pre = [
+      "KETADATA LAB // ROOM SORTER EXPORT (ALL)",
+      "Task: Compare pages across rooms. Identify duplicates, style bleed, shared components, and prioritize consolidation. Output: (1) global primitives, (2) room-by-room fixes, (3) dedup plan, (4) next 10 implementation actions.",
+      "Constraints: be direct, actionable, non-poetic.",
+      "---",
+      ""
+    ].join("\\n");
+    return pre + state.rooms.map(r => buildPromptForRoom(r)).join("\\n\\n");
+  }
+
+  function exportJSON(){
+    const payload = { version: 1, exported_at: new Date().toISOString(), ...state };
+    download("ketadata.room_sorter.export.json", JSON.stringify(payload, null, 2), "application/json");
+  }
+
+  function importJSON(file){
+    const reader = new FileReader();
+    reader.onload = () => {
+      try{
+        const data = JSON.parse(reader.result);
+        if(!data.rooms || !Array.isArray(data.rooms)) throw new Error("bad");
+        state.version = 1;
+        state.selectedRoomId = data.selectedRoomId || (data.rooms[0] && data.rooms[0].id) || uid();
+        state.sourcesRaw = data.sourcesRaw || "";
+        state.sources = Array.isArray(data.sources) ? data.sources : [];
+        state.rooms = data.rooms.map((r, idx) => ({
+          id: r.id || uid(),
+          order: r.order || (idx+1),
+          name: r.name || `module ${idx+1}`,
+          notes: r.notes || "",
+          items: Array.isArray(r.items) ? r.items.map(it => ({
+            id: it.id || uid(),
+            title: it.title || "",
+            link: it.link || "",
+            html: it.html || "",
+            notes: it.notes || "",
+            screenshotDataUrl: it.screenshotDataUrl || "",
+            screenshotName: it.screenshotName || ""
+          })) : []
+        }));
+        srcInput.value = state.sourcesRaw || "";
+        save(); renderSources(); renderRooms();
+      }catch(e){ alert("Import failed: invalid JSON."); }
+    };
+    reader.readAsText(file);
+  }
+
+  function renderSources(){
+    srcList.innerHTML = "";
+    srcCount.textContent = String(state.sources.length);
+
+    if(state.sources.length === 0){
+      const empty = document.createElement("div");
+      empty.className = "small";
+      empty.textContent = "No sources parsed yet. Paste links above and click parse.";
+      srcList.appendChild(empty);
+      return;
+    }
+
+    state.sources.forEach(s => {
+      const row = document.createElement("div");
+      row.className = "src";
+      row.innerHTML = `
+        <div class="left">
+          <div class="url" title="${escapeHtml(s.url)}">${escapeHtml(s.url)}</div>
+          <div class="host">${escapeHtml(s.host)}</div>
+        </div>
+        <div class="acts">
+          <button class="mini" data-act="copy">copy</button>
+          <button class="mini" data-act="add">add→room</button>
+        </div>
+      `;
+      row.querySelector('[data-act="copy"]').onclick = async () => { await copyText(s.url); };
+      row.querySelector('[data-act="add"]').onclick = () => {
+        const r = state.rooms.find(x => x.id === state.selectedRoomId);
+        if(!r){ alert("Select a target room first."); return; }
+        addItemToRoom(r.id, { link: s.url, title: "" });
+      };
+      srcList.appendChild(row);
+    });
+  }
+
+  function renderRooms(){
+    roomsGrid.innerHTML = "";
+    renderHeaderMeta();
+
+    state.rooms.sort((a,b) => (a.order||0) - (b.order||0)).forEach(r => {
+      const wrap = document.createElement("div");
+      wrap.className = "room";
+      const isSelected = (r.id === state.selectedRoomId);
+      const itemCount = r.items.length;
+
+      wrap.innerHTML = `
+        <div class="hdr">
+          <div style="display:flex; gap:10px; align-items:center; min-width:0;">
+            <div class="radio" title="target room for filing links">
+              <input type="radio" name="targetRoom" ${isSelected ? "checked" : ""}/>
+              <span>target</span>
+            </div>
+            <div class="room-title" title="${escapeHtml(r.name)}">${escapeHtml(r.name)}</div>
+            <span class="pill">${itemCount} pages</span>
+          </div>
+          <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+            <button class="mini" data-act="addPage">add page</button>
+            <button class="mini" data-act="exportRoom">export prompts</button>
+            <button class="mini danger" data-act="removeRoom">remove</button>
+          </div>
+        </div>
+        <div class="body">
+          <div class="field">
+            <label>room name</label>
+            <input type="text" data-k="name" value="${escapeAttr(r.name)}" placeholder="e.g. observatory / studio / vault / basement"/>
+          </div>
+          <div class="field">
+            <label>room notes (purpose / constraints / what belongs here)</label>
+            <textarea data-k="notes" placeholder="what is this room for? what does not belong here? what shared primitives does it need?">${escapeHtml(r.notes||"")}</textarea>
+          </div>
+          <div class="divider"></div>
+          <div class="items"></div>
+        </div>
+      `;
+
+      wrap.querySelector('input[type="radio"]').onchange = () => setSelectedRoom(r.id);
+
+      wrap.querySelectorAll("[data-k]").forEach(el => {
+        const k = el.getAttribute("data-k");
+        el.addEventListener("input", () => setRoomField(r.id, k, el.value));
+      });
+
+      wrap.querySelector('[data-act="addPage"]').onclick = () => addItemToRoom(r.id);
+      wrap.querySelector('[data-act="exportRoom"]').onclick = async () => {
+        const text = buildPromptForRoom(r);
+        openModal(`export prompts // ${r.name}`, text);
+        await copyText(text);
+      };
+      wrap.querySelector('[data-act="removeRoom"]').onclick = () => {
+        const ok = confirm(`Remove room "${r.name}"?`);
+        if(!ok) return;
+        removeRoom(r.id);
+      };
+
+      const itemsEl = wrap.querySelector(".items");
+      if(r.items.length === 0){
+        const empty = document.createElement("div");
+        empty.className = "small";
+        empty.textContent = "No pages filed yet. Select this room as target, then click add→room on the left, or add page.";
+        itemsEl.appendChild(empty);
+      } else {
+        r.items.forEach((it, idx) => {
+          const item = document.createElement("div");
+          item.className = "item";
+          const title = (it.title || "").trim() || `page ${idx+1}`;
+
+          item.innerHTML = `
+            <div class="item-top">
+              <div class="name" title="${escapeHtml(title)}">${escapeHtml(title)}</div>
+              <div class="actions">
+                <button class="mini" data-act="copyLink">copy link</button>
+                <button class="mini" data-act="exportOne">export</button>
+                <button class="mini danger" data-act="removeOne">remove</button>
+              </div>
+            </div>
+
+            <div class="item-grid">
+              <div class="field">
+                <label>title</label>
+                <input type="text" data-k="title" value="${escapeAttr(it.title)}" placeholder="e.g. system map v4"/>
+              </div>
+              <div class="field">
+                <label>link</label>
+                <input type="text" data-k="link" value="${escapeAttr(it.link)}" placeholder="https://..."/>
+              </div>
+            </div>
+
+            <div class="shot" style="margin-top:10px;">
+              <label>screenshot</label>
+              <div class="drop" data-act="pickShot">
+                ${it.screenshotDataUrl ? `<img alt="screenshot" src="${it.screenshotDataUrl}"/>` : `<div>drag image here<br/>or click to upload</div>`}
+              </div>
+              <div class="tools">
+                <button class="mini" data-act="pickShotBtn">upload</button>
+                <button class="mini" data-act="clearShot">clear</button>
+                <span class="small">${escapeHtml(it.screenshotName || "no screenshot")}</span>
+              </div>
+            </div>
+
+            <div class="field" style="margin-top:10px;">
+              <label>html code (optional)</label>
+              <textarea data-k="html" placeholder="paste html here…" spellcheck="false">${escapeHtml(it.html||"")}</textarea>
+            </div>
+
+            <div class="field">
+              <label>interface notes (likes / dislikes / features / bugs / primitives)</label>
+              <textarea data-k="notes" placeholder="what works / what fails / what to keep / what to consolidate…" spellcheck="false">${escapeHtml(it.notes||"")}</textarea>
+            </div>
+          `;
+
+          item.querySelectorAll("[data-k]").forEach(el => {
+            const k = el.getAttribute("data-k");
+            el.addEventListener("input", () => setItemField(r.id, it.id, k, el.value));
+          });
+
+          const drop = item.querySelector(".drop");
+          bindDrop(drop, r.id, it.id);
+          drop.onclick = () => pickScreenshot(r.id, it.id);
+          item.querySelector('[data-act="pickShotBtn"]').onclick = () => pickScreenshot(r.id, it.id);
+          item.querySelector('[data-act="clearShot"]').onclick = () => clearScreenshot(r.id, it.id);
+
+          item.querySelector('[data-act="removeOne"]').onclick = () => removeItem(r.id, it.id);
+          item.querySelector('[data-act="copyLink"]').onclick = async () => { await copyText(it.link || ""); };
+          item.querySelector('[data-act="exportOne"]').onclick = async () => {
+            const fakeRoom = { name: r.name, notes: r.notes, items: [it] };
+            const text = buildPromptForRoom(fakeRoom);
+            openModal(`export prompts // ${r.name} // single page`, text);
+            await copyText(text);
+          };
+
+          itemsEl.appendChild(item);
+        });
+      }
+
+      roomsGrid.appendChild(wrap);
+    });
+  }
+
+  function escapeHtml(s){
+    return (s || "").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;");
+  }
+  function escapeAttr(s){
+    return (s || "").replaceAll("&","&amp;").replaceAll('"',"&quot;").replaceAll("<","&lt;").replaceAll(">","&gt;");
+  }
+
+  // Topbar
+  $("btnAddRoom").onclick = addRoom;
+  $("btnExportAll").onclick = () => openModal("export prompts // all rooms", buildPromptAll());
+  $("btnCopyAll").onclick = async () => {
+    const text = buildPromptAll();
+    await copyText(text);
+    $("btnCopyAll").textContent = "copied";
+    setTimeout(() => $("btnCopyAll").textContent = "copy prompts", 900);
+  };
+  $("btnExportJSON").onclick = exportJSON;
+  $("btnImportJSON").onclick = () => jsonFile.click();
+  jsonFile.onchange = () => { const f = jsonFile.files && jsonFile.files[0]; if(f) importJSON(f); };
+
+  $("btnReset").onclick = () => {
+    const ok = confirm("Reset everything? This clears local state.");
+    if(!ok) return;
+    localStorage.removeItem(LS);
+    location.reload();
+  };
+
+  // Sources
+  $("btnParse").onclick = parseSources;
+  $("btnClearSrc").onclick = () => {
+    srcInput.value = "";
+    state.sourcesRaw = "";
+    state.sources = [];
+    save();
+    renderSources();
+  };
+
+  // Modal
+  $("btnClose").onclick = closeModal;
+  modal.addEventListener("click", (e) => { if(e.target === modal) closeModal(); });
+  window.addEventListener("keydown", (e) => { if(e.key === "Escape") closeModal(); });
+  $("btnDownload").onclick = () => {
+    const text = out.value || "";
+    const safe = (modalTitle.textContent || "export").toLowerCase().replace(/[^a-z0-9]+/g,"_").slice(0,60);
+    download(`ketadata_${safe}.txt`, text, "text/plain");
+  };
+
+  // init
+  srcInput.value = state.sourcesRaw || "";
+  renderHeaderMeta();
+  renderSources();
+  renderRooms();
+})();
+</script>
+</body>
+</html>
