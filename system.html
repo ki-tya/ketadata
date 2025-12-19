@@ -1,0 +1,1024 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>KETADATA — Control Plane</title>
+  <style>
+    :root{
+      --bg:#07080a;
+      --panel:#0c0f14;
+      --panel2:#0a0c10;
+      --ink:#e9edf4;
+      --muted:#9aa6b2;
+      --line:#1e2530;
+      --line2:#141a22;
+      --glass:rgba(255,255,255,0.06);
+      --glass2:rgba(255,255,255,0.03);
+      --accent:#d9dee7;
+      --danger:#ff5a5a;
+      --ok:#86efac;
+      --warn:#fde68a;
+      --radius:16px;
+      --radius2:12px;
+      --shadow: 0 10px 40px rgba(0,0,0,0.45);
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace;
+      --sans: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0;
+      background:
+        radial-gradient(1100px 700px at 20% 10%, rgba(255,255,255,0.07), transparent 60%),
+        radial-gradient(900px 600px at 85% 30%, rgba(255,255,255,0.05), transparent 60%),
+        linear-gradient(180deg, #050608, var(--bg));
+      color:var(--ink);
+      font-family:var(--sans);
+      letter-spacing:0.2px;
+    }
+    .app{
+      height:100%;
+      display:grid;
+      grid-template-rows:auto 1fr;
+    }
+    header{
+      padding:14px 18px;
+      border-bottom:1px solid var(--line2);
+      background:linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02));
+      backdrop-filter: blur(10px);
+      position:sticky;
+      top:0;
+      z-index:5;
+    }
+    .hdr{
+      display:flex;
+      gap:12px;
+      align-items:center;
+      justify-content:space-between;
+    }
+    .brand{
+      display:flex;
+      flex-direction:column;
+      gap:2px;
+    }
+    .brand .title{
+      font-weight:650;
+      font-size:13px;
+      letter-spacing:1.6px;
+      text-transform:uppercase;
+      font-family:var(--mono);
+    }
+    .brand .sub{
+      color:var(--muted);
+      font-size:12px;
+      font-family:var(--mono);
+    }
+    .actions{
+      display:flex;
+      gap:10px;
+      align-items:center;
+      flex-wrap:wrap;
+      justify-content:flex-end;
+    }
+    button, .btn{
+      appearance:none;
+      border:1px solid var(--line);
+      background:linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02));
+      color:var(--ink);
+      padding:10px 12px;
+      border-radius:12px;
+      font-family:var(--mono);
+      font-size:12px;
+      cursor:pointer;
+      transition:transform .08s ease, border-color .12s ease, background .12s ease;
+      box-shadow: 0 2px 14px rgba(0,0,0,0.25);
+    }
+    button:hover{border-color:#2b3546}
+    button:active{transform:translateY(1px)}
+    .btn.secondary{
+      background:linear-gradient(180deg, rgba(255,255,255,0.035), rgba(255,255,255,0.015));
+    }
+    .btn.danger{
+      border-color: rgba(255,90,90,0.35);
+      background: linear-gradient(180deg, rgba(255,90,90,0.14), rgba(255,90,90,0.05));
+    }
+    .pill{
+      font-family:var(--mono);
+      font-size:12px;
+      color:var(--muted);
+      border:1px solid var(--line);
+      background:rgba(255,255,255,0.02);
+      padding:8px 10px;
+      border-radius:999px;
+    }
+
+    .layout{
+      height:100%;
+      display:grid;
+      grid-template-columns: 360px 1fr;
+      gap:16px;
+      padding:16px;
+    }
+
+    .card{
+      border:1px solid var(--line2);
+      border-radius: var(--radius);
+      background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.02));
+      box-shadow: var(--shadow);
+      overflow:hidden;
+      min-height:0;
+    }
+
+    /* LEFT: vertical stack map */
+    .mapWrap{
+      display:flex;
+      flex-direction:column;
+      min-height:0;
+    }
+    .mapHeader{
+      padding:14px 14px 10px 14px;
+      border-bottom:1px solid var(--line2);
+      display:flex;
+      align-items:flex-end;
+      justify-content:space-between;
+      gap:10px;
+    }
+    .mapHeader .h{
+      display:flex;flex-direction:column;gap:6px;
+    }
+    .mapHeader .h .k{
+      font-family:var(--mono);
+      font-size:12px;
+      color:var(--muted);
+      letter-spacing:0.8px;
+      text-transform:uppercase;
+    }
+    .mapHeader .h .v{
+      font-size:14px;
+      font-weight:650;
+      letter-spacing:0.5px;
+    }
+    .mapHeader .hint{
+      font-family:var(--mono);
+      font-size:11px;
+      color:var(--muted);
+      text-align:right;
+      line-height:1.2;
+    }
+
+    .stack{
+      padding:12px;
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+      min-height:0;
+      overflow:auto;
+    }
+    .stackItem{
+      border:1px solid var(--line);
+      border-radius:14px;
+      background:linear-gradient(180deg, rgba(255,255,255,0.035), rgba(255,255,255,0.015));
+      padding:12px 12px 10px 12px;
+      cursor:pointer;
+      transition:border-color .12s ease, transform .08s ease, background .12s ease;
+      position:relative;
+      overflow:hidden;
+    }
+    .stackItem:hover{border-color:#2b3546}
+    .stackItem:active{transform:translateY(1px)}
+    .stackItem.active{
+      border-color:rgba(233,237,244,0.45);
+      background:linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.03));
+    }
+    .stackItem .top{
+      display:flex;
+      justify-content:space-between;
+      gap:10px;
+      align-items:flex-start;
+    }
+    .stackItem .name{
+      font-family:var(--mono);
+      font-size:12px;
+      text-transform:uppercase;
+      letter-spacing:1.2px;
+    }
+    .stackItem .alt{
+      font-family:var(--mono);
+      font-size:11px;
+      color:var(--muted);
+      white-space:nowrap;
+    }
+    .stackItem .desc{
+      margin-top:8px;
+      color:var(--muted);
+      font-size:12px;
+      line-height:1.35;
+    }
+    .stackItem .chips{
+      margin-top:10px;
+      display:flex; flex-wrap:wrap; gap:6px;
+    }
+    .chip{
+      font-family:var(--mono);
+      font-size:11px;
+      color:var(--muted);
+      border:1px solid var(--line);
+      background:rgba(255,255,255,0.02);
+      padding:6px 8px;
+      border-radius:999px;
+    }
+
+    /* RIGHT: workbench */
+    .workbench{
+      display:flex;
+      flex-direction:column;
+      min-height:0;
+    }
+    .tabs{
+      display:flex;
+      gap:8px;
+      padding:12px;
+      border-bottom:1px solid var(--line2);
+      background:rgba(0,0,0,0.08);
+      overflow:auto;
+    }
+    .tab{
+      border:1px solid var(--line);
+      background:rgba(255,255,255,0.02);
+      padding:10px 12px;
+      border-radius:999px;
+      font-family:var(--mono);
+      font-size:12px;
+      color:var(--muted);
+      cursor:pointer;
+      user-select:none;
+      white-space:nowrap;
+    }
+    .tab.active{
+      color:var(--ink);
+      border-color:rgba(233,237,244,0.42);
+      background:rgba(255,255,255,0.06);
+    }
+    .pane{
+      padding:14px;
+      overflow:auto;
+      min-height:0;
+    }
+
+    .grid2{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap:12px;
+    }
+    .grid3{
+      display:grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap:12px;
+    }
+    .panel{
+      border:1px solid var(--line2);
+      background:linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.015));
+      border-radius: var(--radius);
+      padding:12px;
+      min-height:0;
+    }
+    .panel h3{
+      margin:0 0 10px 0;
+      font-size:12px;
+      letter-spacing:1px;
+      text-transform:uppercase;
+      font-family:var(--mono);
+      color:var(--muted);
+    }
+    .panel .row{
+      display:flex;
+      gap:10px;
+      align-items:center;
+      justify-content:space-between;
+      margin:10px 0;
+      flex-wrap:wrap;
+    }
+    label{
+      font-family:var(--mono);
+      font-size:12px;
+      color:var(--muted);
+    }
+    input[type="text"], textarea, select{
+      width:100%;
+      border:1px solid var(--line);
+      background:rgba(0,0,0,0.25);
+      color:var(--ink);
+      border-radius:12px;
+      padding:10px 12px;
+      font-family:var(--mono);
+      font-size:12px;
+      outline:none;
+      transition:border-color .12s ease;
+    }
+    textarea{min-height:110px; resize:vertical;}
+    input[type="text"]:focus, textarea:focus, select:focus{
+      border-color:rgba(233,237,244,0.45);
+    }
+
+    .kv{
+      display:grid;
+      grid-template-columns: 140px 1fr;
+      gap:10px 12px;
+      align-items:start;
+    }
+    .kv .k{
+      font-family:var(--mono);
+      color:var(--muted);
+      font-size:12px;
+      padding-top:10px;
+    }
+    .kv .v{min-height:0;}
+    .small{
+      font-family:var(--mono);
+      color:var(--muted);
+      font-size:11px;
+      line-height:1.35;
+    }
+    .hr{
+      height:1px;
+      background:var(--line2);
+      margin:12px 0;
+    }
+
+    .footerNote{
+      margin-top:12px;
+      border-top:1px solid var(--line2);
+      padding-top:10px;
+      color:var(--muted);
+      font-family:var(--mono);
+      font-size:11px;
+      line-height:1.35;
+    }
+
+    .toast{
+      position:fixed;
+      bottom:14px;
+      right:14px;
+      border:1px solid var(--line);
+      background:rgba(10,12,16,0.88);
+      padding:10px 12px;
+      border-radius:12px;
+      font-family:var(--mono);
+      font-size:12px;
+      color:var(--ink);
+      box-shadow: var(--shadow);
+      opacity:0;
+      transform:translateY(6px);
+      transition:opacity .18s ease, transform .18s ease;
+      pointer-events:none;
+      z-index:20;
+    }
+    .toast.show{opacity:1; transform:translateY(0px)}
+    .mutedBox{
+      border:1px dashed var(--line);
+      border-radius:12px;
+      padding:10px 12px;
+      background:rgba(255,255,255,0.015);
+      color:var(--muted);
+      font-family:var(--mono);
+      font-size:11px;
+      line-height:1.35;
+    }
+    @media (max-width: 980px){
+      .layout{grid-template-columns:1fr; }
+      .kv{grid-template-columns: 1fr;}
+      .kv .k{padding-top:0}
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <div class="hdr">
+        <div class="brand">
+          <div class="title">KETADATA // CONTROL PLANE</div>
+          <div class="sub">Rooms × Modes × Tooling × Layer Governance (Ontology / Architecture / Operations / Expression)</div>
+        </div>
+        <div class="actions">
+          <span class="pill" id="statePill">unsaved</span>
+          <button class="btn secondary" id="btnExport">export.json</button>
+          <button class="btn secondary" id="btnImport">import.json</button>
+          <button class="btn" id="btnSave">save</button>
+          <button class="btn danger" id="btnReset">reset</button>
+        </div>
+      </div>
+    </header>
+
+    <div class="layout">
+      <!-- LEFT: Map -->
+      <div class="card mapWrap">
+        <div class="mapHeader">
+          <div class="h">
+            <div class="k">system map</div>
+            <div class="v">Vertical Section (All Rooms Visible)</div>
+          </div>
+          <div class="hint">
+            click room = load module<br/>
+            rooms = where • modes = how
+          </div>
+        </div>
+        <div class="stack" id="stack"></div>
+      </div>
+
+      <!-- RIGHT: Workbench -->
+      <div class="card workbench">
+        <div class="tabs" id="tabs">
+          <div class="tab active" data-tab="room">room module</div>
+          <div class="tab" data-tab="ontology">ontology</div>
+          <div class="tab" data-tab="architecture">architecture</div>
+          <div class="tab" data-tab="operations">operations</div>
+          <div class="tab" data-tab="expression">expression</div>
+        </div>
+
+        <div class="pane" id="pane-room"></div>
+        <div class="pane" id="pane-ontology" style="display:none;"></div>
+        <div class="pane" id="pane-architecture" style="display:none;"></div>
+        <div class="pane" id="pane-operations" style="display:none;"></div>
+        <div class="pane" id="pane-expression" style="display:none;"></div>
+      </div>
+    </div>
+  </div>
+
+  <input type="file" id="fileInput" accept="application/json" style="display:none" />
+  <div class="toast" id="toast"></div>
+
+  <script>
+    // ---------- Data Model ----------
+    const DEFAULT = {
+      version: "ketadata.controlplane.v1",
+      lastSavedISO: null,
+      selectedRoomId: "observatory",
+      rooms: [
+        {
+          id: "observatory",
+          name: "Observatory",
+          altitude: "highest",
+          short: "World time, flows, screenshots, events → abstract patterns. Funding + politics interfaces. Watching without action.",
+          purpose: "Reflect world signals into abstract patterns; generate legitimacy without intervention.",
+          allowedPrimitives: ["signal:world", "signal:screenshots", "reference", "visibility", "time", "mapping:patterns"],
+          forbiddenPrimitives: ["transformation:edit", "self-authoring", "sealing", "intervention"],
+          tools: ["globe/flows renderer", "event abstraction", "screenshot intake", "hyperstition mapper", "funding board (no kitsch)", "politics viewer (non-opinionated)"],
+          dataIn: "screenshots, world feeds, time zones, event streams",
+          dataOut: "abstract patterns, dashboards, legitimacy signals",
+          outputs: "legitimacy / signal / funding confidence",
+          constraints: "No intervention. No creation. No sealing. Visibility declared.",
+          failureModes: "turning commentary into action; turning feeds into addiction; kitsch finance UI"
+        },
+        {
+          id: "theater",
+          name: "Theater",
+          altitude: "near-high",
+          short: "Direct video lens. Screenings + live playback. Shared perception without editing or analysis.",
+          purpose: "Provide direct audiovisual perception as a lens under the Observatory.",
+          allowedPrimitives: ["signal:video", "visibility", "time", "shared-viewing"],
+          forbiddenPrimitives: ["transformation:edit", "analysis", "sealing"],
+          tools: ["screenings", "live playback", "politics playback extension", "research playback extension"],
+          dataIn: "video streams, curated clips",
+          dataOut: "shared perception, context substrate",
+          outputs: "shared perception",
+          constraints: "No editing. No analysis. No sealing. No feeds.",
+          failureModes: "becoming a content platform; mixing interpretation into playback"
+        },
+        {
+          id: "room",
+          name: "Room",
+          altitude: "private-high",
+          short: "Private suite/portal. Persistent design, intake, notepad, timer, meditation presets. Controlled consumption.",
+          purpose: "Provide continuity, care, and personal infrastructure without capture.",
+          allowedPrimitives: ["memory:personal", "intake", "notepad", "timer", "meditation", "private-visibility"],
+          forbiddenPrimitives: ["public-output", "forced-disclosure", "sealing (unless explicit via Vault)"],
+          tools: ["intake forms", "design memory", "notepad", "timer", "meditation presets", "library access (read)", "visuals access (read)"],
+          dataIn: "user preferences, intake data",
+          dataOut: "personal state, session routing",
+          outputs: "trust / continuity",
+          constraints: "No coercion. No public identity claims. Calm instrumentation.",
+          failureModes: "turning into therapy portal; turning into engagement trap"
+        },
+        {
+          id: "studio",
+          name: "Studio",
+          altitude: "above-lobby",
+          short: "Mixed media + vibe-coding tooling. Session-based; must save on exit. Metadata editing. Self-authoring as editing.",
+          purpose: "Primary value engine: create, transform, compose across media; generate structured outputs from prompts.",
+          allowedPrimitives: ["session", "transformation", "composition", "metadata:edit", "vibe-coding", "self-authoring(editing)", "export"],
+          forbiddenPrimitives: ["sealing", "feeds", "hidden autosave"],
+          tools: ["media transforms", "prompt mapping", "schema generation", "file converters", "advanced metadata editor", "inventory/self-authoring builder", "report plug-ins"],
+          dataIn: "user media, prompts, objects, files",
+          dataOut: "sessions, assets, schemas, transformed media",
+          outputs: "raw value / labor",
+          constraints: "New session on entry. Explicit save on exit. Nothing seals here.",
+          failureModes: "style bleed; duplicated tools; silent persistence; endless sessions"
+        },
+        {
+          id: "lobby",
+          name: "Lobby",
+          altitude: "access-plane",
+          short: "Primary entry. Users can go anywhere. Orientation + routing. Shop adjacency. No obligation.",
+          purpose: "Access plane: enter apparatus, route to rooms, optional commerce.",
+          allowedPrimitives: ["navigation", "orientation", "routing", "light commerce"],
+          forbiddenPrimitives: ["analysis", "forced onboarding"],
+          tools: ["system map", "room directory", "shop access", "temple access"],
+          dataIn: "minimal session start",
+          dataOut: "routing events",
+          outputs: "access",
+          constraints: "No capture. No deep logic here.",
+          failureModes: "funnelization; gating; upsell coercion"
+        },
+        {
+          id: "temple",
+          name: "Temple",
+          altitude: "adjacent-to-lobby",
+          short: "Contained esoteric room (airport multi-faith). Simplified rituals. Calm, bounded, optional. Not Basement intensity.",
+          purpose: "Provide symbolic orientation + contained ritual without spectacle or authority.",
+          allowedPrimitives: ["ritual", "time", "contained-intensity", "symbolic primitives"],
+          forbiddenPrimitives: ["analysis", "sealing", "myth enforcement", "social capture"],
+          tools: ["timed rituals", "geometry/light cues", "breath/attention guidance", "minimal cosmology (non-belief-bound)"],
+          dataIn: "none required / optional minimal",
+          dataOut: "stabilization state",
+          outputs: "orientation / emotional legitimacy",
+          constraints: "Bounded duration. Optional. No doctrine.",
+          failureModes: "wellness kitsch; belief coercion; turning into basement-lite spectacle"
+        },
+        {
+          id: "shop",
+          name: "Shop",
+          altitude: "public-access",
+          short: "Low-friction commerce. Buy artifacts/objects/reports without entering full apparatus.",
+          purpose: "Revenue without capture; access without commitment.",
+          allowedPrimitives: ["commerce", "catalog", "checkout"],
+          forbiddenPrimitives: ["analysis", "personal extraction"],
+          tools: ["catalog", "limited editions", "artifact purchase", "ticketing for stays"],
+          dataIn: "transaction only",
+          dataOut: "receipt, access tokens",
+          outputs: "revenue",
+          constraints: "No funnels. No personalization manipulation.",
+          failureModes: "growth hacks; spammy merchandising; kitsch scarcity tricks"
+        },
+        {
+          id: "vault",
+          name: "Vault",
+          altitude: "above-basement",
+          short: "Preservation layer. Sealed artifacts, numbered + dated, read-only. Collection / junkie archive.",
+          purpose: "Seal and preserve value; provide provenance and immutability.",
+          allowedPrimitives: ["sealing", "numbering", "dating", "provenance", "read-only"],
+          forbiddenPrimitives: ["editing", "remix", "unbounded mutation"],
+          tools: ["seal artifact", "version registry", "provenance ledger", "collection browser"],
+          dataIn: "exported sessions / selected outputs",
+          dataOut: "sealed artifacts",
+          outputs: "preserved value",
+          constraints: "Only place sealing occurs. Irreversible.",
+          failureModes: "editing sealed outputs; confusing archive vs feed"
+        },
+        {
+          id: "basement",
+          name: "Basement / Lab",
+          altitude: "lowest",
+          short: "Techno bunker sensory space. Instant feedback remixing. Intense, embodied, ephemeral unless exported.",
+          purpose: "Generate desire/energy via high-intensity experimentation; no permanence unless explicitly exported.",
+          allowedPrimitives: ["intensity:high", "instant feedback", "remix", "sensory", "ephemeral"],
+          forbiddenPrimitives: ["sealing", "reports", "interpretation as truth"],
+          tools: ["real-time effects", "audio-reactive transforms", "video remix", "sensory presets"],
+          dataIn: "media, signals, objects",
+          dataOut: "ephemeral remixes, exports",
+          outputs: "desire / energy / breakthroughs",
+          constraints: "No sealing. No reports. No permanence by default.",
+          failureModes: "addictive loops; confusing intensity with insight"
+        }
+      ],
+      layers: {
+        ontology: {
+          constitution: "KETADATA is a fun(ctional apparatus and party machine. It processes identity, objects, media, environments, and world signals as interoperable signals under constraint. It is not therapy, not diagnosis, not a feed. It produces finite, sealed artifacts and allows exit.",
+          isIsNot: "IS: bounded artifacts; explicit constraints; room jurisdiction; visible inference; industrial luxury; deliberate endings.\nIS NOT: diagnosis; coercion; infinite engagement; hidden mode switching; kitsch spectacle; total capture.",
+          forbidden: "No therapy claims. No medical/psychiatric diagnosis. No hidden extraction. No infinite loops posing as value."
+        },
+        architecture: {
+          roomsRule: "Rooms define WHERE. Modes define HOW. Artifacts define WHAT (state). Room law cannot be overridden by modes or aesthetics.",
+          altitude: "Basement lowest. Vault one above. Lobby entry plane. Studio above lobby. Room above studio. Theater below Observatory. Observatory highest. Temple + Shop adjacent to Lobby.",
+          interlocks: "No analysis on Basement/Theater. No sealing outside Vault. No hidden autosave in Studio. No doctrine in Temple. No funnels in Lobby/Shop."
+        },
+        operations: {
+          runbook: "Operator work happens in Control Plane. Users inhabit rooms. Transitions are explicit. Sessions begin on Studio entry. Exports move to Vault for sealing. Observatory ingests screenshots/world data and outputs patterns. Theater plays direct video. Basement remixes with instant feedback and requires explicit export to persist.",
+          checklists: "Daily: verify room boundaries; verify forbidden primitives per room; verify export/seal pathways; verify no kitsch in funding; verify sound stratification; verify exits.",
+          auditTriggers: "If a feature spans multiple rooms: split it. If a visual implies permission: fix it. If a tool floats without room-binding: bind it."
+        },
+        expression: {
+          materials: "industrial luxury: glass/stone/concrete, restraint, instrument interfaces, no ornament. sound is architectural. video is stratified by altitude.",
+          visuals: "observatory: orbital/cosmic; theater: disciplined screening; studio: instrument bench; room: quiet suite; lobby/shop: minimal prestige; temple: contained ritual; vault: archive weight; basement: bunker intensity.",
+          noKitsch: "No cartoon finance. No dopamine confetti. No wellness pastel. No cute mysticism. No faux-startup neon."
+        }
+      }
+    };
+
+    // ---------- Persistence ----------
+    const STORAGE_KEY = "ketadata_control_plane_v1";
+    function loadState(){
+      try{
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if(!raw) return structuredClone(DEFAULT);
+        const parsed = JSON.parse(raw);
+        // soft-merge with DEFAULT for forward-compat
+        return deepMerge(structuredClone(DEFAULT), parsed);
+      }catch(e){
+        return structuredClone(DEFAULT);
+      }
+    }
+    function saveState(){
+      state.lastSavedISO = new Date().toISOString();
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state, null, 2));
+      dirty = false;
+      setStatePill();
+      toast("saved");
+    }
+    function resetState(){
+      state = structuredClone(DEFAULT);
+      dirty = true;
+      setStatePill();
+      renderAll();
+      toast("reset to default");
+    }
+    function markDirty(){
+      dirty = true;
+      setStatePill();
+    }
+    function setStatePill(){
+      const pill = document.getElementById("statePill");
+      if(dirty){
+        pill.textContent = "unsaved";
+        pill.style.borderColor = "rgba(253,230,138,0.25)";
+        pill.style.color = "var(--warn)";
+      }else{
+        pill.textContent = "saved";
+        pill.style.borderColor = "rgba(134,239,172,0.25)";
+        pill.style.color = "var(--ok)";
+      }
+    }
+    function deepMerge(target, source){
+      if(typeof source !== "object" || source === null) return target;
+      for(const key of Object.keys(source)){
+        const sv = source[key];
+        const tv = target[key];
+        if(Array.isArray(sv)){
+          target[key] = sv; // authoritative
+        }else if(typeof sv === "object" && sv !== null){
+          target[key] = deepMerge(tv && typeof tv === "object" ? tv : {}, sv);
+        }else{
+          target[key] = sv;
+        }
+      }
+      return target;
+    }
+
+    // ---------- UI ----------
+    let state = loadState();
+    let dirty = false;
+
+    function toast(msg){
+      const t = document.getElementById("toast");
+      t.textContent = msg;
+      t.classList.add("show");
+      setTimeout(()=>t.classList.remove("show"), 1100);
+    }
+
+    function getRoom(id){ return state.rooms.find(r => r.id === id); }
+
+    function renderStack(){
+      const stack = document.getElementById("stack");
+      stack.innerHTML = "";
+      state.rooms.forEach(r=>{
+        const div = document.createElement("div");
+        div.className = "stackItem" + (r.id===state.selectedRoomId ? " active" : "");
+        div.dataset.roomId = r.id;
+        div.innerHTML = `
+          <div class="top">
+            <div class="name">${escapeHtml(r.name)}</div>
+            <div class="alt">${escapeHtml(r.altitude)}</div>
+          </div>
+          <div class="desc">${escapeHtml(r.short)}</div>
+          <div class="chips">
+            ${[r.outputs, r.purpose].filter(Boolean).slice(0,1).map(x=>`<span class="chip">${escapeHtml(x)}</span>`).join("")}
+            <span class="chip">room-bound tools</span>
+          </div>
+        `;
+        div.addEventListener("click", ()=>{
+          state.selectedRoomId = r.id;
+          markDirty();
+          renderStack();
+          renderRoomPane();
+        });
+        stack.appendChild(div);
+      });
+    }
+
+    function renderRoomPane(){
+      const room = getRoom(state.selectedRoomId);
+      const pane = document.getElementById("pane-room");
+      pane.innerHTML = `
+        <div class="panel">
+          <h3>selected room</h3>
+          <div class="kv">
+            <div class="k">name</div>
+            <div class="v"><input type="text" id="room-name" value="${escapeAttr(room.name)}"/></div>
+
+            <div class="k">altitude</div>
+            <div class="v">
+              <select id="room-altitude">
+                ${["highest","near-high","private-high","above-lobby","access-plane","adjacent-to-lobby","public-access","above-basement","lowest"]
+                  .map(a=>`<option value="${a}" ${a===room.altitude?"selected":""}>${a}</option>`).join("")}
+              </select>
+            </div>
+
+            <div class="k">short</div>
+            <div class="v"><textarea id="room-short">${escapeHtml(room.short)}</textarea></div>
+
+            <div class="k">purpose</div>
+            <div class="v"><textarea id="room-purpose">${escapeHtml(room.purpose)}</textarea></div>
+          </div>
+
+          <div class="hr"></div>
+
+          <div class="grid2">
+            <div class="panel">
+              <h3>allowed primitives</h3>
+              <textarea id="room-allowed">${escapeHtml((room.allowedPrimitives||[]).join("\\n"))}</textarea>
+              <div class="footerNote">one per line. keep primitives orthogonal. room law must be enforceable.</div>
+            </div>
+            <div class="panel">
+              <h3>forbidden primitives</h3>
+              <textarea id="room-forbidden">${escapeHtml((room.forbiddenPrimitives||[]).join("\\n"))}</textarea>
+              <div class="footerNote">one per line. this is where you prevent bleed.</div>
+            </div>
+          </div>
+
+          <div class="hr"></div>
+
+          <div class="grid2">
+            <div class="panel">
+              <h3>tools (room-bound)</h3>
+              <textarea id="room-tools">${escapeHtml((room.tools||[]).join("\\n"))}</textarea>
+              <div class="footerNote">tools belong to one room only. if it spans rooms, split the tool.</div>
+            </div>
+            <div class="panel">
+              <h3>constraints + failure modes</h3>
+              <label>constraints</label>
+              <textarea id="room-constraints">${escapeHtml(room.constraints||"")}</textarea>
+              <div class="hr"></div>
+              <label>known failure modes</label>
+              <textarea id="room-fail">${escapeHtml(room.failureModes||"")}</textarea>
+            </div>
+          </div>
+
+          <div class="hr"></div>
+
+          <div class="grid3">
+            <div class="panel">
+              <h3>data in</h3>
+              <textarea id="room-in">${escapeHtml(room.dataIn||"")}</textarea>
+            </div>
+            <div class="panel">
+              <h3>data out</h3>
+              <textarea id="room-out">${escapeHtml(room.dataOut||"")}</textarea>
+            </div>
+            <div class="panel">
+              <h3>outputs (value type)</h3>
+              <textarea id="room-outputs">${escapeHtml(room.outputs||"")}</textarea>
+              <div class="footerNote">each room must have a distinct output type. no overlap unless declared.</div>
+            </div>
+          </div>
+
+          <div class="hr"></div>
+
+          <div class="row">
+            <div class="mutedBox">
+              Control Plane edits are structural. This does not “enter” the room. It tools the room.
+              If a change alters behavior across rooms, it is a layer violation.
+            </div>
+            <div style="display:flex; gap:10px; flex-wrap:wrap;">
+              <button class="btn secondary" id="btnDuplicateRoom">duplicate room</button>
+              <button class="btn danger" id="btnDeleteRoom">delete room</button>
+            </div>
+          </div>
+        </div>
+      `;
+
+      // bind inputs
+      const bind = (id, fn) => {
+        const el = document.getElementById(id);
+        el.addEventListener("input", ()=>{ fn(el.value); markDirty(); });
+      };
+
+      bind("room-name", v=>room.name=v);
+      document.getElementById("room-altitude").addEventListener("change", (e)=>{ room.altitude=e.target.value; markDirty(); });
+      bind("room-short", v=>room.short=v);
+      bind("room-purpose", v=>room.purpose=v);
+
+      bind("room-allowed", v=>room.allowedPrimitives = splitLines(v));
+      bind("room-forbidden", v=>room.forbiddenPrimitives = splitLines(v));
+      bind("room-tools", v=>room.tools = splitLines(v));
+      bind("room-constraints", v=>room.constraints=v);
+      bind("room-fail", v=>room.failureModes=v);
+
+      bind("room-in", v=>room.dataIn=v);
+      bind("room-out", v=>room.dataOut=v);
+      bind("room-outputs", v=>room.outputs=v);
+
+      // duplicate / delete
+      document.getElementById("btnDuplicateRoom").addEventListener("click", ()=>{
+        const copy = structuredClone(room);
+        copy.id = room.id + "_" + Math.random().toString(16).slice(2,6);
+        copy.name = room.name + " (copy)";
+        state.rooms.push(copy);
+        state.selectedRoomId = copy.id;
+        markDirty();
+        renderAll();
+        toast("room duplicated");
+      });
+
+      document.getElementById("btnDeleteRoom").addEventListener("click", ()=>{
+        if(state.rooms.length <= 1) return toast("cannot delete last room");
+        const idx = state.rooms.findIndex(r=>r.id===room.id);
+        state.rooms.splice(idx,1);
+        state.selectedRoomId = state.rooms[Math.max(0, idx-1)].id;
+        markDirty();
+        renderAll();
+        toast("room deleted");
+      });
+    }
+
+    function renderLayerPane(which){
+      const pane = document.getElementById("pane-"+which);
+      const data = state.layers[which];
+
+      const make = (title, field, height=160, hint="") => `
+        <div class="panel">
+          <h3>${escapeHtml(title)}</h3>
+          <textarea data-layer="${which}" data-field="${field}" style="min-height:${height}px">${escapeHtml(data[field]||"")}</textarea>
+          ${hint ? `<div class="footerNote">${escapeHtml(hint)}</div>` : ``}
+        </div>
+      `;
+
+      let content = "";
+      if(which==="ontology"){
+        content = `
+          <div class="grid2">
+            ${make("constitution", "constitution", 190, "immutable during operation. no metaphors doing definitional work.")}
+            ${make("is / is not", "isIsNot", 190, "high-level law. abstract. enforceable.")}
+          </div>
+          <div class="hr"></div>
+          ${make("forbidden", "forbidden", 160, "hard NOs. anything here is a system fault.")}
+        `;
+      }
+      if(which==="architecture"){
+        content = `
+          <div class="grid2">
+            ${make("rooms rule", "roomsRule", 180, "rooms = where. modes = how. artifacts = what (state).")}
+            ${make("altitude + placement", "altitude", 180, "this is the section cut. keep it consistent across UI.")}
+          </div>
+          <div class="hr"></div>
+          ${make("interlocks", "interlocks", 160, "anti-bleed constraints. enforce at runtime.")}
+        `;
+      }
+      if(which==="operations"){
+        content = `
+          <div class="grid2">
+            ${make("runbook", "runbook", 210, "boring on purpose. step-by-step. no vibes.")}
+            ${make("checklists", "checklists", 210, "daily/weekly operator checks.")}
+          </div>
+          <div class="hr"></div>
+          ${make("audit triggers", "auditTriggers", 160, "when to stop and refactor.")}
+        `;
+      }
+      if(which==="expression"){
+        content = `
+          <div class="grid2">
+            ${make("materials", "materials", 190, "industrial luxury law. instruments, restraint, weight.")}
+            ${make("visuals", "visuals", 190, "room-specific expression; cannot grant permissions.")}
+          </div>
+          <div class="hr"></div>
+          ${make("no kitsch", "noKitsch", 160, "style hard NOs. prevents aesthetic rot.")}
+        `;
+      }
+
+      pane.innerHTML = `
+        <div class="panel">
+          <h3>${which}</h3>
+          <div class="small">
+            Ontology defines what exists. Architecture defines where/how it can happen. Operations defines what to do next.
+            Expression defines how it feels and looks. If expression changes behavior, it is illegal bleed.
+          </div>
+        </div>
+        <div class="hr"></div>
+        ${content}
+      `;
+
+      pane.querySelectorAll("textarea[data-layer]").forEach(t=>{
+        t.addEventListener("input", ()=>{
+          const layer = t.getAttribute("data-layer");
+          const field = t.getAttribute("data-field");
+          state.layers[layer][field] = t.value;
+          markDirty();
+        });
+      });
+    }
+
+    function renderAll(){
+      renderStack();
+      renderRoomPane();
+      renderLayerPane("ontology");
+      renderLayerPane("architecture");
+      renderLayerPane("operations");
+      renderLayerPane("expression");
+      setStatePill();
+    }
+
+    // ---------- Tabs ----------
+    function setTab(name){
+      document.querySelectorAll(".tab").forEach(t=>{
+        t.classList.toggle("active", t.dataset.tab === name);
+      });
+      ["room","ontology","architecture","operations","expression"].forEach(k=>{
+        document.getElementById("pane-"+k).style.display = (k===name) ? "block" : "none";
+      });
+    }
+    document.getElementById("tabs").addEventListener("click", (e)=>{
+      const tab = e.target.closest(".tab");
+      if(!tab) return;
+      setTab(tab.dataset.tab);
+    });
+
+    // ---------- Export / Import ----------
+    function download(filename, text){
+      const blob = new Blob([text], {type:"application/json"});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    }
+    document.getElementById("btnExport").addEventListener("click", ()=>{
+      const payload = JSON.stringify(state, null, 2);
+      download("ketadata-control-plane.json", payload);
+      toast("exported");
+    });
+    document.getElementById("btnImport").addEventListener("click", ()=>{
+      document.getElementById("fileInput").click();
+    });
+    document.getElementById("fileInput").addEventListener("change", async (e)=>{
+      const file = e.target.files[0];
+      if(!file) return;
+      try{
+        const text = await file.text();
+        const parsed = JSON.parse(text);
+        state = deepMerge(structuredClone(DEFAULT), parsed);
+        dirty = true;
+        setStatePill();
+        renderAll();
+        toast("imported");
+      }catch(err){
+        toast("import failed");
+      }finally{
+        e.target.value = "";
+      }
+    });
+
+    // ---------- Save / Reset ----------
+    document.getElementById("btnSave").addEventListener("click", saveState);
+    document.getElementById("btnReset").addEventListener("click", ()=>{
+      resetState();
+      localStorage.removeItem(STORAGE_KEY);
+    });
+
+    // warn on unload
+    window.addEventListener("beforeunload", (e)=>{
+      if(!dirty) return;
+      e.preventDefault();
+      e.returnValue = "";
+    });
+
+    // ---------- helpers ----------
+    function splitLines(s){
+      return s.split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
+    }
+    function escapeHtml(str){
+      return String(str ?? "")
+        .replace(/&/g,"&amp;")
+        .replace(/</g,"&lt;")
+        .replace(/>/g,"&gt;")
+        .replace(/"/g,"&quot;")
+        .replace(/'/g,"&#039;");
+    }
+    function escapeAttr(str){ return escapeHtml(str); }
+
+    // init
+    renderAll();
+  </script>
+</body>
+</html>
