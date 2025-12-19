@@ -1,0 +1,751 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>KETADATA — Constellation Notes Interface</title>
+  <style>
+    :root{
+      --bg:#0b0d10;
+      --panel:#0f1217;
+      --ink:#e9edf4;
+      --muted:#a2acb8;
+      --line:#202734;
+      --line2:#141a22;
+      --danger:#ff5a5a;
+      --warn:#fde68a;
+      --ok:#86efac;
+    }
+    *{
+      box-sizing:border-box;
+      font-family: Arial, Helvetica, sans-serif !important;
+      border-radius:0 !important;
+    }
+    html,body{height:100%}
+    body{
+      margin:0;
+      background:var(--bg);
+      color:var(--ink);
+      overflow:hidden;
+    }
+    header{
+      height:54px;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      padding:0 14px;
+      border-bottom:1px solid var(--line2);
+      background:#0a0c10;
+    }
+    .brand{
+      display:flex; flex-direction:column; gap:2px;
+    }
+    .brand .t{
+      font-weight:700;
+      font-size:12px;
+      letter-spacing:1.4px;
+      text-transform:uppercase;
+    }
+    .brand .s{
+      font-size:12px;
+      color:var(--muted);
+    }
+    .controls{
+      display:flex;
+      gap:8px;
+      align-items:center;
+      flex-wrap:wrap;
+      justify-content:flex-end;
+    }
+    button{
+      border:1px solid var(--line);
+      background:#0d1016;
+      color:var(--ink);
+      padding:8px 10px;
+      font-size:12px;
+      cursor:pointer;
+    }
+    button:hover{border-color:#2b3546}
+    .pill{
+      border:1px solid var(--line);
+      color:var(--muted);
+      padding:7px 10px;
+      font-size:12px;
+    }
+
+    /* Stage */
+    #stage{
+      position:relative;
+      width:100%;
+      height:calc(100% - 54px);
+      background:
+        radial-gradient(600px 400px at 20% 10%, rgba(255,255,255,0.05), transparent 60%),
+        radial-gradient(700px 500px at 80% 35%, rgba(255,255,255,0.04), transparent 60%),
+        linear-gradient(180deg, rgba(255,255,255,0.03), transparent 40%);
+    }
+
+    /* Edges layer */
+    svg#edges{
+      position:absolute;
+      inset:0;
+      width:100%;
+      height:100%;
+      pointer-events:none;
+    }
+
+    /* Nodes */
+    .node{
+      position:absolute;
+      width:220px;
+      border:1px solid var(--line);
+      background:#0c0f14;
+      cursor:grab;
+      user-select:none;
+    }
+    .node:active{cursor:grabbing}
+    .node.selected{
+      border-color: rgba(233,237,244,0.55);
+      outline: 1px solid rgba(233,237,244,0.18);
+      outline-offset: 0;
+    }
+    .bar{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      padding:10px 10px 8px 10px;
+      border-bottom:1px solid var(--line2);
+      background:#0a0c10;
+    }
+    .name{
+      font-size:12px;
+      font-weight:700;
+      letter-spacing:1.2px;
+      text-transform:uppercase;
+    }
+    .tag{
+      font-size:11px;
+      color:var(--muted);
+      border:1px solid var(--line);
+      padding:4px 6px;
+    }
+    .body{
+      padding:10px;
+      display:flex;
+      flex-direction:column;
+      gap:8px;
+    }
+    textarea{
+      width:100%;
+      min-height:104px;
+      border:1px solid var(--line);
+      background:#07090c;
+      color:var(--ink);
+      padding:8px 9px;
+      font-size:12px;
+      resize:vertical;
+    }
+    .meta{
+      display:flex;
+      gap:8px;
+      flex-wrap:wrap;
+      align-items:center;
+      justify-content:space-between;
+    }
+    .meta .small{
+      font-size:11px;
+      color:var(--muted);
+      line-height:1.25;
+    }
+    .miniBtn{
+      border:1px solid var(--line);
+      background:#0a0c10;
+      color:var(--ink);
+      padding:6px 8px;
+      font-size:12px;
+      cursor:pointer;
+    }
+    .miniBtn:hover{border-color:#2b3546}
+
+    /* Context panel */
+    #side{
+      position:absolute;
+      top:10px;
+      right:10px;
+      width:360px;
+      max-height:calc(100% - 20px);
+      border:1px solid var(--line2);
+      background:#0a0c10;
+      padding:12px;
+      overflow:auto;
+    }
+    #side h3{
+      margin:0 0 10px 0;
+      font-size:12px;
+      letter-spacing:1.2px;
+      text-transform:uppercase;
+      color:var(--muted);
+    }
+    #side .kv{
+      display:grid;
+      grid-template-columns:120px 1fr;
+      gap:8px 10px;
+      align-items:start;
+    }
+    #side .k{
+      color:var(--muted);
+      font-size:12px;
+    }
+    #side .v{
+      font-size:12px;
+      color:var(--ink);
+      word-break:break-word;
+    }
+    #side .hr{
+      height:1px;
+      background:var(--line2);
+      margin:10px 0;
+    }
+    #side .hint{
+      color:var(--muted);
+      font-size:12px;
+      line-height:1.35;
+    }
+
+    /* Mobile: hide side panel */
+    @media (max-width: 980px){
+      #side{display:none;}
+      .node{width:200px;}
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <div class="t">KETADATA // CONSTELLATION NOTES</div>
+      <div class="s">Squares are rooms. Drag to rearrange. Lines are navigation logic.</div>
+    </div>
+    <div class="controls">
+      <span class="pill" id="status">unsaved</span>
+      <button id="btnCenter">center</button>
+      <button id="btnReset">reset layout</button>
+      <button id="btnExport">export.json</button>
+      <button id="btnImport">import.json</button>
+      <button id="btnSave">save</button>
+    </div>
+  </header>
+
+  <div id="stage">
+    <svg id="edges"></svg>
+
+    <div id="side">
+      <h3>selected</h3>
+      <div class="kv">
+        <div class="k">room</div><div class="v" id="selName">—</div>
+        <div class="k">tier</div><div class="v" id="selTier">—</div>
+        <div class="k">neighbors</div><div class="v" id="selNeighbors">—</div>
+      </div>
+      <div class="hr"></div>
+      <div class="hint">
+        Interaction rules:
+        <br>— click a square to select
+        <br>— drag squares to rearrange
+        <br>— notes persist per square
+        <br>— navigation logic is fixed unless you edit the graph in JSON
+      </div>
+    </div>
+  </div>
+
+  <input type="file" id="fileInput" accept="application/json" style="display:none"/>
+
+  <script>
+    // -----------------------------
+    // GRAPH (your requested topology)
+    // -----------------------------
+    // LOBBY (top) -> Row 1: TEMPLE / ELEVATOR / STORE
+    // ELEVATOR -> OBSERVATORY / CINEMA / ROOM / STUDIO / LIBRARY + VAULT / LAB / BASEMENT
+    //
+    // Notes:
+    // - "Cinema" = Theater
+    // - "Basement" (you also mention Lab/ Basement; you asked for VAULT/LAB/BASEMENT)
+    // - We keep both LAB and BASEMENT as separate squares per your instruction.
+
+    const DEFAULT = {
+      version: "ketadata.constellation.v1",
+      lastSavedISO: null,
+      selectedId: "lobby",
+      nodes: [
+        // TOP
+        { id:"lobby",       label:"Lobby",       tier:"entry",     x: 520, y:  40,  note:"" },
+
+        // ROW 1 (under lobby)
+        { id:"temple",      label:"Temple",      tier:"adjacent",  x: 240, y: 170,  note:"" },
+        { id:"elevator",    label:"Elevator",    tier:"router",    x: 520, y: 170,  note:"" },
+        { id:"store",       label:"Store",       tier:"commerce",  x: 800, y: 170,  note:"" },
+
+        // ELEVATOR DESTINATIONS (mid / high)
+        { id:"observatory", label:"Observatory", tier:"highest",   x: 160, y: 330,  note:"" },
+        { id:"cinema",      label:"Cinema",      tier:"lens",      x: 400, y: 330,  note:"" },
+        { id:"room",        label:"Room",        tier:"private",   x: 640, y: 330,  note:"" },
+        { id:"studio",      label:"Studio",      tier:"work",      x: 880, y: 330,  note:"" },
+        { id:"library",     label:"Library",     tier:"club",      x: 1120,y: 330,  note:"" },
+
+        // LOWER DESTINATIONS (value arrest + intensity)
+        { id:"vault",       label:"Vault",       tier:"sealed",    x: 360, y: 520,  note:"" },
+        { id:"lab",         label:"Lab",         tier:"sensory",   x: 640, y: 520,  note:"" },
+        { id:"basement",    label:"Basement",    tier:"lowest",    x: 920, y: 520,  note:"" }
+      ],
+      edges: [
+        // Lobby to Row 1
+        { from:"lobby", to:"temple", kind:"nav" },
+        { from:"lobby", to:"elevator", kind:"nav" },
+        { from:"lobby", to:"store", kind:"nav" },
+
+        // Elevator fan-out
+        { from:"elevator", to:"observatory", kind:"nav" },
+        { from:"elevator", to:"cinema", kind:"nav" },
+        { from:"elevator", to:"room", kind:"nav" },
+        { from:"elevator", to:"studio", kind:"nav" },
+        { from:"elevator", to:"library", kind:"nav" },
+        { from:"elevator", to:"vault", kind:"nav" },
+        { from:"elevator", to:"lab", kind:"nav" },
+        { from:"elevator", to:"basement", kind:"nav" },
+
+        // Optional structural adjacency (feel free to delete later)
+        { from:"lab", to:"basement", kind:"adj" },
+        { from:"vault", to:"lab", kind:"adj" },
+        { from:"cinema", to:"observatory", kind:"adj" }
+      ],
+      ui: {
+        snap: false,
+        grid: 20,
+        showEdgeLabels: false
+      }
+    };
+
+    // -----------------------------
+    // STATE / PERSISTENCE
+    // -----------------------------
+    const KEY = "ketadata_constellation_v1";
+    let state = loadState();
+    let dirty = false;
+
+    function loadState(){
+      try{
+        const raw = localStorage.getItem(KEY);
+        if(!raw) return structuredClone(DEFAULT);
+        const parsed = JSON.parse(raw);
+        return deepMerge(structuredClone(DEFAULT), parsed);
+      }catch(e){
+        return structuredClone(DEFAULT);
+      }
+    }
+    function saveState(){
+      state.lastSavedISO = new Date().toISOString();
+      localStorage.setItem(KEY, JSON.stringify(state, null, 2));
+      dirty = false;
+      setStatus();
+    }
+    function markDirty(){ dirty = true; setStatus(); }
+    function setStatus(){
+      const el = document.getElementById("status");
+      el.textContent = dirty ? "unsaved" : "saved";
+      el.style.borderColor = dirty ? "rgba(253,230,138,0.35)" : "rgba(134,239,172,0.35)";
+      el.style.color = dirty ? "var(--warn)" : "var(--ok)";
+    }
+    function deepMerge(target, source){
+      if(typeof source !== "object" || source === null) return target;
+      for(const k of Object.keys(source)){
+        const sv = source[k];
+        const tv = target[k];
+        if(Array.isArray(sv)) target[k] = sv;
+        else if(typeof sv === "object" && sv !== null) target[k] = deepMerge(tv && typeof tv==="object" ? tv : {}, sv);
+        else target[k] = sv;
+      }
+      return target;
+    }
+
+    // -----------------------------
+    // RENDER
+    // -----------------------------
+    const stage = document.getElementById("stage");
+    const edgesSvg = document.getElementById("edges");
+
+    const nodeEls = new Map();
+
+    function nodeById(id){ return state.nodes.find(n => n.id === id); }
+    function neighborsOf(id){
+      const out = [];
+      state.edges.forEach(e=>{
+        if(e.from===id) out.push(e.to);
+        if(e.to===id) out.push(e.from);
+      });
+      // unique
+      return [...new Set(out)];
+    }
+
+    function render(){
+      // nodes
+      state.nodes.forEach(n=>{
+        let el = nodeEls.get(n.id);
+        if(!el){
+          el = document.createElement("div");
+          el.className = "node";
+          el.dataset.id = n.id;
+
+          el.innerHTML = `
+            <div class="bar">
+              <div class="name">${escapeHtml(n.label)}</div>
+              <div class="tag">${escapeHtml(n.tier)}</div>
+            </div>
+            <div class="body">
+              <textarea spellcheck="false" placeholder="notes..."></textarea>
+              <div class="meta">
+                <div class="small">drag to reposition</div>
+                <button class="miniBtn" data-action="focus">focus</button>
+              </div>
+            </div>
+          `;
+
+          // select on click (bar or body)
+          el.addEventListener("mousedown", (ev)=>{
+            // allow text editing without dragging
+            if(ev.target && (ev.target.tagName === "TEXTAREA" || ev.target.closest("textarea"))) return;
+            selectNode(n.id);
+          });
+
+          // focus button
+          el.querySelector('[data-action="focus"]').addEventListener("click", (ev)=>{
+            ev.stopPropagation();
+            selectNode(n.id);
+            centerOnNode(n.id);
+          });
+
+          // note editing
+          const ta = el.querySelector("textarea");
+          ta.value = n.note || "";
+          ta.addEventListener("input", ()=>{
+            const node = nodeById(n.id);
+            node.note = ta.value;
+            markDirty();
+          });
+
+          // drag
+          makeDraggable(el);
+
+          stage.appendChild(el);
+          nodeEls.set(n.id, el);
+        }
+
+        // position
+        el.style.left = n.x + "px";
+        el.style.top  = n.y + "px";
+
+        // selected
+        el.classList.toggle("selected", n.id === state.selectedId);
+      });
+
+      // remove any missing nodes
+      for(const [id, el] of nodeEls.entries()){
+        if(!state.nodes.some(n=>n.id===id)){
+          el.remove();
+          nodeEls.delete(id);
+        }
+      }
+
+      renderEdges();
+      renderSidePanel();
+      setStatus();
+    }
+
+    function renderEdges(){
+      // Clear SVG
+      edgesSvg.innerHTML = "";
+
+      // SVG defs (arrow marker)
+      const defs = document.createElementNS("http://www.w3.org/2000/svg","defs");
+      const marker = document.createElementNS("http://www.w3.org/2000/svg","marker");
+      marker.setAttribute("id","arrow");
+      marker.setAttribute("viewBox","0 0 10 10");
+      marker.setAttribute("refX","10");
+      marker.setAttribute("refY","5");
+      marker.setAttribute("markerWidth","7");
+      marker.setAttribute("markerHeight","7");
+      marker.setAttribute("orient","auto-start-reverse");
+      const path = document.createElementNS("http://www.w3.org/2000/svg","path");
+      path.setAttribute("d","M 0 0 L 10 5 L 0 10 z");
+      path.setAttribute("fill","rgba(233,237,244,0.55)");
+      marker.appendChild(path);
+      defs.appendChild(marker);
+      edgesSvg.appendChild(defs);
+
+      // Draw lines
+      state.edges.forEach(e=>{
+        const a = nodeEls.get(e.from);
+        const b = nodeEls.get(e.to);
+        if(!a || !b) return;
+
+        const A = centerOf(a);
+        const B = centerOf(b);
+
+        const isSelectedEdge = (e.from===state.selectedId || e.to===state.selectedId);
+
+        const line = document.createElementNS("http://www.w3.org/2000/svg","line");
+        line.setAttribute("x1", A.x);
+        line.setAttribute("y1", A.y);
+        line.setAttribute("x2", B.x);
+        line.setAttribute("y2", B.y);
+
+        const isNav = (e.kind === "nav");
+        const stroke = isSelectedEdge
+          ? "rgba(233,237,244,0.65)"
+          : (isNav ? "rgba(233,237,244,0.28)" : "rgba(253,230,138,0.22)");
+
+        line.setAttribute("stroke", stroke);
+        line.setAttribute("stroke-width", isSelectedEdge ? "2" : "1");
+        line.setAttribute("shape-rendering", "crispEdges");
+
+        if(isNav){
+          line.setAttribute("marker-end", "url(#arrow)");
+        }else{
+          line.setAttribute("stroke-dasharray", "4 4");
+        }
+
+        edgesSvg.appendChild(line);
+
+        if(state.ui.showEdgeLabels){
+          const txt = document.createElementNS("http://www.w3.org/2000/svg","text");
+          txt.setAttribute("x", (A.x + B.x)/2);
+          txt.setAttribute("y", (A.y + B.y)/2 - 6);
+          txt.setAttribute("fill", "rgba(233,237,244,0.55)");
+          txt.setAttribute("font-size", "11");
+          txt.textContent = e.kind;
+          edgesSvg.appendChild(txt);
+        }
+      });
+    }
+
+    function renderSidePanel(){
+      const n = nodeById(state.selectedId);
+      document.getElementById("selName").textContent = n ? n.label : "—";
+      document.getElementById("selTier").textContent = n ? n.tier : "—";
+      const neigh = n ? neighborsOf(n.id).map(id => nodeById(id)?.label || id).join(", ") : "—";
+      document.getElementById("selNeighbors").textContent = neigh || "—";
+    }
+
+    function centerOf(el){
+      const r = el.getBoundingClientRect();
+      const s = stage.getBoundingClientRect();
+      return {
+        x: (r.left - s.left) + r.width/2,
+        y: (r.top  - s.top)  + r.height/2
+      };
+    }
+
+    // -----------------------------
+    // DRAGGING
+    // -----------------------------
+    function makeDraggable(el){
+      let dragging = false;
+      let startX = 0, startY = 0;
+      let nodeStartX = 0, nodeStartY = 0;
+
+      el.addEventListener("pointerdown", (ev)=>{
+        // block dragging when editing text
+        if(ev.target && (ev.target.tagName === "TEXTAREA" || ev.target.closest("textarea"))) return;
+        dragging = true;
+        el.setPointerCapture(ev.pointerId);
+        startX = ev.clientX;
+        startY = ev.clientY;
+
+        const id = el.dataset.id;
+        const n = nodeById(id);
+        selectNode(id);
+
+        nodeStartX = n.x;
+        nodeStartY = n.y;
+      });
+
+      el.addEventListener("pointermove", (ev)=>{
+        if(!dragging) return;
+        const id = el.dataset.id;
+        const n = nodeById(id);
+
+        const dx = ev.clientX - startX;
+        const dy = ev.clientY - startY;
+
+        let nx = nodeStartX + dx;
+        let ny = nodeStartY + dy;
+
+        // keep within stage bounds
+        const pad = 6;
+        const stageRect = stage.getBoundingClientRect();
+        const w = el.offsetWidth;
+        const h = el.offsetHeight;
+
+        nx = Math.max(pad, Math.min(nx, stageRect.width - w - pad));
+        ny = Math.max(pad, Math.min(ny, stageRect.height - h - pad));
+
+        if(state.ui.snap){
+          const g = state.ui.grid || 20;
+          nx = Math.round(nx / g) * g;
+          ny = Math.round(ny / g) * g;
+        }
+
+        n.x = nx; n.y = ny;
+        el.style.left = nx + "px";
+        el.style.top  = ny + "px";
+        markDirty();
+        renderEdges();
+      });
+
+      el.addEventListener("pointerup", ()=>{
+        dragging = false;
+      });
+      el.addEventListener("pointercancel", ()=>{
+        dragging = false;
+      });
+    }
+
+    // -----------------------------
+    // Selection / Centering
+    // -----------------------------
+    function selectNode(id){
+      state.selectedId = id;
+      markDirty();
+      // update node classes
+      for(const [nid, el] of nodeEls.entries()){
+        el.classList.toggle("selected", nid===id);
+      }
+      renderEdges();
+      renderSidePanel();
+    }
+
+    function centerOnNode(id){
+      const el = nodeEls.get(id);
+      if(!el) return;
+      // We are not implementing camera pan/zoom yet (kept simple).
+      // Center action moves all nodes so selected becomes roughly centered.
+      const stageRect = stage.getBoundingClientRect();
+      const nodeRect = el.getBoundingClientRect();
+
+      const targetX = stageRect.left + stageRect.width/2;
+      const targetY = stageRect.top  + stageRect.height/2;
+
+      const nodeCenterX = nodeRect.left + nodeRect.width/2;
+      const nodeCenterY = nodeRect.top  + nodeRect.height/2;
+
+      const dx = targetX - nodeCenterX;
+      const dy = targetY - nodeCenterY;
+
+      // shift all nodes by dx/dy within bounds
+      state.nodes.forEach(n=>{
+        const nodeEl = nodeEls.get(n.id);
+        if(!nodeEl) return;
+        const w = nodeEl.offsetWidth;
+        const h = nodeEl.offsetHeight;
+
+        let nx = n.x + dx;
+        let ny = n.y + dy;
+
+        const pad = 6;
+        nx = Math.max(pad, Math.min(nx, stageRect.width - w - pad));
+        ny = Math.max(pad, Math.min(ny, stageRect.height - h - pad));
+        n.x = nx; n.y = ny;
+        nodeEl.style.left = nx + "px";
+        nodeEl.style.top  = ny + "px";
+      });
+
+      markDirty();
+      renderEdges();
+    }
+
+    // -----------------------------
+    // Export / Import
+    // -----------------------------
+    function download(filename, text){
+      const blob = new Blob([text], {type:"application/json"});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    }
+
+    document.getElementById("btnExport").addEventListener("click", ()=>{
+      download("ketadata-constellation.json", JSON.stringify(state, null, 2));
+      // not marking dirty; export isn't a change
+    });
+
+    document.getElementById("btnImport").addEventListener("click", ()=>{
+      document.getElementById("fileInput").click();
+    });
+
+    document.getElementById("fileInput").addEventListener("change", async (e)=>{
+      const file = e.target.files[0];
+      if(!file) return;
+      try{
+        const txt = await file.text();
+        const parsed = JSON.parse(txt);
+        state = deepMerge(structuredClone(DEFAULT), parsed);
+        dirty = true;
+        // re-render fully
+        for(const [id, el] of nodeEls.entries()){ el.remove(); }
+        nodeEls.clear();
+        render();
+      }catch(err){
+        alert("Import failed: invalid JSON");
+      }finally{
+        e.target.value = "";
+      }
+    });
+
+    // -----------------------------
+    // Buttons
+    // -----------------------------
+    document.getElementById("btnSave").addEventListener("click", ()=>{
+      saveState();
+      // keep selection / layout; saved state
+    });
+
+    document.getElementById("btnReset").addEventListener("click", ()=>{
+      // reset layout + notes
+      state = structuredClone(DEFAULT);
+      dirty = true;
+      localStorage.removeItem(KEY);
+      for(const [id, el] of nodeEls.entries()){ el.remove(); }
+      nodeEls.clear();
+      render();
+    });
+
+    document.getElementById("btnCenter").addEventListener("click", ()=>{
+      centerOnNode(state.selectedId || "lobby");
+    });
+
+    // autosave warning
+    window.addEventListener("beforeunload", (e)=>{
+      if(!dirty) return;
+      e.preventDefault();
+      e.returnValue = "";
+    });
+
+    // -----------------------------
+    // Utilities
+    // -----------------------------
+    function escapeHtml(str){
+      return String(str ?? "")
+        .replace(/&/g,"&amp;")
+        .replace(/</g,"&lt;")
+        .replace(/>/g,"&gt;")
+        .replace(/"/g,"&quot;")
+        .replace(/'/g,"&#039;");
+    }
+
+    // Initial render
+    render();
+  </script>
+</body>
+</html>
