@@ -1,0 +1,885 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>KETADATA CONSTELLATION</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    :root {
+      --bg: #0a0a0a;
+      --fg: #ffffff;
+      --fg-dim: #666666;
+      --accent: #ff0000;
+      --line: #333333;
+      --room-bg: #1a1a1a;
+      --room-border: #444444;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--fg);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      font-size: 13px;
+      overflow: hidden;
+    }
+
+    .mono {
+      font-family: 'Courier New', monospace;
+      letter-spacing: 0.5px;
+    }
+
+    /* ELEVATOR BUTTON (always visible) */
+    .elevator-trigger {
+      position: fixed;
+      bottom: 30px;
+      right: 30px;
+      width: 60px;
+      height: 60px;
+      background: var(--accent);
+      color: var(--fg);
+      border: none;
+      border-radius: 50%;
+      cursor: pointer;
+      font-size: 24px;
+      z-index: 9999;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: transform 0.2s;
+      box-shadow: 0 4px 20px rgba(255, 0, 0, 0.3);
+    }
+
+    .elevator-trigger:hover {
+      transform: scale(1.1);
+    }
+
+    /* CONSTELLATION OVERLAY */
+    .constellation-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: var(--bg);
+      z-index: 10000;
+      display: none;
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+
+    .constellation-overlay.active {
+      display: block;
+      opacity: 1;
+    }
+
+    /* HEADER */
+    .constellation-header {
+      padding: 20px 30px;
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .constellation-title {
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: 2px;
+    }
+
+    .constellation-info {
+      font-size: 11px;
+      color: var(--fg-dim);
+    }
+
+    .close-btn {
+      background: none;
+      border: 1px solid var(--room-border);
+      color: var(--fg);
+      padding: 8px 20px;
+      cursor: pointer;
+      font-size: 11px;
+      letter-spacing: 1px;
+      transition: all 0.2s;
+    }
+
+    .close-btn:hover {
+      border-color: var(--fg);
+      background: var(--room-bg);
+    }
+
+    /* CONTROLS */
+    .constellation-controls {
+      position: absolute;
+      top: 20px;
+      right: 30px;
+      display: flex;
+      gap: 10px;
+    }
+
+    .control-btn {
+      background: var(--room-bg);
+      border: 1px solid var(--room-border);
+      color: var(--fg);
+      padding: 8px 16px;
+      cursor: pointer;
+      font-size: 10px;
+      letter-spacing: 1px;
+      transition: all 0.2s;
+    }
+
+    .control-btn:hover {
+      border-color: var(--fg);
+    }
+
+    /* CANVAS CONTAINER */
+    .constellation-canvas {
+      position: relative;
+      width: 100%;
+      height: calc(100% - 70px);
+      overflow: hidden;
+    }
+
+    .constellation-grid {
+      position: absolute;
+      width: 1600px;
+      height: 900px;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+    }
+
+    /* SVG LINES */
+    .connection-lines {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+    }
+
+    .connection-line {
+      stroke: var(--line);
+      stroke-width: 1;
+      stroke-dasharray: 5, 5;
+      fill: none;
+    }
+
+    /* ROOM SQUARES */
+    .room {
+      position: absolute;
+      background: var(--room-bg);
+      border: 1px solid var(--room-border);
+      padding: 15px;
+      cursor: pointer;
+      transition: all 0.2s;
+      user-select: none;
+    }
+
+    .room:hover {
+      border-color: var(--fg);
+      background: #222;
+      transform: scale(1.02);
+      z-index: 100;
+    }
+
+    .room.current {
+      border-color: var(--accent);
+      border-width: 2px;
+    }
+
+    .room-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 10px;
+    }
+
+    .room-name {
+      font-weight: 700;
+      font-size: 12px;
+      letter-spacing: 1.5px;
+    }
+
+    .room-layer {
+      font-size: 9px;
+      color: var(--fg-dim);
+      letter-spacing: 0.5px;
+    }
+
+    .room-content {
+      font-size: 10px;
+      line-height: 1.4;
+      color: var(--fg-dim);
+      max-width: 200px;
+    }
+
+    .room-content div {
+      margin-bottom: 3px;
+    }
+
+    .room-footer {
+      margin-top: 15px;
+      padding-top: 10px;
+      border-top: 1px solid var(--line);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .room-action {
+      font-size: 9px;
+      color: var(--fg-dim);
+      letter-spacing: 1px;
+    }
+
+    .focus-btn {
+      background: none;
+      border: 1px solid var(--room-border);
+      color: var(--fg);
+      padding: 4px 12px;
+      font-size: 9px;
+      letter-spacing: 1px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .focus-btn:hover {
+      background: var(--fg);
+      color: var(--bg);
+    }
+
+    /* LAYER LABELS */
+    .layer-label {
+      position: absolute;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 2px;
+      color: var(--fg-dim);
+      background: var(--bg);
+      padding: 5px 10px;
+      border: 1px solid var(--line);
+    }
+
+    /* RESPONSIVE */
+    @media (max-width: 1400px) {
+      .constellation-grid {
+        transform: translate(-50%, -50%) scale(0.8);
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ELEVATOR TRIGGER BUTTON -->
+  <button class="elevator-trigger" id="elevatorBtn" title="Open Constellation">
+    ▲
+  </button>
+
+  <!-- CONSTELLATION OVERLAY -->
+  <div class="constellation-overlay" id="constellationOverlay">
+    
+    <!-- HEADER -->
+    <div class="constellation-header">
+      <div>
+        <div class="constellation-title">KETADATA // CONSTELLATION NOTES</div>
+        <div class="constellation-info mono">Squares are rooms + system layers. Drag to rearrange. Lines are navigation logic.</div>
+      </div>
+      <div style="display: flex; gap: 10px;">
+        <button class="control-btn" id="unsavedBtn">unsaved</button>
+        <button class="control-btn" id="centerBtn">center</button>
+        <button class="control-btn" id="resetBtn">reset layout</button>
+        <button class="control-btn" id="exportBtn">export json</button>
+        <button class="control-btn" id="importBtn">import json</button>
+        <button class="control-btn" id="saveBtn">save</button>
+        <button class="close-btn" id="closeBtn">CLOSE [ESC]</button>
+      </div>
+    </div>
+
+    <!-- CANVAS -->
+    <div class="constellation-canvas" id="canvas">
+      <div class="constellation-grid" id="grid">
+        
+        <!-- SVG FOR CONNECTION LINES -->
+        <svg class="connection-lines" id="connectionLines"></svg>
+
+        <!-- ROOMS WILL BE GENERATED BY JS -->
+
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    // ROOM DEFINITIONS
+    const rooms = {
+      observatory: {
+        name: 'OBSERVATORY',
+        layer: 'room/highest',
+        x: 150, y: 50,
+        width: 220, height: 150,
+        content: [
+          'WORLD-VIEW',
+          'VIDEO FEED',
+          'ANALYTICS BOARDS',
+          'DISCOURSE FLOWS',
+          'KETADATA STOCK'
+        ],
+        connections: ['cinema', 'architecture']
+      },
+      cinema: {
+        name: 'CINEMA',
+        layer: 'room/films',
+        x: 50, y: 250,
+        width: 200, height: 100,
+        content: [
+          'CURATED VIDEO LIBRARY',
+          'HD SEED',
+          'FLOW SETUP - PRESET',
+          'QUEUE'
+        ],
+        connections: ['studio', 'architecture']
+      },
+      studio: {
+        name: 'STUDIO',
+        layer: 'room/work',
+        x: 50, y: 380,
+        width: 180, height: 120,
+        content: [
+          'KETADATA CONVERTER',
+          'KETADATA GRID',
+          'MEDIA STUDIO',
+          'ANNOTATION',
+          'COLOR PALETTES'
+        ],
+        connections: ['lab', 'architecture']
+      },
+      lab: {
+        name: 'LAB',
+        layer: 'room/sensory',
+        x: 50, y: 540,
+        width: 180, height: 120,
+        content: [
+          'VIBE - CODERS',
+          'META-COGNITIVE',
+          'STRUCTURING',
+          'STRUCTURES MAPPING',
+          'SELF AUTHORSHIP',
+          'VALUE EXTRACT'
+        ],
+        connections: ['basement']
+      },
+      basement: {
+        name: 'BASEMENT',
+        layer: 'room/lowest',
+        x: 50, y: 700,
+        width: 180, height: 140,
+        content: [
+          'DRUG INTERFACES',
+          'ADDICTION SIMULATIONS',
+          'STROBE LIGHTING',
+          'PULSATING LIGHTING',
+          'ESCAPEMENT',
+          'BRUTAL/INDUSTRIAL',
+          'TECHNO'
+        ],
+        connections: []
+      },
+      temple: {
+        name: 'TEMPLE',
+        layer: 'room/adjacent',
+        x: 430, y: 80,
+        width: 180, height: 100,
+        content: [
+          'CHAKRA FREQUENCY',
+          '10 - MIN MEDITATIONS',
+          'MANDALA',
+          'ESOTERIC INFO BITES'
+        ],
+        connections: ['architecture']
+      },
+      architecture: {
+        name: 'ARCHITECTURE',
+        layer: 'layer/note',
+        x: 320, y: 280,
+        width: 200, height: 180,
+        content: [
+          'HOTEL RESORT',
+          'STRUCTURE W/ SEVERAL ZONES',
+          'PRODUCTION/CONSUMPTION',
+          'RECEPTION DESK',
+          'ARCHIVAL/COLLECTION ZONES',
+          'PRIVATE PERSONAL ZONE',
+          'SOCIAL ZONES',
+          'WORKSPACE',
+          'SHOP ZONES'
+        ],
+        connections: ['elevator', 'library']
+      },
+      library: {
+        name: 'LIBRARY',
+        layer: 'room/club',
+        x: 450, y: 530,
+        width: 180, height: 230,
+        content: [
+          'LIBRARY CARD -',
+          'CHECK OUT TRACKING',
+          'EPUB/PDF',
+          'CHECKOUT "HISTORY"',
+          'LIMIT OF ACTIVE BOOKS',
+          'LIT.SALON INTEGRATION',
+          'NEW ADDITIONS AS A',
+          'CHANNEL',
+          'SUBMISSION FOR LIBRARY',
+          'INCLUSION - USERS CAN TAG',
+          'ANY ITEMS FROM THE',
+          'AVAILABLE TAGS',
+          'LIBRARY CARDS AS USERS',
+          '"FRONT FACING" IDENTIFIERS',
+          '(FOR FUTURE CONNECTIVE',
+          'INTEGRATION)'
+        ],
+        connections: ['elevator']
+      },
+      lobby: {
+        name: 'LOBBY',
+        layer: 'room/entry',
+        x: 680, y: 150,
+        width: 180, height: 100,
+        content: [
+          'RECEPTION DESK',
+          'DIRECTORY',
+          'ABOUT'
+        ],
+        connections: ['elevator', 'store']
+      },
+      elevator: {
+        name: 'ELEVATOR',
+        layer: 'room/router',
+        x: 680, y: 350,
+        width: 180, height: 80,
+        content: [
+          'CENTRAL LIMINAL SPACE'
+        ],
+        connections: ['expression', 'vault'],
+        current: true
+      },
+      store: {
+        name: 'STORE',
+        layer: 'room/commerce',
+        x: 880, y: 100,
+        width: 180, height: 100,
+        content: [
+          'SUGGESTED/AFFILIATED',
+          'PRODUCTS',
+          'K2 SHOP'
+        ],
+        connections: ['lobby']
+      },
+      room: {
+        name: 'ROOM',
+        layer: 'room/private',
+        x: 1200, y: 50,
+        width: 220, height: 180,
+        content: [
+          'PLUG-IN CENTER',
+          'USER INFORMATION',
+          'PATIENT PORTAL',
+          'DREAM ENTERTAINMENT',
+          'MEDITATION PRESETS',
+          'CONCENTRATION PRESETS',
+          'NOTATION SPACE'
+        ],
+        connections: ['ontology']
+      },
+      expression: {
+        name: 'EXPRESSION',
+        layer: 'layer/note',
+        x: 680, y: 520,
+        width: 180, height: 200,
+        content: [
+          'THE SYSTEM IS AS IF',
+          'COVERED',
+          'HIGHLY REACTIVE TO USER',
+          'INPUT - EXPANSIVE',
+          'HIGH PERSONALIZATION -',
+          'TOTALLY COLLAPSIBLE',
+          'ADJUSTABLE - SEAMLESS',
+          'FLOW AS THE IDEAL',
+          'THE USER MOVES',
+          'THROUGH SPATIALLY'
+        ],
+        connections: []
+      },
+      vault: {
+        name: 'VAULT',
+        layer: 'room/sealed',
+        x: 880, y: 480,
+        width: 220, height: 280,
+        content: [
+          'BLACK BOOK CORPUS -',
+          'CENTRAL ARTIFACT',
+          'CHECKING IN - CHECK INS -',
+          'OUT - THE SCAN EMPIRE -',
+          'THIS IS THE CORE',
+          'COLLECTION — THIS IS THE',
+          'FIRST EXPANDING GROWING',
+          'ARCHIVE',
+          '',
+          'THEN — THE KETADATA',
+          'USERS',
+          'USER SUBMITTED ARTIFACTS',
+          'ORGANIZED INTO EXHIBITS',
+          '',
+          'THEN — THE ARCHIVE',
+          'PARSEABLE BUT NOT',
+          'DISPLAYED',
+          '',
+          'SUBMISSION FUNCTIONALITY',
+          'DATA OBJECTS TAGGED SO',
+          'CAN BE FILTERED/SORTED',
+          'BASED ON TAGS'
+        ],
+        connections: ['ontology']
+      },
+      ontology: {
+        name: 'ONTOLOGY',
+        layer: 'layer/note',
+        x: 1140, y: 340,
+        width: 180, height: 200,
+        content: [
+          'SYMBOLS & MOTIFS',
+          '/// - ADIDAS + REPO',
+          'MAN IMAGERY',
+          'DARK MODE/COLOR',
+          'INVERSION/X-RAY',
+          'TIME LOGIC',
+          'COGNITIVE STRUCTURING',
+          'RADICAL TRANSPARENCY',
+          'CHROMATOGRAPHY',
+          'CIVILIZED TRASH',
+          'MEMORY THEORY',
+          'SCHRODINGERS RESORT',
+          'SUBLIME LIGHTNING'
+        ],
+        connections: []
+      },
+      operations: {
+        name: 'OPERATIONS',
+        layer: 'layer/note',
+        x: 1340, y: 340,
+        width: 220, height: 440,
+        content: [
+          'DATA SYNC IS NOT',
+          'AUTOMATIC IT IS',
+          'INTENTIONAL',
+          'USERS ARE STORED IN THE',
+          'SYSTEM AS PATIENTS',
+          'USERS CONTROL ALL',
+          'ALL THEIR DATA LEADING',
+          'UP TO THEIR',
+          'USER DATA /// DATA ID',
+          'USER PROFILES GET',
+          'UPDATED PROVIDED',
+          'THE SYSTEM AND THE',
+          'USER THROUGH EACH',
+          'OTHER',
+          'MINIMAL BACKEND - AT',
+          'LEAST INITIALLY - I NEED TO',
+          'KNOW HOW TO HANDLE',
+          'SUBMISSIONS AND',
+          'SUGGESTIONS — I NEED TO',
+          'BE ABLE TO REMEMBER',
+          'USER ROOMS AND PROPER',
+          'WAYS TO KEEP PRIVATE',
+          'KETADATA LOG TO EXIST',
+          'LOCAL BUT FORMAL IN THE',
+          'CORRECT FORMAT FOR',
+          'SYSTEM UPLOADS — THE',
+          'STUDIO UPLOADS SHOULD',
+          'BE TRANSIENT - SYSTEM',
+          'DATA SHOULD BE',
+          'PERSISTENT ACROSS',
+          'SESSION - NO PERSISTENT',
+          'ACCOUNT MEMORY — JUST',
+          'ACCESS NEEDED / TIME',
+          'CONSTRAINTS / FEATURE',
+          'CONSTRAINTS / PAYMENT',
+          'ETC - NEED BACKEND FOR',
+          'LIBRARY MEMORY AS WELL',
+          'AS DATA FOR MEDIA',
+          'SAVING/PLAYLISTS IN THE',
+          'CINEMA'
+        ],
+        connections: []
+      }
+    };
+
+    // STATE
+    let currentRoom = 'elevator';
+    let isDragging = false;
+    let draggedRoom = null;
+
+    // INIT
+    document.addEventListener('DOMContentLoaded', () => {
+      renderRooms();
+      renderConnections();
+      setupEventListeners();
+    });
+
+    // ELEVATOR BUTTON
+    document.getElementById('elevatorBtn').addEventListener('click', openConstellation);
+
+    function openConstellation() {
+      document.getElementById('constellationOverlay').classList.add('active');
+    }
+
+    function closeConstellation() {
+      document.getElementById('constellationOverlay').classList.remove('active');
+    }
+
+    // CLOSE BUTTON
+    document.getElementById('closeBtn').addEventListener('click', closeConstellation);
+
+    // ESC KEY
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        closeConstellation();
+      }
+    });
+
+    // RENDER ROOMS
+    function renderRooms() {
+      const grid = document.getElementById('grid');
+      
+      Object.entries(rooms).forEach(([id, room]) => {
+        const roomEl = document.createElement('div');
+        roomEl.className = 'room';
+        if (room.current) roomEl.classList.add('current');
+        roomEl.dataset.id = id;
+        
+        roomEl.style.left = room.x + 'px';
+        roomEl.style.top = room.y + 'px';
+        roomEl.style.width = room.width + 'px';
+        roomEl.style.minHeight = room.height + 'px';
+
+        const contentHTML = room.content.map(line => `<div>${line}</div>`).join('');
+
+        roomEl.innerHTML = `
+          <div class="room-header">
+            <div class="room-name">${room.name}</div>
+            <div class="room-layer mono">${room.layer}</div>
+          </div>
+          <div class="room-content">
+            ${contentHTML}
+          </div>
+          <div class="room-footer">
+            <div class="room-action mono">drag to reposition</div>
+            <button class="focus-btn mono" data-room="${id}">focus</button>
+          </div>
+        `;
+
+        grid.appendChild(roomEl);
+      });
+    }
+
+    // RENDER CONNECTIONS
+    function renderConnections() {
+      const svg = document.getElementById('connectionLines');
+      const grid = document.getElementById('grid');
+      
+      Object.entries(rooms).forEach(([fromId, fromRoom]) => {
+        fromRoom.connections.forEach(toId => {
+          const toRoom = rooms[toId];
+          if (!toRoom) return;
+
+          const fromX = fromRoom.x + fromRoom.width / 2;
+          const fromY = fromRoom.y + fromRoom.height / 2;
+          const toX = toRoom.x + toRoom.width / 2;
+          const toY = toRoom.y + toRoom.height / 2;
+
+          const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+          line.setAttribute('class', 'connection-line');
+          line.setAttribute('x1', fromX);
+          line.setAttribute('y1', fromY);
+          line.setAttribute('x2', toX);
+          line.setAttribute('y2', toY);
+          
+          svg.appendChild(line);
+        });
+      });
+    }
+
+    // EVENT LISTENERS
+    function setupEventListeners() {
+      // FOCUS BUTTONS
+      document.querySelectorAll('.focus-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const roomId = btn.dataset.room;
+          navigateToRoom(roomId);
+        });
+      });
+
+      // ROOM CLICKS
+      document.querySelectorAll('.room').forEach(roomEl => {
+        roomEl.addEventListener('click', () => {
+          const roomId = roomEl.dataset.id;
+          navigateToRoom(roomId);
+        });
+
+        // DRAG FUNCTIONALITY
+        let offsetX, offsetY;
+        
+        roomEl.addEventListener('mousedown', (e) => {
+          if (e.target.tagName === 'BUTTON') return;
+          isDragging = true;
+          draggedRoom = roomEl;
+          
+          const rect = roomEl.getBoundingClientRect();
+          const gridRect = document.getElementById('grid').getBoundingClientRect();
+          
+          offsetX = e.clientX - rect.left;
+          offsetY = e.clientY - rect.top;
+          
+          roomEl.style.cursor = 'grabbing';
+          e.preventDefault();
+        });
+      });
+
+      // GRID DRAG HANDLERS
+      const grid = document.getElementById('grid');
+      
+      grid.addEventListener('mousemove', (e) => {
+        if (!isDragging || !draggedRoom) return;
+        
+        const gridRect = grid.getBoundingClientRect();
+        const x = e.clientX - gridRect.left - offsetX;
+        const y = e.clientY - gridRect.top - offsetY;
+        
+        draggedRoom.style.left = x + 'px';
+        draggedRoom.style.top = y + 'px';
+        
+        // Update room data
+        const roomId = draggedRoom.dataset.id;
+        rooms[roomId].x = x;
+        rooms[roomId].y = y;
+        
+        // Redraw connections
+        document.getElementById('connectionLines').innerHTML = '';
+        renderConnections();
+      });
+
+      grid.addEventListener('mouseup', () => {
+        if (draggedRoom) {
+          draggedRoom.style.cursor = 'pointer';
+        }
+        isDragging = false;
+        draggedRoom = null;
+      });
+
+      // CONTROL BUTTONS
+      document.getElementById('centerBtn').addEventListener('click', centerView);
+      document.getElementById('resetBtn').addEventListener('click', resetLayout);
+      document.getElementById('saveBtn').addEventListener('click', () => {
+        alert('Layout saved (in-memory for this session)');
+      });
+      document.getElementById('exportBtn').addEventListener('click', exportLayout);
+      document.getElementById('importBtn').addEventListener('click', importLayout);
+    }
+
+    // NAVIGATION
+    function navigateToRoom(roomId) {
+      const roomData = rooms[roomId];
+      if (!roomData) return;
+
+      // In a real implementation, this would route to the actual room
+      alert(`Navigating to: ${roomData.name}\n\nIn production, this would load: ${roomId}.html`);
+      
+      // Update current room indicator
+      document.querySelectorAll('.room').forEach(el => el.classList.remove('current'));
+      document.querySelector(`[data-id="${roomId}"]`).classList.add('current');
+      currentRoom = roomId;
+      
+      // Close constellation
+      closeConstellation();
+    }
+
+    // CONTROLS
+    function centerView() {
+      const grid = document.getElementById('grid');
+      grid.style.transform = 'translate(-50%, -50%)';
+    }
+
+    function resetLayout() {
+      if (confirm('Reset all room positions to default?')) {
+        location.reload();
+      }
+    }
+
+    function exportLayout() {
+      const layout = {};
+      Object.entries(rooms).forEach(([id, room]) => {
+        layout[id] = { x: room.x, y: room.y };
+      });
+      
+      const json = JSON.stringify(layout, null, 2);
+      const blob = new Blob([json], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'ketadata-constellation.json';
+      a.click();
+    }
+
+    function importLayout() {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'application/json';
+      
+      input.onchange = (e) => {
+        const file = e.target.files[0];
+        const reader = new FileReader();
+        
+        reader.onload = (event) => {
+          try {
+            const layout = JSON.parse(event.target.result);
+            
+            Object.entries(layout).forEach(([id, pos]) => {
+              if (rooms[id]) {
+                rooms[id].x = pos.x;
+                rooms[id].y = pos.y;
+                
+                const roomEl = document.querySelector(`[data-id="${id}"]`);
+                if (roomEl) {
+                  roomEl.style.left = pos.x + 'px';
+                  roomEl.style.top = pos.y + 'px';
+                }
+              }
+            });
+            
+            document.getElementById('connectionLines').innerHTML = '';
+            renderConnections();
+            
+            alert('Layout imported successfully');
+          } catch (err) {
+            alert('Error importing layout: ' + err.message);
+          }
+        };
+        
+        reader.readAsText(file);
+      };
+      
+      input.click();
+    }
+  </script>
+
+</body>
+</html>
