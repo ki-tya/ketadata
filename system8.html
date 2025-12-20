@@ -1,0 +1,890 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>KETADATA // CONSTELLATION NOTES</title>
+  <style>
+    :root{
+      --bg:#000;
+      --panel:#050607;
+      --panel2:#07090b;
+      --ink:#eef2f7;
+      --muted:#9aa3af;
+
+      --line:#e9eef7;
+      --lineSoft:#1b1f25;
+
+      --radius:3px;          /* slightly rounded, not soft */
+      --nodeW:240;
+      --nodeH:158;
+      --centerW:240;
+      --centerH:158;
+
+      --shadow: 0 0 0 1px rgba(233,238,247,.16), 0 10px 40px rgba(0,0,0,.65);
+      --shadowSoft: 0 0 0 1px rgba(233,238,247,.10), 0 8px 30px rgba(0,0,0,.55);
+    }
+
+    *{ box-sizing:border-box; }
+    html,body{ height:100%; margin:0; background:var(--bg); color:var(--ink); font-family:Arial,Helvetica,sans-serif; }
+
+    /* topbar */
+    .topbar{
+      position:fixed; inset:0 0 auto 0;
+      height:52px;
+      display:flex; align-items:center; justify-content:space-between;
+      padding:0 14px;
+      background:#000;
+      border-bottom:1px solid var(--lineSoft);
+      z-index:50;
+    }
+    .brand{
+      display:flex; flex-direction:column; gap:2px;
+      min-width: 340px;
+    }
+    .brand .t{
+      font-size:12px; letter-spacing:1.4px; text-transform:uppercase;
+    }
+    .brand .s{
+      font-size:11px; color:var(--muted);
+    }
+    .btns{ display:flex; gap:8px; align-items:center; }
+    button{
+      background:transparent;
+      color:var(--ink);
+      border:1px solid var(--lineSoft);
+      border-radius:10px; /* buttons can be slightly round; nodes remain industrial */
+      padding:7px 10px;
+      font-size:11px;
+      letter-spacing:.6px;
+      text-transform:uppercase;
+      cursor:pointer;
+    }
+    button:hover{ border-color:rgba(233,238,247,.28); }
+    button.primary{ border-color:rgba(233,238,247,.28); }
+    .pill{
+      border:1px solid rgba(233,238,247,.22);
+      border-radius:999px;
+      padding:6px 10px;
+      font-size:11px;
+      color:rgba(233,238,247,.85);
+      letter-spacing:.6px;
+      text-transform:uppercase;
+    }
+
+    /* layout */
+    #stageWrap{
+      position:fixed;
+      inset:52px 0 0 0;
+      overflow:hidden;
+      background:#000;
+    }
+    #stage{
+      position:absolute;
+      inset:0;
+      overflow:hidden;
+    }
+    #wires{
+      position:absolute; inset:0;
+      pointer-events:none;
+      z-index:1;
+    }
+
+    /* left hint */
+    .hint{
+      position:absolute;
+      left:12px; bottom:10px;
+      font-size:11px;
+      letter-spacing:1px;
+      color:rgba(154,163,175,.65);
+      text-transform:uppercase;
+      z-index:5;
+      user-select:none;
+    }
+
+    /* nodes */
+    .node{
+      position:absolute;
+      width:calc(var(--nodeW) * 1px);
+      height:calc(var(--nodeH) * 1px);
+      border-radius:var(--radius);
+      background:rgba(5,6,7,.98);
+      border:1px solid rgba(233,238,247,.14);
+      box-shadow:var(--shadowSoft);
+      z-index:3;
+      user-select:none;
+    }
+    .node.center{
+      width:calc(var(--centerW) * 1px);
+      height:calc(var(--centerH) * 1px);
+      background:rgba(4,5,6,.98);
+      border-color:rgba(233,238,247,.18);
+      box-shadow:var(--shadow);
+    }
+    .node.selected{
+      border-color:rgba(233,238,247,.35);
+    }
+
+    .bar{
+      display:flex; align-items:center; justify-content:space-between;
+      padding:9px 10px 7px 10px;
+      border-bottom:1px solid var(--lineSoft);
+    }
+    .bar .name{
+      font-size:12px;
+      letter-spacing:1.2px;
+      text-transform:uppercase;
+    }
+    .bar .tag{
+      font-size:10px;
+      color:rgba(154,163,175,.8);
+      letter-spacing:.6px;
+      border:1px solid rgba(233,238,247,.12);
+      padding:2px 6px;
+      border-radius:9px;
+      text-transform:lowercase;
+      white-space:nowrap;
+    }
+
+    .body{
+      padding:10px;
+      height:calc(100% - 38px);
+      display:flex;
+      flex-direction:column;
+      gap:8px;
+    }
+
+    textarea{
+      width:100%;
+      flex:1;
+      resize:none;
+      border-radius:2px;
+      border:1px solid rgba(233,238,247,.10);
+      background:#000;
+      color:rgba(233,238,247,.92);
+      padding:8px;
+      font-size:11px;
+      line-height:1.35;
+      outline:none;
+    }
+    textarea:focus{ border-color:rgba(233,238,247,.22); }
+
+    .meta{
+      display:flex; align-items:center; justify-content:space-between;
+      font-size:11px;
+      color:rgba(154,163,175,.85);
+    }
+    .meta .focus{
+      border-radius:2px;
+      border:1px solid rgba(233,238,247,.14);
+      padding:4px 7px;
+      font-size:11px;
+      text-transform:lowercase;
+      color:rgba(233,238,247,.92);
+      background:transparent;
+      cursor:pointer;
+    }
+    .meta .focus:hover{ border-color:rgba(233,238,247,.24); }
+
+    /* right panels */
+    #rightDock{
+      position:absolute;
+      right:12px; top:12px;
+      width:360px;
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+      z-index:10;
+      pointer-events:none; /* dock is informational; node card inside can still be interactive via pointer-events */
+    }
+
+    .panel{
+      pointer-events:auto;
+      border-radius:var(--radius);
+      border:1px solid rgba(233,238,247,.14);
+      background:rgba(5,6,7,.98);
+      box-shadow:var(--shadowSoft);
+      padding:10px;
+    }
+    .panel h3{
+      margin:0 0 10px 0;
+      font-size:11px;
+      color:rgba(154,163,175,.9);
+      letter-spacing:1.2px;
+      text-transform:uppercase;
+    }
+    .kv{
+      display:grid;
+      grid-template-columns:88px 1fr;
+      gap:6px 10px;
+      font-size:11px;
+      color:rgba(233,238,247,.92);
+    }
+    .kv .k{ color:rgba(154,163,175,.9); text-transform:lowercase; }
+    .rules{
+      margin-top:10px;
+      border-top:1px solid var(--lineSoft);
+      padding-top:10px;
+      font-size:11px;
+      color:rgba(154,163,175,.85);
+      line-height:1.4;
+    }
+    .rules .dash{ display:block; }
+
+    /* floating “expression note” card in dock to match screenshot */
+    .noteCard{
+      pointer-events:auto;
+      border-radius:var(--radius);
+      border:1px solid rgba(233,238,247,.14);
+      background:rgba(14,16,18,.96);
+      box-shadow:var(--shadowSoft);
+      padding:0;
+      overflow:hidden;
+    }
+    .noteCard .bar{
+      border-bottom:1px solid var(--lineSoft);
+      padding:9px 10px 7px 10px;
+    }
+    .noteCard .bar .name{ font-size:12px; }
+    .noteCard .bar .tag{ text-transform:lowercase; }
+    .noteCard .content{
+      padding:10px;
+    }
+    .noteCard .content .txt{
+      font-size:11px;
+      color:rgba(233,238,247,.92);
+      line-height:1.35;
+      border:1px solid rgba(233,238,247,.10);
+      background:#000;
+      padding:8px;
+      border-radius:2px;
+      min-height:64px;
+    }
+    .noteCard .content .meta{
+      margin-top:8px;
+    }
+
+    /* electric route pulse */
+    .pulseLine{
+      stroke:rgba(233,238,247,.92);
+      stroke-width:1.2;
+      fill:none;
+      stroke-dasharray: 2 7;
+      animation: dash 900ms linear infinite;
+      filter: drop-shadow(0 0 6px rgba(233,238,247,.25));
+    }
+    @keyframes dash{
+      from{ stroke-dashoffset: 0; }
+      to{ stroke-dashoffset: -40; }
+    }
+
+    /* base lines */
+    .wire{
+      stroke:rgba(233,238,247,.14);
+      stroke-width:1;
+      fill:none;
+    }
+    .wire.dashed{
+      stroke:rgba(120,150,130,.28);
+      stroke-dasharray:3 6;
+    }
+
+    /* tiny node pin */
+    .pin{
+      width:7px; height:7px; border-radius:999px;
+      border:1px solid rgba(233,238,247,.18);
+      background:rgba(233,238,247,.06);
+      margin-left:10px;
+    }
+
+    /* accessibility */
+    .sr{ position:absolute; left:-9999px; }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="brand">
+      <div class="t">KETADATA // CONSTELLATION NOTES</div>
+      <div class="s">Squares are rooms + system layers. Drag to rearrange. Lines are navigation logic.</div>
+    </div>
+
+    <div class="btns">
+      <span id="dirty" class="pill">unsaved</span>
+      <button class="primary" id="btnCenter">center</button>
+      <button id="btnReset">reset layout</button>
+      <button id="btnExport">export.json</button>
+      <button id="btnImport">import.json</button>
+      <button class="primary" id="btnSave">save</button>
+      <input id="file" class="sr" type="file" accept="application/json">
+    </div>
+  </div>
+
+  <div id="stageWrap">
+    <div id="stage">
+      <svg id="wires"></svg>
+
+      <!-- nodes injected by JS -->
+
+      <div id="rightDock">
+        <div class="panel" id="selectedPanel">
+          <h3>Selected</h3>
+          <div class="kv">
+            <div class="k">node</div><div id="selNode">—</div>
+            <div class="k">type</div><div id="selType">—</div>
+            <div class="k">neighbors</div><div id="selNbrs">—</div>
+          </div>
+          <div class="rules">
+            <span class="dash">— click a square to select</span>
+            <span class="dash">— drag squares to rearrange</span>
+            <span class="dash">— notes persist per square</span>
+            <span class="dash">— navigation logic is fixed unless edited in JSON</span>
+            <span class="dash">— layer notes are grey steel notes (Ontology / Architecture / Operations / Expression)</span>
+          </div>
+        </div>
+
+        <!-- Expression note card (to match the screenshot’s upper-right note) -->
+        <div class="noteCard" id="expressionDock">
+          <div class="bar">
+            <div style="display:flex;align-items:center;gap:8px">
+              <div class="name">Expression</div>
+              <div class="pin" aria-hidden="true"></div>
+            </div>
+            <div class="tag">layer/note</div>
+          </div>
+          <div class="content">
+            <div class="txt" contenteditable="true" spellcheck="false" id="expressionText">
+Define how it feels. Materials.
+No-kitsch. Room visuals.
+            </div>
+            <div class="meta">
+              <span>drag to reposition</span>
+              <button class="focus" id="focusExpression">focus</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="hint">DRAG TO REPOSITION · CLICK TO SELECT</div>
+    </div>
+  </div>
+
+<script>
+(() => {
+  const stage = document.getElementById('stage');
+  const svg = document.getElementById('wires');
+
+  const dirtyEl = document.getElementById('dirty');
+  const btnCenter = document.getElementById('btnCenter');
+  const btnReset = document.getElementById('btnReset');
+  const btnExport = document.getElementById('btnExport');
+  const btnImport = document.getElementById('btnImport');
+  const btnSave = document.getElementById('btnSave');
+  const file = document.getElementById('file');
+
+  const selNode = document.getElementById('selNode');
+  const selType = document.getElementById('selType');
+  const selNbrs = document.getElementById('selNbrs');
+
+  const expressionDock = document.getElementById('expressionDock');
+  const expressionText = document.getElementById('expressionText');
+  const focusExpression = document.getElementById('focusExpression');
+
+  const LS_KEY = 'ketadata_constellation_v1';
+
+  const cssNum = (name) => {
+    const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    const n = Number(v);
+    return Number.isFinite(n) ? n : 0;
+  };
+
+  // ---- graph (rooms + layers) ----
+  const nodes = [
+    { id:'observatory', label:'Observatory', type:'room/highest' },
+    { id:'cinema',      label:'Cinema',      type:'room/lens' },
+    { id:'library',     label:'Library',     type:'room/club' },
+    { id:'temple',      label:'Temple',      type:'room/adjacent' },
+    { id:'lobby',       label:'Lobby',       type:'room/entry' },
+    { id:'store',       label:'Store',       type:'room/commerce' },
+    { id:'room',        label:'Room',        type:'room/private' },
+    { id:'studio',      label:'Studio',      type:'room/work' },
+    { id:'lab',         label:'Lab',         type:'room/sensory' },
+    { id:'vault',       label:'Vault',       type:'room/sealed' },
+    { id:'basement',    label:'Basement',    type:'room/lowest' },
+    { id:'elevator',    label:'Elevator',    type:'room/router', center:true },
+  ];
+
+  // solid: router connections (primary)
+  const edges = [
+    ['elevator','lobby'],
+    ['elevator','temple'],
+    ['elevator','store'],
+    ['elevator','room'],
+    ['elevator','studio'],
+    ['elevator','lab'],
+    ['elevator','vault'],
+    ['elevator','cinema'],
+    ['elevator','library'],
+    ['elevator','observatory'],
+    ['elevator','basement'],
+  ];
+
+  // optional dashed logic (ambient / secondary)
+  const dashedEdges = [
+    ['lobby','store'],
+    ['temple','store'],
+    ['lab','basement'],
+    ['vault','lab'],
+    ['observatory','cinema'],
+    ['cinema','studio'],
+    ['library','vault'],
+  ];
+
+  const state = {
+    selected: 'elevator',
+    positions: {},  // { [id]:{x,y} }
+    notes: {},      // { [id]:'...' }
+    _dirty: true
+  };
+
+  // ---- DOM build ----
+  const dom = new Map();
+
+  function makeNode(n){
+    const el = document.createElement('div');
+    el.className = 'node' + (n.center ? ' center' : '');
+    el.dataset.id = n.id;
+
+    const bar = document.createElement('div');
+    bar.className = 'bar';
+
+    const left = document.createElement('div');
+    left.style.display = 'flex';
+    left.style.alignItems = 'center';
+    left.style.gap = '8px';
+
+    const name = document.createElement('div');
+    name.className = 'name';
+    name.textContent = n.label;
+
+    const pin = document.createElement('div');
+    pin.className = 'pin';
+    pin.title = 'node';
+
+    left.appendChild(name);
+    left.appendChild(pin);
+
+    const tag = document.createElement('div');
+    tag.className = 'tag';
+    tag.textContent = n.type;
+
+    bar.appendChild(left);
+    bar.appendChild(tag);
+
+    const body = document.createElement('div');
+    body.className = 'body';
+
+    const ta = document.createElement('textarea');
+    ta.placeholder = 'notes...';
+    ta.value = state.notes[n.id] || '';
+    ta.addEventListener('input', () => {
+      state.notes[n.id] = ta.value;
+      setDirty(true);
+    });
+
+    const meta = document.createElement('div');
+    meta.className = 'meta';
+
+    const m1 = document.createElement('span');
+    m1.textContent = 'drag to reposition';
+
+    const focus = document.createElement('button');
+    focus.className = 'focus';
+    focus.type = 'button';
+    focus.textContent = 'focus';
+    focus.addEventListener('click', (e) => {
+      e.stopPropagation();
+      selectNode(n.id);
+      // simple focus = center this node
+      centerOn(n.id);
+    });
+
+    meta.appendChild(m1);
+    meta.appendChild(focus);
+
+    body.appendChild(ta);
+    body.appendChild(meta);
+
+    el.appendChild(bar);
+    el.appendChild(body);
+
+    // click select
+    el.addEventListener('mousedown', (e) => {
+      // allow drag with textarea focus not stealing immediately
+      if (e.target.tagName === 'TEXTAREA' || e.target.classList.contains('focus')) return;
+      selectNode(n.id);
+    });
+
+    // drag
+    enableDrag(el);
+
+    stage.appendChild(el);
+    dom.set(n.id, el);
+  }
+
+  function rebuild(){
+    // remove existing node elements (not dock panels)
+    for (const [id, el] of dom) el.remove();
+    dom.clear();
+
+    nodes.forEach(makeNode);
+    layoutAll();
+    selectNode(state.selected);
+  }
+
+  // ---- selection ----
+  function selectNode(id){
+    state.selected = id;
+    for (const [nid, el] of dom){
+      el.classList.toggle('selected', nid === id);
+    }
+    const n = nodes.find(x => x.id === id);
+    const neighbors = edges
+      .filter(([a,b]) => a === id || b === id)
+      .map(([a,b]) => (a === id ? b : a))
+      .map(x => (nodes.find(nn => nn.id === x)?.label || x));
+
+    selNode.textContent = n ? n.label : id;
+    selType.textContent = n ? n.type : '—';
+    selNbrs.textContent = neighbors.length ? neighbors.join(', ') : '—';
+
+    setDirty(true);
+  }
+
+  // ---- layout helpers ----
+  function layoutAll(){
+    // apply positions to DOM
+    for (const n of nodes){
+      const el = dom.get(n.id);
+      if (!el) continue;
+      const p = state.positions[n.id];
+      if (!p) continue;
+      el.style.left = Math.round(p.x) + 'px';
+      el.style.top  = Math.round(p.y) + 'px';
+    }
+    drawWires();
+  }
+
+  function nodeCenter(id){
+    const el = dom.get(id);
+    const r = el.getBoundingClientRect();
+    const sr = stage.getBoundingClientRect();
+    return {
+      x: (r.left - sr.left) + r.width/2,
+      y: (r.top  - sr.top)  + r.height/2
+    };
+  }
+
+  function drawWires(){
+    const r = stage.getBoundingClientRect();
+    svg.setAttribute('width', r.width);
+    svg.setAttribute('height', r.height);
+    svg.innerHTML = '';
+
+    // base wires
+    for (const [a,b] of edges){
+      const A = nodeCenter(a), B = nodeCenter(b);
+      const p = document.createElementNS('http://www.w3.org/2000/svg','path');
+      p.setAttribute('class','wire');
+      p.setAttribute('d', `M ${A.x} ${A.y} L ${B.x} ${B.y}`);
+      svg.appendChild(p);
+    }
+    for (const [a,b] of dashedEdges){
+      const A = nodeCenter(a), B = nodeCenter(b);
+      const p = document.createElementNS('http://www.w3.org/2000/svg','path');
+      p.setAttribute('class','wire dashed');
+      p.setAttribute('d', `M ${A.x} ${A.y} L ${B.x} ${B.y}`);
+      svg.appendChild(p);
+    }
+  }
+
+  // ---- default layout: MATCH THE SCREENSHOT’S RELATIVE POSITIONING ----
+  function resetLayout(){
+    const r = stage.getBoundingClientRect();
+    const cx = r.width * 0.50;
+    const cy = r.height * 0.48;
+
+    const w  = cssNum('--nodeW'),  h  = cssNum('--nodeH');
+    const cw = cssNum('--centerW'), ch = cssNum('--centerH');
+
+    // spacing tuned to “air + no overlap” like your screenshot
+    const gx = 48;   // horizontal gap
+    const gy = 44;   // vertical gap
+
+    const pos = {};
+
+    // center (elevator)
+    pos.elevator = { x: cx - cw/2, y: cy - ch/2 };
+
+    // anchor columns relative to elevator
+    const colL = pos.elevator.x - (w + gx);
+    const colC = pos.elevator.x + (cw - w)/2;
+    const colR = pos.elevator.x + cw + gx;
+
+    // anchor rows
+    const rowTop    = pos.elevator.y - (h + gy) * 1.55;  // observatory / lobby band
+    const rowUpper  = pos.elevator.y - (h + gy) * 0.20;  // temple/store row (slightly above elevator)
+    const rowCenter = pos.elevator.y;                    // elevator row
+    const rowLower  = pos.elevator.y + (h + gy) * 0.95;  // studio/vault/lab row
+    const rowBottom = pos.elevator.y + (h + gy) * 1.80;  // basement row
+
+    // LEFT STACK (observatory, cinema, library) like screenshot
+    pos.observatory = { x: colL - (w + gx) * 0.55, y: rowTop - (h + gy) * 0.20 };
+    pos.cinema      = { x: pos.observatory.x,      y: rowUpper + (h + gy) * 0.15 };
+    pos.library     = { x: pos.observatory.x,      y: rowLower - (h + gy) * 0.05 };
+
+    // TOP CENTER (lobby)
+    pos.lobby = { x: colC + (w + gx) * 0.25, y: rowTop };
+
+    // MID (temple, store) flanking elevator, slightly above
+    pos.temple = { x: colC, y: rowUpper };
+    pos.store  = { x: colR, y: rowUpper };
+
+    // RIGHT (room) far right mid
+    pos.room = { x: colR + (w + gx) * 1.05, y: rowUpper + (h + gy) * 0.35 };
+
+    // LOWER ROW (studio, vault, lab)
+    pos.studio = { x: colC - (w + gx) * 0.05, y: rowLower };
+    pos.vault  = { x: colC + (w + gx) * 0.95, y: rowLower };
+    pos.lab    = { x: colR + (w + gx) * 0.55, y: rowLower + (h + gy) * 0.30 };
+
+    // BOTTOM RIGHT (basement)
+    pos.basement = { x: colR + (w + gx) * 1.10, y: rowBottom + (h + gy) * 0.05 };
+
+    state.positions = pos;
+    setDirty(true);
+    persist();
+    layoutAll();
+    selectNode('elevator');
+  }
+
+  function centerOn(id){
+    // “center” just recenters all nodes relative to viewport by shifting based on chosen node
+    const r = stage.getBoundingClientRect();
+    const target = nodeCenter(id);
+    const desired = { x: r.width * 0.50, y: r.height * 0.48 };
+    const dx = desired.x - target.x;
+    const dy = desired.y - target.y;
+
+    for (const k of Object.keys(state.positions)){
+      state.positions[k] = { x: state.positions[k].x + dx, y: state.positions[k].y + dy };
+    }
+    setDirty(true);
+    persist();
+    layoutAll();
+  }
+
+  // ---- drag ----
+  function enableDrag(el){
+    let dragging = false;
+    let start = null;
+    let base = null;
+
+    const id = el.dataset.id;
+
+    const onDown = (e) => {
+      if (e.button !== 0) return;
+      // allow drag even if clicking bar/body, but not textarea
+      if (e.target.tagName === 'TEXTAREA') return;
+
+      dragging = true;
+      el.style.cursor = 'grabbing';
+      selectNode(id);
+
+      const sr = stage.getBoundingClientRect();
+      start = { x: e.clientX, y: e.clientY };
+      base = {
+        x: (state.positions[id]?.x ?? (el.getBoundingClientRect().left - sr.left)),
+        y: (state.positions[id]?.y ?? (el.getBoundingClientRect().top  - sr.top))
+      };
+
+      window.addEventListener('mousemove', onMove);
+      window.addEventListener('mouseup', onUp);
+    };
+
+    const onMove = (e) => {
+      if (!dragging) return;
+      const dx = e.clientX - start.x;
+      const dy = e.clientY - start.y;
+      state.positions[id] = { x: base.x + dx, y: base.y + dy };
+      setDirty(true);
+      layoutAll();
+    };
+
+    const onUp = () => {
+      dragging = false;
+      el.style.cursor = 'grab';
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+      persist();
+    };
+
+    el.addEventListener('mousedown', onDown);
+  }
+
+  // ---- electric route pulse ----
+  let pulseTimeout = null;
+
+  function pulseRoute(toId){
+    // remove prior pulse
+    const existing = svg.querySelector('.pulseLine');
+    if (existing) existing.remove();
+
+    const A = nodeCenter('elevator');
+    const B = nodeCenter(toId);
+    const p = document.createElementNS('http://www.w3.org/2000/svg','path');
+    p.setAttribute('class','pulseLine');
+    p.setAttribute('d', `M ${A.x} ${A.y} L ${B.x} ${B.y}`);
+    svg.appendChild(p);
+
+    clearTimeout(pulseTimeout);
+    pulseTimeout = setTimeout(() => {
+      p.remove();
+    }, 900);
+  }
+
+  // click to “route”: pulse then “enter”
+  stage.addEventListener('click', (e) => {
+    const nodeEl = e.target.closest('.node');
+    if (!nodeEl) return;
+    const id = nodeEl.dataset.id;
+    if (!id) return;
+
+    selectNode(id);
+
+    if (id !== 'elevator'){
+      pulseRoute(id);
+      // clean, slow-ish transition: small delay to imply system routing
+      window.setTimeout(() => {
+        // placeholder: “enter room”
+        // replace with location change later if you want:
+        // window.location.href = `/${id}.html`;
+        centerOn(id);
+      }, 520);
+    }
+  });
+
+  // ---- persistence ----
+  function setDirty(v){
+    state._dirty = !!v;
+    dirtyEl.textContent = state._dirty ? 'unsaved' : 'saved';
+    dirtyEl.style.borderColor = state._dirty ? 'rgba(233,238,247,.30)' : 'rgba(120,150,130,.35)';
+    dirtyEl.style.color = state._dirty ? 'rgba(233,238,247,.85)' : 'rgba(180,220,190,.85)';
+  }
+
+  function persist(){
+    try{
+      localStorage.setItem(LS_KEY, JSON.stringify({
+        selected: state.selected,
+        positions: state.positions,
+        notes: state.notes,
+        expression: expressionText.innerText.trim()
+      }));
+    }catch{}
+  }
+
+  function load(){
+    try{
+      const raw = localStorage.getItem(LS_KEY);
+      if (!raw) return false;
+      const data = JSON.parse(raw);
+      if (data && typeof data === 'object'){
+        state.selected = data.selected || state.selected;
+        state.positions = data.positions || {};
+        state.notes = data.notes || {};
+        if (typeof data.expression === 'string') expressionText.innerText = data.expression;
+        return true;
+      }
+    }catch{}
+    return false;
+  }
+
+  // ---- export/import ----
+  function exportJSON(){
+    const payload = {
+      version: 'ketadata-constellation-v1',
+      selected: state.selected,
+      positions: state.positions,
+      notes: state.notes,
+      expression: expressionText.innerText.trim(),
+      edges,
+      dashedEdges
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], {type:'application/json'});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'ketadata_constellation.json';
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+
+  function importJSONFile(f){
+    const reader = new FileReader();
+    reader.onload = () => {
+      try{
+        const data = JSON.parse(reader.result);
+        if (!data || typeof data !== 'object') return;
+
+        if (data.positions) state.positions = data.positions;
+        if (data.notes) state.notes = data.notes;
+        if (typeof data.selected === 'string') state.selected = data.selected;
+        if (typeof data.expression === 'string') expressionText.innerText = data.expression;
+
+        persist();
+        rebuild();
+        setDirty(true);
+      }catch{}
+    };
+    reader.readAsText(f);
+  }
+
+  // ---- wire up controls ----
+  btnReset.addEventListener('click', () => resetLayout());
+  btnCenter.addEventListener('click', () => centerOn('elevator'));
+  btnSave.addEventListener('click', () => { persist(); setDirty(false); });
+  btnExport.addEventListener('click', exportJSON);
+  btnImport.addEventListener('click', () => file.click());
+  file.addEventListener('change', () => {
+    if (file.files && file.files[0]) importJSONFile(file.files[0]);
+    file.value = '';
+  });
+
+  focusExpression.addEventListener('click', (e) => {
+    e.stopPropagation();
+    // bring attention to expression dock: slight border emphasis
+    expressionDock.style.borderColor = 'rgba(233,238,247,.35)';
+    window.setTimeout(() => expressionDock.style.borderColor = 'rgba(233,238,247,.14)', 700);
+  });
+
+  expressionText.addEventListener('input', () => { setDirty(true); persist(); });
+
+  // keep wires correct on resize
+  window.addEventListener('resize', () => {
+    // do not reflow positions; just redraw wires
+    drawWires();
+  });
+
+  // ---- init ----
+  const had = load();
+  rebuild();
+  if (!had || !Object.keys(state.positions).length){
+    resetLayout(); // force screenshot-relative default
+  }else{
+    layoutAll();
+    selectNode(state.selected);
+  }
+  setDirty(true);
+
+})();
+</script>
+</body>
+</html>
