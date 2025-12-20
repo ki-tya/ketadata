@@ -1,0 +1,1538 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>KDTV // CINEMA</title>
+  <style>
+    :root{
+      --bg:#000;
+      --panel: rgba(255,255,255,.035);
+      --panel2: rgba(255,255,255,.02);
+      --line: rgba(255,255,255,.10);
+      --line2: rgba(255,255,255,.16);
+      --text: rgba(255,255,255,.86);
+      --muted: rgba(255,255,255,.56);
+      --muted2: rgba(255,255,255,.40);
+      --red: #ff2a2a;
+      --r: 10px;
+      --r2: 12px;
+
+      --heroH: 100vh;
+
+      /* multi default */
+      --gridCols: 3;
+      --gridGap: 10px;
+      --tileMinH: 220px;
+    }
+
+    *{ box-sizing:border-box; }
+    html,body{ height:100%; }
+    body{
+      margin:0;
+      font-family: Arial, Helvetica, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      overflow-x:hidden;
+    }
+
+    /* subtle vignette + grain (very restrained) */
+    .fx{
+      position:fixed; inset:0;
+      pointer-events:none;
+      background:
+        radial-gradient(70% 60% at 50% 40%, rgba(255,255,255,.045) 0%, rgba(0,0,0,0) 58%),
+        radial-gradient(120% 90% at 50% 50%, rgba(0,0,0,0) 0%, rgba(0,0,0,.88) 72%);
+      opacity:.95;
+      z-index:0;
+    }
+
+    /* HERO (immersive) */
+    .hero{
+      position:relative;
+      height: var(--heroH);
+      min-height: 640px;
+      width: 100%;
+      z-index:1;
+    }
+
+    .heroStage{
+      position:absolute; inset:0;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      padding: 18px;
+    }
+
+    .playerShell{
+      position:relative;
+      width: min(1320px, 100%);
+      height: min(740px, calc(100vh - 110px));
+      border-radius: var(--r2);
+      border:1px solid var(--line);
+      background: rgba(255,255,255,.02);
+      overflow:hidden;
+      box-shadow: 0 30px 120px rgba(0,0,0,.68);
+    }
+
+    .playerMedia{
+      position:absolute; inset:0;
+      /* visual filter pipeline */
+      filter: var(--kdfilter, none);
+      transform: translateZ(0);
+    }
+
+    iframe, video{
+      width:100%;
+      height:100%;
+      border:0;
+      display:block;
+      background:#000;
+    }
+
+    /* minimal top HUD in hero */
+    .hud{
+      position:absolute;
+      top: 14px;
+      left: 14px;
+      right: 14px;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:12px;
+      pointer-events:none;
+    }
+
+    .brand{
+      pointer-events:auto;
+      user-select:none;
+      display:flex;
+      align-items:baseline;
+      gap:10px;
+      padding: 8px 10px;
+      border:1px solid var(--line);
+      border-radius: 999px;
+      background: rgba(0,0,0,.35);
+      backdrop-filter: blur(10px);
+      letter-spacing:.22em;
+      text-transform:uppercase;
+      font-size:11px;
+      color: var(--muted);
+    }
+    .brand strong{
+      color: rgba(255,255,255,.88);
+      font-weight:700;
+      letter-spacing:.26em;
+    }
+    .brand .slash{ opacity:.6; }
+
+    .hudRight{
+      pointer-events:auto;
+      display:flex;
+      gap:10px;
+      align-items:center;
+      flex-wrap:wrap;
+      justify-content:flex-end;
+    }
+
+    .btn{
+      cursor:pointer;
+      user-select:none;
+      border:1px solid var(--line);
+      background: rgba(255,255,255,.03);
+      color: var(--muted);
+      border-radius: 999px;
+      padding: 8px 10px;
+      font-size:11px;
+      letter-spacing:.14em;
+      text-transform:uppercase;
+      transition: border-color .15s ease, color .15s ease, background .15s ease;
+    }
+    .btn:hover{ border-color: var(--line2); color: rgba(255,255,255,.75); background: rgba(255,255,255,.045); }
+    .btn:active{ transform: translateY(1px); }
+    .btn.red{
+      border-color: rgba(255,42,42,.55);
+      background: rgba(255,42,42,.06);
+      color: rgba(255,255,255,.72);
+    }
+
+    /* input bar (minimal) */
+    .inputBar{
+      position:absolute;
+      left: 14px;
+      right: 14px;
+      bottom: 14px;
+      display:flex;
+      gap:10px;
+      align-items:center;
+      pointer-events:auto;
+    }
+    .input{
+      flex: 1;
+      display:flex;
+      align-items:center;
+      gap:10px;
+      padding: 10px 12px;
+      border:1px solid var(--line);
+      border-radius: 999px;
+      background: rgba(0,0,0,.35);
+      backdrop-filter: blur(10px);
+      min-width:0;
+    }
+    .input .hint{
+      color: var(--muted2);
+      font-size:11px;
+      letter-spacing:.10em;
+      text-transform:uppercase;
+      white-space:nowrap;
+    }
+    .input input{
+      flex:1;
+      min-width:0;
+      border:0;
+      outline:0;
+      background: transparent;
+      color: var(--text);
+      font-size:12px;
+      letter-spacing:.02em;
+    }
+    .fileBtn{
+      display:flex;
+      gap:10px;
+      align-items:center;
+    }
+    .fileBtn input[type="file"]{
+      display:none;
+    }
+    .pill{
+      border:1px solid var(--line);
+      border-radius: 999px;
+      padding: 8px 10px;
+      background: rgba(0,0,0,.35);
+      color: var(--muted2);
+      font-size:11px;
+      letter-spacing:.10em;
+      text-transform:uppercase;
+      white-space:nowrap;
+    }
+
+    /* Sticky control bar (appears on scroll) */
+    .sticky{
+      position:fixed;
+      left: 16px;
+      right: 16px;
+      top: 14px;
+      z-index:40;
+      display:none;
+      align-items:center;
+      justify-content:space-between;
+      gap:12px;
+      padding: 10px 12px;
+      border:1px solid var(--line);
+      border-radius: 999px;
+      background: rgba(0,0,0,.62);
+      backdrop-filter: blur(12px);
+    }
+    .sticky.on{ display:flex; }
+
+    .sticky .search{
+      flex: 1;
+      display:flex;
+      align-items:center;
+      gap:10px;
+      min-width:0;
+    }
+    .sticky input{
+      width:100%;
+      border:0;
+      outline:0;
+      background: transparent;
+      color: var(--text);
+      font-size:12px;
+      letter-spacing:.02em;
+    }
+    .sticky .k{
+      color: var(--muted2);
+      font-size:11px;
+      letter-spacing:.12em;
+      text-transform:uppercase;
+      white-space:nowrap;
+    }
+
+    /* COLLECTION */
+    .collection{
+      position:relative;
+      z-index:1;
+      width: min(1320px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 20px 0 72px;
+    }
+
+    .controlsRow{
+      display:flex;
+      gap:10px;
+      align-items:center;
+      flex-wrap:wrap;
+      padding: 14px 0 12px;
+    }
+
+    .chip{
+      cursor:pointer;
+      user-select:none;
+      border:1px solid var(--line);
+      background: rgba(255,255,255,.02);
+      color: var(--muted);
+      border-radius: 999px;
+      padding: 7px 10px;
+      font-size:11px;
+      letter-spacing:.10em;
+      text-transform:uppercase;
+    }
+    .chip.active{
+      border-color: var(--line2);
+      background: rgba(255,255,255,.045);
+      color: rgba(255,255,255,.74);
+    }
+
+    .grid{
+      display:grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+    }
+    @media (max-width: 1100px){
+      .grid{ grid-template-columns: repeat(2, 1fr); }
+    }
+    @media (max-width: 720px){
+      .grid{ grid-template-columns: 1fr; }
+    }
+
+    .card{
+      border:1px solid var(--line);
+      background: rgba(255,255,255,.02);
+      border-radius: var(--r2);
+      overflow:hidden;
+      cursor:pointer;
+      transition: border-color .15s ease, background .15s ease, transform .15s ease;
+    }
+    .card:hover{
+      border-color: var(--line2);
+      background: rgba(255,255,255,.03);
+      transform: translateY(-1px);
+    }
+
+    .cardTop{
+      display:flex;
+      align-items:stretch;
+      gap:0;
+    }
+    .thumb{
+      width: 40%;
+      min-height: 108px;
+      border-right:1px solid var(--line);
+      background: rgba(0,0,0,.35);
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      color: var(--muted2);
+      font-size:11px;
+      letter-spacing:.10em;
+      text-transform:uppercase;
+      position:relative;
+    }
+    .thumb img{
+      width:100%;
+      height:100%;
+      object-fit:cover;
+      display:block;
+      filter: grayscale(15%) contrast(1.05) brightness(.92);
+    }
+    .meta{
+      flex:1;
+      padding: 10px 12px;
+      display:flex;
+      flex-direction:column;
+      gap: 8px;
+      min-width:0;
+    }
+    .meta .t{
+      font-size:12px;
+      color: rgba(255,255,255,.82);
+      font-weight:700;
+      letter-spacing:.03em;
+      line-height:1.25;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+    .meta .s{
+      font-size:11px;
+      color: var(--muted);
+      letter-spacing:.02em;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+    .tags{
+      display:flex;
+      gap:8px;
+      flex-wrap:wrap;
+      margin-top:2px;
+    }
+    .tag{
+      border:1px solid rgba(255,255,255,.10);
+      border-radius: 999px;
+      padding: 4px 8px;
+      font-size:10px;
+      color: var(--muted2);
+      letter-spacing:.12em;
+      text-transform:uppercase;
+      background: rgba(255,255,255,.015);
+    }
+
+    /* Minimal YT nod: red bracket around data only */
+    .ytData{
+      position:absolute;
+      top: 8px;
+      right: 8px;
+      border:1px solid rgba(255,42,42,.75);
+      border-radius: 8px;
+      padding: 6px 8px;
+      background: rgba(255,42,42,.06);
+      color: rgba(255,255,255,.74);
+      font-size:10px;
+      letter-spacing:.14em;
+      text-transform:uppercase;
+      line-height:1.1;
+      text-align:right;
+      box-shadow: 0 0 0 1px rgba(255,42,42,.08) inset;
+    }
+
+    /* MULTI MODE overlay */
+    .multi{
+      position:fixed; inset:0;
+      background:#000;
+      z-index:60;
+      display:none;
+      flex-direction:column;
+    }
+    .multi.on{ display:flex; }
+
+    .multiTop{
+      padding: 12px 16px;
+      border-bottom:1px solid var(--line);
+      background: rgba(0,0,0,.78);
+      backdrop-filter: blur(12px);
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:12px;
+      flex-wrap:wrap;
+    }
+
+    .multiTop .left, .multiTop .right{
+      display:flex;
+      gap:10px;
+      align-items:center;
+      flex-wrap:wrap;
+    }
+
+    .slider{
+      display:flex;
+      align-items:center;
+      gap:10px;
+      border:1px solid var(--line);
+      border-radius:999px;
+      padding: 8px 10px;
+      background: rgba(255,255,255,.02);
+      color: var(--muted2);
+      font-size:11px;
+      letter-spacing:.10em;
+      text-transform:uppercase;
+    }
+    .slider input{ width: 120px; }
+
+    .multiStage{
+      flex:1;
+      padding: 14px 16px 18px;
+      overflow:auto;
+    }
+
+    .survGrid{
+      display:grid;
+      grid-template-columns: repeat(var(--gridCols), 1fr);
+      gap: var(--gridGap);
+      align-items:stretch;
+    }
+
+    .tile{
+      border:1px solid var(--line);
+      border-radius: var(--r2);
+      background: rgba(255,255,255,.02);
+      overflow:hidden;
+      min-height: var(--tileMinH);
+      position:relative;
+      /* resizable */
+      resize: both;
+      overflow: hidden;
+    }
+
+    /* tile header */
+    .tileHud{
+      position:absolute;
+      top: 10px;
+      left: 10px;
+      right: 10px;
+      display:flex;
+      justify-content:space-between;
+      gap:10px;
+      align-items:center;
+      pointer-events:none;
+    }
+    .tileHud .mini{
+      pointer-events:auto;
+      border:1px solid var(--line);
+      border-radius:999px;
+      padding: 6px 8px;
+      background: rgba(0,0,0,.40);
+      color: var(--muted2);
+      font-size:10px;
+      letter-spacing:.14em;
+      text-transform:uppercase;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      max-width: 70%;
+    }
+    .tileHud .mini.red{
+      border-color: rgba(255,42,42,.55);
+      background: rgba(255,42,42,.06);
+      color: rgba(255,255,255,.70);
+    }
+
+    .tileMedia{
+      position:absolute; inset:0;
+      filter: var(--tilefilter, none);
+      transform: translateZ(0);
+    }
+
+    /* Effects drawers (hidden until expanded) */
+    .drawer{
+      position:absolute;
+      left: 10px;
+      right: 10px;
+      bottom: 10px;
+      border:1px solid var(--line);
+      border-radius: var(--r2);
+      background: rgba(0,0,0,.55);
+      backdrop-filter: blur(10px);
+      overflow:hidden;
+    }
+    .drawerHead{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      padding: 10px 10px;
+    }
+    .drawerHead .label{
+      font-size:11px;
+      letter-spacing:.18em;
+      text-transform:uppercase;
+      color: var(--muted);
+      user-select:none;
+    }
+    .drawerBody{
+      display:none;
+      border-top:1px solid rgba(255,255,255,.08);
+      padding: 10px;
+      gap: 10px;
+    }
+    .drawer.open .drawerBody{ display:grid; }
+    .drawerBody .row{
+      display:grid;
+      grid-template-columns: 120px 1fr 70px;
+      gap:10px;
+      align-items:center;
+    }
+    .drawerBody .row span{
+      font-size:10px;
+      letter-spacing:.14em;
+      text-transform:uppercase;
+      color: var(--muted2);
+    }
+    .drawerBody input[type="range"]{ width:100%; }
+    .drawerBody .val{
+      text-align:right;
+      color: rgba(255,255,255,.70);
+      font-size:10px;
+      letter-spacing:.12em;
+      text-transform:uppercase;
+    }
+    .drawerBtns{
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+      margin-top:6px;
+    }
+
+    /* small helper text */
+    .note{
+      color: var(--muted2);
+      font-size:11px;
+      line-height:1.35;
+      letter-spacing:.02em;
+    }
+
+    /* clean transitions */
+    .fadeOut{
+      animation: fadeOut .42s ease forwards;
+    }
+    .fadeIn{
+      animation: fadeIn .50s ease forwards;
+    }
+    @keyframes fadeOut{ to{ opacity:0; transform: scale(.995); } }
+    @keyframes fadeIn{ from{ opacity:0; transform: scale(1.005);} to{ opacity:1; transform: scale(1);} }
+
+    /* small utility */
+    .hide{ display:none !important; }
+  </style>
+</head>
+<body>
+  <div class="fx"></div>
+
+  <!-- Sticky bar appears after scroll -->
+  <div class="sticky" id="sticky">
+    <div class="brand" style="padding:7px 10px;">
+      <strong>KDTV</strong><span class="slash">//</span><span>CINEMA</span>
+    </div>
+    <div class="search">
+      <span class="k">search</span>
+      <input id="search2" type="text" placeholder="title / tag / channel" />
+    </div>
+    <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+      <button class="btn" id="toTop">top</button>
+      <button class="btn red" id="openMulti2">kdtv multi</button>
+    </div>
+  </div>
+
+  <!-- HERO -->
+  <section class="hero" id="hero">
+    <div class="heroStage">
+      <div class="playerShell" id="playerShell">
+        <div class="playerMedia" id="playerMedia"></div>
+
+        <div class="hud">
+          <div class="brand" title="KDTV Cinema">
+            <strong>KDTV</strong><span class="slash">//</span><span>CINEMA</span>
+            <span style="opacity:.45; letter-spacing:.10em;">IMMERSIVE</span>
+          </div>
+          <div class="hudRight">
+            <button class="btn" id="effectsBtn">effects</button>
+            <button class="btn red" id="openMulti">kdtv multi</button>
+            <button class="btn" id="exportBtn">export</button>
+            <button class="btn" id="importBtn">import</button>
+          </div>
+        </div>
+
+        <div class="inputBar">
+          <div class="input">
+            <div class="hint">youtube url / id</div>
+            <input id="ytInput" type="text" placeholder="paste: https://youtube.com/watch?v=…  or  ytid" />
+          </div>
+
+          <div class="fileBtn">
+            <label class="btn" for="fileInput">local file</label>
+            <input id="fileInput" type="file" accept="video/*,audio/*" />
+          </div>
+
+          <button class="btn" id="loadBtn">load</button>
+          <div class="pill" id="modePill">YT MODE</div>
+        </div>
+
+        <!-- HERO effects drawer (visual only for YT, visual+audio possible for local) -->
+        <div class="drawer" id="heroDrawer" style="left:14px; right:14px; bottom:58px;">
+          <div class="drawerHead">
+            <div class="label">KETADATA EFFECTS</div>
+            <div style="display:flex; gap:10px; align-items:center;">
+              <div class="note" id="audioNote" style="max-width: 520px;">
+                Audio effects require local media (browser security prevents processing YouTube iframe audio).
+              </div>
+              <button class="btn" id="drawerToggle">expand</button>
+            </div>
+          </div>
+          <div class="drawerBody" id="heroDrawerBody">
+            <!-- sliders injected -->
+            <div class="drawerBtns">
+              <button class="btn" id="presetClean">clean</button>
+              <button class="btn" id="presetInfra">infra</button>
+              <button class="btn" id="presetXray">x-ray</button>
+              <button class="btn" id="presetSurv">surveillance</button>
+              <button class="btn" id="presetNull">null</button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- COLLECTION -->
+  <section class="collection" id="collection">
+    <div class="controlsRow">
+      <div class="note" style="flex:1; min-width:240px;">
+        Scroll-state UI: search + categories + tags. Selecting a video routes it back into the immersive stage.
+      </div>
+      <div class="input" style="max-width:520px; padding:8px 12px; border-radius:999px;">
+        <div class="hint">search</div>
+        <input id="search" type="text" placeholder="title / tag / channel" />
+      </div>
+    </div>
+
+    <div class="controlsRow" id="categoryRow"></div>
+    <div class="controlsRow" id="tagRow"></div>
+
+    <div class="grid" id="cards"></div>
+  </section>
+
+  <!-- MULTI MODE -->
+  <section class="multi" id="multi">
+    <div class="multiTop">
+      <div class="left">
+        <div class="brand" style="padding:7px 10px;">
+          <strong>KDTV</strong><span class="slash">//</span><span>MULTI</span>
+          <span style="opacity:.45; letter-spacing:.10em;">SURVEILLANCE LAYOUT</span>
+        </div>
+
+        <div class="slider" title="Grid columns">
+          cols
+          <input id="cols" type="range" min="1" max="6" value="3" />
+          <span id="colsVal" style="color:rgba(255,255,255,.72);">3</span>
+        </div>
+
+        <div class="slider" title="Gap">
+          gap
+          <input id="gap" type="range" min="4" max="22" value="10" />
+          <span id="gapVal" style="color:rgba(255,255,255,.72);">10</span>
+        </div>
+
+        <div class="slider" title="Minimum tile height">
+          min h
+          <input id="minh" type="range" min="160" max="420" value="220" />
+          <span id="minhVal" style="color:rgba(255,255,255,.72);">220</span>
+        </div>
+      </div>
+
+      <div class="right">
+        <button class="btn" id="addTile">add module</button>
+        <button class="btn" id="clearTiles">clear</button>
+        <button class="btn" id="exportMulti">export</button>
+        <button class="btn" id="importMulti">import</button>
+        <button class="btn red" id="closeMulti">close</button>
+      </div>
+    </div>
+
+    <div class="multiStage">
+      <div class="survGrid" id="survGrid"></div>
+      <div class="note" style="margin-top:12px;">
+        Modules are resizable (bottom-right handle). Effects drawers are invisible until expanded. YouTube audio cannot be processed in-browser; local media can.
+      </div>
+    </div>
+  </section>
+
+  <script>
+    /***********************
+     * KDTV CINEMA (single-file)
+     * - Immersive hero player (YT + local file)
+     * - Scroll reveals search/categories/tags + curated grid
+     * - Selecting any card loads hero
+     * - MULTI mode: surveillance grid, resizable modules, adjustable cols/gap/min-height
+     * - Visual effects available everywhere; audio effects only for local media (browser limitation)
+     ***********************/
+
+    // ---------- Sample curated data (replace with your real list) ----------
+    const CURATED = [
+      { id:"c1", title:"Curated: Flow Setup / Preset", channel:"KDTV", category:"Event", tags:["flow","setup","preset"], yt:"M7lc1UVf-VE", dur:"18:42" },
+      { id:"c2", title:"Curated: Discourse Flow", channel:"KDTV", category:"Theory", tags:["discourse","systems"], yt:"ysz5S6PUM-U", dur:"09:55" },
+      { id:"c3", title:"Curated: Archive Pull", channel:"KDTV", category:"Archive", tags:["archive","artifacts"], yt:"aqz-KE-bpKQ", dur:"31:10" },
+      { id:"c4", title:"Curated: City Lens", channel:"KDTV", category:"Lens", tags:["lens","city"], yt:"dQw4w9WgXcQ", dur:"12:08" },
+      { id:"c5", title:"Curated: Signal / Noise", channel:"KDTV", category:"Systems", tags:["signal","noise","control"], yt:"E7wJTI-1dvQ", dur:"22:05" },
+      { id:"c6", title:"Curated: Rhythm Study", channel:"KDTV", category:"Music", tags:["rhythm","editing"], yt:"hTWKbfoikeg", dur:"04:39" },
+    ];
+
+    // ---------- State ----------
+    const state = {
+      // hero
+      hero: {
+        mode: "yt",     // "yt" | "local"
+        ytId: CURATED[0].yt,
+        localUrl: null,
+        title: CURATED[0].title,
+        // effects
+        fx: defaultFx(),
+      },
+      // collection filters
+      filter: {
+        q: "",
+        category: "All",
+        tag: "All",
+      },
+      // multi
+      multi: {
+        cols: 3,
+        gap: 10,
+        minh: 220,
+        tiles: []
+      }
+    };
+
+    // ---------- DOM ----------
+    const hero = document.getElementById('hero');
+    const sticky = document.getElementById('sticky');
+    const toTop = document.getElementById('toTop');
+
+    const playerMedia = document.getElementById('playerMedia');
+    const ytInput = document.getElementById('ytInput');
+    const fileInput = document.getElementById('fileInput');
+    const loadBtn = document.getElementById('loadBtn');
+    const modePill = document.getElementById('modePill');
+
+    const effectsBtn = document.getElementById('effectsBtn');
+    const heroDrawer = document.getElementById('heroDrawer');
+    const heroDrawerBody = document.getElementById('heroDrawerBody');
+    const drawerToggle = document.getElementById('drawerToggle');
+
+    const search = document.getElementById('search');
+    const search2 = document.getElementById('search2');
+    const categoryRow = document.getElementById('categoryRow');
+    const tagRow = document.getElementById('tagRow');
+    const cards = document.getElementById('cards');
+
+    const openMulti = document.getElementById('openMulti');
+    const openMulti2 = document.getElementById('openMulti2');
+    const multi = document.getElementById('multi');
+    const closeMulti = document.getElementById('closeMulti');
+    const survGrid = document.getElementById('survGrid');
+
+    const cols = document.getElementById('cols');
+    const gap = document.getElementById('gap');
+    const minh = document.getElementById('minh');
+    const colsVal = document.getElementById('colsVal');
+    const gapVal = document.getElementById('gapVal');
+    const minhVal = document.getElementById('minhVal');
+
+    const addTile = document.getElementById('addTile');
+    const clearTiles = document.getElementById('clearTiles');
+
+    const exportBtn = document.getElementById('exportBtn');
+    const importBtn = document.getElementById('importBtn');
+    const exportMulti = document.getElementById('exportMulti');
+    const importMulti = document.getElementById('importMulti');
+
+    // ---------- Utilities ----------
+    function defaultFx(){
+      return {
+        brightness: 1.00,
+        contrast: 1.00,
+        saturate: 1.00,
+        hue: 0,
+        blur: 0,
+        grayscale: 0,
+        invert: 0,
+        sepia: 0,
+      };
+    }
+
+    function fxToFilter(fx){
+      // keep clean, systemic: pure CSS filter chain
+      return [
+        `brightness(${fx.brightness})`,
+        `contrast(${fx.contrast})`,
+        `saturate(${fx.saturate})`,
+        `hue-rotate(${fx.hue}deg)`,
+        `blur(${fx.blur}px)`,
+        `grayscale(${fx.grayscale}%)`,
+        `invert(${fx.invert}%)`,
+        `sepia(${fx.sepia}%)`,
+      ].join(' ');
+    }
+
+    function parseYouTubeId(input){
+      const s = (input||"").trim();
+      if(!s) return null;
+
+      // If it's already an 11-char-ish id
+      if(/^[a-zA-Z0-9_-]{8,15}$/.test(s) && !s.includes("http")) return s;
+
+      try{
+        const u = new URL(s);
+        // youtube.com/watch?v=
+        if(u.searchParams.get("v")) return u.searchParams.get("v");
+        // youtu.be/ID
+        const parts = u.pathname.split("/").filter(Boolean);
+        if(u.hostname.includes("youtu.be") && parts[0]) return parts[0];
+        // /embed/ID
+        const embedIdx = parts.indexOf("embed");
+        if(embedIdx >= 0 && parts[embedIdx+1]) return parts[embedIdx+1];
+      }catch(e){
+        return null;
+      }
+      return null;
+    }
+
+    function escapeHtml(str){
+      return String(str ?? "").replace(/[&<>"']/g, c=>({
+        "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
+      }[c]));
+    }
+
+    function setCSSVar(name, val){
+      document.documentElement.style.setProperty(name, val);
+    }
+
+    // ---------- Hero Player ----------
+    function ytEmbedSrc(id){
+      // keep minimal: no autoplay by default; we control autoplay on select
+      return `https://www.youtube.com/embed/${id}?rel=0&modestbranding=1&controls=1&iv_load_policy=3`;
+    }
+
+    function renderHeroPlayer({autoplay=false} = {}){
+      // wipe current
+      playerMedia.innerHTML = "";
+
+      // apply filter
+      document.documentElement.style.setProperty("--kdfilter", fxToFilter(state.hero.fx));
+
+      if(state.hero.mode === "local" && state.hero.localUrl){
+        const v = document.createElement("video");
+        v.src = state.hero.localUrl;
+        v.controls = true;
+        v.playsInline = true;
+        v.autoplay = !!autoplay;
+        v.loop = false;
+        v.preload = "metadata";
+        playerMedia.appendChild(v);
+
+        modePill.textContent = "LOCAL MODE";
+      }else{
+        const id = state.hero.ytId;
+        const ifr = document.createElement("iframe");
+        const src = ytEmbedSrc(id) + (autoplay ? "&autoplay=1" : "");
+        ifr.src = src;
+        ifr.allow = "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture";
+        ifr.allowFullscreen = true;
+        ifr.title = state.hero.title || "KDTV";
+        playerMedia.appendChild(ifr);
+
+        modePill.textContent = "YT MODE";
+      }
+    }
+
+    function loadFromInput(){
+      const id = parseYouTubeId(ytInput.value);
+      if(!id) return;
+
+      state.hero.mode = "yt";
+      state.hero.ytId = id;
+      state.hero.localUrl = null;
+      state.hero.title = `YT:${id}`;
+      renderHeroPlayer({autoplay:true});
+      softFlashRed();
+    }
+
+    function softFlashRed(){
+      // minimal nod: a quick subtle red border pulse on the player shell
+      const shell = document.getElementById("playerShell");
+      shell.animate([
+        { boxShadow: "0 30px 120px rgba(0,0,0,.68), 0 0 0 0 rgba(255,42,42,.0)" },
+        { boxShadow: "0 30px 120px rgba(0,0,0,.68), 0 0 0 1px rgba(255,42,42,.25)" },
+        { boxShadow: "0 30px 120px rgba(0,0,0,.68), 0 0 0 0 rgba(255,42,42,.0)" }
+      ], { duration: 520, easing:"ease-out" });
+    }
+
+    fileInput.addEventListener("change", ()=>{
+      const f = fileInput.files && fileInput.files[0];
+      if(!f) return;
+      const url = URL.createObjectURL(f);
+      state.hero.mode = "local";
+      state.hero.localUrl = url;
+      state.hero.title = f.name;
+      renderHeroPlayer({autoplay:true});
+      softFlashRed();
+    });
+
+    loadBtn.addEventListener("click", loadFromInput);
+    ytInput.addEventListener("keydown", (e)=>{
+      if(e.key === "Enter") loadFromInput();
+    });
+
+    // ---------- Effects Drawer ----------
+    function makeSlider(label, key, min, max, step){
+      const row = document.createElement("div");
+      row.className = "row";
+
+      const l = document.createElement("span");
+      l.textContent = label;
+
+      const r = document.createElement("input");
+      r.type = "range";
+      r.min = min;
+      r.max = max;
+      r.step = step;
+      r.value = state.hero.fx[key];
+
+      const v = document.createElement("div");
+      v.className = "val";
+      v.textContent = String(state.hero.fx[key]);
+
+      r.addEventListener("input", ()=>{
+        const val = (key === "hue" || key === "blur" || key === "grayscale" || key === "invert" || key === "sepia")
+          ? Number(r.value)
+          : Number(r.value);
+        state.hero.fx[key] = val;
+        v.textContent = String(val);
+        document.documentElement.style.setProperty("--kdfilter", fxToFilter(state.hero.fx));
+      });
+
+      row.appendChild(l);
+      row.appendChild(r);
+      row.appendChild(v);
+      return row;
+    }
+
+    function renderHeroFxUI(){
+      // keep drawer body: sliders + preset row already present at end
+      // remove existing sliders (keep buttons)
+      const btns = heroDrawerBody.querySelector(".drawerBtns");
+      heroDrawerBody.innerHTML = "";
+      heroDrawerBody.appendChild(makeSlider("brightness","brightness",0.60,1.60,0.01));
+      heroDrawerBody.appendChild(makeSlider("contrast","contrast",0.60,1.90,0.01));
+      heroDrawerBody.appendChild(makeSlider("saturate","saturate",0.00,2.20,0.01));
+      heroDrawerBody.appendChild(makeSlider("hue","hue",-180,180,1));
+      heroDrawerBody.appendChild(makeSlider("blur","blur",0,8,0.1));
+      heroDrawerBody.appendChild(makeSlider("grayscale","grayscale",0,100,1));
+      heroDrawerBody.appendChild(makeSlider("invert","invert",0,100,1));
+      heroDrawerBody.appendChild(makeSlider("sepia","sepia",0,100,1));
+      heroDrawerBody.appendChild(btns);
+    }
+
+    function setPreset(name){
+      if(name === "clean"){
+        state.hero.fx = defaultFx();
+      } else if(name === "infra"){
+        state.hero.fx = { brightness:1.06, contrast:1.28, saturate:1.45, hue:18, blur:0, grayscale:0, invert:0, sepia:0 };
+      } else if(name === "xray"){
+        state.hero.fx = { brightness:1.12, contrast:1.55, saturate:0.10, hue:-30, blur:0.2, grayscale:40, invert:18, sepia:0 };
+      } else if(name === "surveillance"){
+        state.hero.fx = { brightness:0.92, contrast:1.42, saturate:0.70, hue:-10, blur:0, grayscale:22, invert:0, sepia:8 };
+      } else if(name === "null"){
+        state.hero.fx = { brightness:1.00, contrast:1.00, saturate:0.00, hue:0, blur:0, grayscale:100, invert:0, sepia:0 };
+      }
+      document.documentElement.style.setProperty("--kdfilter", fxToFilter(state.hero.fx));
+      renderHeroFxUI();
+    }
+
+    document.getElementById("presetClean").addEventListener("click", ()=>setPreset("clean"));
+    document.getElementById("presetInfra").addEventListener("click", ()=>setPreset("infra"));
+    document.getElementById("presetXray").addEventListener("click", ()=>setPreset("xray"));
+    document.getElementById("presetSurv").addEventListener("click", ()=>setPreset("surveillance"));
+    document.getElementById("presetNull").addEventListener("click", ()=>setPreset("null"));
+
+    function toggleDrawer(open){
+      if(open === undefined) open = !heroDrawer.classList.contains("open");
+      heroDrawer.classList.toggle("open", !!open);
+      drawerToggle.textContent = open ? "collapse" : "expand";
+    }
+
+    effectsBtn.addEventListener("click", ()=>toggleDrawer(true));
+    drawerToggle.addEventListener("click", ()=>toggleDrawer());
+
+    renderHeroFxUI();
+    toggleDrawer(false);
+
+    // ---------- Collection (categories/tags/search) ----------
+    function unique(arr){ return [...new Set(arr)]; }
+
+    function computeCategories(){
+      return ["All", ...unique(CURATED.map(x=>x.category || "Other"))];
+    }
+    function computeTags(){
+      const all = CURATED.flatMap(x=>x.tags || []);
+      return ["All", ...unique(all)];
+    }
+
+    function renderChips(){
+      categoryRow.innerHTML = "";
+      tagRow.innerHTML = "";
+
+      const cats = computeCategories();
+      cats.forEach(c=>{
+        const el = document.createElement("div");
+        el.className = "chip" + (state.filter.category === c ? " active" : "");
+        el.textContent = c;
+        el.addEventListener("click", ()=>{
+          state.filter.category = c;
+          renderChips();
+          renderCards();
+        });
+        categoryRow.appendChild(el);
+      });
+
+      const tags = computeTags();
+      tags.forEach(t=>{
+        const el = document.createElement("div");
+        el.className = "chip" + (state.filter.tag === t ? " active" : "");
+        el.textContent = t;
+        el.addEventListener("click", ()=>{
+          state.filter.tag = t;
+          renderChips();
+          renderCards();
+        });
+        tagRow.appendChild(el);
+      });
+    }
+
+    function matchItem(it){
+      const q = (state.filter.q || "").trim().toLowerCase();
+      const cat = state.filter.category;
+      const tag = state.filter.tag;
+
+      const qOK = !q || (
+        (it.title||"").toLowerCase().includes(q) ||
+        (it.channel||"").toLowerCase().includes(q) ||
+        (it.category||"").toLowerCase().includes(q) ||
+        (it.tags||[]).some(t=>String(t).toLowerCase().includes(q))
+      );
+      const catOK = (cat === "All") || ((it.category||"Other") === cat);
+      const tagOK = (tag === "All") || ((it.tags||[]).includes(tag));
+
+      return qOK && catOK && tagOK;
+    }
+
+    function cardThumbUrl(ytId){
+      return `https://i.ytimg.com/vi/${ytId}/hqdefault.jpg`;
+    }
+
+    function renderCards(){
+      const list = CURATED.filter(matchItem);
+      cards.innerHTML = "";
+
+      list.forEach(it=>{
+        const c = document.createElement("div");
+        c.className = "card";
+        c.innerHTML = `
+          <div class="cardTop">
+            <div class="thumb">
+              <img alt="" src="${cardThumbUrl(it.yt)}" />
+              <div class="ytData">YT DATA<br>${escapeHtml(it.dur || "—")}</div>
+            </div>
+            <div class="meta">
+              <div class="t">${escapeHtml(it.title)}</div>
+              <div class="s">${escapeHtml(it.channel || "—")} · ${escapeHtml(it.category || "Other")}</div>
+              <div class="tags">${(it.tags||[]).slice(0,5).map(t=>`<span class="tag">${escapeHtml(t)}</span>`).join("")}</div>
+            </div>
+          </div>
+        `;
+        c.addEventListener("click", ()=>{
+          // clean: fade swap
+          playerMedia.classList.remove("fadeIn");
+          playerMedia.classList.add("fadeOut");
+          setTimeout(()=>{
+            state.hero.mode = "yt";
+            state.hero.ytId = it.yt;
+            state.hero.localUrl = null;
+            state.hero.title = it.title;
+            renderHeroPlayer({autoplay:true});
+            softFlashRed();
+            playerMedia.classList.remove("fadeOut");
+            playerMedia.classList.add("fadeIn");
+            window.scrollTo({ top: 0, behavior: "smooth" });
+          }, 220);
+        });
+        cards.appendChild(c);
+      });
+    }
+
+    search.addEventListener("input", ()=>{
+      state.filter.q = search.value;
+      renderCards();
+      // keep sticky search in sync
+      if(search2.value !== search.value) search2.value = search.value;
+    });
+    search2.addEventListener("input", ()=>{
+      state.filter.q = search2.value;
+      renderCards();
+      if(search.value !== search2.value) search.value = search2.value;
+    });
+
+    // ---------- Sticky bar behavior ----------
+    const obs = new IntersectionObserver((entries)=>{
+      const heroVisible = entries[0].isIntersecting;
+      sticky.classList.toggle("on", !heroVisible);
+    }, { threshold: 0.18 });
+
+    obs.observe(hero);
+
+    toTop.addEventListener("click", ()=>{
+      window.scrollTo({ top: 0, behavior:"smooth" });
+    });
+
+    // ---------- MULTI MODE ----------
+    function openMultiMode(){
+      multi.classList.add("on");
+      applyMultiVars();
+      renderMulti();
+    }
+    function closeMultiMode(){
+      multi.classList.remove("on");
+    }
+
+    openMulti.addEventListener("click", openMultiMode);
+    openMulti2.addEventListener("click", openMultiMode);
+    closeMulti.addEventListener("click", closeMultiMode);
+    window.addEventListener("keydown", (e)=>{
+      if(e.key === "Escape" && multi.classList.contains("on")) closeMultiMode();
+    });
+
+    function applyMultiVars(){
+      setCSSVar("--gridCols", state.multi.cols);
+      setCSSVar("--gridGap", state.multi.gap + "px");
+      setCSSVar("--tileMinH", state.multi.minh + "px");
+      cols.value = state.multi.cols;
+      gap.value = state.multi.gap;
+      minh.value = state.multi.minh;
+      colsVal.textContent = String(state.multi.cols);
+      gapVal.textContent = String(state.multi.gap);
+      minhVal.textContent = String(state.multi.minh);
+    }
+
+    cols.addEventListener("input", ()=>{
+      state.multi.cols = Number(cols.value);
+      colsVal.textContent = String(state.multi.cols);
+      applyMultiVars();
+    });
+    gap.addEventListener("input", ()=>{
+      state.multi.gap = Number(gap.value);
+      gapVal.textContent = String(state.multi.gap);
+      applyMultiVars();
+    });
+    minh.addEventListener("input", ()=>{
+      state.multi.minh = Number(minh.value);
+      minhVal.textContent = String(state.multi.minh);
+      applyMultiVars();
+    });
+
+    function newTile(){
+      return {
+        id: "t_" + Math.random().toString(16).slice(2),
+        mode: "yt",
+        ytId: CURATED[Math.floor(Math.random()*CURATED.length)].yt,
+        localUrl: null,
+        title: "module",
+        fx: defaultFx(),
+        drawerOpen: false
+      };
+    }
+
+    addTile.addEventListener("click", ()=>{
+      state.multi.tiles.push(newTile());
+      renderMulti();
+    });
+
+    clearTiles.addEventListener("click", ()=>{
+      state.multi.tiles = [];
+      renderMulti();
+    });
+
+    function renderMulti(){
+      survGrid.innerHTML = "";
+
+      if(state.multi.tiles.length === 0){
+        // default: create 3 tiles for immediate utility
+        state.multi.tiles = [newTile(), newTile(), newTile()];
+      }
+
+      state.multi.tiles.forEach((t, idx)=>{
+        const tile = document.createElement("div");
+        tile.className = "tile";
+        tile.style.setProperty("--tilefilter", fxToFilter(t.fx));
+        tile.dataset.id = t.id;
+
+        const title = (t.title && t.title !== "module") ? t.title : `module ${idx+1}`;
+        tile.innerHTML = `
+          <div class="tileMedia"></div>
+
+          <div class="tileHud">
+            <div class="mini">${escapeHtml(title)}</div>
+            <div class="mini red">YT DATA</div>
+          </div>
+
+          <div class="drawer ${t.drawerOpen ? "open" : ""}">
+            <div class="drawerHead">
+              <div class="label">effects</div>
+              <div style="display:flex; gap:10px; align-items:center;">
+                <button class="btn" data-act="load">load</button>
+                <button class="btn" data-act="toggle">${t.drawerOpen ? "collapse" : "expand"}</button>
+                <button class="btn" data-act="remove">remove</button>
+              </div>
+            </div>
+            <div class="drawerBody" data-body></div>
+          </div>
+        `;
+
+        const mediaHost = tile.querySelector(".tileMedia");
+
+        if(t.mode === "local" && t.localUrl){
+          const v = document.createElement("video");
+          v.src = t.localUrl;
+          v.controls = true;
+          v.playsInline = true;
+          v.preload = "metadata";
+          mediaHost.appendChild(v);
+        } else {
+          const ifr = document.createElement("iframe");
+          ifr.src = ytEmbedSrc(t.ytId);
+          ifr.allow = "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture";
+          ifr.allowFullscreen = true;
+          ifr.title = title;
+          mediaHost.appendChild(ifr);
+        }
+
+        // drawer sliders
+        const body = tile.querySelector("[data-body]");
+        body.appendChild(tileSlider(t, "brightness","brightness",0.60,1.60,0.01, tile));
+        body.appendChild(tileSlider(t, "contrast","contrast",0.60,1.90,0.01, tile));
+        body.appendChild(tileSlider(t, "saturate","saturate",0.00,2.20,0.01, tile));
+        body.appendChild(tileSlider(t, "hue","hue",-180,180,1, tile));
+        body.appendChild(tileSlider(t, "blur","blur",0,8,0.1, tile));
+        body.appendChild(tileSlider(t, "grayscale","grayscale",0,100,1, tile));
+        body.appendChild(tileSlider(t, "invert","invert",0,100,1, tile));
+        body.appendChild(tileSlider(t, "sepia","sepia",0,100,1, tile));
+
+        // presets
+        const presetWrap = document.createElement("div");
+        presetWrap.className = "drawerBtns";
+        presetWrap.innerHTML = `
+          <button class="btn" data-pre="clean">clean</button>
+          <button class="btn" data-pre="infra">infra</button>
+          <button class="btn" data-pre="xray">x-ray</button>
+          <button class="btn" data-pre="surv">surveillance</button>
+          <button class="btn" data-pre="null">null</button>
+        `;
+        body.appendChild(presetWrap);
+
+        presetWrap.querySelectorAll("[data-pre]").forEach(b=>{
+          b.addEventListener("click", ()=>{
+            const p = b.dataset.pre;
+            if(p === "clean") t.fx = defaultFx();
+            if(p === "infra") t.fx = { brightness:1.06, contrast:1.28, saturate:1.45, hue:18, blur:0, grayscale:0, invert:0, sepia:0 };
+            if(p === "xray") t.fx = { brightness:1.12, contrast:1.55, saturate:0.10, hue:-30, blur:0.2, grayscale:40, invert:18, sepia:0 };
+            if(p === "surv") t.fx = { brightness:0.92, contrast:1.42, saturate:0.70, hue:-10, blur:0, grayscale:22, invert:0, sepia:8 };
+            if(p === "null") t.fx = { brightness:1.00, contrast:1.00, saturate:0.00, hue:0, blur:0, grayscale:100, invert:0, sepia:0 };
+            tile.style.setProperty("--tilefilter", fxToFilter(t.fx));
+            // refresh numeric labels
+            renderMulti();
+          });
+        });
+
+        // actions
+        tile.querySelectorAll("[data-act]").forEach(btn=>{
+          btn.addEventListener("click", async ()=>{
+            const act = btn.dataset.act;
+
+            if(act === "toggle"){
+              t.drawerOpen = !t.drawerOpen;
+              renderMulti();
+            }
+
+            if(act === "remove"){
+              state.multi.tiles = state.multi.tiles.filter(x=>x.id !== t.id);
+              renderMulti();
+            }
+
+            if(act === "load"){
+              // minimal loader: prompt for YT; optional local file picker
+              const choice = prompt("Paste YouTube URL/ID (leave blank to load local file):", "");
+              if(choice && choice.trim()){
+                const id = parseYouTubeId(choice);
+                if(id){
+                  t.mode = "yt";
+                  t.ytId = id;
+                  t.localUrl = null;
+                  t.title = `YT:${id}`;
+                  renderMulti();
+                }
+              } else {
+                // local file
+                const inp = document.createElement("input");
+                inp.type = "file";
+                inp.accept = "video/*,audio/*";
+                inp.onchange = ()=>{
+                  const f = inp.files && inp.files[0];
+                  if(!f) return;
+                  const url = URL.createObjectURL(f);
+                  t.mode = "local";
+                  t.localUrl = url;
+                  t.title = f.name;
+                  renderMulti();
+                };
+                inp.click();
+              }
+            }
+          });
+        });
+
+        // click tile to route to immersive (systemic: optional)
+        tile.addEventListener("dblclick", ()=>{
+          // load tile into hero
+          state.hero.fx = { ...t.fx };
+          document.documentElement.style.setProperty("--kdfilter", fxToFilter(state.hero.fx));
+          renderHeroFxUI();
+
+          if(t.mode === "local" && t.localUrl){
+            state.hero.mode = "local";
+            state.hero.localUrl = t.localUrl;
+            state.hero.title = t.title;
+          } else {
+            state.hero.mode = "yt";
+            state.hero.ytId = t.ytId;
+            state.hero.localUrl = null;
+            state.hero.title = t.title;
+          }
+          renderHeroPlayer({autoplay:true});
+          closeMultiMode();
+          softFlashRed();
+        });
+
+        survGrid.appendChild(tile);
+      });
+    }
+
+    function tileSlider(tileState, label, key, min, max, step, tileEl){
+      const row = document.createElement("div");
+      row.className = "row";
+
+      const l = document.createElement("span");
+      l.textContent = label;
+
+      const r = document.createElement("input");
+      r.type = "range";
+      r.min = min;
+      r.max = max;
+      r.step = step;
+      r.value = tileState.fx[key];
+
+      const v = document.createElement("div");
+      v.className = "val";
+      v.textContent = String(tileState.fx[key]);
+
+      r.addEventListener("input", ()=>{
+        const val = Number(r.value);
+        tileState.fx[key] = val;
+        v.textContent = String(val);
+        tileEl.style.setProperty("--tilefilter", fxToFilter(tileState.fx));
+      });
+
+      row.appendChild(l);
+      row.appendChild(r);
+      row.appendChild(v);
+      return row;
+    }
+
+    // ---------- Export / Import ----------
+    function downloadJSON(obj, filename){
+      const blob = new Blob([JSON.stringify(obj, null, 2)], { type:"application/json" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(a.href);
+    }
+
+    function pickJSONFile(onLoad){
+      const inp = document.createElement("input");
+      inp.type = "file";
+      inp.accept = "application/json";
+      inp.onchange = async ()=>{
+        const f = inp.files && inp.files[0];
+        if(!f) return;
+        const text = await f.text();
+        try{
+          const obj = JSON.parse(text);
+          onLoad(obj);
+        }catch(e){
+          alert("Invalid JSON.");
+        }
+      };
+      inp.click();
+    }
+
+    exportBtn.addEventListener("click", ()=>{
+      downloadJSON({ hero: state.hero, filter: state.filter }, "kdtv_cinema_state.json");
+    });
+
+    importBtn.addEventListener("click", ()=>{
+      pickJSONFile((obj)=>{
+        if(obj.hero){
+          state.hero = { ...state.hero, ...obj.hero };
+          // safety: avoid reviving stale blob urls from other machine
+          if(state.hero.mode === "local") state.hero.mode = "yt";
+          renderHeroFxUI();
+          renderHeroPlayer({autoplay:false});
+        }
+        if(obj.filter){
+          state.filter = { ...state.filter, ...obj.filter };
+          search.value = state.filter.q || "";
+          search2.value = state.filter.q || "";
+          renderChips();
+          renderCards();
+        }
+      });
+    });
+
+    exportMulti.addEventListener("click", ()=>{
+      // note: local blob URLs won't be portable across sessions
+      const safeTiles = state.multi.tiles.map(t=>({
+        ...t,
+        localUrl: null,
+        mode: t.mode === "local" ? "yt" : t.mode
+      }));
+      downloadJSON({ multi: { ...state.multi, tiles: safeTiles } }, "kdtv_multi_state.json");
+    });
+
+    importMulti.addEventListener("click", ()=>{
+      pickJSONFile((obj)=>{
+        if(obj.multi){
+          state.multi.cols = Number(obj.multi.cols || state.multi.cols);
+          state.multi.gap  = Number(obj.multi.gap  || state.multi.gap);
+          state.multi.minh = Number(obj.multi.minh || state.multi.minh);
+          state.multi.tiles = Array.isArray(obj.multi.tiles) ? obj.multi.tiles.map(t=>({
+            ...newTile(),
+            ...t,
+            localUrl: null,
+            mode: (t.mode === "local") ? "yt" : (t.mode || "yt")
+          })) : state.multi.tiles;
+
+          applyMultiVars();
+          renderMulti();
+        }
+      });
+    });
+
+    // ---------- Init ----------
+    function init(){
+      // hero default
+      renderHeroPlayer({autoplay:false});
+
+      // collection
+      renderChips();
+      renderCards();
+
+      // multi defaults
+      applyMultiVars();
+    }
+    init();
+  </script>
+</body>
+</html>
