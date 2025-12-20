@@ -1,0 +1,753 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>KETADATA // TEMPLE</title>
+  <style>
+    :root{
+      --bg:#000;
+      --ink:rgba(255,255,255,.92);
+      --muted:rgba(255,255,255,.62);
+      --line:rgba(255,255,255,.12);
+
+      --r:0px;
+      --pad:12px;
+      --font: Arial, Helvetica, sans-serif;
+    }
+
+    *{ box-sizing:border-box; margin:0; padding:0; }
+    html,body{ width:100%; height:100%; overflow:hidden; background:var(--bg); }
+    body{ font-family: var(--font); color: var(--ink); }
+
+    canvas{ display:block; width:100%; height:100%; }
+
+    /* TEMPLE OVERLAY — KETADATA LANGUAGE */
+    #hud{
+      position:fixed;
+      inset:0;
+      pointer-events:none;
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      justify-content:space-between;
+      padding:18px 18px;
+      mix-blend-mode: screen;
+    }
+
+    #hudTop{
+      display:flex;
+      gap:10px;
+      align-items:center;
+      justify-content:center;
+      text-align:center;
+      font-size:11px;
+      letter-spacing:.22em;
+      text-transform:uppercase;
+      opacity:.90;
+    }
+
+    #hudMid{
+      text-align:center;
+      font-size: clamp(14px, 1.8vw, 18px);
+      text-transform:uppercase;
+      letter-spacing:.22em;
+      opacity:.86;
+      max-width: min(980px, 92vw);
+      line-height: 1.35;
+    }
+
+    #hudBot{
+      text-align:center;
+      font-size:10px;
+      letter-spacing:.20em;
+      text-transform:uppercase;
+      opacity:.55;
+    }
+
+    .pill{
+      display:inline-flex;
+      padding: 5px 10px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,.16);
+      background: radial-gradient(circle at top left, rgba(255,255,255,.18), rgba(0,0,0,.10));
+      backdrop-filter: blur(8px);
+    }
+
+    /* CONTROL PANEL (collapsible) */
+    #panel{
+      position:fixed;
+      top:12px;
+      left:12px;
+      width: min(520px, calc(100vw - 24px));
+      border:1px solid var(--line);
+      background: rgba(0,0,0,.55);
+      border-radius: var(--r);
+      backdrop-filter: blur(10px);
+      z-index:30;
+      pointer-events:auto;
+      box-shadow: 0 22px 90px rgba(0,0,0,.55);
+    }
+
+    #panelHeader{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      padding:10px 12px;
+      border-bottom: 1px solid rgba(255,255,255,.08);
+    }
+
+    #panelTitle{
+      font-size:12px;
+      letter-spacing:.18em;
+      text-transform:uppercase;
+      font-weight:700;
+      color: rgba(255,255,255,.92);
+      white-space:nowrap;
+    }
+
+    #panelStatus{
+      font-size:11px;
+      color: rgba(255,255,255,.60);
+      letter-spacing:.02em;
+      text-align:right;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      white-space:nowrap;
+      max-width: 260px;
+    }
+
+    #panelBtns{ display:flex; gap:8px; align-items:center; }
+    .btn{
+      appearance:none;
+      border:1px solid rgba(255,255,255,.14);
+      background: rgba(255,255,255,.04);
+      color: rgba(255,255,255,.90);
+      padding:6px 8px;
+      font-size:11px;
+      cursor:pointer;
+      text-transform:lowercase;
+      border-radius: var(--r);
+    }
+    .btn:hover{ border-color: rgba(255,255,255,.22); }
+
+    #controls{
+      padding:12px;
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap:10px;
+    }
+    .field{
+      border:1px solid rgba(255,255,255,.08);
+      background: rgba(255,255,255,.02);
+      padding:10px;
+    }
+    label{
+      display:block;
+      font-size:11px;
+      color: rgba(255,255,255,.65);
+      letter-spacing:.10em;
+      text-transform:uppercase;
+      margin-bottom:6px;
+    }
+    input[type="range"], select{ width:100%; }
+    select{
+      border:1px solid rgba(255,255,255,.14);
+      background: rgba(0,0,0,.35);
+      color: rgba(255,255,255,.92);
+      padding:8px 10px;
+      font-size:12px;
+      outline:none;
+    }
+
+    .row{ grid-column: 1 / -1; display:flex; gap:8px; flex-wrap:wrap; }
+    .row .btn{
+      padding:8px 10px;
+      font-size:12px;
+      text-transform:uppercase;
+      letter-spacing:.12em;
+      font-weight:700;
+    }
+
+    /* collapse behavior */
+    body.panel-collapsed #controls{ display:none; }
+    body.panel-hidden #panel{
+      transform: translateX(calc(-100% - 18px));
+      opacity:0;
+      pointer-events:none;
+    }
+
+    #hint{
+      position:fixed;
+      left:12px;
+      bottom:12px;
+      font-size:10px;
+      letter-spacing:.18em;
+      text-transform:uppercase;
+      opacity:.38;
+      pointer-events:none;
+      border:1px solid rgba(255,255,255,.10);
+      background: rgba(0,0,0,.45);
+      padding:8px 10px;
+      border-radius: var(--r);
+      backdrop-filter: blur(6px);
+    }
+
+    @media (max-width: 820px){
+      #controls{ grid-template-columns: 1fr; }
+      #panelStatus{ max-width: 160px; }
+    }
+  </style>
+</head>
+<body>
+  <canvas id="templeCanvas"></canvas>
+
+  <!-- KETADATA OVERLAY -->
+  <div id="hud" aria-hidden="true">
+    <div id="hudTop">
+      <span class="pill">KETA//DATA</span>
+      <span class="pill">TEMPLE</span>
+      <span class="pill" id="modePill">PRESET: VOIDCORE</span>
+    </div>
+
+    <div id="hudMid">
+      CALIBRATION CHAMBER<br/>
+      SIGNAL COMPRESSION · SYMBOLIC LOAD · CHROME HAZE
+      <div style="margin-top:10px; font-size:9px; opacity:.78;">
+        <span class="pill">SPACE = OVERLAY</span>
+        <span class="pill">R = RESEED</span>
+        <span class="pill">H = PANEL</span>
+      </div>
+    </div>
+
+    <div id="hudBot">
+      INDEXING ACTIVE · TEXTURE ENGINE ON · NO NARRATION
+    </div>
+  </div>
+
+  <div id="panel" role="region" aria-label="Temple Controls">
+    <div id="panelHeader">
+      <div>
+        <div id="panelTitle">TEMPLE CONTROLS</div>
+        <div id="panelStatus">voidcore · bands 54 · blobs 24 · grain 0.16 · texture 0.85</div>
+      </div>
+      <div id="panelBtns">
+        <button class="btn" id="collapseBtn" title="H">collapse</button>
+        <button class="btn" id="hideBtn" title="Shift+H">hide</button>
+      </div>
+    </div>
+
+    <div id="controls">
+      <div class="field" style="grid-column:1/-1">
+        <label>preset</label>
+        <select id="mode">
+          <option value="voidcore" selected>voidcore</option>
+          <option value="infra">infra</option>
+          <option value="ultraviolent">ultraviolent</option>
+          <option value="chrome">chrome</option>
+          <option value="deep">deep</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label>bands</label>
+        <input id="bands" type="range" min="8" max="96" value="54" />
+      </div>
+
+      <div class="field">
+        <label>band drift</label>
+        <input id="bandDrift" type="range" min="0" max="1" step="0.01" value="0.82" />
+      </div>
+
+      <div class="field">
+        <label>blobs</label>
+        <input id="blobCount" type="range" min="0" max="42" value="24" />
+      </div>
+
+      <div class="field">
+        <label>blob intensity</label>
+        <input id="blobIntensity" type="range" min="0" max="1.35" step="0.01" value="1.08" />
+      </div>
+
+      <div class="field">
+        <label>grain</label>
+        <input id="grain" type="range" min="0" max="0.35" step="0.005" value="0.16" />
+      </div>
+
+      <div class="field">
+        <label>grain step</label>
+        <input id="grainStep" type="range" min="1" max="10" step="1" value="3" />
+      </div>
+
+      <div class="field">
+        <label>texture amount</label>
+        <input id="texture" type="range" min="0" max="1" step="0.01" value="0.85" />
+      </div>
+
+      <div class="field">
+        <label>chroma split</label>
+        <input id="chroma" type="range" min="0" max="6" step="0.1" value="3.2" />
+      </div>
+
+      <div class="field" style="grid-column:1/-1">
+        <label>floating text</label>
+        <select id="phrases">
+          <option value="off">off</option>
+          <option value="sparse">sparse</option>
+          <option value="normal" selected>normal</option>
+          <option value="dense">dense</option>
+        </select>
+      </div>
+
+      <div class="row">
+        <button class="btn" id="reseed">reseed</button>
+        <button class="btn" id="toggleHud">toggle overlay</button>
+        <button class="btn" id="reset">reset preset</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="hint">SPACE overlay · R reseed · H collapse panel · Shift+H hide panel</div>
+
+  <script>
+    // Reworked from your Temple draft (bands/blobs/grain/text engine) with KETADATA-themed default preset + higher intensity + textures. :contentReference[oaicite:1]{index=1}
+
+    const canvas = document.getElementById("templeCanvas");
+    const ctx = canvas.getContext("2d");
+
+    function resize(){
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width = window.innerWidth * dpr;
+      canvas.height = window.innerHeight * dpr;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+    window.addEventListener("resize", resize);
+    resize();
+
+    // UI nodes
+    const modeEl = document.getElementById("mode");
+    const bandsEl = document.getElementById("bands");
+    const bandDriftEl = document.getElementById("bandDrift");
+    const blobCountEl = document.getElementById("blobCount");
+    const blobIntensityEl = document.getElementById("blobIntensity");
+    const grainEl = document.getElementById("grain");
+    const grainStepEl = document.getElementById("grainStep");
+    const textureEl = document.getElementById("texture");
+    const chromaEl = document.getElementById("chroma");
+    const phrasesEl = document.getElementById("phrases");
+
+    const reseedBtn = document.getElementById("reseed");
+    const toggleHudBtn = document.getElementById("toggleHud");
+    const resetBtn = document.getElementById("reset");
+
+    const collapseBtn = document.getElementById("collapseBtn");
+    const hideBtn = document.getElementById("hideBtn");
+
+    const hud = document.getElementById("hud");
+    const modePill = document.getElementById("modePill");
+    const panelStatus = document.getElementById("panelStatus");
+
+    // panel persistence
+    const KEY_COLLAPSED = "ketadata_temple_panel_collapsed";
+    const KEY_HIDDEN = "ketadata_temple_panel_hidden";
+
+    function setCollapsed(on){
+      document.body.classList.toggle("panel-collapsed", !!on);
+      try{ localStorage.setItem(KEY_COLLAPSED, on ? "1" : "0"); }catch(_){}
+    }
+    function setHidden(on){
+      document.body.classList.toggle("panel-hidden", !!on);
+      try{ localStorage.setItem(KEY_HIDDEN, on ? "1" : "0"); }catch(_){}
+    }
+    (function loadPanelPrefs(){
+      try{
+        setCollapsed((localStorage.getItem(KEY_COLLAPSED) || "0") === "1");
+        setHidden((localStorage.getItem(KEY_HIDDEN) || "0") === "1");
+      }catch(_){}
+    })();
+
+    collapseBtn.addEventListener("click", () => setCollapsed(!document.body.classList.contains("panel-collapsed")));
+    hideBtn.addEventListener("click", () => setHidden(!document.body.classList.contains("panel-hidden")));
+
+    // Time base
+    let t = 0;
+
+    // RNG reseed
+    function reseed(){
+      initBlobs();
+      floatingText.length = 0;
+    }
+
+    // Blobs
+    const blobs = [];
+    function initBlobs(){
+      blobs.length = 0;
+      const count = Number(blobCountEl.value);
+      for (let i=0;i<count;i++){
+        blobs.push({
+          x: Math.random(),
+          y: Math.random(),
+          r: 120 + Math.random() * 360,
+          speedX: (Math.random() - 0.5) * 0.0012,
+          speedY: (Math.random() - 0.5) * 0.0012,
+          phase: Math.random() * Math.PI * 2,
+          hueShift: Math.random() * 360
+        });
+      }
+    }
+
+    // KETADATA PHRASES (no therapy voice)
+    const phrases = [
+      "KETA//DATA ONLINE",
+      "TEMPLE MODE: CALIBRATION",
+      "VAULT INDEX SYNC",
+      "SYMBOLIC LOAD: HIGH",
+      "SIGNAL COMPRESSION: ON",
+      "CHROME HAZE ACTIVE",
+      "VOIDCORE FIELD",
+      "INFRA TRACE",
+      "ULTRAVIOLENT LAYER",
+      "TEXTURE ENGINE: ON",
+      "NO NARRATION",
+      "RETURN TO ROUTER"
+    ];
+
+    const floatingText = [];
+    const MAX_TEXT = 10;
+
+    function spawnText(){
+      if (floatingText.length >= MAX_TEXT) return;
+      const text = phrases[Math.floor(Math.random() * phrases.length)];
+      floatingText.push({
+        text,
+        x: Math.random(),
+        y: Math.random(),
+        life: 0,
+        maxLife: 6500 + Math.random() * 9500,
+        driftX: (Math.random() - 0.5) * 0.00006,
+        driftY: (Math.random() - 0.5) * 0.00006,
+        size: 12 + Math.random() * 14,
+        wobble: Math.random() * Math.PI * 2
+      });
+    }
+
+    let hudVisible = true;
+
+    // Noise helper (same structure)
+    function smoothNoise(x, y, seed){
+      return (
+        Math.sin(x * 1.7 + seed * 0.37 + Math.cos(y * 0.9 + seed * 0.53)) +
+        Math.sin(x * 0.6 + seed * 1.23 + Math.sin(y * 1.4 + seed * 0.11))
+      ) * 0.5;
+    }
+
+    // Presets: deeper + KETADATA themed
+    function palette(mode){
+      switch(mode){
+        case "infra":
+          return { bg0:"hsl(350, 85%, 3%)", bg1:"hsl(10, 85%, 3%)", hueBase: 8, hueSpan: 55, sat: 96, lumA: 72, lumB: 55, lumC: 38 };
+        case "ultraviolent":
+          return { bg0:"hsl(270, 80%, 3%)", bg1:"hsl(215, 85%, 3%)", hueBase: 282, hueSpan: 95, sat: 95, lumA: 74, lumB: 56, lumC: 40 };
+        case "chrome":
+          return { bg0:"hsl(220, 25%, 2%)", bg1:"hsl(200, 30%, 2%)", hueBase: 200, hueSpan: 22, sat: 20, lumA: 80, lumB: 62, lumC: 44 };
+        case "deep":
+          return { bg0:"hsl(255, 55%, 3%)", bg1:"hsl(205, 65%, 2%)", hueBase: 210, hueSpan: 75, sat: 90, lumA: 74, lumB: 56, lumC: 40 };
+        case "voidcore":
+        default:
+          // void-core / infra-blue / ultraviolent edge
+          return { bg0:"hsl(265, 70%, 2.5%)", bg1:"hsl(200, 85%, 2.2%)", hueBase: 205, hueSpan: 110, sat: 95, lumA: 76, lumB: 58, lumC: 38 };
+      }
+    }
+
+    function drawBackground(w, h){
+      const p = palette(modeEl.value);
+      const drift = Number(bandDriftEl.value);
+      const tex = Number(textureEl.value);
+
+      // base gradient
+      const grad = ctx.createLinearGradient(0, 0, w, h);
+      grad.addColorStop(0, p.bg0);
+      grad.addColorStop(1, p.bg1);
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, w, h);
+
+      // bands (stronger)
+      const bands = Number(bandsEl.value);
+      for (let i=0;i<bands;i++){
+        const y = (h / bands) * i;
+        const n = smoothNoise(i * 0.26, t * 0.00055 * (0.5 + drift), 7.3);
+        const hue = p.hueBase + n * p.hueSpan + Math.sin(t * 0.00018 + i * 0.22) * (p.hueSpan * 0.42);
+        const alpha = 0.10 + (n + 1) * 0.075;
+
+        ctx.globalAlpha = alpha;
+        const bandGrad = ctx.createLinearGradient(0, y, w, y + h / bands);
+
+        bandGrad.addColorStop(0, `hsla(${hue}, ${p.sat}%, 55%, 0.0)`);
+        bandGrad.addColorStop(0.5, `hsla(${hue + 18}, ${p.sat}%, 62%, ${0.55 + 0.25*tex})`);
+        bandGrad.addColorStop(1, `hsla(${hue + 44}, ${p.sat}%, 62%, 0.0)`);
+
+        ctx.fillStyle = bandGrad;
+        ctx.fillRect(0, y - 60, w, h / bands + 120);
+      }
+
+      ctx.globalAlpha = 1;
+    }
+
+    function drawBlobs(w, h){
+      const p = palette(modeEl.value);
+      const inten = Number(blobIntensityEl.value);
+      const tex = Number(textureEl.value);
+
+      ctx.globalCompositeOperation = "screen";
+
+      for (const b of blobs){
+        b.x += b.speedX;
+        b.y += b.speedY;
+        b.phase += 0.00045;
+
+        if (b.x < -0.25) b.x = 1.25;
+        if (b.x > 1.25) b.x = -0.25;
+        if (b.y < -0.25) b.y = 1.25;
+        if (b.y > 1.25) b.y = -0.25;
+
+        const cx = b.x * w;
+        const cy = b.y * h;
+
+        const pulse = 0.65 + Math.sin(b.phase + t * 0.00016) * 0.35;
+        const radius = b.r * (0.82 + pulse * 0.55);
+
+        const hueBase =
+          p.hueBase +
+          Math.sin(t * 0.00011 + b.hueShift) * (p.hueSpan * 0.75) +
+          Math.sin(b.phase * 2.2) * (p.hueSpan * 0.32);
+
+        const grad = ctx.createRadialGradient(cx, cy, radius * 0.07, cx, cy, radius);
+        grad.addColorStop(0, `hsla(${hueBase}, ${p.sat}%, ${p.lumA}%, ${Math.min(0.95, 0.78*inten + 0.10*tex)})`);
+        grad.addColorStop(0.35, `hsla(${hueBase + 18}, ${p.sat}%, ${p.lumB}%, ${Math.min(0.85, 0.66*inten + 0.12*tex)})`);
+        grad.addColorStop(1, `hsla(${hueBase + 55}, ${p.sat}%, ${p.lumC}%, 0.0)`);
+
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      ctx.globalCompositeOperation = "source-over";
+    }
+
+    // Texture layer: scanlines + micro shimmer + vignette + chroma split
+    function drawTexture(w, h){
+      const tex = Number(textureEl.value);
+      if (tex <= 0) return;
+
+      // scanlines (subtle but present)
+      const lineAlpha = 0.05 + 0.10 * tex;
+      ctx.globalAlpha = lineAlpha;
+      ctx.fillStyle = "rgba(0,0,0,1)";
+      for (let y = 0; y < h; y += 2){
+        if ((y / 2) % 3 === 0) ctx.fillRect(0, y, w, 1);
+      }
+      ctx.globalAlpha = 1;
+
+      // vignette
+      const vg = ctx.createRadialGradient(w*0.5, h*0.5, Math.min(w,h)*0.15, w*0.5, h*0.5, Math.max(w,h)*0.65);
+      vg.addColorStop(0, "rgba(0,0,0,0)");
+      vg.addColorStop(1, `rgba(0,0,0,${0.55 + 0.25*tex})`);
+      ctx.fillStyle = vg;
+      ctx.fillRect(0,0,w,h);
+
+      // micro shimmer noise dots
+      const dots = Math.floor((w*h) / 26000 * tex);
+      ctx.globalAlpha = 0.22 * tex;
+      for (let i=0;i<dots;i++){
+        const x = Math.random()*w;
+        const y = Math.random()*h;
+        const a = 0.20 + 0.55*Math.random();
+        ctx.fillStyle = `rgba(255,255,255,${a})`;
+        ctx.fillRect(x, y, 1, 1);
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    function drawGrain(w, h){
+      const density = Number(grainEl.value);
+      const step = Number(grainStepEl.value);
+      if (density <= 0) return;
+
+      // darker grain, with occasional bright speck (more texture)
+      for (let y=0; y<h; y+=step){
+        for (let x=0; x<w; x+=step){
+          if (Math.random() < density){
+            const n = smoothNoise(x * 0.07, y * 0.07, t * 0.0009);
+            const a = 0.06 + (n + 1) * 0.06;
+            ctx.globalAlpha = a;
+
+            const bright = Math.random() < 0.06;
+            if (bright) ctx.fillStyle = "rgba(255,255,255,1)";
+            else ctx.fillStyle = "rgba(0,0,0,1)";
+
+            ctx.fillRect(x, y, step, step);
+          }
+        }
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    function drawFloatingText(w, h, deltaMs){
+      const mode = phrasesEl.value; // off | sparse | normal | dense
+      if (mode === "off") return;
+
+      const spawnProb =
+        mode === "sparse" ? 0.0035 :
+        mode === "dense"  ? 0.0120 :
+                            0.0075;
+
+      if (Math.random() < spawnProb) spawnText();
+
+      const chroma = Number(chromaEl.value);
+
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+
+      for (let i=floatingText.length - 1; i>=0; i--){
+        const item = floatingText[i];
+        item.life += deltaMs;
+        item.wobble += 0.0009 * deltaMs;
+        item.x += item.driftX * deltaMs;
+        item.y += item.driftY * deltaMs;
+
+        const lifeRatio = item.life / item.maxLife;
+        const alpha = Math.sin(Math.PI * lifeRatio);
+
+        if (lifeRatio >= 1){
+          floatingText.splice(i, 1);
+          continue;
+        }
+
+        const x = item.x * w;
+        const y = item.y * h + Math.sin(item.wobble) * (10 + 18*Math.sin(item.wobble*0.7));
+
+        ctx.save();
+        ctx.translate(x, y);
+
+        ctx.shadowBlur = 28;
+        ctx.shadowColor = "rgba(0,0,0,0.90)";
+        ctx.font = `800 ${item.size}px Arial, Helvetica, sans-serif`;
+
+        // chroma split (stronger)
+        ctx.globalAlpha = alpha * 0.26;
+        ctx.fillStyle = "rgba(0,255,255,0.95)";
+        ctx.fillText(item.text, chroma, 0);
+
+        ctx.globalAlpha = alpha * 0.26;
+        ctx.fillStyle = "rgba(255,0,255,0.95)";
+        ctx.fillText(item.text, -chroma, 0);
+
+        ctx.globalAlpha = alpha * 0.90;
+        ctx.fillStyle = "rgba(245,245,245,0.92)";
+        ctx.fillText(item.text, 0, 0);
+
+        ctx.restore();
+      }
+    }
+
+    function updateStatus(){
+      const m = modeEl.value;
+      modePill.textContent = `PRESET: ${m.toUpperCase()}`;
+      panelStatus.textContent =
+        `${m} · bands ${bandsEl.value} · blobs ${blobCountEl.value} · grain ${grainEl.value} · texture ${textureEl.value}`;
+    }
+
+    function applyControls(){
+      initBlobs();
+      updateStatus();
+    }
+
+    // Controls
+    modeEl.addEventListener("change", updateStatus);
+    bandsEl.addEventListener("input", updateStatus);
+    bandDriftEl.addEventListener("input", updateStatus);
+    blobCountEl.addEventListener("input", () => { initBlobs(); updateStatus(); });
+    blobIntensityEl.addEventListener("input", updateStatus);
+    grainEl.addEventListener("input", updateStatus);
+    grainStepEl.addEventListener("input", updateStatus);
+    textureEl.addEventListener("input", updateStatus);
+    chromaEl.addEventListener("input", updateStatus);
+    phrasesEl.addEventListener("change", updateStatus);
+
+    reseedBtn.addEventListener("click", () => { reseed(); updateStatus(); });
+
+    resetBtn.addEventListener("click", () => {
+      // HARD DEFAULT PRESET: KETADATA VOIDCORE
+      modeEl.value = "voidcore";
+      bandsEl.value = "54";
+      bandDriftEl.value = "0.82";
+      blobCountEl.value = "24";
+      blobIntensityEl.value = "1.08";
+      grainEl.value = "0.16";
+      grainStepEl.value = "3";
+      textureEl.value = "0.85";
+      chromaEl.value = "3.2";
+      phrasesEl.value = "normal";
+      applyControls();
+    });
+
+    toggleHudBtn.addEventListener("click", () => {
+      hudVisible = !hudVisible;
+      hud.style.display = hudVisible ? "flex" : "none";
+    });
+
+    // Init
+    applyControls();
+
+    // Animation loop
+    let lastTime = performance.now();
+    function loop(now){
+      const deltaMs = now - lastTime;
+      lastTime = now;
+      t += deltaMs;
+
+      const w = window.innerWidth;
+      const h = window.innerHeight;
+
+      drawBackground(w, h);
+      drawBlobs(w, h);
+      drawTexture(w, h);
+      drawGrain(w, h);
+      drawFloatingText(w, h, deltaMs);
+
+      requestAnimationFrame(loop);
+    }
+    requestAnimationFrame(loop);
+
+    // Keyboard
+    window.addEventListener("keydown", (e) => {
+      const k = e.key.toLowerCase();
+
+      // Space toggles overlay
+      if (e.code === "Space"){
+        e.preventDefault();
+        hudVisible = !hudVisible;
+        hud.style.display = hudVisible ? "flex" : "none";
+      }
+
+      // R reseed
+      if (k === "r"){
+        reseed();
+        updateStatus();
+      }
+
+      // H collapse panel; Shift+H hide panel
+      if (k === "h" && !e.metaKey && !e.ctrlKey){
+        e.preventDefault();
+        if (e.shiftKey) setHidden(!document.body.classList.contains("panel-hidden"));
+        else setCollapsed(!document.body.classList.contains("panel-collapsed"));
+      }
+    });
+
+    // Ensure reset preset is actually applied once on load
+    resetBtn.click();
+  </script>
+</body>
+</html>
