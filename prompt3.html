@@ -1,0 +1,1266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>KETADATA // Prompt-Response Analyzer (Resizable + Typography)</title>
+<style>
+  *{ box-sizing:border-box; font-family: Arial, Helvetica, sans-serif; }
+  :root{
+    --bg:#000;
+    --panel:#050505;
+    --panel2:#080808;
+    --line:#1f1f1f;
+    --line2:#2a2a2a;
+    --txt:#eaeaea;
+    --muted:#a8a8a8;
+    --muted2:#7a7a7a;
+
+    /* “breathing” + typography controls (user-adjustable) */
+    --uiFont: 12.5px;
+    --uiLine: 1.45;
+    --pad: 12px;
+    --gap: 12px;
+
+    /* layout sizes (user-adjustable via splitters) */
+    --leftW: 360px;
+    --rightW: 360px;
+    --bottomH: 240px;
+
+    /* highlight (GREY ONLY) */
+    --hl: #2f2f2f;
+  }
+
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--txt);
+    overflow:hidden;
+    font-size:var(--uiFont);
+    line-height:var(--uiLine);
+  }
+
+  /* APP LAYOUT:
+     header
+     middle row (left | splitter | stage | splitter | right)
+     horizontal splitter
+     bottom row
+  */
+  .app{
+    height:100vh;
+    display:grid;
+    grid-template-rows: auto 1fr 8px var(--bottomH);
+    grid-template-columns: 1fr;
+    gap:0;
+  }
+
+  header{
+    display:flex;
+    justify-content: space-between;
+    align-items:center;
+    padding:12px 14px;
+    border-bottom:1px solid var(--line);
+    background: linear-gradient(#070707,#000);
+    min-width:0;
+  }
+  .title{
+    font-size:12px;
+    letter-spacing:.08em;
+    text-transform:uppercase;
+    color:var(--muted);
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    max-width:48vw;
+  }
+  .actions{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; justify-content:flex-end; }
+  .chip{
+    font-size:12px;
+    padding:6px 10px;
+    border:1px solid var(--line2);
+    background:#0a0a0a;
+    color:var(--txt);
+  }
+  button{
+    font-size:12px;
+    padding:7px 10px;
+    border:1px solid var(--line2);
+    background:#0b0b0b;
+    color:var(--txt);
+    cursor:pointer;
+  }
+  button:hover{ background:#141414; }
+  button.danger{ border-color:#3a2424; background:#120707; }
+  button.danger:hover{ background:#1a0a0a; }
+  button.ghost{ background:#070707; }
+  button.ghost:hover{ background:#101010; }
+
+  /* TOP-RIGHT GLOBAL CONTROLS (breath + text) */
+  .controls{
+    display:flex;
+    gap:10px;
+    align-items:center;
+    flex-wrap:wrap;
+    padding-left:10px;
+    border-left:1px solid var(--line);
+    margin-left:10px;
+  }
+  .ctl{
+    display:flex;
+    gap:6px;
+    align-items:center;
+  }
+  .ctl label{
+    font-size:11px;
+    color:var(--muted2);
+    letter-spacing:.06em;
+    text-transform:uppercase;
+    white-space:nowrap;
+  }
+  input[type="range"]{
+    width:120px;
+    accent-color:#777;
+  }
+
+  /* MIDDLE GRID */
+  .middle{
+    display:grid;
+    grid-template-columns: var(--leftW) 10px 1fr 10px var(--rightW);
+    gap:0;
+    padding: var(--gap);
+    overflow:hidden;
+    min-width:0;
+  }
+
+  .splitV{
+    cursor: col-resize;
+    background: linear-gradient(transparent, #111, transparent);
+    border-left:1px solid #0f0f0f;
+    border-right:1px solid #0f0f0f;
+    opacity:.65;
+  }
+  .splitV:hover{ opacity:1; }
+  .splitV:active{ opacity:1; }
+
+  .panel, .stage{
+    border:1px solid var(--line);
+    background: radial-gradient(1200px 800px at 50% 0%, #0b0b0b, #000 60%);
+    overflow:hidden;
+    min-width:0;
+  }
+
+  .panel{
+    display:flex;
+    flex-direction:column;
+  }
+  .panel .head{
+    padding: 12px;
+    border-bottom:1px solid var(--line);
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:8px;
+    background: linear-gradient(#080808,#000);
+  }
+  .panel .head .label{
+    font-size:12px;
+    letter-spacing:.08em;
+    text-transform:uppercase;
+    color:var(--muted);
+  }
+  .panel .head .sub{
+    font-size:11px;
+    color:var(--muted2);
+    margin-top:4px;
+  }
+  .panel .body{
+    padding: var(--pad);
+    overflow:auto;
+    min-height:0;
+  }
+
+  .headLeft{
+    min-width:0;
+  }
+  .headBtns{
+    display:flex;
+    gap:8px;
+    align-items:center;
+    flex-wrap:wrap;
+    justify-content:flex-end;
+  }
+  .collapseBtn{
+    padding:6px 9px;
+    font-size:12px;
+  }
+
+  /* CENTER STAGE */
+  .stage{
+    display:grid;
+    grid-template-rows: auto auto 1fr auto;
+    min-width:0;
+  }
+
+  .promptModule{
+    border-bottom:1px solid var(--line);
+    padding: var(--pad);
+    background: linear-gradient(#070707, #000);
+  }
+  .promptModule .row{
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-start;
+    gap:12px;
+  }
+  .promptLabel{
+    font-size:11px;
+    color:var(--muted);
+    letter-spacing:.08em;
+    text-transform:uppercase;
+    margin-bottom:8px;
+  }
+
+  textarea{
+    width:100%;
+    border:1px solid var(--line2);
+    background:#000;
+    color:var(--txt);
+    padding: 12px;
+    resize:vertical;
+    outline:none;
+    font-size: var(--uiFont);
+    line-height: var(--uiLine);
+  }
+
+  .meta{
+    display:flex;
+    gap:8px;
+    align-items:center;
+    flex-wrap:wrap;
+    justify-content:flex-end;
+  }
+  .meta input{
+    height:30px;
+    padding:6px 8px;
+    border:1px solid var(--line2);
+    background:#000;
+    color:var(--txt);
+    font-size:12px;
+    width:160px;
+  }
+  .meta input::placeholder{ color:#666; }
+
+  /* FORMAT BAR (response-local) */
+  .formatBar{
+    padding: 10px var(--pad);
+    border-bottom:1px solid var(--line);
+    display:flex;
+    gap:8px;
+    flex-wrap:wrap;
+    align-items:center;
+    background: linear-gradient(#060606,#000);
+  }
+  .formatBar .group{
+    display:flex;
+    gap:6px;
+    align-items:center;
+    padding-right:10px;
+    margin-right:4px;
+    border-right:1px solid #111;
+  }
+  .formatBar .group:last-child{
+    border-right:none;
+    padding-right:0;
+    margin-right:0;
+  }
+  .formatBar .hint{
+    font-size:11px;
+    color:var(--muted2);
+    letter-spacing:.02em;
+    margin-left:auto;
+    white-space:nowrap;
+  }
+  .formatBar button{
+    padding:6px 9px;
+  }
+
+  .responseWrap{
+    padding: var(--pad);
+    overflow:auto;
+    min-height:0;
+  }
+  .responseLabel{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:10px;
+    margin-bottom:10px;
+  }
+  .responseLabel .left{
+    font-size:11px;
+    color:var(--muted);
+    letter-spacing:.08em;
+    text-transform:uppercase;
+  }
+  .responseLabel .right{
+    font-size:11px;
+    color:var(--muted2);
+  }
+
+  .responseBox{
+    border:1px solid var(--line2);
+    background:#000;
+    min-height: 360px;
+    padding: 14px;
+    white-space:pre-wrap;
+    line-height: var(--uiLine);
+    font-size: var(--uiFont);
+    outline:none;
+  }
+  .responseBox:focus{ border-color:#3a3a3a; }
+
+  .stageControls{
+    border-top:1px solid var(--line);
+    padding: var(--pad);
+    display:flex;
+    gap:8px;
+    flex-wrap:wrap;
+    background: linear-gradient(#000, #050505);
+  }
+
+  /* BUCKET ENTRIES */
+  .entry{
+    border-top:1px solid var(--line);
+    padding:10px 0;
+  }
+  .entry:first-child{ border-top:none; }
+  .entry .excerpt{
+    font-size: var(--uiFont);
+    color: var(--txt);
+    white-space:pre-wrap;
+  }
+  .entry .note{
+    margin-top:8px;
+    font-size:11.5px;
+    color:var(--muted2);
+    white-space:pre-wrap;
+  }
+  .entry .meta{
+    margin-top:8px;
+    display:flex;
+    gap:10px;
+    align-items:center;
+    justify-content:space-between;
+  }
+  .entry .meta .tag{
+    font-size:10px;
+    letter-spacing:.10em;
+    text-transform:uppercase;
+    color:var(--muted2);
+  }
+  .entry .meta .mini{
+    display:flex;
+    gap:6px;
+    align-items:center;
+  }
+  .mini button{ padding:5px 8px; font-size:11px; }
+
+  .bad .excerpt{ color: #ff7a7a; }
+  .good .excerpt{ color: #7cff9a; }
+
+  /* HORIZONTAL SPLITTER */
+  .splitH{
+    cursor: row-resize;
+    background: linear-gradient(90deg, transparent, #111, transparent);
+    border-top:1px solid #0f0f0f;
+    border-bottom:1px solid #0f0f0f;
+    opacity:.65;
+  }
+  .splitH:hover{ opacity:1; }
+
+  /* BOTTOM PANEL */
+  .bottom{
+    border-top:1px solid var(--line);
+    background: linear-gradient(#000, #050505);
+    padding: var(--gap);
+    overflow:hidden;
+    min-width:0;
+  }
+  .bottomInner{
+    height:100%;
+    border:1px solid var(--line);
+    background: radial-gradient(1200px 800px at 50% 0%, #0b0b0b, #000 60%);
+    overflow:hidden;
+    display:flex;
+    flex-direction:column;
+    min-width:0;
+  }
+  .bottomHead{
+    padding:12px;
+    border-bottom:1px solid var(--line);
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:8px;
+    background: linear-gradient(#080808,#000);
+  }
+  .bottomHead .label{
+    font-size:12px;
+    letter-spacing:.08em;
+    text-transform:uppercase;
+    color:var(--muted);
+  }
+  .bottomBody{
+    padding: var(--pad);
+    overflow:auto;
+    min-height:0;
+  }
+  .bottomGrid{
+    display:grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: var(--gap);
+  }
+  .block{
+    border:1px solid var(--line);
+    background: radial-gradient(900px 500px at 50% 0%, #0b0b0b, #000 65%);
+    padding: var(--pad);
+    min-width:0;
+  }
+  .block .h{
+    font-size:11px;
+    color:var(--muted);
+    letter-spacing:.08em;
+    text-transform:uppercase;
+    margin-bottom:8px;
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:8px;
+  }
+  .block .h span{ color:var(--muted2); font-size:11px; text-transform:none; letter-spacing:0; }
+
+  .bottomActions{
+    margin-top:12px;
+    display:flex;
+    gap:8px;
+    flex-wrap:wrap;
+    justify-content:flex-end;
+  }
+  .smallHint{
+    font-size:11px;
+    color:var(--muted2);
+    line-height:1.35;
+    margin-top:8px;
+  }
+
+  /* COLLAPSED STATES */
+  .collapsed .body{ display:none; }
+  .collapsed{
+    background: #000;
+  }
+  .collapsed .head{
+    border-bottom:none;
+  }
+  .collapsed .head .sub{ display:none; }
+
+  /* when fully collapsed width-wise */
+  .panel.narrow .headLeft{ display:none; }
+  .panel.narrow .head{ justify-content:center; }
+  .panel.narrow .body{ display:none; }
+
+  /* RESPONSIVE */
+  @media (max-width: 1150px){
+    body{ overflow:auto; }
+    .app{ height:auto; min-height:100vh; overflow:auto; grid-template-rows:auto auto 8px auto; }
+    .middle{ grid-template-columns: 1fr; grid-template-rows:auto auto auto; gap: var(--gap); }
+    .splitV{ display:none; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <header>
+    <div class="title">KETADATA // GENERATION CRITICISM & DEVELOPMENT</div>
+
+    <div class="actions">
+      <div class="chip" id="statusChip">unsaved</div>
+
+      <button class="ghost" onclick="newGeneration()">new generation</button>
+      <button onclick="saveLocal()">save</button>
+      <button onclick="loadLocal()">load</button>
+      <button onclick="exportJSON()">export json</button>
+      <button onclick="exportMachinePrompt()">export prompt</button>
+      <button class="danger" onclick="resetAll()">reset</button>
+
+      <div class="controls" title="Global feel (breath + typography)">
+        <div class="ctl">
+          <label>text</label>
+          <input id="ctlFont" type="range" min="11" max="18" step="0.5" />
+        </div>
+        <div class="ctl">
+          <label>line</label>
+          <input id="ctlLine" type="range" min="1.15" max="2.0" step="0.05" />
+        </div>
+        <div class="ctl">
+          <label>pad</label>
+          <input id="ctlPad" type="range" min="8" max="24" step="1" />
+        </div>
+        <div class="ctl">
+          <label>gap</label>
+          <input id="ctlGap" type="range" min="8" max="24" step="1" />
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <div class="middle">
+
+    <!-- LEFT: CRITICISM -->
+    <div class="panel" id="critPanel">
+      <div class="head">
+        <div class="headLeft">
+          <div class="label">Criticism / Wrong</div>
+          <div class="sub">what must be cut, corrected, constrained</div>
+        </div>
+        <div class="headBtns">
+          <button class="collapseBtn" onclick="toggleCollapse('crit')">collapse</button>
+          <button class="danger" onclick="clearBucket('crit')">clear</button>
+        </div>
+      </div>
+      <div class="body" id="critBucket"></div>
+    </div>
+
+    <div class="splitV" id="splitLeft" title="Drag to resize"></div>
+
+    <!-- CENTER: PROMPT + RESPONSE STAGE -->
+    <div class="stage" id="stage">
+
+      <div class="promptModule">
+        <div class="row">
+          <div style="flex:1; min-width:0;">
+            <div class="promptLabel">User prompt (module)</div>
+            <textarea id="promptInput" placeholder="Paste the user prompt here..."></textarea>
+          </div>
+          <div class="meta">
+            <input id="genTitle" placeholder="title (optional)" />
+            <input id="modelName" placeholder="model (optional)" />
+          </div>
+        </div>
+      </div>
+
+      <!-- FORMAT BAR -->
+      <div class="formatBar">
+        <div class="group">
+          <button onclick="fmt('bold')" title="Bold"><b>B</b></button>
+          <button onclick="fmt('italic')" title="Italic"><i>I</i></button>
+          <button onclick="greyHighlight()" title="Grey highlight only">highlight</button>
+          <button onclick="fmt('removeFormat')" title="Clear formatting">clear</button>
+        </div>
+
+        <div class="group">
+          <button onclick="fmt('justifyLeft')" title="Align left">left</button>
+          <button onclick="fmt('justifyCenter')" title="Align center">center</button>
+          <button onclick="fmt('justifyRight')" title="Align right">right</button>
+          <button onclick="fmt('justifyFull')" title="Justify">justify</button>
+        </div>
+
+        <div class="group">
+          <button class="danger" onclick="routeSelection('crit')">route → criticism</button>
+          <button onclick="routeSelection('dev')">route → yes &</button>
+          <button onclick="annotateSelection()">annotate</button>
+          <button onclick="addGlobalAnchor()">anchor</button>
+        </div>
+
+        <div class="hint">select text in response → act</div>
+      </div>
+
+      <div class="responseWrap">
+        <div class="responseLabel">
+          <div class="left">AI response (staged center)</div>
+          <div class="right">center = primary focus (single generation)</div>
+        </div>
+        <div id="responseBox" class="responseBox" contenteditable="true" spellcheck="false"></div>
+      </div>
+
+      <div class="stageControls">
+        <button onclick="copyMachinePrompt()">copy prompt packet</button>
+        <button onclick="exportMachinePrompt()">export prompt packet</button>
+        <button onclick="exportJSON()">export json</button>
+        <button onclick="snapshotPNG()">screenshot (system)</button>
+      </div>
+
+    </div>
+
+    <div class="splitV" id="splitRight" title="Drag to resize"></div>
+
+    <!-- RIGHT: DEVELOPMENT -->
+    <div class="panel" id="devPanel">
+      <div class="head">
+        <div class="headLeft">
+          <div class="label">Yes & / Development</div>
+          <div class="sub">what to amplify, extend, build from</div>
+        </div>
+        <div class="headBtns">
+          <button class="collapseBtn" onclick="toggleCollapse('dev')">collapse</button>
+          <button onclick="clearBucket('dev')">clear</button>
+        </div>
+      </div>
+      <div class="body" id="devBucket"></div>
+    </div>
+
+  </div>
+
+  <!-- HORIZONTAL SPLITTER -->
+  <div class="splitH" id="splitBottom" title="Drag to resize"></div>
+
+  <!-- BOTTOM: NOTES / REFS / CORRECTIONS -->
+  <div class="bottom" id="bottomPanel">
+    <div class="bottomInner">
+      <div class="bottomHead">
+        <div class="label">Notes / Corrections / References</div>
+        <div class="headBtns">
+          <button class="collapseBtn" onclick="toggleCollapse('bottom')">collapse</button>
+        </div>
+      </div>
+
+      <div class="bottomBody" id="bottomBody">
+        <div class="bottomGrid">
+          <div class="block">
+            <div class="h">General Notes <span>about the generation as a totality</span></div>
+            <textarea id="generalNotes" placeholder="General notes..."></textarea>
+            <div class="smallHint">Use for: overall diagnosis, tone issues, structure, missing constraints, contradictions.</div>
+          </div>
+
+          <div class="block">
+            <div class="h">Prompt Corrections <span>delta constraints</span></div>
+            <textarea id="promptCorrections" placeholder="Corrections / clarifications (lines)..."></textarea>
+            <div class="smallHint">Use for: “Define X”, “Do not assume Y”, “Output format Z”, “No kitsch”, “All Arial”, etc.</div>
+          </div>
+
+          <div class="block">
+            <div class="h">References <span>links, docs, motifs</span></div>
+            <textarea id="references" placeholder="References..."></textarea>
+            <div class="smallHint">Use for: canonical pages, internal standards, inspirations, constraints, source material.</div>
+          </div>
+        </div>
+
+        <div class="bottomActions">
+          <button onclick="exportMachinePrompt()">export prompt</button>
+          <button onclick="copyMachinePrompt()">copy prompt</button>
+          <button onclick="exportJSON()">export json</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+/* ---------------------------
+   STATE
+---------------------------- */
+let state = {
+  title: "",
+  model: "",
+  prompt: "",
+  response: "",
+  criticism: [],
+  development: [],
+  annotations: [],
+  anchors: [],
+  generalNotes: "",
+  promptCorrections: "",
+  references: "",
+  updatedAt: null,
+  ui: {
+    leftW: null,
+    rightW: null,
+    bottomH: null,
+    font: null,
+    line: null,
+    pad: null,
+    gap: null,
+    collapsed: { crit:false, dev:false, bottom:false }
+  }
+};
+
+const $ = (id) => document.getElementById(id);
+const root = document.documentElement;
+
+const markDirty = () => { $("statusChip").textContent = "unsaved"; };
+const markSaved = () => { $("statusChip").textContent = "saved"; };
+
+const uid = () => Math.random().toString(36).slice(2,10) + "-" + Date.now();
+
+/* ---------------------------
+   SIMPLE FORMAT (RESPONSE BOX)
+---------------------------- */
+function fmt(cmd){
+  $("responseBox").focus();
+  try{ document.execCommand(cmd, false, null); }catch(e){}
+  markDirty();
+}
+function greyHighlight(){
+  $("responseBox").focus();
+  // "hiliteColor" works in most browsers; fallback "backColor"
+  const color = getComputedStyle(root).getPropertyValue('--hl').trim() || '#2f2f2f';
+  try{
+    document.execCommand("hiliteColor", false, color);
+  }catch(e){
+    try{ document.execCommand("backColor", false, color); }catch(e2){}
+  }
+  markDirty();
+}
+
+/* ---------------------------
+   SELECTION ROUTING
+---------------------------- */
+function selectedText(){
+  const sel = window.getSelection();
+  if (!sel) return "";
+  const txt = sel.toString();
+  return txt ? txt.trim() : "";
+}
+
+function routeSelection(where){
+  const txt = selectedText();
+  if (!txt) return;
+
+  const note = prompt(where === "crit" ? "Criticism note (optional):" : "Yes & note (optional):");
+  const item = { id: uid(), text: txt, note: note || "", createdAt: new Date().toISOString() };
+
+  if (where === "crit") state.criticism.unshift(item);
+  else state.development.unshift(item);
+
+  renderBuckets();
+  markDirty();
+}
+
+function annotateSelection(){
+  const txt = selectedText();
+  if (!txt) return;
+  const note = prompt("Annotation (tied to this exact excerpt):");
+  if (!note) return;
+  state.annotations.unshift({ id: uid(), text: txt, note, createdAt: new Date().toISOString() });
+  markDirty();
+  alert("Saved annotation.");
+}
+
+function addGlobalAnchor(){
+  const note = prompt("Anchor note (not tied to selection):");
+  if (!note) return;
+  state.anchors.unshift({ id: uid(), note, createdAt: new Date().toISOString() });
+  markDirty();
+  alert("Saved anchor note.");
+}
+
+/* ---------------------------
+   RENDER BUCKETS
+---------------------------- */
+function renderBuckets(){
+  const crit = $("critBucket");
+  const dev = $("devBucket");
+  crit.innerHTML = "";
+  dev.innerHTML = "";
+
+  state.criticism.forEach(item => crit.appendChild(renderEntry(item, "crit")));
+  state.development.forEach(item => dev.appendChild(renderEntry(item, "dev")));
+}
+
+function renderEntry(item, where){
+  const wrap = document.createElement("div");
+  wrap.className = "entry " + (where === "crit" ? "bad" : "good");
+
+  const excerpt = document.createElement("div");
+  excerpt.className = "excerpt";
+  excerpt.textContent = item.text;
+
+  const note = document.createElement("div");
+  note.className = "note";
+  note.textContent = item.note || "";
+
+  const meta = document.createElement("div");
+  meta.className = "meta";
+
+  const tag = document.createElement("div");
+  tag.className = "tag";
+  tag.textContent = where === "crit" ? "WRONG" : "YES &";
+
+  const mini = document.createElement("div");
+  mini.className = "mini";
+
+  const btnEdit = document.createElement("button");
+  btnEdit.textContent = "edit note";
+  btnEdit.onclick = () => {
+    const next = prompt("Edit note:", item.note || "");
+    if (next === null) return;
+    item.note = next;
+    renderBuckets();
+    markDirty();
+  };
+
+  const btnMove = document.createElement("button");
+  btnMove.textContent = "move";
+  btnMove.onclick = () => {
+    if (where === "crit"){
+      state.criticism = state.criticism.filter(x => x.id !== item.id);
+      state.development.unshift(item);
+    } else {
+      state.development = state.development.filter(x => x.id !== item.id);
+      state.criticism.unshift(item);
+    }
+    renderBuckets();
+    markDirty();
+  };
+
+  const btnDel = document.createElement("button");
+  btnDel.textContent = "delete";
+  btnDel.className = "danger";
+  btnDel.onclick = () => {
+    if (!confirm("Delete this entry?")) return;
+    if (where === "crit") state.criticism = state.criticism.filter(x => x.id !== item.id);
+    else state.development = state.development.filter(x => x.id !== item.id);
+    renderBuckets();
+    markDirty();
+  };
+
+  mini.appendChild(btnEdit);
+  mini.appendChild(btnMove);
+  mini.appendChild(btnDel);
+
+  meta.appendChild(tag);
+  meta.appendChild(mini);
+
+  wrap.appendChild(excerpt);
+  if (item.note) wrap.appendChild(note);
+  wrap.appendChild(meta);
+  return wrap;
+}
+
+function clearBucket(where){
+  if (!confirm("Clear this entire bucket?")) return;
+  if (where === "crit") state.criticism = [];
+  else state.development = [];
+  renderBuckets();
+  markDirty();
+}
+
+/* ---------------------------
+   COLLAPSE / EXPAND
+---------------------------- */
+function toggleCollapse(which){
+  if (which === "crit"){
+    state.ui.collapsed.crit = !state.ui.collapsed.crit;
+    applyCollapse();
+  } else if (which === "dev"){
+    state.ui.collapsed.dev = !state.ui.collapsed.dev;
+    applyCollapse();
+  } else if (which === "bottom"){
+    state.ui.collapsed.bottom = !state.ui.collapsed.bottom;
+    applyCollapse();
+  }
+  markDirty();
+}
+
+function applyCollapse(){
+  // vertical side panels
+  const crit = $("critPanel");
+  const dev = $("devPanel");
+
+  if (state.ui.collapsed.crit){
+    crit.classList.add("narrow");
+    root.style.setProperty("--leftW", "56px");
+  } else {
+    crit.classList.remove("narrow");
+    root.style.setProperty("--leftW", state.ui.leftW || getDefault("--leftW"));
+  }
+
+  if (state.ui.collapsed.dev){
+    dev.classList.add("narrow");
+    root.style.setProperty("--rightW", "56px");
+  } else {
+    dev.classList.remove("narrow");
+    root.style.setProperty("--rightW", state.ui.rightW || getDefault("--rightW"));
+  }
+
+  // bottom collapse
+  const bottom = $("bottomPanel");
+  const body = $("bottomBody");
+  if (state.ui.collapsed.bottom){
+    body.style.display = "none";
+    root.style.setProperty("--bottomH", "56px");
+  } else {
+    body.style.display = "";
+    root.style.setProperty("--bottomH", state.ui.bottomH || getDefault("--bottomH"));
+  }
+}
+
+/* ---------------------------
+   RESIZE SPLITTERS
+---------------------------- */
+function getDefault(cssVar){
+  return getComputedStyle(root).getPropertyValue(cssVar).trim();
+}
+
+function px(n){ return Math.max(56, Math.round(n)) + "px"; }
+
+function attachSplitters(){
+  const splitLeft = $("splitLeft");
+  const splitRight = $("splitRight");
+  const splitBottom = $("splitBottom");
+
+  // LEFT SPLITTER: adjusts --leftW
+  splitLeft.addEventListener("mousedown", (e) => {
+    e.preventDefault();
+    if (state.ui.collapsed.crit) return; // if collapsed, ignore
+    const startX = e.clientX;
+    const startW = parseFloat(getComputedStyle(root).getPropertyValue("--leftW"));
+    const onMove = (ev) => {
+      const dx = ev.clientX - startX;
+      const next = startW + dx;
+      root.style.setProperty("--leftW", px(next));
+    };
+    const onUp = () => {
+      state.ui.leftW = getComputedStyle(root).getPropertyValue("--leftW").trim();
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+      markDirty();
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  });
+
+  // RIGHT SPLITTER: adjusts --rightW
+  splitRight.addEventListener("mousedown", (e) => {
+    e.preventDefault();
+    if (state.ui.collapsed.dev) return;
+    const startX = e.clientX;
+    const startW = parseFloat(getComputedStyle(root).getPropertyValue("--rightW"));
+    const onMove = (ev) => {
+      const dx = startX - ev.clientX; // reverse because dragging left increases center
+      const next = startW + dx;
+      root.style.setProperty("--rightW", px(next));
+    };
+    const onUp = () => {
+      state.ui.rightW = getComputedStyle(root).getPropertyValue("--rightW").trim();
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+      markDirty();
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  });
+
+  // BOTTOM SPLITTER: adjusts --bottomH
+  splitBottom.addEventListener("mousedown", (e) => {
+    e.preventDefault();
+    if (state.ui.collapsed.bottom) return;
+    const startY = e.clientY;
+    const startH = parseFloat(getComputedStyle(root).getPropertyValue("--bottomH"));
+    const onMove = (ev) => {
+      const dy = startY - ev.clientY; // drag up -> bigger bottom
+      const next = startH + dy;
+      root.style.setProperty("--bottomH", px(next));
+    };
+    const onUp = () => {
+      state.ui.bottomH = getComputedStyle(root).getPropertyValue("--bottomH").trim();
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+      markDirty();
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  });
+}
+
+/* ---------------------------
+   GLOBAL TYPOGRAPHY CONTROLS
+---------------------------- */
+function initGlobalControls(){
+  const ctlFont = $("ctlFont");
+  const ctlLine = $("ctlLine");
+  const ctlPad  = $("ctlPad");
+  const ctlGap  = $("ctlGap");
+
+  // defaults from CSS
+  const defFont = parseFloat(getComputedStyle(root).getPropertyValue("--uiFont")) || 12.5;
+  const defLine = parseFloat(getComputedStyle(root).getPropertyValue("--uiLine")) || 1.45;
+  const defPad  = parseFloat(getComputedStyle(root).getPropertyValue("--pad")) || 12;
+  const defGap  = parseFloat(getComputedStyle(root).getPropertyValue("--gap")) || 12;
+
+  // hydrate from state.ui if present, else defaults
+  const font = state.ui.font ? parseFloat(state.ui.font) : defFont;
+  const line = state.ui.line ? parseFloat(state.ui.line) : defLine;
+  const pad  = state.ui.pad  ? parseFloat(state.ui.pad)  : defPad;
+  const gap  = state.ui.gap  ? parseFloat(state.ui.gap)  : defGap;
+
+  setGlobalFeel(font, line, pad, gap);
+
+  ctlFont.value = font;
+  ctlLine.value = line;
+  ctlPad.value  = pad;
+  ctlGap.value  = gap;
+
+  ctlFont.addEventListener("input", () => { setGlobalFeel(ctlFont.value, null, null, null); markDirty(); });
+  ctlLine.addEventListener("input", () => { setGlobalFeel(null, ctlLine.value, null, null); markDirty(); });
+  ctlPad.addEventListener("input",  () => { setGlobalFeel(null, null, ctlPad.value, null); markDirty(); });
+  ctlGap.addEventListener("input",  () => { setGlobalFeel(null, null, null, ctlGap.value); markDirty(); });
+}
+
+function setGlobalFeel(font, line, pad, gap){
+  if (font !== null){
+    root.style.setProperty("--uiFont", parseFloat(font) + "px");
+    state.ui.font = parseFloat(font) + "px";
+  }
+  if (line !== null){
+    root.style.setProperty("--uiLine", parseFloat(line));
+    state.ui.line = parseFloat(line);
+  }
+  if (pad !== null){
+    root.style.setProperty("--pad", parseFloat(pad) + "px");
+    state.ui.pad = parseFloat(pad) + "px";
+  }
+  if (gap !== null){
+    root.style.setProperty("--gap", parseFloat(gap) + "px");
+    state.ui.gap = parseFloat(gap) + "px";
+  }
+}
+
+/* ---------------------------
+   UI <-> STATE SYNC
+---------------------------- */
+function syncFromUI(){
+  state.title = $("genTitle").value.trim();
+  state.model = $("modelName").value.trim();
+  state.prompt = $("promptInput").value;
+  state.response = $("responseBox").innerHTML; // keep formatting
+  state.generalNotes = $("generalNotes").value;
+  state.promptCorrections = $("promptCorrections").value;
+  state.references = $("references").value;
+  state.updatedAt = new Date().toISOString();
+
+  // capture layout vars
+  state.ui.leftW = getComputedStyle(root).getPropertyValue("--leftW").trim();
+  state.ui.rightW = getComputedStyle(root).getPropertyValue("--rightW").trim();
+  state.ui.bottomH = getComputedStyle(root).getPropertyValue("--bottomH").trim();
+}
+
+function syncToUI(){
+  $("genTitle").value = state.title || "";
+  $("modelName").value = state.model || "";
+  $("promptInput").value = state.prompt || "";
+  $("responseBox").innerHTML = state.response || "";
+  $("generalNotes").value = state.generalNotes || "";
+  $("promptCorrections").value = state.promptCorrections || "";
+  $("references").value = state.references || "";
+  renderBuckets();
+
+  // apply layout
+  if (state.ui.leftW) root.style.setProperty("--leftW", state.ui.leftW);
+  if (state.ui.rightW) root.style.setProperty("--rightW", state.ui.rightW);
+  if (state.ui.bottomH) root.style.setProperty("--bottomH", state.ui.bottomH);
+
+  applyCollapse();
+}
+
+/* mark dirty on inputs */
+["genTitle","modelName","promptInput","generalNotes","promptCorrections","references"].forEach(id=>{
+  document.addEventListener("input", (e)=>{
+    if (e.target && e.target.id === id) markDirty();
+  });
+});
+$("responseBox").addEventListener("input", markDirty);
+
+/* ---------------------------
+   GENERATIONS
+---------------------------- */
+function newGeneration(){
+  if ($("statusChip").textContent === "unsaved"){
+    if (!confirm("Unsaved changes. Create new generation anyway?")) return;
+  }
+  const uiKeep = JSON.parse(JSON.stringify(state.ui)); // keep layout + feel
+  state = {
+    title: "",
+    model: "",
+    prompt: "",
+    response: "",
+    criticism: [],
+    development: [],
+    annotations: [],
+    anchors: [],
+    generalNotes: "",
+    promptCorrections: "",
+    references: "",
+    updatedAt: null,
+    ui: uiKeep
+  };
+  syncToUI();
+  markDirty();
+}
+
+/* ---------------------------
+   SAVE / LOAD
+---------------------------- */
+const STORE_KEY = "ketadata_prompt_response_analyzer_v2";
+
+function saveLocal(){
+  syncFromUI();
+  localStorage.setItem(STORE_KEY, JSON.stringify(state));
+  markSaved();
+}
+
+function loadLocal(){
+  const raw = localStorage.getItem(STORE_KEY);
+  if (!raw) { alert("No saved state found."); return; }
+  state = JSON.parse(raw);
+  syncToUI();
+  initGlobalControls(); // re-apply feel sliders
+  markSaved();
+}
+
+/* ---------------------------
+   EXPORTS
+---------------------------- */
+function download(filename, content, mime){
+  const blob = new Blob([content], {type: mime || "text/plain"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+}
+
+function exportJSON(){
+  syncFromUI();
+  download(
+    (state.title ? safeName(state.title) : "prompt-response") + ".json",
+    JSON.stringify(state, null, 2),
+    "application/json"
+  );
+}
+
+function safeName(s){
+  return (s || "export").toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/(^-|-$)/g,"");
+}
+
+/* prompt packet: export HTML-stripped response (plus a copy of styled HTML for reference) */
+function buildMachinePrompt(){
+  syncFromUI();
+
+  const tmp = document.createElement("div");
+  tmp.innerHTML = state.response || "";
+  const responsePlain = (tmp.innerText || "").trim();
+
+  const crit = state.criticism.map((x,i)=>(
+    `- EXCERPT ${i+1}: ${x.text}\n  NOTE: ${x.note || "(none)"}`
+  )).join("\n");
+
+  const dev = state.development.map((x,i)=>(
+    `- EXCERPT ${i+1}: ${x.text}\n  NOTE: ${x.note || "(none)"}`
+  )).join("\n");
+
+  const ann = state.annotations.map((x,i)=>(
+    `- EXCERPT ${i+1}: ${x.text}\n  NOTE: ${x.note}`
+  )).join("\n");
+
+  const anchors = state.anchors.map((x,i)=>(
+    `- ANCHOR ${i+1}: ${x.note}`
+  )).join("\n");
+
+  return (
+`TITLE
+${state.title || "(untitled)"}
+
+MODEL
+${state.model || "(unspecified)"}
+
+ORIGINAL PROMPT
+${state.prompt || "(empty)"}
+
+AI RESPONSE (PLAIN)
+${responsePlain || "(empty)"}
+
+AI RESPONSE (FORMATTED HTML)
+${state.response || "(empty)"}
+
+CRITICISM / WRONG (CUT + CORRECT)
+${crit || "(none)"}
+
+YES & / DEVELOPMENT (AMPLIFY + EXTEND)
+${dev || "(none)"}
+
+ANNOTATIONS (SELECTION-TIED)
+${ann || "(none)"}
+
+ANCHOR NOTES (GLOBAL)
+${anchors || "(none)"}
+
+PROMPT CORRECTIONS / CLARIFICATIONS (DELTA)
+${state.promptCorrections || "(none)"}
+
+GENERAL NOTES
+${state.generalNotes || "(none)"}
+
+REFERENCES
+${state.references || "(none)"}
+`
+  );
+}
+
+function exportMachinePrompt(){
+  const txt = buildMachinePrompt();
+  download(
+    (state.title ? safeName(state.title) : "prompt-response") + ".txt",
+    txt,
+    "text/plain"
+  );
+}
+
+async function copyMachinePrompt(){
+  const txt = buildMachinePrompt();
+  try{
+    await navigator.clipboard.writeText(txt);
+    alert("Copied prompt packet.");
+  }catch(e){
+    alert("Clipboard failed. Use export prompt instead.");
+  }
+}
+
+/* ---------------------------
+   SCREENSHOT
+---------------------------- */
+function snapshotPNG(){
+  alert("Use system screenshot.\n\nMac: Cmd+Shift+4\nWin: Win+Shift+S");
+}
+
+/* ---------------------------
+   RESET
+---------------------------- */
+function resetAll(){
+  if (!confirm("Reset everything?")) return;
+  localStorage.removeItem(STORE_KEY);
+  // keep current feel defaults
+  newGeneration();
+}
+
+/* ---------------------------
+   INIT
+---------------------------- */
+(function init(){
+  // baseline render
+  renderBuckets();
+  // splitters
+  attachSplitters();
+
+  // global controls
+  initGlobalControls();
+
+  // load collapsed defaults if any
+  applyCollapse();
+
+  // initial save indicator
+  markDirty();
+})();
+</script>
+</body>
+</html>
