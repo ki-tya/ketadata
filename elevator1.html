@@ -1,0 +1,577 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>KETADATA // ELEVATOR (MIN)</title>
+  <style>
+    :root{
+      --bg:#000;
+      --txt:rgba(255,255,255,.82);
+      --muted:rgba(255,255,255,.46);
+      --edge:rgba(255,255,255,.10);
+      --edge2:rgba(255,255,255,.16);
+      --panel:rgba(255,255,255,.03);
+      --panel2:rgba(255,255,255,.02);
+      --glow:rgba(255,255,255,.18);
+
+      --r:6px;              /* slight rounding (ever so slightly) */
+      --pad:10px;
+
+      --nodeW: 168px;       /* tighter + smaller */
+      --nodeH: 88px;
+      --centerW: 190px;
+      --centerH: 106px;
+
+      --stroke:1;
+    }
+
+    *{ box-sizing:border-box; font-family: Arial, Helvetica, sans-serif; }
+    html,body{ height:100%; }
+    body{
+      margin:0;
+      background:var(--bg);
+      color:var(--txt);
+      overflow:hidden;
+    }
+
+    /* No titles. Minimal utility controls only. */
+    .hud{
+      position:fixed;
+      top:12px; right:12px;
+      display:flex; gap:8px;
+      z-index:30;
+      opacity:.9;
+    }
+    .btn{
+      border:1px solid var(--edge);
+      background:rgba(255,255,255,.02);
+      color:var(--txt);
+      padding:8px 10px;
+      font-size:11px;
+      letter-spacing:.10em;
+      text-transform:uppercase;
+      cursor:pointer;
+      border-radius:var(--r);
+      user-select:none;
+    }
+    .btn:hover{ border-color:var(--edge2); background:rgba(255,255,255,.03); }
+    .btn:active{ transform: translateY(1px); }
+
+    #stage{
+      position:absolute; inset:0;
+      overflow:hidden;
+    }
+
+    svg#wires{
+      position:absolute; inset:0;
+      width:100%; height:100%;
+      pointer-events:none;
+    }
+
+    /* Nodes: industrial minimal, no titles */
+    .node{
+      position:absolute;
+      width:var(--nodeW);
+      height:var(--nodeH);
+      border:1px solid var(--edge);
+      background:
+        linear-gradient(180deg, var(--panel), var(--panel2));
+      border-radius:var(--r);
+      user-select:none;
+      cursor:grab;
+      z-index:5;
+      box-shadow:
+        0 0 0 1px rgba(0,0,0,.55) inset,
+        0 12px 40px rgba(0,0,0,.55);
+    }
+    .node:active{ cursor:grabbing; }
+
+    .node .tag{
+      position:absolute;
+      top:8px; left:10px;
+      font-size:10px;
+      letter-spacing:.14em;
+      text-transform:uppercase;
+      color:var(--muted);
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      max-width: calc(100% - 20px);
+    }
+
+    .node .dot{
+      position:absolute;
+      right:10px; top:10px;
+      width:8px; height:8px;
+      border-radius:999px;
+      background:rgba(255,255,255,.14);
+    }
+
+    /* Center (elevator) */
+    .node.center{
+      width:var(--centerW);
+      height:var(--centerH);
+      z-index:10;
+      border-color:rgba(255,255,255,.14);
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.02));
+    }
+    .node.center .dot{ background:rgba(255,255,255,.22); }
+
+    /* Wires */
+    .wire{
+      stroke: rgba(255,255,255,.16);
+      stroke-width: var(--stroke);
+      fill:none;
+    }
+    .wire.dashed{
+      stroke-dasharray: 4 8;
+      stroke: rgba(255,255,255,.12);
+    }
+
+    /* Current (clean, not flashy) */
+    .current{
+      stroke: rgba(255,255,255,.72);
+      stroke-width: 2;
+      fill:none;
+      stroke-linecap:round;
+      stroke-dasharray: 10 18;
+      animation: dash 900ms linear infinite;
+      filter: drop-shadow(0 0 10px rgba(255,255,255,.10));
+    }
+    @keyframes dash{ to{ stroke-dashoffset: -56; } }
+
+    /* Selection state */
+    .node.active{
+      border-color:rgba(255,255,255,.24);
+      box-shadow:
+        0 0 0 1px rgba(255,255,255,.06) inset,
+        0 0 24px rgba(255,255,255,.06),
+        0 12px 40px rgba(0,0,0,.55);
+    }
+
+    /* Subtle route pulse (clean rectangle) */
+    .pulse{
+      position:absolute;
+      border:1px solid rgba(255,255,255,.30);
+      border-radius:var(--r);
+      pointer-events:none;
+      animation:pulse 900ms ease-out forwards;
+    }
+    @keyframes pulse{
+      0%{ opacity:0; transform:scale(.985); }
+      12%{ opacity:1; }
+      100%{ opacity:0; transform:scale(1.06); }
+    }
+
+    /* Clean transition (slow, systemic) */
+    .veil{
+      position:absolute; inset:0;
+      background:#000;
+      opacity:0;
+      pointer-events:none;
+      transition: opacity 650ms ease;
+      z-index:25;
+    }
+    .veil.on{ opacity:1; }
+
+    .hint{
+      position:fixed;
+      left:12px; bottom:12px;
+      font-size:11px;
+      letter-spacing:.10em;
+      text-transform:uppercase;
+      color:rgba(255,255,255,.28);
+      z-index:30;
+      pointer-events:none;
+    }
+  </style>
+</head>
+<body>
+  <div class="hud">
+    <button class="btn" id="centerBtn">center</button>
+    <button class="btn" id="resetBtn">reset</button>
+    <button class="btn" id="exportBtn">export</button>
+    <button class="btn" id="importBtn">import</button>
+  </div>
+
+  <div id="stage">
+    <svg id="wires" aria-hidden="true">
+      <g id="wireBase"></g>
+      <g id="wireCurrent"></g>
+    </svg>
+    <div class="veil" id="veil"></div>
+  </div>
+
+  <div class="hint">drag to reposition • click to route</div>
+
+  <script>
+  (() => {
+    const stage = document.getElementById('stage');
+    const svg = document.getElementById('wires');
+    const wireBase = document.getElementById('wireBase');
+    const wireCurrent = document.getElementById('wireCurrent');
+    const veil = document.getElementById('veil');
+
+    const centerBtn = document.getElementById('centerBtn');
+    const resetBtn  = document.getElementById('resetBtn');
+    const exportBtn = document.getElementById('exportBtn');
+    const importBtn = document.getElementById('importBtn');
+
+    // Minimal graph (no visible titles, only tags)
+    const DEFAULT = {
+      nodes: [
+        { id:"elevator", tag:"router", url:"https://ketadata.com/elevator.html", role:"center" },
+
+        { id:"lobby", tag:"entry", url:"https://ketadata.com/directory.html" },
+        { id:"temple", tag:"adjacent", url:"https://ketadata.com/mandala.html" },
+        { id:"store", tag:"commerce", url:"https://ketadata.com/shop.html" },
+
+        { id:"observatory", tag:"highest", url:"https://ketadata.com/map.html" },
+        { id:"cinema", tag:"lens", url:"https://ketadata.com/videohome.html" },
+        { id:"room", tag:"private", url:"https://ketadata.com/room.html" },
+
+        { id:"studio", tag:"work", url:"https://ketadata.com/studio.html" },
+        { id:"library", tag:"club", url:"https://ketadata.com/library.html" },
+        { id:"vault", tag:"sealed", url:"https://ketadata.com/vape-drive.html" },
+        { id:"lab", tag:"sensory", url:"https://ketadata.com/prompt.html" },
+        { id:"basement", tag:"lowest", url:"https://ketadata.com/1.html" },
+      ],
+      edges: [
+        ["elevator","observatory"], ["elevator","cinema"], ["elevator","room"],
+        ["elevator","studio"], ["elevator","library"], ["elevator","vault"],
+        ["elevator","lab"], ["elevator","basement"],
+
+        ["lobby","elevator"], ["temple","elevator"], ["store","elevator"],
+        ["lobby","temple","dashed"], ["lobby","store","dashed"],
+
+        ["lab","basement","dashed"], ["vault","library","dashed"], ["studio","cinema","dashed"],
+        ["observatory","cinema","dashed"]
+      ],
+      positions: {}
+    };
+
+    const KEY = "ketadata_elevator_min_layout_v2";
+
+    const state = load() || structuredClone(DEFAULT);
+    const nodeEls = new Map();
+
+    function cssNum(name){
+      return parseInt(getComputedStyle(document.documentElement).getPropertyValue(name).trim(),10);
+    }
+
+    function resetLayout(){
+      const r = stage.getBoundingClientRect();
+      const cx = r.width * 0.50;
+      const cy = r.height * 0.52;
+
+      // Keypad-like pattern, tight, no overlaps
+      const w = cssNum('--nodeW'), h = cssNum('--nodeH');
+      const cw = cssNum('--centerW'), ch = cssNum('--centerH');
+
+      const gapX = 34;
+      const gapY = 28;
+
+      const center = { x: cx - cw/2, y: cy - ch/2 };
+
+      // 3 columns around center + side anchors
+      const pos = {};
+      pos.elevator = center;
+
+      // Top row (entry band)
+      pos.lobby   = { x: center.x - (w + gapX), y: center.y - (h + gapY) };
+      pos.temple  = { x: center.x,             y: center.y - (h + gapY) };
+      pos.store   = { x: center.x + (w + gapX), y: center.y - (h + gapY) };
+
+      // Left column (observatory/cinema/library)
+      pos.observatory = { x: center.x - (w + gapX) * 2.05, y: center.y - (h + gapY) * 1.05 };
+      pos.cinema      = { x: center.x - (w + gapX) * 2.05, y: center.y };
+      pos.library     = { x: center.x - (w + gapX) * 2.05, y: center.y + (h + gapY) * 1.05 };
+
+      // Right (room)
+      pos.room = { x: center.x + (w + gapX) * 2.05, y: center.y - (h + gapY) * 0.20 };
+
+      // Bottom row (production/collection/sensory)
+      pos.studio   = { x: center.x - (w + gapX), y: center.y + (h + gapY) };
+      pos.vault    = { x: center.x,             y: center.y + (h + gapY) };
+      pos.lab      = { x: center.x + (w + gapX), y: center.y + (h + gapY) };
+      pos.basement = { x: center.x + (w + gapX) * 2.05, y: center.y + (h + gapY) * 1.05 };
+
+      state.positions = pos;
+      persist();
+      layoutAll();
+    }
+
+    function makeNode(n){
+      const el = document.createElement('div');
+      el.className = "node" + (n.role==="center" ? " center" : "");
+      el.dataset.id = n.id;
+
+      el.innerHTML = `
+        <div class="tag">${escapeHtml(n.tag || "")}</div>
+        <div class="dot"></div>
+      `;
+
+      attachDrag(el);
+
+      el.addEventListener('click', () => {
+        if(el.__dragMoved) return;
+        if(n.id === "elevator") return;
+        routeTo(n.id);
+      });
+
+      stage.appendChild(el);
+      nodeEls.set(n.id, el);
+    }
+
+    function layoutAll(){
+      for(const n of state.nodes){
+        if(!nodeEls.has(n.id)) makeNode(n);
+        const el = nodeEls.get(n.id);
+        const p = state.positions[n.id];
+        if(!p) continue;
+        el.style.left = `${p.x}px`;
+        el.style.top  = `${p.y}px`;
+      }
+      drawWires();
+    }
+
+    function anchor(id, p){
+      const isCenter = (id==="elevator");
+      const w = isCenter ? cssNum('--centerW') : cssNum('--nodeW');
+      const h = isCenter ? cssNum('--centerH') : cssNum('--nodeH');
+      return { x: p.x + w/2, y: p.y + h/2 };
+    }
+
+    function curve(x1,y1,x2,y2){
+      const dx = x2-x1;
+      const c = 0.32;
+      const cx1 = x1 + dx*c;
+      const cx2 = x2 - dx*c;
+      return `M ${x1} ${y1} C ${cx1} ${y1}, ${cx2} ${y2}, ${x2} ${y2}`;
+    }
+
+    function drawWires(){
+      wireBase.innerHTML = "";
+      const r = stage.getBoundingClientRect();
+      svg.setAttribute("viewBox", `0 0 ${r.width} ${r.height}`);
+
+      for(const e of state.edges){
+        const [a,b,style] = e;
+        const pa = state.positions[a], pb = state.positions[b];
+        if(!pa || !pb) continue;
+
+        const A = anchor(a, pa);
+        const B = anchor(b, pb);
+
+        const path = document.createElementNS("http://www.w3.org/2000/svg","path");
+        path.setAttribute("d", curve(A.x,A.y,B.x,B.y));
+        path.setAttribute("class", "wire" + (style==="dashed" ? " dashed" : ""));
+        wireBase.appendChild(path);
+      }
+    }
+
+    let navLock = false;
+
+    function clearActive(){
+      for(const el of nodeEls.values()) el.classList.remove('active');
+      wireCurrent.innerHTML = "";
+      veil.classList.remove('on');
+      navLock = false;
+    }
+
+    function routeTo(targetId){
+      if(navLock) return;
+      navLock = true;
+
+      clearActive(); // clears current visuals but keeps lock
+      navLock = true;
+
+      const targetNode = state.nodes.find(n => n.id === targetId);
+      if(!targetNode) { navLock=false; return; }
+
+      const elevPos = state.positions.elevator;
+      const tgtPos  = state.positions[targetId];
+      if(!elevPos || !tgtPos) { navLock=false; return; }
+
+      const elevEl = nodeEls.get("elevator");
+      const tgtEl  = nodeEls.get(targetId);
+      if(elevEl) elevEl.classList.add('active');
+      if(tgtEl)  tgtEl.classList.add('active');
+
+      // Clean current path
+      wireCurrent.innerHTML = "";
+      const A = anchor("elevator", elevPos);
+      const B = anchor(targetId, tgtPos);
+
+      const p = document.createElementNS("http://www.w3.org/2000/svg","path");
+      p.setAttribute("d", curve(A.x,A.y,B.x,B.y));
+      p.setAttribute("class","current");
+      wireCurrent.appendChild(p);
+
+      // Subtle pulse at destination
+      pulseRect(tgtEl);
+
+      // Give it time: let current run a bit, then veil, then navigate
+      const CURRENT_TIME = 1100;  // "no need to rush"
+      const VEIL_TIME = 650;
+
+      setTimeout(() => {
+        veil.classList.add('on');
+        setTimeout(() => {
+          window.location.href = targetNode.url || "#";
+        }, VEIL_TIME);
+      }, CURRENT_TIME);
+    }
+
+    function pulseRect(el){
+      if(!el) return;
+      const rect = el.getBoundingClientRect();
+      const srect = stage.getBoundingClientRect();
+
+      const pulse = document.createElement('div');
+      pulse.className = "pulse";
+      pulse.style.left = (rect.left - srect.left + 6) + "px";
+      pulse.style.top  = (rect.top  - srect.top  + 6) + "px";
+      pulse.style.width = (rect.width - 12) + "px";
+      pulse.style.height = (rect.height - 12) + "px";
+      stage.appendChild(pulse);
+      setTimeout(() => pulse.remove(), 950);
+    }
+
+    // Dragging
+    function attachDrag(el){
+      let sx=0, sy=0, ox=0, oy=0;
+      el.__dragMoved = false;
+
+      const down = (e) => {
+        if(e.button !== undefined && e.button !== 0) return;
+        e.preventDefault();
+
+        el.__dragMoved = false;
+        const id = el.dataset.id;
+        const p = state.positions[id] || {x:0,y:0};
+        sx = e.clientX; sy = e.clientY;
+        ox = p.x; oy = p.y;
+
+        window.addEventListener('mousemove', move);
+        window.addEventListener('mouseup', up, { once:true });
+      };
+
+      const move = (e) => {
+        const dx = e.clientX - sx;
+        const dy = e.clientY - sy;
+        if(Math.abs(dx)+Math.abs(dy) > 2) el.__dragMoved = true;
+
+        const id = el.dataset.id;
+        state.positions[id] = { x: ox+dx, y: oy+dy };
+        el.style.left = `${state.positions[id].x}px`;
+        el.style.top  = `${state.positions[id].y}px`;
+        drawWires();
+      };
+
+      const up = () => {
+        window.removeEventListener('mousemove', move);
+        persist();
+        // restore click readiness
+        setTimeout(() => el.__dragMoved = false, 0);
+      };
+
+      el.addEventListener('mousedown', down);
+    }
+
+    // Controls
+    function centerView(){
+      const r = stage.getBoundingClientRect();
+      const cx = r.width * 0.5;
+      const cy = r.height * 0.52;
+
+      const p = state.positions.elevator;
+      if(!p) return;
+
+      const cw = cssNum('--centerW'), ch = cssNum('--centerH');
+      const dx = cx - (p.x + cw/2);
+      const dy = cy - (p.y + ch/2);
+
+      for(const k in state.positions){
+        state.positions[k].x += dx;
+        state.positions[k].y += dy;
+      }
+      persist();
+      layoutAll();
+    }
+
+    centerBtn.addEventListener('click', () => { clearActive(); centerView(); });
+    resetBtn.addEventListener('click',  () => { clearActive(); resetLayout(); });
+
+    exportBtn.addEventListener('click', async () => {
+      const out = JSON.stringify({ positions: state.positions }, null, 2);
+      try{
+        await navigator.clipboard.writeText(out);
+      }catch(_){
+        const blob = new Blob([out], {type:"application/json"});
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = "layout.json";
+        a.click();
+        URL.revokeObjectURL(a.href);
+      }
+    });
+
+    importBtn.addEventListener('click', () => {
+      const raw = prompt("Paste { positions: {...} }");
+      if(!raw) return;
+      try{
+        const obj = JSON.parse(raw);
+        if(obj && obj.positions){
+          state.positions = obj.positions;
+          persist();
+          layoutAll();
+        }
+      }catch(_){}
+    });
+
+    // Escape: kill routing visuals
+    window.addEventListener('keydown', (e) => {
+      if(e.key === "Escape") clearActive();
+    });
+
+    // Persistence
+    function persist(){
+      try{ localStorage.setItem(KEY, JSON.stringify(state)); }catch(_){}
+    }
+    function load(){
+      try{
+        const raw = localStorage.getItem(KEY);
+        if(!raw) return null;
+        const obj = JSON.parse(raw);
+        if(!obj || !obj.nodes || !obj.edges) return null;
+        return obj;
+      }catch(_){ return null; }
+    }
+
+    function escapeHtml(s){
+      return String(s).replace(/[&<>"']/g, m => ({
+        "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"
+      }[m]));
+    }
+
+    // Init
+    function init(){
+      for(const n of state.nodes){
+        if(!nodeEls.has(n.id)) makeNode(n);
+      }
+      if(!state.positions || Object.keys(state.positions).length === 0){
+        resetLayout();
+      }else{
+        layoutAll();
+      }
+      window.addEventListener('resize', () => drawWires());
+    }
+
+    init();
+  })();
+  </script>
+</body>
+</html>
