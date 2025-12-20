@@ -1,0 +1,348 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>KETADATA // LAB ENTRY</title>
+  <style>
+    :root{
+      --bg:#000;
+      --ink:rgba(255,255,255,.92);
+      --muted:rgba(255,255,255,.60);
+      --line:rgba(255,255,255,.12);
+      --font: Arial, Helvetica, sans-serif;
+    }
+    *{ box-sizing:border-box; }
+    html,body{ height:100%; }
+    body{
+      margin:0;
+      background:var(--bg);
+      color:var(--ink);
+      overflow:hidden;
+      font-family: var(--font);
+      user-select:none;
+    }
+
+    #scene{ position:fixed; inset:0; overflow:hidden; }
+    .layer{
+      position:absolute;
+      inset:-14vh -14vw;
+      will-change: transform;
+      pointer-events:none;
+    }
+
+    /* Lab field: denser grid + interference */
+    #grid{
+      background:
+        linear-gradient(rgba(255,255,255,.05) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,.05) 1px, transparent 1px);
+      background-size: 52px 52px;
+      opacity:.16;
+    }
+    #interf{
+      opacity:.30;
+      background:
+        repeating-linear-gradient(0deg, rgba(255,255,255,.05) 0 1px, transparent 1px 6px),
+        radial-gradient(circle at 20% 30%, rgba(255,255,255,.08), transparent 48%),
+        radial-gradient(circle at 75% 58%, rgba(255,255,255,.06), transparent 52%);
+      filter: blur(10px);
+      mix-blend-mode: screen;
+    }
+    #bench{
+      inset:auto -14vw -26vh -14vw;
+      height:62vh;
+      background:
+        linear-gradient(to top, rgba(255,255,255,.08), rgba(255,255,255,0) 65%),
+        linear-gradient(90deg, rgba(255,255,255,.06) 1px, transparent 1px),
+        linear-gradient(rgba(255,255,255,.06) 1px, transparent 1px);
+      background-size: auto, 88px 88px, 88px 88px;
+      opacity:.18;
+      transform-origin: center bottom;
+      transform: perspective(900px) rotateX(60deg) translate3d(0,0,0);
+    }
+    #vignette{
+      inset:0;
+      background: radial-gradient(circle at center, rgba(0,0,0,0) 0%, rgba(0,0,0,.58) 62%, rgba(0,0,0,.92) 100%);
+    }
+
+    #hud{
+      position:fixed;
+      right:12px; top:12px;
+      z-index:10;
+      border:1px solid var(--line);
+      background: rgba(0,0,0,.55);
+      backdrop-filter: blur(10px);
+      padding:10px 12px;
+      text-align:right;
+    }
+    #hud .top{
+      display:flex;
+      gap:10px;
+      align-items:baseline;
+      justify-content:space-between;
+      border-bottom:1px solid rgba(255,255,255,.08);
+      padding-bottom:8px;
+      margin-bottom:8px;
+    }
+    #hud .brand{
+      font-size:12px;
+      letter-spacing:.18em;
+      text-transform:uppercase;
+      font-weight:800;
+      white-space:nowrap;
+    }
+    #hud .room{
+      font-size:11px;
+      letter-spacing:.14em;
+      text-transform:uppercase;
+      color: var(--muted);
+      white-space:nowrap;
+    }
+    #hud .sub{
+      font-size:11px;
+      color: rgba(255,255,255,.62);
+      letter-spacing:.02em;
+      line-height:1.35;
+      max-width: 360px;
+      margin-left:auto;
+    }
+
+    #hint{
+      position:fixed;
+      left:12px; bottom:12px;
+      z-index:10;
+      border:1px solid rgba(255,255,255,.10);
+      background: rgba(0,0,0,.45);
+      padding:8px 10px;
+      font-size:10px;
+      letter-spacing:.18em;
+      text-transform:uppercase;
+      color: rgba(255,255,255,.62);
+      backdrop-filter: blur(6px);
+      pointer-events:none;
+    }
+
+    .node{
+      position:absolute;
+      z-index:6;
+      border:1px solid rgba(255,255,255,.14);
+      background: rgba(255,255,255,.03);
+      backdrop-filter: blur(8px);
+      padding:10px 12px;
+      min-width: 190px;
+      cursor:pointer;
+      transition: transform 160ms ease, border-color 160ms ease, background 160ms ease;
+      transform: translate3d(0,0,0);
+    }
+    .node:hover{
+      border-color: rgba(255,255,255,.24);
+      background: rgba(255,255,255,.05);
+      transform: translate3d(0,-2px,0);
+    }
+    .node .name{
+      font-size:12px;
+      letter-spacing:.14em;
+      text-transform:uppercase;
+      font-weight:800;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+    .node .tag{
+      margin-top:6px;
+      font-size:10px;
+      letter-spacing:.14em;
+      text-transform:uppercase;
+      color: rgba(255,255,255,.62);
+      white-space:nowrap;
+    }
+    .node .desc{
+      margin-top:8px;
+      font-size:12px;
+      color: rgba(255,255,255,.70);
+      line-height:1.3;
+    }
+
+    .d1{ opacity:.92; }
+    .d2{ opacity:.84; transform: translate3d(0,0,0) scale(.98); }
+    .d3{ opacity:.74; transform: translate3d(0,0,0) scale(.96); }
+    .d4{ opacity:.64; transform: translate3d(0,0,0) scale(.94); }
+
+    #lines{
+      position:absolute;
+      inset:0;
+      pointer-events:none;
+      z-index:5;
+      opacity:.40;
+      mix-blend-mode: screen;
+    }
+    .line{
+      position:absolute;
+      height:1px;
+      background: rgba(255,255,255,.14);
+      transform-origin: left center;
+    }
+
+    #veil{
+      position:fixed;
+      inset:0;
+      background:#000;
+      opacity:0;
+      pointer-events:none;
+      transition: opacity 520ms ease;
+      z-index:50;
+    }
+    #veil.on{ opacity:1; }
+
+    @media (max-width: 980px){
+      #hud{ left:12px; right:12px; }
+      .node{ min-width: 170px; }
+    }
+    @media (prefers-reduced-motion: reduce){
+      #veil{ transition:none !important; }
+    }
+  </style>
+</head>
+<body>
+  <div id="scene">
+    <div id="grid" class="layer" data-depth="0.18"></div>
+    <div id="interf" class="layer" data-depth="0.10"></div>
+    <div id="bench" class="layer" data-depth="0.28"></div>
+    <div id="vignette" class="layer" data-depth="0.00"></div>
+
+    <div id="lines"></div>
+    <!-- nodes injected by JS -->
+  </div>
+
+  <div id="hud">
+    <div class="top">
+      <div class="brand">KETADATA</div>
+      <div class="room">LAB // ENTRY</div>
+    </div>
+    <div class="sub">
+      You are entering the cognition chamber. Instruments are protocols. Output is structured: prompts, schemas, tests, logs.
+      Click an instrument to run.
+    </div>
+  </div>
+
+  <div id="hint">1–9 quick run · click instruments · ESC cancel transition</div>
+  <div id="veil"></div>
+
+  <script>
+    (() => {
+      // EDIT THESE URLS
+      const ROUTES = [
+        { key:"1", id:"prompt",  name:"PROMPT BAY",       tag:"PROMPTS", desc:"Generate / mutate / store blocks.", url:"https://ketadata.com/prompt3.html",   x:0.50, y:0.60, d:"d1" },
+        { key:"2", id:"schema",  name:"SCHEMA FORGE",     tag:"DB",      desc:"Tables, fields, constraints.",       url:"https://ketadata.com/schema.html",    x:0.20, y:0.58, d:"d2" },
+        { key:"3", id:"ontology",name:"ONTOLOGY GRID",    tag:"MAP",     desc:"Entities, rooms, primitives.",       url:"https://ketadata.com/ontology.html",  x:0.80, y:0.58, d:"d2" },
+        { key:"4", id:"bench",   name:"TEST BENCH",       tag:"EVAL",    desc:"Rubrics, A/B, scoring.",             url:"https://ketadata.com/tests.html",     x:0.30, y:0.34, d:"d3" },
+        { key:"5", id:"log",     name:"EXPERIMENT LOG",   tag:"LOG",     desc:"Timestamped runs + outcomes.",       url:"https://ketadata.com/log.html",       x:0.70, y:0.34, d:"d3" },
+        { key:"6", id:"models",  name:"MODEL NOTES",      tag:"AI",      desc:"Capabilities + failure modes.",      url:"https://ketadata.com/models.html",    x:0.50, y:0.26, d:"d4" },
+        { key:"7", id:"vault",   name:"VAULT",            tag:"INDEX",   desc:"System structure reference.",        url:"https://ketadata.com/system.html",    x:0.06, y:0.78, d:"d4" },
+        { key:"8", id:"temple",  name:"TEMPLE",           tag:"CALIB",   desc:"Calibration field.",                url:"https://ketadata.com/temple.html",    x:0.92, y:0.78, d:"d4" },
+        { key:"9", id:"elevator",name:"ELEVATOR",         tag:"ROUTER",  desc:"Back to routing.",                  url:"https://ketadata.com/elevator1.html", x:0.92, y:0.18, d:"d4" },
+      ];
+
+      const scene = document.getElementById("scene");
+      const lines = document.getElementById("lines");
+      const veil = document.getElementById("veil");
+
+      const nodes = [];
+      ROUTES.forEach(r => {
+        const el = document.createElement("div");
+        el.className = `node ${r.d}`;
+        el.dataset.key = r.key;
+        el.dataset.url = r.url;
+        el.dataset.name = r.name;
+        el.style.left = `${r.x * 100}%`;
+        el.style.top  = `${r.y * 100}%`;
+        el.style.transform = `translate(-50%,-50%)`;
+        el.innerHTML = `
+          <div class="name">${r.key}. ${r.name}</div>
+          <div class="tag">${r.tag}</div>
+          <div class="desc">${r.desc}</div>
+        `;
+        el.addEventListener("click", () => route(r.name, r.url));
+        scene.appendChild(el);
+        nodes.push({ r, el });
+      });
+
+      function addLine(ax, ay, bx, by){
+        const dx = bx - ax, dy = by - ay;
+        const len = Math.hypot(dx, dy);
+        const ang = Math.atan2(dy, dx) * 180 / Math.PI;
+        const l = document.createElement("div");
+        l.className = "line";
+        l.style.left = `${ax}px`;
+        l.style.top  = `${ay}px`;
+        l.style.width = `${len}px`;
+        l.style.transform = `rotate(${ang}deg)`;
+        lines.appendChild(l);
+      }
+
+      function layoutLines(){
+        lines.innerHTML = "";
+        const anchor = nodes.find(n => n.r.id === "prompt");
+        if(!anchor) return;
+        const a = anchor.el.getBoundingClientRect();
+        const ax = a.left + a.width/2;
+        const ay = a.top  + a.height/2;
+
+        ["schema","ontology","bench","log","models"].forEach(id => {
+          const n = nodes.find(x => x.r.id === id);
+          if(!n) return;
+          const b = n.el.getBoundingClientRect();
+          addLine(ax, ay, b.left + b.width/2, b.top + b.height/2);
+        });
+      }
+      window.addEventListener("resize", layoutLines);
+      setTimeout(layoutLines, 50);
+
+      // Parallax
+      let mx = 0, my = 0;
+      window.addEventListener("mousemove", (e) => {
+        mx = (e.clientX / window.innerWidth - 0.5) * 2;
+        my = (e.clientY / window.innerHeight - 0.5) * 2;
+      }, { passive:true });
+
+      function tick(){
+        document.querySelectorAll(".layer").forEach(layer => {
+          const d = Number(layer.dataset.depth || 0);
+          const tx = (-mx * 18 * d);
+          const ty = (-my * 14 * d);
+          layer.style.transform = `translate3d(${tx}px, ${ty}px, 0)`;
+        });
+
+        nodes.forEach(({el}, i) => {
+          const wob = Math.sin((Date.now()/1000) * (0.33 + i*0.03) + i) * 1.1;
+          el.style.marginTop = `${wob}px`;
+        });
+
+        requestAnimationFrame(tick);
+      }
+      requestAnimationFrame(tick);
+
+      // Navigation
+      let navLock = false;
+      function route(name, url){
+        if(navLock) return;
+        navLock = true;
+        veil.classList.add("on");
+        setTimeout(() => window.location.href = url, 520);
+      }
+
+      // Hotkeys
+      window.addEventListener("keydown", (e) => {
+        const k = e.key.toLowerCase();
+        if(k === "escape"){
+          veil.classList.remove("on");
+          navLock = false;
+          return;
+        }
+        const hit = ROUTES.find(r => r.key === e.key);
+        if(hit) route(hit.name, hit.url);
+      });
+    })();
+  </script>
+</body>
+</html>
