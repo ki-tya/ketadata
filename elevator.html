@@ -1,0 +1,621 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>KETADATA // ELEVATOR</title>
+  <style>
+    :root{
+      --bg:#000;
+      --txt:#eaeaea;
+      --muted:#9a9a9a;
+      --line:#1f1f1f;
+      --line2:#2a2a2a;
+      --accent:#d8d8d8;      /* used for “current” */
+      --panel:#070707;
+      --shadow: 0 0 0 1px rgba(255,255,255,.06), 0 10px 40px rgba(0,0,0,.65);
+      --pad:14px;
+      --nodeW: 220px;
+      --nodeH: 130px;
+    }
+    *{ box-sizing:border-box; font-family: Arial, Helvetica, sans-serif; }
+    html,body{ height:100%; }
+    body{ margin:0; background:var(--bg); color:var(--txt); overflow:hidden; }
+
+    .top{
+      position:fixed; left:0; right:0; top:0; height:52px;
+      display:flex; align-items:center; justify-content:space-between;
+      padding:0 var(--pad);
+      border-bottom:1px solid var(--line);
+      background: linear-gradient(180deg,#0a0a0a,#000);
+      z-index:20;
+    }
+    .brand{
+      font-size:12px; letter-spacing:.14em; text-transform:uppercase;
+      color:var(--muted); font-weight:700;
+    }
+    .controls{ display:flex; gap:10px; align-items:center; }
+    .btn{
+      border:1px solid var(--line2);
+      background:#0b0b0b;
+      color:var(--txt);
+      padding:9px 11px;
+      font-size:12px;
+      letter-spacing:.10em;
+      text-transform:uppercase;
+      cursor:pointer;
+      user-select:none;
+    }
+    .btn:hover{ border-color:#3a3a3a; }
+    .btn:active{ transform: translateY(1px); }
+
+    .hint{
+      position:fixed; left:14px; bottom:14px;
+      font-size:12px; letter-spacing:.08em; text-transform:uppercase;
+      color:rgba(234,234,234,.45);
+      z-index:20;
+      pointer-events:none;
+    }
+
+    /* Stage */
+    #stage{
+      position:absolute; inset:52px 0 0 0;
+      overflow:hidden;
+    }
+    svg#wires{
+      position:absolute; inset:0;
+      width:100%; height:100%;
+      pointer-events:none;
+      filter: drop-shadow(0 0 8px rgba(255,255,255,.04));
+    }
+
+    /* Nodes */
+    .node{
+      position:absolute;
+      width:var(--nodeW);
+      height:var(--nodeH);
+      background: radial-gradient(120% 140% at 50% 0%, rgba(255,255,255,.06), rgba(0,0,0,.0) 55%),
+                  linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,.01));
+      border:1px solid var(--line);
+      box-shadow: var(--shadow);
+      padding:10px;
+      user-select:none;
+      cursor:grab;
+      z-index:5;
+    }
+    .node:active{ cursor:grabbing; }
+    .node .row{
+      display:flex; align-items:center; justify-content:space-between; gap:10px;
+      margin-bottom:10px;
+    }
+    .node .name{
+      font-size:12px;
+      letter-spacing:.14em;
+      text-transform:uppercase;
+      font-weight:700;
+      color:var(--txt);
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      max-width: 70%;
+    }
+    .node .tag{
+      font-size:10px;
+      letter-spacing:.12em;
+      text-transform:uppercase;
+      color:rgba(234,234,234,.55);
+      border:1px solid var(--line2);
+      padding:4px 6px;
+    }
+    .node .sub{
+      font-size:11px;
+      line-height:1.25;
+      color:rgba(234,234,234,.55);
+      border:1px solid rgba(255,255,255,.04);
+      background: rgba(0,0,0,.35);
+      height:calc(100% - 34px);
+      padding:8px;
+      overflow:hidden;
+    }
+
+    /* Elevator center node */
+    .node.elevator{
+      width:260px;
+      height:170px;
+      border-color:#2b2b2b;
+      background: radial-gradient(120% 140% at 50% 0%, rgba(255,255,255,.08), rgba(0,0,0,.0) 55%),
+                  linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,.01));
+      z-index:10;
+    }
+    .node.elevator .name{ max-width:100%; }
+    .node.elevator .sub{
+      display:flex; align-items:center; justify-content:center;
+      text-align:center;
+      letter-spacing:.10em;
+      text-transform:uppercase;
+      color:rgba(234,234,234,.6);
+      font-size:11px;
+    }
+
+    /* Click (navigate) affordance */
+    .node[data-clickable="true"]:hover{
+      border-color:#3a3a3a;
+    }
+
+    /* “Electrical current” FX */
+    .pulseRing{
+      position:absolute;
+      border:1px solid rgba(216,216,216,.7);
+      box-shadow: 0 0 22px rgba(216,216,216,.18);
+      pointer-events:none;
+      border-radius:0; /* unrounded */
+      animation: ring 620ms ease-out forwards;
+    }
+    @keyframes ring{
+      0%{ opacity:0; transform:scale(.88); }
+      15%{ opacity:1; }
+      100%{ opacity:0; transform:scale(1.18); }
+    }
+
+    .fadeOut{
+      animation: fadeOut 420ms ease-in forwards;
+    }
+    @keyframes fadeOut{
+      to{ opacity:0; filter: blur(2px); transform: scale(.995); }
+    }
+
+    /* Wire styles */
+    .wire{ stroke: rgba(234,234,234,.16); stroke-width:1; }
+    .wire.dashed{ stroke-dasharray: 3 6; stroke: rgba(234,234,234,.14); }
+
+    /* Active current along a wire */
+    .current{
+      stroke: rgba(216,216,216,.9);
+      stroke-width:2;
+      stroke-linecap:round;
+      stroke-dasharray: 10 14;
+      animation: dash 360ms linear infinite;
+      filter: drop-shadow(0 0 10px rgba(216,216,216,.22));
+    }
+    @keyframes dash{
+      to{ stroke-dashoffset: -48; }
+    }
+
+    /* Minimal toast */
+    .toast{
+      position:fixed; right:14px; bottom:14px;
+      border:1px solid var(--line2);
+      background: rgba(10,10,10,.85);
+      padding:10px 12px;
+      font-size:12px;
+      letter-spacing:.10em;
+      text-transform:uppercase;
+      color:rgba(234,234,234,.8);
+      opacity:0;
+      transform: translateY(6px);
+      transition: opacity .18s ease, transform .18s ease;
+      z-index:30;
+      pointer-events:none;
+    }
+    .toast.show{ opacity:1; transform: translateY(0); }
+  </style>
+</head>
+<body>
+  <div class="top">
+    <div class="brand">KETADATA // ELEVATOR (HYPERMIN)</div>
+    <div class="controls">
+      <button class="btn" id="centerBtn">center</button>
+      <button class="btn" id="resetBtn">reset layout</button>
+      <button class="btn" id="exportBtn">export layout</button>
+      <button class="btn" id="importBtn">import layout</button>
+    </div>
+  </div>
+
+  <div id="stage">
+    <svg id="wires" aria-hidden="true">
+      <g id="wireBase"></g>
+      <g id="wireCurrent"></g>
+    </svg>
+  </div>
+
+  <div class="hint">drag modules to rearrange • click a module to run current • then navigate</div>
+  <div class="toast" id="toast"></div>
+
+  <script>
+  (() => {
+    const stage = document.getElementById('stage');
+    const svg = document.getElementById('wires');
+    const wireBase = document.getElementById('wireBase');
+    const wireCurrent = document.getElementById('wireCurrent');
+
+    const centerBtn = document.getElementById('centerBtn');
+    const resetBtn = document.getElementById('resetBtn');
+    const exportBtn = document.getElementById('exportBtn');
+    const importBtn = document.getElementById('importBtn');
+    const toast = document.getElementById('toast');
+
+    // --- KETADATA room graph (minimal, editable) ---
+    // Each room has an id, label, tag, and destination URL (your room page).
+    // Layout is in px relative to stage.
+    const DEFAULT = {
+      nodes: [
+        { id:"elevator", label:"ELEVATOR", tag:"room/router", url:"https://ketadata.com/elevator.html", role:"center" },
+
+        { id:"lobby", label:"LOBBY", tag:"room/entry", url:"https://ketadata.com/directory.html" },
+        { id:"temple", label:"TEMPLE", tag:"room/adjacent", url:"https://ketadata.com/mandala.html" },
+        { id:"store", label:"STORE", tag:"room/commerce", url:"https://ketadata.com/shop.html" },
+
+        { id:"observatory", label:"OBSERVATORY", tag:"room/highest", url:"https://ketadata.com/map.html" },
+        { id:"cinema", label:"CINEMA", tag:"room/lens", url:"https://ketadata.com/videohome.html" },
+        { id:"room", label:"ROOM", tag:"room/private", url:"https://ketadata.com/room.html" },
+
+        { id:"studio", label:"STUDIO", tag:"room/work", url:"https://ketadata.com/studio.html" },
+        { id:"library", label:"LIBRARY", tag:"room/club", url:"https://ketadata.com/library.html" },
+        { id:"vault", label:"VAULT", tag:"room/sealed", url:"https://ketadata.com/vape-drive.html" },
+        { id:"lab", label:"LAB", tag:"room/sensory", url:"https://ketadata.com/prompt.html" },
+        { id:"basement", label:"BASEMENT", tag:"room/lowest", url:"https://ketadata.com/1.html" },
+      ],
+      edges: [
+        // elevator hub
+        ["elevator","observatory"], ["elevator","cinema"], ["elevator","room"],
+        ["elevator","studio"], ["elevator","library"], ["elevator","vault"],
+        ["elevator","lab"], ["elevator","basement"],
+
+        // entry layer
+        ["lobby","elevator"], ["temple","elevator"], ["store","elevator"],
+        ["lobby","temple"], ["lobby","store"],
+
+        // a few “logic” links (dashed)
+        ["lab","basement","dashed"], ["vault","library","dashed"], ["studio","cinema","dashed"],
+        ["observatory","cinema","dashed"]
+      ],
+      positions: {} // filled by resetLayout()
+    };
+
+    // sensible initial “pattern” matching your screenshot
+    function resetLayout(){
+      const r = stage.getBoundingClientRect();
+      const cx = r.width*0.50, cy = r.height*0.50;
+
+      const pos = {
+        elevator: { x: cx-130, y: cy-85 },
+
+        lobby: { x: cx-110, y: 70 },
+        temple:{ x: cx-330, y: r.height*0.40 },
+        store: { x: cx+120, y: r.height*0.48 },
+
+        observatory:{ x: 70, y: 40 },
+        cinema:{ x: 70, y: r.height*0.32 },
+        library:{ x: 70, y: r.height*0.62 },
+
+        studio:{ x: cx-240, y: r.height*0.70 },
+        vault: { x: cx-10, y: r.height*0.78 },
+        lab:  { x: cx+260, y: r.height*0.74 },
+        basement:{ x: cx+520, y: r.height*0.80 },
+
+        room: { x: r.width-290, y: r.height*0.35 },
+      };
+
+      state.positions = pos;
+      persist();
+      layoutAll();
+    }
+
+    // state (mutable)
+    const state = load() || structuredClone(DEFAULT);
+
+    // build DOM nodes
+    const nodeEls = new Map();
+
+    function makeNode(n){
+      const el = document.createElement('div');
+      el.className = "node" + (n.role==="center" ? " elevator" : "");
+      el.dataset.id = n.id;
+      el.dataset.clickable = (n.id !== "elevator") ? "true" : "false";
+
+      el.innerHTML = `
+        <div class="row">
+          <div class="name">${escapeHtml(n.label)}</div>
+          <div class="tag">${escapeHtml(n.tag || "")}</div>
+        </div>
+        <div class="sub">${n.role==="center" ? "central liminal space" : "&nbsp;"}</div>
+      `;
+
+      // drag handling
+      attachDrag(el);
+
+      // click to navigate (not for elevator itself)
+      el.addEventListener('click', (e) => {
+        // ignore click if it was a drag
+        if(el.__dragMoved) return;
+        if(n.id === "elevator") return;
+        runCurrentAndNavigate(n.id);
+      });
+
+      stage.appendChild(el);
+      nodeEls.set(n.id, el);
+    }
+
+    // wires
+    function clearWires(){
+      wireBase.innerHTML = "";
+      wireCurrent.innerHTML = "";
+    }
+
+    function drawWires(){
+      clearWires();
+      const r = stage.getBoundingClientRect();
+      svg.setAttribute("viewBox", `0 0 ${r.width} ${r.height}`);
+
+      const byId = (id) => state.positions[id];
+
+      for(const e of state.edges){
+        const a = e[0], b = e[1], style = e[2] || "solid";
+        const pa = byId(a), pb = byId(b);
+        if(!pa || !pb) continue;
+
+        const A = anchor(a, pa);
+        const B = anchor(b, pb);
+
+        const path = document.createElementNS("http://www.w3.org/2000/svg","path");
+        path.setAttribute("d", curve(A.x,A.y,B.x,B.y));
+        path.setAttribute("fill","none");
+        path.setAttribute("class", "wire" + (style==="dashed" ? " dashed" : ""));
+        wireBase.appendChild(path);
+      }
+    }
+
+    function anchor(id, p){
+      const isElev = (id==="elevator");
+      const w = isElev ? 260 : parseInt(getComputedStyle(document.documentElement).getPropertyValue('--nodeW'));
+      const h = isElev ? 170 : parseInt(getComputedStyle(document.documentElement).getPropertyValue('--nodeH'));
+      return { x: p.x + w/2, y: p.y + h/2 };
+    }
+
+    function curve(x1,y1,x2,y2){
+      const dx = x2-x1, dy = y2-y1;
+      const c = 0.35;
+      const cx1 = x1 + dx*c;
+      const cy1 = y1;
+      const cx2 = x2 - dx*c;
+      const cy2 = y2;
+      return `M ${x1} ${y1} C ${cx1} ${cy1}, ${cx2} ${cy2}, ${x2} ${y2}`;
+    }
+
+    function layoutAll(){
+      for(const n of state.nodes){
+        if(!nodeEls.has(n.id)) makeNode(n);
+        const el = nodeEls.get(n.id);
+        const p = state.positions[n.id];
+        if(!p) continue;
+        el.style.left = `${p.x}px`;
+        el.style.top  = `${p.y}px`;
+      }
+      drawWires();
+    }
+
+    // --- “current” animation ---
+    let navLock = false;
+    function runCurrentAndNavigate(targetId){
+      if(navLock) return;
+      navLock = true;
+
+      const elevPos = state.positions["elevator"];
+      const tgtPos = state.positions[targetId];
+      const elevNode = state.nodes.find(n=>n.id==="elevator");
+      const tgtNode  = state.nodes.find(n=>n.id===targetId);
+      if(!elevPos || !tgtPos || !tgtNode){ navLock=false; return; }
+
+      // make a current path from elevator -> target
+      wireCurrent.innerHTML = "";
+      const A = anchor("elevator", elevPos);
+      const B = anchor(targetId, tgtPos);
+
+      const p = document.createElementNS("http://www.w3.org/2000/svg","path");
+      p.setAttribute("d", curve(A.x,A.y,B.x,B.y));
+      p.setAttribute("fill","none");
+      p.setAttribute("class","current");
+      wireCurrent.appendChild(p);
+
+      // ring pulse on target
+      pulseRing(targetId);
+
+      // micro toast + stage fade
+      showToast(`routing → ${tgtNode.label}`);
+
+      // small delay feels like “current” moving, then navigate
+      setTimeout(() => {
+        // optional: fade stage before nav
+        stage.classList.add('fadeOut');
+        setTimeout(() => {
+          window.location.href = tgtNode.url || "#";
+        }, 200);
+      }, 520);
+    }
+
+    function pulseRing(id){
+      const el = nodeEls.get(id);
+      if(!el) return;
+      const ring = document.createElement('div');
+      ring.className = "pulseRing";
+      const rect = el.getBoundingClientRect();
+      const srect = stage.getBoundingClientRect();
+
+      ring.style.left = (rect.left - srect.left + 6) + "px";
+      ring.style.top  = (rect.top  - srect.top  + 6) + "px";
+      ring.style.width  = (rect.width - 12) + "px";
+      ring.style.height = (rect.height - 12) + "px";
+
+      stage.appendChild(ring);
+      setTimeout(() => ring.remove(), 740);
+    }
+
+    function showToast(text){
+      toast.textContent = text;
+      toast.classList.add('show');
+      setTimeout(()=> toast.classList.remove('show'), 780);
+    }
+
+    // --- dragging ---
+    function attachDrag(el){
+      let startX=0, startY=0, origX=0, origY=0;
+      el.__dragMoved = false;
+
+      const down = (e) => {
+        if(e.button !== undefined && e.button !== 0) return;
+        e.preventDefault();
+        const id = el.dataset.id;
+        const p = state.positions[id] || {x:0,y:0};
+        startX = e.clientX; startY = e.clientY;
+        origX = p.x; origY = p.y;
+        el.__dragMoved = false;
+
+        window.addEventListener('mousemove', move);
+        window.addEventListener('mouseup', up, { once:true });
+      };
+
+      const move = (e) => {
+        const dx = e.clientX - startX;
+        const dy = e.clientY - startY;
+        if(Math.abs(dx)+Math.abs(dy) > 2) el.__dragMoved = true;
+
+        const id = el.dataset.id;
+        state.positions[id] = {
+          x: origX + dx,
+          y: origY + dy
+        };
+        el.style.left = `${state.positions[id].x}px`;
+        el.style.top  = `${state.positions[id].y}px`;
+        drawWires();
+      };
+
+      const up = () => {
+        window.removeEventListener('mousemove', move);
+        persist();
+        // clear current on move
+        wireCurrent.innerHTML = "";
+        navLock = false;
+        stage.classList.remove('fadeOut');
+        // allow click again (but keep “drag moved” true until next mousedown)
+        setTimeout(()=> el.__dragMoved = false, 0);
+      };
+
+      el.addEventListener('mousedown', down);
+    }
+
+    // --- persistence ---
+    function persist(){
+      try{
+        localStorage.setItem("ketadata_elevator_layout_v1", JSON.stringify(state));
+      }catch(_){}
+    }
+    function load(){
+      try{
+        const raw = localStorage.getItem("ketadata_elevator_layout_v1");
+        if(!raw) return null;
+        const obj = JSON.parse(raw);
+        if(!obj || !obj.nodes || !obj.edges) return null;
+        return obj;
+      }catch(_){ return null; }
+    }
+
+    // --- controls ---
+    function centerView(){
+      const r = stage.getBoundingClientRect();
+      const cx = r.width*0.5, cy = r.height*0.5;
+      const p = state.positions["elevator"];
+      if(!p) return;
+      const dx = cx - (p.x + 130);
+      const dy = cy - (p.y + 85);
+
+      for(const k in state.positions){
+        state.positions[k].x += dx;
+        state.positions[k].y += dy;
+      }
+      persist();
+      layoutAll();
+      showToast("centered");
+    }
+
+    centerBtn.addEventListener('click', centerView);
+    resetBtn.addEventListener('click', () => {
+      stage.classList.remove('fadeOut');
+      wireCurrent.innerHTML = "";
+      navLock = false;
+      resetLayout();
+      showToast("reset");
+    });
+
+    exportBtn.addEventListener('click', async () => {
+      const out = JSON.stringify({ positions: state.positions }, null, 2);
+      try{
+        await navigator.clipboard.writeText(out);
+        showToast("layout copied");
+      }catch(_){
+        // fallback download
+        const blob = new Blob([out], {type:"application/json"});
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = "ketadata_elevator_layout.json";
+        a.click();
+        URL.revokeObjectURL(a.href);
+        showToast("layout exported");
+      }
+    });
+
+    importBtn.addEventListener('click', () => {
+      const raw = prompt("Paste layout JSON (expects { positions: {...} }):");
+      if(!raw) return;
+      try{
+        const obj = JSON.parse(raw);
+        if(obj && obj.positions){
+          state.positions = obj.positions;
+          persist();
+          layoutAll();
+          showToast("layout imported");
+        }else{
+          alert("Invalid JSON shape.");
+        }
+      }catch(e){
+        alert("Invalid JSON.");
+      }
+    });
+
+    // ESC clears “current” / unlock
+    window.addEventListener('keydown', (e) => {
+      if(e.key === "Escape"){
+        wireCurrent.innerHTML = "";
+        navLock = false;
+        stage.classList.remove('fadeOut');
+        showToast("cleared");
+      }
+    });
+
+    // helpers
+    function escapeHtml(s){
+      return String(s).replace(/[&<>"']/g, m => ({
+        "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"
+      }[m]));
+    }
+
+    // init: ensure positions exist, else reset
+    function init(){
+      // mount nodes
+      for(const n of state.nodes){
+        if(!nodeEls.has(n.id)) makeNode(n);
+      }
+      // positions
+      if(!state.positions || Object.keys(state.positions).length === 0){
+        resetLayout();
+      }else{
+        layoutAll();
+      }
+      // if stage resizes, re-draw wires
+      window.addEventListener('resize', () => drawWires());
+    }
+
+    init();
+  })();
+  </script>
+</body>
+</html>
