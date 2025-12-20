@@ -1,0 +1,791 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>KETADATA // Prompt-Response Analyzer</title>
+<style>
+  * { box-sizing: border-box; font-family: Arial, Helvetica, sans-serif; }
+  :root{
+    --bg:#000;
+    --panel:#050505;
+    --panel2:#080808;
+    --line:#1f1f1f;
+    --line2:#2a2a2a;
+    --txt:#eaeaea;
+    --muted:#a8a8a8;
+    --muted2:#7a7a7a;
+    --accent:#eaeaea;
+    --bad:#ff7a7a;
+    --good:#7cff9a;
+  }
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--txt);
+    overflow:hidden;
+  }
+
+  /* APP LAYOUT */
+  .app{
+    height:100vh;
+    display:grid;
+    grid-template-rows: auto 1fr auto;
+    grid-template-columns: 1fr;
+  }
+
+  /* TOP BAR */
+  header{
+    display:flex;
+    justify-content: space-between;
+    align-items:center;
+    padding:10px 14px;
+    border-bottom:1px solid var(--line);
+    background: linear-gradient(#050505,#000);
+  }
+  .title{
+    font-size:13px;
+    letter-spacing:.06em;
+    text-transform:uppercase;
+    color:var(--muted);
+  }
+  .actions{ display:flex; gap:8px; align-items:center; }
+  .chip{
+    font-size:12px;
+    padding:6px 10px;
+    border:1px solid var(--line2);
+    background:#0a0a0a;
+    color:var(--txt);
+  }
+  button{
+    font-size:12px;
+    padding:7px 10px;
+    border:1px solid var(--line2);
+    background:#0b0b0b;
+    color:var(--txt);
+    cursor:pointer;
+  }
+  button:hover{ background:#111; }
+  button.danger{ border-color:#3a2424; background:#120707; }
+  button.danger:hover{ background:#1a0a0a; }
+  button.primary{ border-color:#2f2f2f; background:#0d0d0d; }
+  button.primary:hover{ background:#141414; }
+
+  /* MIDDLE: LEFT / CENTER / RIGHT */
+  .middle{
+    display:grid;
+    grid-template-columns: 340px 1fr 340px;
+    gap:10px;
+    padding:10px;
+    overflow:hidden;
+  }
+
+  .panel{
+    border:1px solid var(--line);
+    background: radial-gradient(1200px 800px at 50% 0%, #0b0b0b, #000 60%);
+    overflow:hidden;
+    display:flex;
+    flex-direction:column;
+    min-width:0;
+  }
+  .panel .head{
+    padding:10px 10px 8px;
+    border-bottom:1px solid var(--line);
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:8px;
+  }
+  .panel .head .label{
+    font-size:12px;
+    letter-spacing:.06em;
+    text-transform:uppercase;
+    color:var(--muted);
+  }
+  .panel .head .sub{
+    font-size:11px;
+    color:var(--muted2);
+  }
+  .panel .body{
+    padding:10px;
+    overflow:auto;
+    min-height:0;
+  }
+
+  /* CENTER STAGE */
+  .stage{
+    border:1px solid var(--line);
+    background: radial-gradient(1200px 800px at 50% 0%, #0b0b0b, #000 60%);
+    overflow:hidden;
+    display:grid;
+    grid-template-rows: auto 1fr auto;
+    min-width:0;
+  }
+
+  .promptModule{
+    border-bottom:1px solid var(--line);
+    padding:10px;
+    background: linear-gradient(#070707, #000);
+  }
+  .promptModule .row{
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-start;
+    gap:10px;
+  }
+  .promptModule .meta{
+    display:flex;
+    gap:8px;
+    align-items:center;
+    flex-wrap:wrap;
+  }
+  .promptModule .meta input{
+    height:28px;
+    padding:6px 8px;
+    border:1px solid var(--line2);
+    background:#000;
+    color:var(--txt);
+    font-size:12px;
+  }
+  .promptModule .meta input::placeholder{ color:#666; }
+
+  textarea{
+    width:100%;
+    border:1px solid var(--line2);
+    background:#000;
+    color:var(--txt);
+    padding:10px;
+    resize:vertical;
+    outline:none;
+    font-size:12px;
+    line-height:1.35;
+  }
+
+  .promptLabel{
+    font-size:11px;
+    color:var(--muted);
+    letter-spacing:.06em;
+    text-transform:uppercase;
+    margin-bottom:6px;
+  }
+
+  .responseWrap{
+    padding:10px;
+    overflow:auto;
+  }
+  .responseLabel{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:10px;
+    margin-bottom:8px;
+  }
+  .responseLabel .left{
+    font-size:11px;
+    color:var(--muted);
+    letter-spacing:.06em;
+    text-transform:uppercase;
+  }
+  .responseLabel .right{
+    font-size:11px;
+    color:var(--muted2);
+  }
+
+  .responseBox{
+    border:1px solid var(--line2);
+    background:#000;
+    min-height:320px;
+    padding:10px;
+    white-space:pre-wrap;
+    line-height:1.35;
+    font-size:12px;
+    outline:none;
+  }
+  .responseBox[contenteditable="true"]:focus{
+    border-color:#3a3a3a;
+  }
+
+  .stageControls{
+    border-top:1px solid var(--line);
+    padding:10px;
+    display:flex;
+    gap:8px;
+    flex-wrap:wrap;
+    background: linear-gradient(#000, #050505);
+  }
+
+  /* BUCKET ENTRIES */
+  .entry{
+    border-top:1px solid var(--line);
+    padding:8px 0;
+  }
+  .entry:first-child{ border-top:none; }
+  .entry .excerpt{
+    font-size:12px;
+    color:var(--txt);
+    white-space:pre-wrap;
+  }
+  .entry .note{
+    margin-top:6px;
+    font-size:11px;
+    color:var(--muted2);
+    white-space:pre-wrap;
+  }
+  .entry .meta{
+    margin-top:6px;
+    display:flex;
+    gap:10px;
+    align-items:center;
+    justify-content:space-between;
+  }
+  .entry .meta .tag{
+    font-size:10px;
+    letter-spacing:.08em;
+    text-transform:uppercase;
+    color:var(--muted2);
+  }
+  .entry .meta .mini{
+    display:flex;
+    gap:6px;
+    align-items:center;
+  }
+  .mini button{
+    padding:4px 8px;
+    font-size:11px;
+  }
+
+  .bad .excerpt{ color: var(--bad); }
+  .good .excerpt{ color: var(--good); }
+
+  /* BOTTOM PANEL */
+  .bottom{
+    border-top:1px solid var(--line);
+    background: linear-gradient(#000, #050505);
+    padding:10px;
+    overflow:auto;
+  }
+  .bottomGrid{
+    display:grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap:10px;
+  }
+  .bottom .block{
+    border:1px solid var(--line);
+    background: radial-gradient(900px 500px at 50% 0%, #0b0b0b, #000 65%);
+    padding:10px;
+    min-width:0;
+  }
+  .block .h{
+    font-size:11px;
+    color:var(--muted);
+    letter-spacing:.06em;
+    text-transform:uppercase;
+    margin-bottom:6px;
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:8px;
+  }
+  .block .h span{ color:var(--muted2); font-size:11px; text-transform:none; letter-spacing:0; }
+
+  .bottomActions{
+    margin-top:10px;
+    display:flex;
+    gap:8px;
+    flex-wrap:wrap;
+    justify-content:flex-end;
+  }
+
+  /* SMALL HELP TEXT */
+  .hint{
+    font-size:11px;
+    color:var(--muted2);
+    line-height:1.35;
+  }
+
+  /* RESPONSIVE */
+  @media (max-width: 1100px){
+    .middle{ grid-template-columns: 1fr; grid-template-rows:auto auto auto; overflow:auto; }
+    .stage{ min-height:520px; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <header>
+    <div class="title">KETADATA // GENERATION CRITICISM & DEVELOPMENT</div>
+    <div class="actions">
+      <div class="chip" id="statusChip">unsaved</div>
+      <button class="primary" onclick="newGeneration()">new generation</button>
+      <button onclick="saveLocal()">save</button>
+      <button onclick="loadLocal()">load</button>
+      <button onclick="exportJSON()">export json</button>
+      <button onclick="exportMachinePrompt()">export prompt</button>
+      <button class="danger" onclick="resetAll()">reset</button>
+    </div>
+  </header>
+
+  <div class="middle">
+
+    <!-- LEFT: CRITICISM -->
+    <div class="panel" id="critPanel">
+      <div class="head">
+        <div>
+          <div class="label">Criticism / Wrong</div>
+          <div class="sub">what must be cut, corrected, constrained</div>
+        </div>
+        <button class="danger" onclick="clearBucket('crit')">clear</button>
+      </div>
+      <div class="body" id="critBucket"></div>
+    </div>
+
+    <!-- CENTER: PROMPT + RESPONSE STAGE -->
+    <div class="stage">
+
+      <div class="promptModule">
+        <div class="row">
+          <div style="flex:1; min-width:0;">
+            <div class="promptLabel">User prompt (module)</div>
+            <textarea id="promptInput" placeholder="Paste the user prompt here..."></textarea>
+          </div>
+          <div class="meta">
+            <input id="genTitle" placeholder="title (optional)" />
+            <input id="modelName" placeholder="model (optional)" />
+          </div>
+        </div>
+      </div>
+
+      <div class="responseWrap">
+        <div class="responseLabel">
+          <div class="left">AI response (staged center)</div>
+          <div class="right">select text → route left/right → annotate</div>
+        </div>
+        <div id="responseBox" class="responseBox" contenteditable="true" spellcheck="false"></div>
+      </div>
+
+      <div class="stageControls">
+        <button class="danger" onclick="routeSelection('crit')">route → criticism</button>
+        <button onclick="routeSelection('dev')">route → yes &</button>
+        <button onclick="annotateSelection()">annotate selection</button>
+        <button onclick="addGlobalAnchor()">add anchor note</button>
+        <button onclick="snapshotPNG()">screenshot (html)</button>
+      </div>
+
+    </div>
+
+    <!-- RIGHT: DEVELOPMENT -->
+    <div class="panel" id="devPanel">
+      <div class="head">
+        <div>
+          <div class="label">Yes & / Development</div>
+          <div class="sub">what to amplify, extend, build from</div>
+        </div>
+        <button onclick="clearBucket('dev')">clear</button>
+      </div>
+      <div class="body" id="devBucket"></div>
+    </div>
+
+  </div>
+
+  <!-- BOTTOM: NOTES / REFS / CORRECTIONS -->
+  <div class="bottom">
+    <div class="bottomGrid">
+      <div class="block">
+        <div class="h">General Notes <span>about the generation as a totality</span></div>
+        <textarea id="generalNotes" placeholder="General notes..."></textarea>
+        <div class="hint">
+          Use for: overall diagnosis, tone issues, structure, missing constraints, contradictions.
+        </div>
+      </div>
+
+      <div class="block">
+        <div class="h">Prompt Corrections / Clarifications <span>delta constraints</span></div>
+        <textarea id="promptCorrections" placeholder="Corrections / clarifications (bullets or lines)..."></textarea>
+        <div class="hint">
+          Use for: “Define X”, “Do not assume Y”, “Output format Z”, “No kitsch”, “All Arial”, etc.
+        </div>
+      </div>
+
+      <div class="block">
+        <div class="h">References <span>links, docs, motifs</span></div>
+        <textarea id="references" placeholder="References..."></textarea>
+        <div class="hint">
+          Use for: canonical pages, internal standards, inspirations, constraints, source material.
+        </div>
+      </div>
+    </div>
+
+    <div class="bottomActions">
+      <button onclick="exportJSON()">export json</button>
+      <button onclick="exportMachinePrompt()">export prompt</button>
+      <button onclick="copyMachinePrompt()">copy prompt</button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+/* ---------------------------
+   STATE
+---------------------------- */
+let state = {
+  title: "",
+  model: "",
+  prompt: "",
+  response: "",
+  criticism: [], // {id, text, note, createdAt}
+  development: [], // {id, text, note, createdAt}
+  annotations: [], // {id, text, note, createdAt}
+  anchors: [], // {id, note, createdAt}
+  generalNotes: "",
+  promptCorrections: "",
+  references: "",
+  updatedAt: null
+};
+
+const $ = (id) => document.getElementById(id);
+const markDirty = () => {
+  $("statusChip").textContent = "unsaved";
+  $("statusChip").style.borderColor = "#3a3a3a";
+};
+const markSaved = () => {
+  $("statusChip").textContent = "saved";
+  $("statusChip").style.borderColor = "#2a2a2a";
+};
+const uid = () => Math.random().toString(36).slice(2, 10) + "-" + Date.now();
+
+/* ---------------------------
+   SELECTION UTILS
+---------------------------- */
+function selectedText(){
+  const sel = window.getSelection();
+  if (!sel) return "";
+  const txt = sel.toString();
+  return txt ? txt.trim() : "";
+}
+
+function routeSelection(where){
+  const txt = selectedText();
+  if (!txt) return;
+
+  const note = prompt(where === "crit" ? "Criticism note (optional):" : "Yes & note (optional):");
+  const item = { id: uid(), text: txt, note: note || "", createdAt: new Date().toISOString() };
+
+  if (where === "crit") state.criticism.unshift(item);
+  else state.development.unshift(item);
+
+  renderBuckets();
+  markDirty();
+}
+
+function annotateSelection(){
+  const txt = selectedText();
+  if (!txt) return;
+  const note = prompt("Annotation (tied to this exact excerpt):");
+  if (!note) return;
+  state.annotations.unshift({ id: uid(), text: txt, note, createdAt: new Date().toISOString() });
+  markDirty();
+  alert("Saved annotation.");
+}
+
+function addGlobalAnchor(){
+  const note = prompt("Anchor note (not tied to selection):");
+  if (!note) return;
+  state.anchors.unshift({ id: uid(), note, createdAt: new Date().toISOString() });
+  markDirty();
+  alert("Saved anchor note.");
+}
+
+/* ---------------------------
+   RENDERING
+---------------------------- */
+function renderBuckets(){
+  const crit = $("critBucket");
+  const dev = $("devBucket");
+  crit.innerHTML = "";
+  dev.innerHTML = "";
+
+  state.criticism.forEach(item => crit.appendChild(renderEntry(item, "crit")));
+  state.development.forEach(item => dev.appendChild(renderEntry(item, "dev")));
+}
+
+function renderEntry(item, where){
+  const wrap = document.createElement("div");
+  wrap.className = "entry " + (where === "crit" ? "bad" : "good");
+
+  const excerpt = document.createElement("div");
+  excerpt.className = "excerpt";
+  excerpt.textContent = item.text;
+
+  const note = document.createElement("div");
+  note.className = "note";
+  note.textContent = item.note || "";
+
+  const meta = document.createElement("div");
+  meta.className = "meta";
+
+  const tag = document.createElement("div");
+  tag.className = "tag";
+  tag.textContent = where === "crit" ? "WRONG" : "YES &";
+
+  const mini = document.createElement("div");
+  mini.className = "mini";
+
+  const btnEdit = document.createElement("button");
+  btnEdit.textContent = "edit note";
+  btnEdit.onclick = () => {
+    const next = prompt("Edit note:", item.note || "");
+    if (next === null) return;
+    item.note = next;
+    renderBuckets();
+    markDirty();
+  };
+
+  const btnMove = document.createElement("button");
+  btnMove.textContent = "move";
+  btnMove.onclick = () => {
+    if (where === "crit"){
+      state.criticism = state.criticism.filter(x => x.id !== item.id);
+      state.development.unshift(item);
+    } else {
+      state.development = state.development.filter(x => x.id !== item.id);
+      state.criticism.unshift(item);
+    }
+    renderBuckets();
+    markDirty();
+  };
+
+  const btnDel = document.createElement("button");
+  btnDel.textContent = "delete";
+  btnDel.className = "danger";
+  btnDel.onclick = () => {
+    if (!confirm("Delete this entry?")) return;
+    if (where === "crit") state.criticism = state.criticism.filter(x => x.id !== item.id);
+    else state.development = state.development.filter(x => x.id !== item.id);
+    renderBuckets();
+    markDirty();
+  };
+
+  mini.appendChild(btnEdit);
+  mini.appendChild(btnMove);
+  mini.appendChild(btnDel);
+
+  meta.appendChild(tag);
+  meta.appendChild(mini);
+
+  wrap.appendChild(excerpt);
+  if (item.note) wrap.appendChild(note);
+  wrap.appendChild(meta);
+
+  return wrap;
+}
+
+function clearBucket(where){
+  if (!confirm("Clear this entire bucket?")) return;
+  if (where === "crit") state.criticism = [];
+  else state.development = [];
+  renderBuckets();
+  markDirty();
+}
+
+/* ---------------------------
+   SYNC UI -> STATE
+---------------------------- */
+function syncFromUI(){
+  state.title = $("genTitle").value.trim();
+  state.model = $("modelName").value.trim();
+  state.prompt = $("promptInput").value;
+  state.response = $("responseBox").innerText;
+  state.generalNotes = $("generalNotes").value;
+  state.promptCorrections = $("promptCorrections").value;
+  state.references = $("references").value;
+  state.updatedAt = new Date().toISOString();
+}
+
+function syncToUI(){
+  $("genTitle").value = state.title || "";
+  $("modelName").value = state.model || "";
+  $("promptInput").value = state.prompt || "";
+  $("responseBox").innerText = state.response || "";
+  $("generalNotes").value = state.generalNotes || "";
+  $("promptCorrections").value = state.promptCorrections || "";
+  $("references").value = state.references || "";
+  renderBuckets();
+}
+
+/* mark dirty on input changes */
+["genTitle","modelName","promptInput","generalNotes","promptCorrections","references"].forEach(id=>{
+  document.addEventListener("input", (e)=>{
+    if (e.target && e.target.id === id) markDirty();
+  });
+});
+$("responseBox").addEventListener("input", markDirty);
+
+/* ---------------------------
+   GENERATIONS (SINGLE FOCUS)
+---------------------------- */
+function newGeneration(){
+  if ($("statusChip").textContent === "unsaved"){
+    if (!confirm("Unsaved changes. Create new generation anyway?")) return;
+  }
+  state = {
+    title: "",
+    model: "",
+    prompt: "",
+    response: "",
+    criticism: [],
+    development: [],
+    annotations: [],
+    anchors: [],
+    generalNotes: "",
+    promptCorrections: "",
+    references: "",
+    updatedAt: null
+  };
+  syncToUI();
+  markDirty();
+}
+
+/* ---------------------------
+   SAVE / LOAD (LOCALSTORAGE)
+---------------------------- */
+const STORE_KEY = "ketadata_prompt_response_analyzer_v1";
+
+function saveLocal(){
+  syncFromUI();
+  localStorage.setItem(STORE_KEY, JSON.stringify(state));
+  markSaved();
+}
+
+function loadLocal(){
+  const raw = localStorage.getItem(STORE_KEY);
+  if (!raw) { alert("No saved state found."); return; }
+  state = JSON.parse(raw);
+  syncToUI();
+  markSaved();
+}
+
+/* ---------------------------
+   EXPORTS
+---------------------------- */
+function download(filename, content, mime){
+  const blob = new Blob([content], {type: mime || "text/plain"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+}
+
+function exportJSON(){
+  syncFromUI();
+  download(
+    (state.title ? safeName(state.title) : "prompt-response") + ".json",
+    JSON.stringify(state, null, 2),
+    "application/json"
+  );
+}
+
+function safeName(s){
+  return (s || "export").toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/(^-|-$)/g,"");
+}
+
+function buildMachinePrompt(){
+  syncFromUI();
+
+  const crit = state.criticism.map((x,i)=>(
+    `- EXCERPT ${i+1}: ${x.text}\n  NOTE: ${x.note || "(none)"}`
+  )).join("\n");
+
+  const dev = state.development.map((x,i)=>(
+    `- EXCERPT ${i+1}: ${x.text}\n  NOTE: ${x.note || "(none)"}`
+  )).join("\n");
+
+  const ann = state.annotations.map((x,i)=>(
+    `- EXCERPT ${i+1}: ${x.text}\n  NOTE: ${x.note}`
+  )).join("\n");
+
+  const anchors = state.anchors.map((x,i)=>(
+    `- ANCHOR ${i+1}: ${x.note}`
+  )).join("\n");
+
+  return (
+`TITLE
+${state.title || "(untitled)"}
+
+MODEL
+${state.model || "(unspecified)"}
+
+ORIGINAL PROMPT
+${state.prompt || "(empty)"}
+
+AI RESPONSE (STAGED)
+${state.response || "(empty)"}
+
+CRITICISM / WRONG (CUT + CORRECT)
+${crit || "(none)"}
+
+YES & / DEVELOPMENT (AMPLIFY + EXTEND)
+${dev || "(none)"}
+
+ANNOTATIONS (SELECTION-TIED)
+${ann || "(none)"}
+
+ANCHOR NOTES (GLOBAL)
+${anchors || "(none)"}
+
+PROMPT CORRECTIONS / CLARIFICATIONS (DELTA)
+${state.promptCorrections || "(none)"}
+
+GENERAL NOTES
+${state.generalNotes || "(none)"}
+
+REFERENCES
+${state.references || "(none)"}
+`
+  );
+}
+
+function exportMachinePrompt(){
+  const txt = buildMachinePrompt();
+  download(
+    (state.title ? safeName(state.title) : "prompt-response") + ".txt",
+    txt,
+    "text/plain"
+  );
+}
+
+async function copyMachinePrompt(){
+  const txt = buildMachinePrompt();
+  try{
+    await navigator.clipboard.writeText(txt);
+    alert("Copied prompt packet.");
+  }catch(e){
+    alert("Clipboard failed. Use export prompt instead.");
+  }
+}
+
+/* ---------------------------
+   SCREENSHOT (HTML -> IMAGE)
+   Minimal, no libs: opens a print view for OS-level screenshot.
+---------------------------- */
+function snapshotPNG(){
+  alert("Use system screenshot. This tool keeps everything screen-legible by design.\n\nMac: Cmd+Shift+4\nWin: Win+Shift+S");
+}
+
+/* ---------------------------
+   RESET
+---------------------------- */
+function resetAll(){
+  if (!confirm("Reset everything?")) return;
+  localStorage.removeItem(STORE_KEY);
+  newGeneration();
+}
+
+/* ---------------------------
+   INIT
+---------------------------- */
+syncToUI();
+</script>
+</body>
+</html>
