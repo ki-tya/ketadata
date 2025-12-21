@@ -1,0 +1,656 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>KETADATA — WIREFRAME TORUS (SLOW-MO + TRUE INVERT)</title>
+  <style>
+    :root{
+      --bg:#000;
+      --fg:rgba(255,255,255,.92);
+      --muted:rgba(255,255,255,.55);
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0;
+      overflow:hidden;
+      background:var(--bg);
+      font-family: Arial, Helvetica, sans-serif;
+      color: var(--fg);
+    }
+    canvas{ position:fixed; inset:0; width:100vw; height:100vh; display:block; }
+
+    .hud{
+      position:fixed; left:22px; top:18px;
+      user-select:none; pointer-events:none;
+      mix-blend-mode:screen;
+    }
+    .brand{
+      font-weight:800;
+      letter-spacing:.18em;
+      text-transform:uppercase;
+      font-size:16px;
+      text-shadow: 0 0 18px rgba(255,255,255,.18);
+    }
+    .sub{
+      margin-top:4px;
+      font-size:11px;
+      letter-spacing:.14em;
+      text-transform:uppercase;
+      color: var(--muted);
+    }
+
+    .dock{
+      position:fixed; left:22px; bottom:18px;
+      display:flex; gap:10px; pointer-events:auto;
+      align-items:center;
+    }
+    .btn{
+      background:rgba(255,255,255,.05);
+      border:1px solid rgba(255,255,255,.22);
+      color:rgba(255,255,255,.86);
+      padding:10px 12px;
+      border-radius:10px;
+      letter-spacing:.14em;
+      font-size:11px;
+      text-transform:uppercase;
+      cursor:pointer;
+      backdrop-filter: blur(6px);
+      transition: transform .08s ease, background .12s ease, border-color .12s ease;
+    }
+    .btn:hover{ background:rgba(255,255,255,.10); border-color:rgba(255,255,255,.36); transform: translateY(-1px); }
+    .btn:active{ transform: translateY(0px); }
+
+    .panel{
+      position:fixed; right:18px; top:18px;
+      width:min(540px, calc(100vw - 36px));
+      max-height: calc(100vh - 36px);
+      overflow:auto;
+      border:1px solid rgba(255,255,255,.18);
+      background:rgba(0,0,0,.46);
+      backdrop-filter: blur(10px);
+      border-radius:14px;
+      box-shadow: 0 0 0 1px rgba(255,255,255,.06) inset, 0 16px 50px rgba(0,0,0,.65);
+    }
+    .panelHeader{
+      position:sticky; top:0;
+      padding:10px 12px;
+      border-bottom:1px solid rgba(255,255,255,.12);
+      background:rgba(0,0,0,.66);
+      backdrop-filter: blur(10px);
+      display:flex; justify-content:space-between; align-items:center;
+      z-index:10;
+    }
+    .panelHeader .title{
+      font-weight:800;
+      letter-spacing:.14em;
+      font-size:11px;
+      text-transform:uppercase;
+      color:rgba(255,255,255,.86);
+    }
+    .panelHeader .hint{
+      font-size:11px;
+      letter-spacing:.08em;
+      color:rgba(255,255,255,.55);
+      text-align:right;
+      line-height:1.2;
+    }
+    .panelBody{ padding:10px 12px 12px; display:flex; flex-direction:column; gap:10px; }
+    .group{
+      border:1px solid rgba(255,255,255,.12);
+      border-radius:12px;
+      overflow:hidden;
+      background:rgba(255,255,255,.02);
+    }
+    .group h3{
+      margin:0;
+      padding:10px 10px;
+      font-size:11px;
+      letter-spacing:.14em;
+      text-transform:uppercase;
+      color:rgba(255,255,255,.75);
+      border-bottom:1px solid rgba(255,255,255,.10);
+      background:rgba(255,255,255,.03);
+    }
+    .rows{ padding:10px; display:flex; flex-direction:column; gap:10px; }
+    .row{
+      display:grid;
+      grid-template-columns: 160px 1fr 64px;
+      gap:10px;
+      align-items:center;
+    }
+    .label{
+      font-size:11px;
+      text-transform:uppercase;
+      letter-spacing:.12em;
+      color:rgba(255,255,255,.62);
+      white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+    }
+    input[type="range"]{ width:100%; accent-color: rgba(255,255,255,.92); }
+    .val{ font-variant-numeric: tabular-nums; font-size:11px; color:rgba(255,255,255,.76); text-align:right; }
+
+    .note{
+      font-size:11px;
+      color:rgba(255,255,255,.55);
+      line-height:1.35;
+      letter-spacing:.02em;
+      padding:10px 12px 0;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="c"></canvas>
+
+  <div class="hud">
+    <div class="brand">KETADATA</div>
+    <div class="sub">WIREFRAME TORUS · SLOW-MO · TRUE INVERT</div>
+  </div>
+
+  <div class="dock">
+    <button class="btn" id="invert">INVERT</button>
+    <button class="btn" id="pause">PAUSE</button>
+    <button class="btn" id="reset">RESET</button>
+  </div>
+
+  <div class="panel" id="panel">
+    <div class="panelHeader">
+      <div class="title">TORUS CONTROLS</div>
+      <div class="hint">
+        SCROLL = SCALE<br/>
+        DRAG = OFFSET<br/>
+        [H] = HIDE PANEL · [P] = PAUSE
+      </div>
+    </div>
+
+    <div class="note">
+      Invert flips background + all wire strokes. When inverted, blending is forced to source-over so black lines remain visible.
+      Use <b>time scale</b> for true slow motion.
+    </div>
+
+    <div class="panelBody">
+
+      <div class="group">
+        <h3>Time & Motion</h3>
+        <div class="rows">
+          <div class="row">
+            <div class="label">time scale</div>
+            <input id="timeScale" type="range" min="0.00" max="2.00" step="0.001" value="1.00">
+            <div class="val" id="timeScaleV">1.000</div>
+          </div>
+          <div class="row">
+            <div class="label">spin speed X</div>
+            <input id="sx" type="range" min="-3" max="3" step="0.01" value="1.05">
+            <div class="val" id="sxV">1.05</div>
+          </div>
+          <div class="row">
+            <div class="label">spin speed Y</div>
+            <input id="sy" type="range" min="-3" max="3" step="0.01" value="0.62">
+            <div class="val" id="syV">0.62</div>
+          </div>
+          <div class="row">
+            <div class="label">spin speed Z</div>
+            <input id="sz" type="range" min="-3" max="3" step="0.01" value="0.30">
+            <div class="val" id="szV">0.30</div>
+          </div>
+          <div class="row">
+            <div class="label">phase wobble</div>
+            <input id="wob" type="range" min="0" max="1" step="0.01" value="0.20">
+            <div class="val" id="wobV">0.20</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="group">
+        <h3>Geometry</h3>
+        <div class="rows">
+          <div class="row">
+            <div class="label">major radius (R)</div>
+            <input id="R" type="range" min="0.5" max="3.8" step="0.01" value="1.55">
+            <div class="val" id="RV">1.55</div>
+          </div>
+          <div class="row">
+            <div class="label">tube radius (r)</div>
+            <input id="r" type="range" min="0.15" max="2.6" step="0.01" value="0.80">
+            <div class="val" id="rV">0.80</div>
+          </div>
+          <div class="row">
+            <div class="label">breathe</div>
+            <input id="breathe" type="range" min="0" max="1" step="0.01" value="0.35">
+            <div class="val" id="breatheV">0.35</div>
+          </div>
+          <div class="row">
+            <div class="label">breathe speed</div>
+            <input id="breatheSpd" type="range" min="0" max="3" step="0.01" value="1.10">
+            <div class="val" id="breatheSpdV">1.10</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="group">
+        <h3>Wireframe</h3>
+        <div class="rows">
+          <div class="row">
+            <div class="label">density U</div>
+            <input id="Nu" type="range" min="8" max="140" step="1" value="44">
+            <div class="val" id="NuV">44</div>
+          </div>
+          <div class="row">
+            <div class="label">density V</div>
+            <input id="Nv" type="range" min="6" max="110" step="1" value="28">
+            <div class="val" id="NvV">28</div>
+          </div>
+          <div class="row">
+            <div class="label">line thickness</div>
+            <input id="thick" type="range" min="0.4" max="5.0" step="0.01" value="1.35">
+            <div class="val" id="thickV">1.35</div>
+          </div>
+          <div class="row">
+            <div class="label">depth alpha</div>
+            <input id="depthA" type="range" min="0" max="1" step="0.01" value="0.92">
+            <div class="val" id="depthAV">0.92</div>
+          </div>
+          <div class="row">
+            <div class="label">base alpha</div>
+            <input id="baseA" type="range" min="0" max="1" step="0.01" value="0.08">
+            <div class="val" id="baseAV">0.08</div>
+          </div>
+          <div class="row">
+            <div class="label">composite</div>
+            <input id="comp" type="range" min="0" max="2" step="1" value="1">
+            <div class="val" id="compV">lighter</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="group">
+        <h3>Camera & Fill</h3>
+        <div class="rows">
+          <div class="row">
+            <div class="label">fov</div>
+            <input id="fov" type="range" min="220" max="1400" step="1" value="780">
+            <div class="val" id="fovV">780</div>
+          </div>
+          <div class="row">
+            <div class="label">fill (screen)</div>
+            <input id="fill" type="range" min="0.6" max="3.6" step="0.01" value="2.15">
+            <div class="val" id="fillV">2.15</div>
+          </div>
+          <div class="row">
+            <div class="label">camera z</div>
+            <input id="camZ" type="range" min="2.0" max="12.0" step="0.01" value="5.35">
+            <div class="val" id="camZV">5.35</div>
+          </div>
+          <div class="row">
+            <div class="label">pan X</div>
+            <input id="panX" type="range" min="-0.8" max="0.8" step="0.001" value="0">
+            <div class="val" id="panXV">0.000</div>
+          </div>
+          <div class="row">
+            <div class="label">pan Y</div>
+            <input id="panY" type="range" min="-0.8" max="0.8" step="0.001" value="0">
+            <div class="val" id="panYV">0.000</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="group">
+        <h3>FX</h3>
+        <div class="rows">
+          <div class="row">
+            <div class="label">contrast</div>
+            <input id="contrast" type="range" min="0.6" max="3.4" step="0.01" value="1.60">
+            <div class="val" id="contrastV">1.60</div>
+          </div>
+          <div class="row">
+            <div class="label">strobe</div>
+            <input id="strobe" type="range" min="0" max="1" step="0.01" value="0.16">
+            <div class="val" id="strobeV">0.16</div>
+          </div>
+          <div class="row">
+            <div class="label">scanlines</div>
+            <input id="scan" type="range" min="0" max="1" step="0.01" value="0.35">
+            <div class="val" id="scanV">0.35</div>
+          </div>
+          <div class="row">
+            <div class="label">vignette warp</div>
+            <input id="vwarp" type="range" min="0" max="0.35" step="0.001" value="0.14">
+            <div class="val" id="vwarpV">0.140</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    (() => {
+      const canvas = document.getElementById('c');
+      const ctx = canvas.getContext('2d', { alpha:false });
+
+      let W=0, H=0, DPR=Math.min(2, window.devicePixelRatio||1);
+      function resize(){
+        W = innerWidth; H = innerHeight;
+        canvas.width = Math.floor(W*DPR);
+        canvas.height = Math.floor(H*DPR);
+        canvas.style.width = W+'px';
+        canvas.style.height = H+'px';
+        ctx.setTransform(DPR,0,0,DPR,0,0);
+      }
+      addEventListener('resize', resize);
+      resize();
+
+      const $ = (id)=>document.getElementById(id);
+      const ids = [
+        'timeScale','sx','sy','sz','wob',
+        'R','r','breathe','breatheSpd',
+        'Nu','Nv','thick','depthA','baseA','comp',
+        'fov','fill','camZ','panX','panY',
+        'contrast','strobe','scan','vwarp'
+      ];
+      const ui = {};
+      for (const id of ids) ui[id] = $(id);
+
+      function compLabel(v){
+        return (v===0) ? 'source-over' : (v===1 ? 'lighter' : 'screen');
+      }
+      function sync(){
+        $('timeScaleV').textContent = (+ui.timeScale.value).toFixed(3);
+
+        $('sxV').textContent = (+ui.sx.value).toFixed(2);
+        $('syV').textContent = (+ui.sy.value).toFixed(2);
+        $('szV').textContent = (+ui.sz.value).toFixed(2);
+        $('wobV').textContent = (+ui.wob.value).toFixed(2);
+
+        $('RV').textContent = (+ui.R.value).toFixed(2);
+        $('rV').textContent = (+ui.r.value).toFixed(2);
+        $('breatheV').textContent = (+ui.breathe.value).toFixed(2);
+        $('breatheSpdV').textContent = (+ui.breatheSpd.value).toFixed(2);
+
+        $('NuV').textContent = ui.Nu.value;
+        $('NvV').textContent = ui.Nv.value;
+        $('thickV').textContent = (+ui.thick.value).toFixed(2);
+        $('depthAV').textContent = (+ui.depthA.value).toFixed(2);
+        $('baseAV').textContent = (+ui.baseA.value).toFixed(2);
+
+        const comp = (+ui.comp.value)|0;
+        $('compV').textContent = compLabel(comp);
+
+        $('fovV').textContent = ui.fov.value;
+        $('fillV').textContent = (+ui.fill.value).toFixed(2);
+        $('camZV').textContent = (+ui.camZ.value).toFixed(2);
+        $('panXV').textContent = (+ui.panX.value).toFixed(3);
+        $('panYV').textContent = (+ui.panY.value).toFixed(3);
+
+        $('contrastV').textContent = (+ui.contrast.value).toFixed(2);
+        $('strobeV').textContent = (+ui.strobe.value).toFixed(2);
+        $('scanV').textContent = (+ui.scan.value).toFixed(2);
+        $('vwarpV').textContent = (+ui.vwarp.value).toFixed(3);
+      }
+      for (const id of ids) ui[id].addEventListener('input', sync);
+      sync();
+
+      const st = {
+        t: 0,
+        invert:false,
+        paused:false,
+        scale: 1.0,
+        wheel: 0,
+        drag:false,
+        ox:0, oy:0,
+        lx:0, ly:0
+      };
+
+      // Buttons (invert is TRUE invert for bg + wire)
+      $('invert').onclick = ()=> st.invert = !st.invert;
+      $('pause').onclick = ()=> st.paused = !st.paused;
+      $('reset').onclick = ()=> {
+        st.t=0; st.scale=1.0; st.wheel=0; st.ox=0; st.oy=0; st.invert=false; st.paused=false;
+      };
+
+      addEventListener('keydown', (e)=>{
+        if (e.key === 'i' || e.key === 'I') st.invert = !st.invert;
+        if (e.key === 'p' || e.key === 'P') st.paused = !st.paused;
+        if (e.key === 'h' || e.key === 'H') {
+          const panel = document.getElementById('panel');
+          panel.style.display = (panel.style.display === 'none') ? '' : 'none';
+        }
+      });
+
+      // Scale (scroll)
+      addEventListener('wheel', (e)=>{
+        const d = Math.max(-160, Math.min(160, e.deltaY));
+        st.wheel += (-d/160) * 0.18;
+        st.wheel = clamp(st.wheel, -0.70, 0.95);
+      }, { passive:true });
+
+      // Offset (drag)
+      addEventListener('pointerdown', (e)=>{ st.drag=true; st.lx=e.clientX; st.ly=e.clientY; });
+      addEventListener('pointerup', ()=> st.drag=false);
+      addEventListener('pointercancel', ()=> st.drag=false);
+      addEventListener('pointermove', (e)=>{
+        if (!st.drag) return;
+        const dx = e.clientX - st.lx;
+        const dy = e.clientY - st.ly;
+        st.lx = e.clientX; st.ly = e.clientY;
+        st.ox += dx;
+        st.oy += dy;
+        st.ox = clamp(st.ox, -W*0.35, W*0.35);
+        st.oy = clamp(st.oy, -H*0.35, H*0.35);
+      });
+
+      // 3D transforms
+      function rotX(p, a){
+        const s=Math.sin(a), c=Math.cos(a);
+        return { x:p.x, y:p.y*c - p.z*s, z:p.y*s + p.z*c };
+      }
+      function rotY(p, a){
+        const s=Math.sin(a), c=Math.cos(a);
+        return { x:p.x*c + p.z*s, y:p.y, z:-p.x*s + p.z*c };
+      }
+      function rotZ(p, a){
+        const s=Math.sin(a), c=Math.cos(a);
+        return { x:p.x*c - p.y*s, y:p.x*s + p.y*c, z:p.z };
+      }
+      function project(p, cx, cy, fov, camZ){
+        const z = (camZ - p.z);
+        const k = fov / Math.max(0.0001, z);
+        return { x: cx + p.x*k, y: cy + p.y*k };
+      }
+      function torus(u, v, R, r){
+        const cu=Math.cos(u), su=Math.sin(u);
+        const cv=Math.cos(v), sv=Math.sin(v);
+        return {
+          x: (R + r*cv) * cu,
+          y: (R + r*cv) * su,
+          z: r * sv
+        };
+      }
+
+      let last = performance.now();
+      function loop(now){
+        const rawDt = Math.min(0.033, (now-last)/1000);
+        last = now;
+
+        // scroll scale smoothing
+        st.wheel *= 0.88;
+        st.scale += st.wheel;
+        st.scale = clamp(st.scale, 0.60, 2.20);
+
+        // time scaling for true slow motion
+        const timeScale = +ui.timeScale.value;
+        const dt = rawDt * timeScale;
+
+        if (!st.paused) st.t += dt;
+
+        render();
+        requestAnimationFrame(loop);
+      }
+      requestAnimationFrame(loop);
+
+      function render(){
+        const inv = st.invert;
+
+        // TRUE invert for background and wire color
+        const bg = inv ? 255 : 0;
+        const fg = inv ? 0 : 255;
+
+        ctx.fillStyle = `rgb(${bg},${bg},${bg})`;
+        ctx.fillRect(0,0,W,H);
+
+        // Center and camera
+        const cx = W*0.5 + st.ox + (+ui.panX.value) * Math.min(W,H);
+        const cy = H*0.5 + st.oy + (+ui.panY.value) * Math.min(W,H);
+
+        // Parameters
+        const R0 = +ui.R.value;
+        const r0 = +ui.r.value;
+        const breatheAmt = +ui.breathe.value;
+        const breatheSpd = +ui.breatheSpd.value;
+
+        const Nu = (+ui.Nu.value)|0;
+        const Nv = (+ui.Nv.value)|0;
+
+        const thick = +ui.thick.value;
+        const depthA = +ui.depthA.value;
+        const baseA = +ui.baseA.value;
+
+        const fov0 = +ui.fov.value;
+        const fill = +ui.fill.value;
+        const camZ = +ui.camZ.value;
+
+        const sx = +ui.sx.value;
+        const sy = +ui.sy.value;
+        const sz = +ui.sz.value;
+        const wob = +ui.wob.value;
+
+        const contrast = +ui.contrast.value;
+        const strobe = +ui.strobe.value;
+        const scan = +ui.scan.value;
+        const vwarp = +ui.vwarp.value;
+
+        // Blending:
+        // - normal mode: user-selected
+        // - inverted mode: force source-over so black lines are visible on white
+        const comp = (+ui.comp.value)|0;
+        ctx.globalCompositeOperation = inv
+          ? 'source-over'
+          : (comp===0 ? 'source-over' : (comp===1 ? 'lighter' : 'screen'));
+
+        ctx.lineWidth = thick;
+
+        // Exposure envelope (still works in invert; just changes alpha)
+        const stro = strobe * (0.5 + 0.5*Math.sin(st.t*12.0));
+        const exposure = (1.0 + stro*0.75) * contrast;
+
+        // Breathe scale for geometry
+        const breathe = 1.0 + breatheAmt * Math.sin(st.t*breatheSpd);
+        const R = R0 * breathe;
+        const r = r0 * breathe;
+
+        // Rotation (phase wobble adds low-frequency instability)
+        const ax = st.t * sx + wob*Math.sin(st.t*0.70);
+        const ay = st.t * sy + wob*Math.sin(st.t*0.92 + 1.2);
+        const az = st.t * sz + wob*Math.sin(st.t*1.10 + 2.1);
+
+        // Screen fill (fov + fill + scroll scale)
+        const fov = fov0 * fill * st.scale;
+
+        // Sampling steps
+        const U = Math.max(6, Nu);
+        const V = Math.max(6, Nv);
+        const du = (Math.PI*2)/U;
+        const dv = (Math.PI*2)/V;
+
+        function warpVignette(x,y){
+          if (vwarp <= 0) return {x,y};
+          const dx = x - cx, dy = y - cy;
+          const d = Math.sqrt(dx*dx + dy*dy);
+          const maxD = Math.max(1, Math.min(W,H) * 0.55);
+          const k = 1.0 + vwarp * (d / maxD);
+          return { x: cx + dx*k, y: cy + dy*k };
+        }
+
+        function alphaFromDepth(z){
+          // depth signal based on z; normalized with current tube radius
+          const depth = clamp((z + (r*1.6)) / (r*3.2), 0, 1);
+          return clamp((baseA + depthA*depth) * exposure, 0, 1);
+        }
+
+        // Draw U-lines (v fixed)
+        for (let j=0;j<V;j++){
+          const v = j*dv;
+          let prev = null;
+
+          for (let i=0;i<=U;i++){
+            const u = i*du;
+
+            let p = torus(u,v,R,r);
+            p = rotZ(rotY(rotX(p, ax), ay), az);
+
+            const q = project(p, cx, cy, fov, camZ);
+            const w = warpVignette(q.x, q.y);
+
+            const a = alphaFromDepth(p.z);
+            const cur = { x:w.x, y:w.y, a };
+
+            if (prev){
+              ctx.strokeStyle = `rgba(${fg},${fg},${fg},${(prev.a+cur.a)*0.5})`;
+              ctx.beginPath();
+              ctx.moveTo(prev.x, prev.y);
+              ctx.lineTo(cur.x, cur.y);
+              ctx.stroke();
+            }
+            prev = cur;
+          }
+        }
+
+        // Draw V-lines (u fixed)
+        for (let i=0;i<U;i++){
+          const u = i*du;
+          let prev = null;
+
+          for (let j=0;j<=V;j++){
+            const v = j*dv;
+
+            let p = torus(u,v,R,r);
+            p = rotZ(rotY(rotX(p, ax), ay), az);
+
+            const q = project(p, cx, cy, fov, camZ);
+            const w = warpVignette(q.x, q.y);
+
+            const a = alphaFromDepth(p.z);
+            const cur = { x:w.x, y:w.y, a };
+
+            if (prev){
+              ctx.strokeStyle = `rgba(${fg},${fg},${fg},${(prev.a+cur.a)*0.5})`;
+              ctx.beginPath();
+              ctx.moveTo(prev.x, prev.y);
+              ctx.lineTo(cur.x, cur.y);
+              ctx.stroke();
+            }
+            prev = cur;
+          }
+        }
+
+        // Scanlines in normal composition
+        ctx.globalCompositeOperation = 'source-over';
+        if (scan > 0){
+          const step = Math.max(6, Math.floor(14 - scan*8));
+          const yOff = (st.t*70) % step;
+          ctx.strokeStyle = `rgba(${fg},${fg},${fg},${0.05*contrast*scan})`;
+          ctx.lineWidth = 1;
+          for (let y=-step; y<H+step; y+=step){
+            ctx.beginPath();
+            ctx.moveTo(0, y+yOff);
+            ctx.lineTo(W, y+yOff);
+            ctx.stroke();
+          }
+        }
+      }
+
+      function clamp(v,a,b){ return Math.max(a, Math.min(b, v)); }
+    })();
+  </script>
+</body>
+</html>
