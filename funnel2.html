@@ -1,0 +1,464 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>KETADATA — WIRE DONUT OUTWARD</title>
+  <style>
+    :root{
+      --bg:#000;
+      --fg:rgba(255,255,255,.92);
+      --muted:rgba(255,255,255,.55);
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0;
+      overflow:hidden;
+      background:var(--bg);
+      font-family: Arial, Helvetica, sans-serif;
+      color: var(--fg);
+    }
+    canvas{ position:fixed; inset:0; width:100vw; height:100vh; display:block; }
+    .hud{
+      position:fixed; left:22px; top:18px;
+      user-select:none; pointer-events:none;
+      mix-blend-mode:screen;
+    }
+    .brand{
+      font-weight:800;
+      letter-spacing:.18em;
+      text-transform:uppercase;
+      font-size:16px;
+      text-shadow: 0 0 18px rgba(255,255,255,.18);
+    }
+    .sub{
+      margin-top:4px;
+      font-size:11px;
+      letter-spacing:.14em;
+      text-transform:uppercase;
+      color: var(--muted);
+    }
+    .dock{
+      position:fixed; left:22px; bottom:18px;
+      display:flex; gap:10px; pointer-events:auto;
+      align-items:center;
+    }
+    .btn{
+      background:rgba(255,255,255,.05);
+      border:1px solid rgba(255,255,255,.22);
+      color:rgba(255,255,255,.86);
+      padding:10px 12px;
+      border-radius:10px;
+      letter-spacing:.14em;
+      font-size:11px;
+      text-transform:uppercase;
+      cursor:pointer;
+      backdrop-filter: blur(6px);
+      transition: transform .08s ease, background .12s ease, border-color .12s ease;
+    }
+    .btn:hover{ background:rgba(255,255,255,.10); border-color:rgba(255,255,255,.36); transform: translateY(-1px); }
+    .btn:active{ transform: translateY(0px); }
+
+    .panel{
+      position:fixed; right:18px; bottom:18px;
+      width:min(420px, calc(100vw - 36px));
+      border:1px solid rgba(255,255,255,.18);
+      background:rgba(0,0,0,.46);
+      backdrop-filter: blur(10px);
+      border-radius:14px;
+      overflow:hidden;
+      box-shadow: 0 0 0 1px rgba(255,255,255,.06) inset, 0 16px 50px rgba(0,0,0,.65);
+    }
+    .panelHeader{
+      padding:10px 12px;
+      border-bottom:1px solid rgba(255,255,255,.12);
+      display:flex; justify-content:space-between; align-items:center;
+    }
+    .panelHeader .title{
+      font-weight:800;
+      letter-spacing:.14em;
+      font-size:11px;
+      text-transform:uppercase;
+      color:rgba(255,255,255,.86);
+    }
+    .panelHeader .hint{
+      font-size:11px;
+      letter-spacing:.08em;
+      color:rgba(255,255,255,.55);
+    }
+    .panelBody{ padding:10px 12px 12px; display:flex; flex-direction:column; gap:9px; }
+    .row{ display:grid; grid-template-columns: 120px 1fr 54px; gap:10px; align-items:center; }
+    .label{
+      font-size:11px;
+      text-transform:uppercase;
+      letter-spacing:.12em;
+      color:rgba(255,255,255,.62);
+      white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+    }
+    input[type="range"]{ width:100%; accent-color: rgba(255,255,255,.92); }
+    .val{ font-variant-numeric: tabular-nums; font-size:11px; color:rgba(255,255,255,.76); text-align:right; }
+
+    .note{
+      margin-top:4px;
+      font-size:11px;
+      color:rgba(255,255,255,.55);
+      line-height:1.35;
+      letter-spacing:.02em;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="c"></canvas>
+
+  <div class="hud">
+    <div class="brand">KETADATA</div>
+    <div class="sub">DONUT HOLE CENTER · WIREFRAME TORUS OUTWARD</div>
+  </div>
+
+  <div class="dock">
+    <button class="btn" id="invert">INVERT</button>
+    <button class="btn" id="pulse">PULSE</button>
+    <button class="btn" id="reset">RESET</button>
+  </div>
+
+  <div class="panel" id="panel">
+    <div class="panelHeader">
+      <div class="title">PARAMETERS</div>
+      <div class="hint">SCROLL = ZOOM · DRAG = OFFSET</div>
+    </div>
+    <div class="panelBody">
+      <div class="row">
+        <div class="label">spin</div>
+        <input id="spin" type="range" min="0" max="3" step="0.01" value="1.25">
+        <div class="val" id="spinV">1.25</div>
+      </div>
+      <div class="row">
+        <div class="label">outward</div>
+        <input id="outward" type="range" min="0" max="2.2" step="0.01" value="1.15">
+        <div class="val" id="outV">1.15</div>
+      </div>
+      <div class="row">
+        <div class="label">wire density</div>
+        <input id="dens" type="range" min="10" max="64" step="1" value="36">
+        <div class="val" id="densV">36</div>
+      </div>
+      <div class="row">
+        <div class="label">thickness</div>
+        <input id="thick" type="range" min="0.6" max="3.2" step="0.01" value="1.55">
+        <div class="val" id="thickV">1.55</div>
+      </div>
+      <div class="row">
+        <div class="label">hole radius</div>
+        <input id="hole" type="range" min="0.08" max="0.40" step="0.001" value="0.19">
+        <div class="val" id="holeV">0.19</div>
+      </div>
+      <div class="row">
+        <div class="label">contrast</div>
+        <input id="contrast" type="range" min="0.6" max="2.6" step="0.01" value="1.55">
+        <div class="val" id="conV">1.55</div>
+      </div>
+
+      <div class="note">
+        The hole is a hard mask: the wireframe never draws inside it. Center stays “void.”
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (() => {
+      const canvas = document.getElementById('c');
+      const ctx = canvas.getContext('2d', { alpha:false });
+
+      let W=0, H=0, DPR=Math.min(2, window.devicePixelRatio||1);
+      function resize(){
+        W = innerWidth; H = innerHeight;
+        canvas.width = Math.floor(W*DPR);
+        canvas.height = Math.floor(H*DPR);
+        canvas.style.width = W+'px';
+        canvas.style.height = H+'px';
+        ctx.setTransform(DPR,0,0,DPR,0,0);
+      }
+      addEventListener('resize', resize);
+      resize();
+
+      const $ = (id)=>document.getElementById(id);
+      const ui = {
+        spin: $('spin'), outward: $('outward'), dens: $('dens'), thick: $('thick'),
+        hole: $('hole'), contrast: $('contrast'),
+        spinV: $('spinV'), outV: $('outV'), densV: $('densV'),
+        thickV: $('thickV'), holeV: $('holeV'), conV: $('conV')
+      };
+      function sync(){
+        ui.spinV.textContent = (+ui.spin.value).toFixed(2);
+        ui.outV.textContent = (+ui.outward.value).toFixed(2);
+        ui.densV.textContent = ui.dens.value;
+        ui.thickV.textContent = (+ui.thick.value).toFixed(2);
+        ui.holeV.textContent = (+ui.hole.value).toFixed(2);
+        ui.conV.textContent = (+ui.contrast.value).toFixed(2);
+      }
+      Object.values(ui).forEach(v => (v && v.tagName === 'INPUT') ? v.addEventListener('input', sync) : null);
+      sync();
+
+      const st = {
+        t: 0,
+        invert: false,
+        pulse: 0,
+        zoom: 1.0,
+        wheel: 0,
+        drag:false,
+        ox:0, oy:0,
+        lx:0, ly:0
+      };
+
+      $('invert').onclick = ()=> st.invert = !st.invert;
+      $('pulse').onclick = ()=> st.pulse = Math.min(1, st.pulse + 0.95);
+      $('reset').onclick = ()=> { st.t=0; st.pulse=0; st.zoom=1.0; st.wheel=0; st.ox=0; st.oy=0; st.invert=false; };
+
+      addEventListener('keydown', (e)=>{
+        if (e.code === 'Space'){ e.preventDefault(); st.pulse = Math.min(1, st.pulse + 0.95); }
+        if (e.key === 'i' || e.key === 'I') st.invert = !st.invert;
+      });
+
+      addEventListener('wheel', (e)=>{
+        const d = Math.max(-160, Math.min(160, e.deltaY));
+        st.wheel += (-d/160) * 0.14;
+        st.wheel = clamp(st.wheel, -0.55, 0.85);
+      }, { passive:true });
+
+      addEventListener('pointerdown', (e)=>{ st.drag=true; st.lx=e.clientX; st.ly=e.clientY; });
+      addEventListener('pointerup', ()=> st.drag=false);
+      addEventListener('pointercancel', ()=> st.drag=false);
+      addEventListener('pointermove', (e)=>{
+        if (!st.drag) return;
+        const dx = e.clientX - st.lx;
+        const dy = e.clientY - st.ly;
+        st.lx = e.clientX; st.ly = e.clientY;
+        st.ox += dx;
+        st.oy += dy;
+        st.ox = clamp(st.ox, -W*0.25, W*0.25);
+        st.oy = clamp(st.oy, -H*0.25, H*0.25);
+      });
+
+      // 3D helpers
+      function rotX(p, a){
+        const s=Math.sin(a), c=Math.cos(a);
+        return { x:p.x, y:p.y*c - p.z*s, z:p.y*s + p.z*c };
+      }
+      function rotY(p, a){
+        const s=Math.sin(a), c=Math.cos(a);
+        return { x:p.x*c + p.z*s, y:p.y, z:-p.x*s + p.z*c };
+      }
+      function rotZ(p, a){
+        const s=Math.sin(a), c=Math.cos(a);
+        return { x:p.x*c - p.y*s, y:p.x*s + p.y*c, z:p.z };
+      }
+
+      // Project 3D -> 2D
+      function project(p, cx, cy, fov){
+        // camera at z = +camZ looking toward origin
+        const camZ = 4.2;
+        const z = (camZ - p.z);
+        const k = fov / Math.max(0.0001, z);
+        return { x: cx + p.x*k, y: cy + p.y*k, k };
+      }
+
+      // Torus parametric surface
+      function torus(u, v, R, r){
+        const cu=Math.cos(u), su=Math.sin(u);
+        const cv=Math.cos(v), sv=Math.sin(v);
+        const x = (R + r*cv) * cu;
+        const y = (R + r*cv) * su;
+        const z = r * sv;
+        return { x,y,z };
+      }
+
+      // Precompute grid indices each frame based on density
+      let last = performance.now();
+      function loop(now){
+        const dt = Math.min(0.033, (now-last)/1000);
+        last = now;
+
+        st.wheel *= 0.88;
+        st.zoom += st.wheel;
+        st.zoom = clamp(st.zoom, 0.65, 1.55);
+
+        st.pulse *= 0.90;
+        if (st.pulse < 0.0008) st.pulse = 0;
+
+        st.t += dt;
+
+        render();
+
+        requestAnimationFrame(loop);
+      }
+      requestAnimationFrame(loop);
+
+      function render(){
+        const inv = st.invert;
+        const bg = inv ? 255 : 0;
+        const fg = inv ? 0 : 255;
+
+        const spin = +ui.spin.value;
+        const outward = +ui.outward.value;
+        const dens = +ui.dens.value | 0;
+        const thick = +ui.thick.value;
+        const holeN = +ui.hole.value; // normalized to min dimension
+        const contrast = +ui.contrast.value;
+
+        ctx.fillStyle = `rgb(${bg},${bg},${bg})`;
+        ctx.fillRect(0,0,W,H);
+
+        const cx = W*0.5 + st.ox;
+        const cy = H*0.5 + st.oy;
+
+        // Donut geometry in 3D space
+        // Major radius and tube radius, modulated by "outward" breathing.
+        const breathe = 1.0 + 0.08*Math.sin(st.t*1.2) + st.pulse*0.07;
+        const R = 1.25 * breathe;            // major radius
+        const r = 0.55 * breathe;            // tube radius
+
+        // Spin outward illusion:
+        // - Torus rotates continuously
+        // - We modulate a radial "push" based on screen-space distance from center,
+        //   implemented via a subtle post-projection scaling factor.
+        const a = st.t * (0.55 + spin*0.85);
+        const b = st.t * (0.34 + spin*0.45);
+        const c = st.t * (0.22 + spin*0.30);
+
+        const fov = 620 * st.zoom;
+        const holeR = Math.min(W,H) * holeN;
+
+        // Wire style
+        ctx.lineWidth = thick;
+        ctx.globalCompositeOperation = 'lighter';
+
+        // Draw wireframe: lines along u and v
+        // Use two passes: u-lines and v-lines for a grid.
+        const Nu = dens;              // around the ring
+        const Nv = Math.floor(dens*0.55); // around the tube
+        const du = (Math.PI*2)/Nu;
+        const dv = (Math.PI*2)/Nv;
+
+        // For depth cue: draw far lines fainter.
+        function strokePath(points){
+          // points: array of {x,y,k,depth}
+          for (let i=1;i<points.length;i++){
+            const p0 = points[i-1], p1 = points[i];
+            // skip if segment intersects the donut hole (hard void)
+            if (segmentHitsHole(p0.x,p0.y,p1.x,p1.y,cx,cy,holeR)) continue;
+
+            const depth = (p0.depth + p1.depth)*0.5; // 0 far .. 1 near
+            const alpha = clamp((0.10 + depth*0.90) * contrast, 0, 1);
+            ctx.strokeStyle = `rgba(${fg},${fg},${fg},${alpha})`;
+
+            ctx.beginPath();
+            ctx.moveTo(p0.x,p0.y);
+            ctx.lineTo(p1.x,p1.y);
+            ctx.stroke();
+          }
+        }
+
+        // Outward field warp in screen space (subtle)
+        function outwardWarp(x,y){
+          const dx = x - cx, dy = y - cy;
+          const d = Math.sqrt(dx*dx + dy*dy);
+          const k = 1.0 + (outward*0.08) * (d / Math.max(1, Math.min(W,H)*0.6));
+          return { x: cx + dx*k, y: cy + dy*k };
+        }
+
+        // U-lines (hold v constant, sweep u)
+        for (let j=0;j<Nv;j++){
+          const v = j*dv;
+          const pts = [];
+          for (let i=0;i<=Nu;i++){
+            const u = i*du;
+
+            let p = torus(u,v,R,r);
+            // rotate in 3D
+            p = rotZ(rotY(rotX(p, b), a), c);
+
+            // depth in [0..1] based on z
+            const depth = clamp((p.z + 1.8) / 3.6, 0, 1);
+
+            const q = project(p, cx, cy, fov);
+            // apply outward warp
+            const w = outwardWarp(q.x, q.y);
+            pts.push({ x:w.x, y:w.y, k:q.k, depth });
+          }
+          strokePath(pts);
+        }
+
+        // V-lines (hold u constant, sweep v)
+        for (let i=0;i<Nu;i++){
+          const u = i*du;
+          const pts = [];
+          for (let j=0;j<=Nv;j++){
+            const v = j*dv;
+
+            let p = torus(u,v,R,r);
+            p = rotZ(rotY(rotX(p, b), a), c);
+
+            const depth = clamp((p.z + 1.8) / 3.6, 0, 1);
+
+            const q = project(p, cx, cy, fov);
+            const w = outwardWarp(q.x, q.y);
+            pts.push({ x:w.x, y:w.y, k:q.k, depth });
+          }
+          strokePath(pts);
+        }
+
+        ctx.globalCompositeOperation = 'source-over';
+
+        // Center donut hole: hard void (always background color)
+        ctx.fillStyle = `rgb(${bg},${bg},${bg})`;
+        ctx.beginPath();
+        ctx.arc(cx, cy, holeR, 0, Math.PI*2);
+        ctx.fill();
+
+        // Hole rim: thin bright edge so it reads as a hole, not missing draw.
+        const rimA = clamp(0.35*contrast + st.pulse*0.35, 0, 1);
+        ctx.strokeStyle = `rgba(${fg},${fg},${fg},${rimA})`;
+        ctx.lineWidth = 2.2 + st.pulse*1.6;
+        ctx.beginPath();
+        ctx.arc(cx, cy, holeR, 0, Math.PI*2);
+        ctx.stroke();
+
+        // Micro scanlines for texture (non-kitsch)
+        const step = 8;
+        const yOff = (st.t*70) % step;
+        ctx.strokeStyle = `rgba(${fg},${fg},${fg},${0.06*contrast})`;
+        ctx.lineWidth = 1;
+        for (let y=-step; y<H+step; y+=step){
+          ctx.beginPath();
+          ctx.moveTo(0, y+yOff);
+          ctx.lineTo(W, y+yOff);
+          ctx.stroke();
+        }
+      }
+
+      // Geometry: does a segment pass through the hole circle?
+      function segmentHitsHole(x0,y0,x1,y1,cx,cy,r){
+        // Quick reject: both endpoints inside => treat as hit
+        const dx0=x0-cx, dy0=y0-cy, dx1=x1-cx, dy1=y1-cy;
+        const d0=dx0*dx0+dy0*dy0, d1=dx1*dx1+dy1*dy1;
+        const rr=r*r;
+
+        // If both outside, still can cross; do distance from center to segment
+        const vx = x1-x0, vy = y1-y0;
+        const wx = cx-x0, wy = cy-y0;
+        const c1 = wx*vx + wy*vy;
+        if (c1 <= 0) return d0 < rr;
+        const c2 = vx*vx + vy*vy;
+        if (c2 <= c1) return d1 < rr;
+        const t = c1 / c2;
+        const px = x0 + t*vx, py = y0 + t*vy;
+        const ddx = px - cx, ddy = py - cy;
+        return (ddx*ddx + ddy*ddy) < rr;
+      }
+
+      function clamp(v,a,b){ return Math.max(a, Math.min(b, v)); }
+    })();
+  </script>
+</body>
+</html>
