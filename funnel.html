@@ -1,0 +1,752 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>KETADATA — ENDLESS FUNNEL</title>
+  <style>
+    :root{
+      --bg:#000;
+      --fg:rgba(255,255,255,.92);
+      --muted:rgba(255,255,255,.55);
+      --hair:rgba(255,255,255,.14);
+      --hair2:rgba(255,255,255,.08);
+      --glow:rgba(255,255,255,.25);
+      --hot:rgba(255,255,255,.95);
+      --cold:rgba(255,255,255,.10);
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0;
+      background:var(--bg);
+      color:var(--fg);
+      font-family: Arial, Helvetica, sans-serif;
+      overflow:hidden;
+    }
+
+    /* Canvas */
+    #stage{
+      position:fixed; inset:0;
+      width:100vw; height:100vh;
+      display:block;
+      image-rendering: crisp-edges;
+    }
+
+    /* HUD */
+    .hud{
+      position:fixed;
+      left:24px; top:18px;
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+      pointer-events:none;
+      user-select:none;
+      mix-blend-mode:screen;
+    }
+    .brand{
+      pointer-events:none;
+      letter-spacing: 0.18em;
+      font-weight:700;
+      font-size:18px;
+      line-height:1;
+      text-transform:uppercase;
+      color:rgba(255,255,255,.9);
+      text-shadow: 0 0 18px rgba(255,255,255,.16);
+    }
+    .sub{
+      font-size:12px;
+      letter-spacing:0.14em;
+      text-transform:uppercase;
+      color:var(--muted);
+      margin-top:2px;
+    }
+
+    .dock{
+      position:fixed;
+      left:24px; bottom:20px;
+      display:flex;
+      gap:10px;
+      pointer-events:auto;
+      align-items:center;
+    }
+    .btn{
+      background:rgba(255,255,255,.04);
+      border:1px solid rgba(255,255,255,.16);
+      color:rgba(255,255,255,.82);
+      padding:10px 12px;
+      border-radius:10px;
+      letter-spacing:.14em;
+      font-size:11px;
+      text-transform:uppercase;
+      cursor:pointer;
+      transition:transform .08s ease, background .12s ease, border-color .12s ease;
+      backdrop-filter: blur(6px);
+    }
+    .btn:hover{
+      background:rgba(255,255,255,.08);
+      border-color:rgba(255,255,255,.28);
+      color:rgba(255,255,255,.92);
+      transform: translateY(-1px);
+    }
+    .btn:active{ transform: translateY(0px) }
+
+    .panel{
+      position:fixed;
+      right:22px; top:18px;
+      width:min(420px, calc(100vw - 44px));
+      max-height: calc(100vh - 36px);
+      border:1px solid rgba(255,255,255,.16);
+      background:rgba(0,0,0,.44);
+      backdrop-filter: blur(10px);
+      border-radius:16px;
+      overflow:hidden;
+      box-shadow: 0 0 0 1px rgba(255,255,255,.06) inset, 0 16px 50px rgba(0,0,0,.65);
+      transform: translateZ(0);
+    }
+    .panelHeader{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      padding:12px 14px;
+      border-bottom:1px solid rgba(255,255,255,.12);
+    }
+    .panelHeader .title{
+      font-weight:700;
+      letter-spacing:.14em;
+      font-size:11px;
+      text-transform:uppercase;
+      color:rgba(255,255,255,.85);
+    }
+    .panelHeader .hint{
+      font-size:11px;
+      letter-spacing:.06em;
+      color:rgba(255,255,255,.55);
+    }
+    .panelBody{
+      padding:12px 14px 14px;
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+    }
+    .row{
+      display:grid;
+      grid-template-columns: 130px 1fr 46px;
+      align-items:center;
+      gap:10px;
+    }
+    .label{
+      font-size:11px;
+      text-transform:uppercase;
+      letter-spacing:.12em;
+      color:rgba(255,255,255,.62);
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+    input[type="range"]{
+      width:100%;
+      accent-color: rgba(255,255,255,.9);
+    }
+    .val{
+      font-variant-numeric: tabular-nums;
+      font-size:11px;
+      letter-spacing:.06em;
+      color:rgba(255,255,255,.72);
+      text-align:right;
+    }
+    .mini{
+      font-size:11px;
+      color:rgba(255,255,255,.55);
+      line-height:1.35;
+      letter-spacing:.02em;
+      margin-top:4px;
+    }
+
+    .collapsed .panelBody{ display:none; }
+    .collapsed{ width: 260px; }
+
+    /* Center prompt */
+    .centerPrompt{
+      position:fixed;
+      left:50%; top:50%;
+      transform: translate(-50%,-50%);
+      text-align:center;
+      pointer-events:none;
+      letter-spacing:.22em;
+      text-transform:uppercase;
+      color:rgba(255,255,255,.70);
+      mix-blend-mode:screen;
+      text-shadow: 0 0 22px rgba(255,255,255,.12);
+    }
+    .centerPrompt .big{
+      font-weight:800;
+      font-size: clamp(20px, 2.7vw, 36px);
+      margin-bottom:10px;
+    }
+    .centerPrompt .small{
+      font-weight:600;
+      font-size: 12px;
+      color: rgba(255,255,255,.52);
+      letter-spacing:.18em;
+    }
+    .centerPrompt .key{
+      display:inline-block;
+      margin-top:12px;
+      padding:7px 10px;
+      border-radius:999px;
+      border:1px solid rgba(255,255,255,.16);
+      background:rgba(255,255,255,.04);
+      font-size:11px;
+      letter-spacing:.18em;
+      color:rgba(255,255,255,.68);
+    }
+  </style>
+</head>
+<body>
+  <canvas id="stage"></canvas>
+
+  <div class="hud">
+    <div>
+      <div class="brand">KETADATA</div>
+      <div class="sub">ENDLESS FUNNEL INTERFACE</div>
+    </div>
+  </div>
+
+  <div class="centerPrompt" id="prompt">
+    <div class="big">ENTER THE FUNNEL</div>
+    <div class="small">SCROLL / DRAG TO ACCELERATE — SPACE TO PULSE — H TO HIDE HUD</div>
+    <div class="key">[ ENTER ]</div>
+  </div>
+
+  <div class="dock">
+    <button class="btn" id="btnEnter">ENTER</button>
+    <button class="btn" id="btnPulse">PULSE</button>
+    <button class="btn" id="btnInvert">INVERT</button>
+    <button class="btn" id="btnReset">RESET</button>
+  </div>
+
+  <div class="panel" id="panel">
+    <div class="panelHeader">
+      <div class="title">FUNNEL PARAMETERS</div>
+      <div class="hint" id="toggleHint">HIDE (H)</div>
+    </div>
+    <div class="panelBody">
+      <div class="row">
+        <div class="label">speed</div>
+        <input id="speed" type="range" min="0" max="3" step="0.01" value="1.00" />
+        <div class="val" id="speedV">1.00</div>
+      </div>
+      <div class="row">
+        <div class="label">depth</div>
+        <input id="depth" type="range" min="16" max="140" step="1" value="72" />
+        <div class="val" id="depthV">72</div>
+      </div>
+      <div class="row">
+        <div class="label">density</div>
+        <input id="density" type="range" min="0.10" max="2.40" step="0.01" value="1.12" />
+        <div class="val" id="densityV">1.12</div>
+      </div>
+      <div class="row">
+        <div class="label">jitter</div>
+        <input id="jitter" type="range" min="0" max="1" step="0.01" value="0.22" />
+        <div class="val" id="jitterV">0.22</div>
+      </div>
+      <div class="row">
+        <div class="label">flare</div>
+        <input id="flare" type="range" min="0" max="1" step="0.01" value="0.35" />
+        <div class="val" id="flareV">0.35</div>
+      </div>
+      <div class="row">
+        <div class="label">strobe</div>
+        <input id="strobe" type="range" min="0" max="1" step="0.01" value="0.12" />
+        <div class="val" id="strobeV">0.12</div>
+      </div>
+      <div class="mini">
+        Controls: mouse wheel = thrust, drag = steer, shift = hyper, enter = begin, space = pulse, h = hud.
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // KETADATA — ENDLESS FUNNEL
+    // Visual intent: infinite depth corridor + recursive rings + "falling" artifacts.
+    // Interaction intent: acceleration, steering, pulse shocks, invert mode.
+    (() => {
+      const canvas = document.getElementById('stage');
+      const ctx = canvas.getContext('2d', { alpha: false });
+
+      const prompt = document.getElementById('prompt');
+      const panel = document.getElementById('panel');
+
+      const ui = {
+        speed: el('speed'), depth: el('depth'), density: el('density'),
+        jitter: el('jitter'), flare: el('flare'), strobe: el('strobe'),
+        speedV: el('speedV'), depthV: el('depthV'), densityV: el('densityV'),
+        jitterV: el('jitterV'), flareV: el('flareV'), strobeV: el('strobeV')
+      };
+
+      const btnEnter = el('btnEnter');
+      const btnPulse = el('btnPulse');
+      const btnInvert = el('btnInvert');
+      const btnReset = el('btnReset');
+
+      function el(id){ return document.getElementById(id); }
+
+      let W = 0, H = 0, DPR = Math.min(2, window.devicePixelRatio || 1);
+      function resize(){
+        W = window.innerWidth; H = window.innerHeight;
+        canvas.width = Math.floor(W * DPR);
+        canvas.height = Math.floor(H * DPR);
+        canvas.style.width = W + 'px';
+        canvas.style.height = H + 'px';
+        ctx.setTransform(DPR,0,0,DPR,0,0);
+      }
+      window.addEventListener('resize', resize);
+      resize();
+
+      const state = {
+        t: 0,
+        running: false,
+        invert: false,
+        thrust: 0,
+        steerX: 0,
+        steerY: 0,
+        pulse: 0,
+        pulseDecay: 0.92,
+        wheelThrust: 0,
+        drag: false,
+        lastX: 0,
+        lastY: 0,
+        hyper: 0
+      };
+
+      // Procedural "scraps" that drift toward you (screen) and re-seed behind.
+      const scraps = [];
+      function seedScraps(n){
+        scraps.length = 0;
+        for(let i=0;i<n;i++){
+          scraps.push(makeScrap(Math.random()*1e9));
+        }
+      }
+      function makeScrap(seed){
+        const r = mulberry32(seed);
+        return {
+          z: r()*1, // normalized depth [0..1] where 0 is far, 1 is near
+          a: r()*Math.PI*2,
+          rad: 0.05 + r()*0.95,
+          spin: (r()*2-1) * (0.2 + r()*0.8),
+          w: 0.5 + r()*1.7,
+          type: r()<0.6 ? 'line' : (r()<0.82 ? 'box' : 'glyph'),
+          jitter: r(),
+          phase: r()*Math.PI*2
+        };
+      }
+
+      // RNG
+      function mulberry32(a){
+        return function(){
+          let t = a += 0x6D2B79F5;
+          t = Math.imul(t ^ t >>> 15, t | 1);
+          t ^= t + Math.imul(t ^ t >>> 7, t | 61);
+          return ((t ^ t >>> 14) >>> 0) / 4294967296;
+        }
+      }
+
+      seedScraps(220);
+
+      // UI bindings
+      function syncUI(){
+        ui.speedV.textContent = (+ui.speed.value).toFixed(2);
+        ui.depthV.textContent = ui.depth.value;
+        ui.densityV.textContent = (+ui.density.value).toFixed(2);
+        ui.jitterV.textContent = (+ui.jitter.value).toFixed(2);
+        ui.flareV.textContent = (+ui.flare.value).toFixed(2);
+        ui.strobeV.textContent = (+ui.strobe.value).toFixed(2);
+      }
+      Object.values(ui).forEach(v => {
+        if (v && v.tagName === 'INPUT') v.addEventListener('input', syncUI);
+      });
+      syncUI();
+
+      // Buttons
+      btnEnter.addEventListener('click', () => enter());
+      btnPulse.addEventListener('click', () => doPulse());
+      btnInvert.addEventListener('click', () => { state.invert = !state.invert; });
+      btnReset.addEventListener('click', () => reset());
+
+      function enter(){
+        state.running = true;
+        prompt.style.display = 'none';
+      }
+      function reset(){
+        state.t = 0;
+        state.thrust = 0;
+        state.steerX = 0;
+        state.steerY = 0;
+        state.pulse = 0;
+        state.wheelThrust = 0;
+        state.hyper = 0;
+        state.invert = false;
+        state.running = false;
+        prompt.style.display = '';
+        seedScraps(220);
+      }
+      function doPulse(){
+        state.pulse = Math.min(1, state.pulse + 0.85);
+      }
+
+      // Input
+      window.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') enter();
+        if (e.code === 'Space'){ e.preventDefault(); doPulse(); }
+        if (e.key === 'h' || e.key === 'H'){
+          panel.classList.toggle('collapsed');
+          const hidden = panel.classList.contains('collapsed');
+          document.getElementById('toggleHint').textContent = hidden ? 'SHOW (H)' : 'HIDE (H)';
+        }
+        if (e.key === 'i' || e.key === 'I'){ state.invert = !state.invert; }
+        if (e.key === 'r' || e.key === 'R'){ reset(); }
+        if (e.key === 'Shift') state.hyper = 1;
+      });
+      window.addEventListener('keyup', (e) => {
+        if (e.key === 'Shift') state.hyper = 0;
+      });
+
+      window.addEventListener('wheel', (e) => {
+        // Wheel becomes thrust impulse (both directions)
+        const d = Math.max(-120, Math.min(120, e.deltaY));
+        state.wheelThrust += (-d / 120) * 0.35;
+        state.wheelThrust = clamp(state.wheelThrust, -1.2, 2.4);
+      }, { passive: true });
+
+      window.addEventListener('pointerdown', (e) => {
+        state.drag = true;
+        state.lastX = e.clientX;
+        state.lastY = e.clientY;
+      });
+      window.addEventListener('pointerup', () => state.drag = false);
+      window.addEventListener('pointercancel', () => state.drag = false);
+      window.addEventListener('pointermove', (e) => {
+        const cx = W * 0.5, cy = H * 0.5;
+        if (state.drag){
+          const dx = e.clientX - state.lastX;
+          const dy = e.clientY - state.lastY;
+          state.lastX = e.clientX;
+          state.lastY = e.clientY;
+          state.steerX += dx * 0.002;
+          state.steerY += dy * 0.002;
+        } else {
+          // subtle aim/gravitate to cursor
+          state.steerX += ((e.clientX - cx) / cx) * 0.002;
+          state.steerY += ((e.clientY - cy) / cy) * 0.002;
+        }
+        state.steerX = clamp(state.steerX, -1.6, 1.6);
+        state.steerY = clamp(state.steerY, -1.6, 1.6);
+      });
+
+      // Main loop
+      let last = performance.now();
+      function frame(now){
+        const dt = Math.min(0.033, (now - last) / 1000);
+        last = now;
+
+        // update
+        const baseSpeed = +ui.speed.value;
+        const depth = +ui.depth.value;
+        const density = +ui.density.value;
+        const jitter = +ui.jitter.value;
+        const flare = +ui.flare.value;
+        const strobe = +ui.strobe.value;
+
+        // dynamics
+        state.wheelThrust *= 0.92;
+        const hyperMul = state.hyper ? 2.2 : 1.0;
+
+        if (state.running){
+          // thrust moves you "forward"
+          state.thrust += (state.wheelThrust) * 0.5;
+          state.thrust *= 0.94;
+          state.thrust = clamp(state.thrust, -1.0, 2.5);
+        } else {
+          state.thrust *= 0.90;
+          state.steerX *= 0.96;
+          state.steerY *= 0.96;
+        }
+
+        // pulse decay
+        state.pulse *= state.pulseDecay;
+        if (state.pulse < 0.001) state.pulse = 0;
+
+        state.t += dt * (0.35 + baseSpeed * 0.9) * (1 + Math.max(0, state.thrust)) * hyperMul;
+
+        // render
+        render({
+          dt,
+          depth,
+          density,
+          jitter,
+          flare,
+          strobe,
+          speed: baseSpeed
+        });
+
+        requestAnimationFrame(frame);
+      }
+      requestAnimationFrame(frame);
+
+      function render(p){
+        const { depth, density, jitter, flare, strobe } = p;
+
+        const inv = state.invert;
+        const bg = inv ? 255 : 0;
+        ctx.fillStyle = `rgb(${bg},${bg},${bg})`;
+        ctx.fillRect(0,0,W,H);
+
+        const cx = W * 0.5, cy = H * 0.5;
+
+        // funnel center drift (steer)
+        const driftX = state.steerX * 120;
+        const driftY = state.steerY * 120;
+
+        // strobe: subtle global exposure modulation
+        const stro = strobe * (0.5 + 0.5*Math.sin(state.t*10.0));
+        const exposure = 0.86 + stro * 0.35 + state.pulse * 0.35;
+
+        // draw tunnel rings
+        const rings = depth;
+        const maxR = Math.min(W,H) * (0.60 + state.pulse*0.06);
+        const minR = 6;
+
+        // density influences ring spacing
+        const spacing = 1 / (0.65 + density*0.6);
+        const zSpeed = (0.28 + p.speed*0.26) * (1 + Math.max(0, state.thrust)) * (state.hyper ? 2.2 : 1);
+        const phase = state.t * zSpeed;
+
+        // Hairlines / grain overlay
+        drawGrain(inv, exposure);
+
+        ctx.save();
+        ctx.translate(cx + driftX, cy + driftY);
+
+        for (let i=0;i<rings;i++){
+          // z in [0..1], where 0 far and 1 near
+          const z = (i / rings);
+          // perspective scale (nonlinear)
+          const k = Math.pow(z, 2.35);
+
+          // ring radius shrinks into distance (reverse perspective)
+          const r = lerp(maxR, minR, k);
+
+          // "endless" drift: shift ring position along z via phase
+          const local = (i * spacing + phase) % rings;
+          const zz = local / rings;
+          const kk = Math.pow(zz, 2.35);
+          const rr = lerp(maxR, minR, kk);
+
+          // jitter + pulse shock
+          const jx = (noise1(i*0.11 + state.t*0.9) * 2 - 1) * jitter * (8 + 28*kk) + state.pulse * (noise1(i*0.23 + state.t*2.1)*2-1) * 16;
+          const jy = (noise1(i*0.17 + state.t*1.1) * 2 - 1) * jitter * (8 + 28*kk) + state.pulse * (noise1(i*0.19 + state.t*2.3)*2-1) * 16;
+
+          // rotation drift
+          const rot = (state.t*0.15) + i*0.015 + state.steerX*0.20 - state.steerY*0.16;
+
+          // thickness increases near viewer
+          const lw = 1 + (1-kk)*1.2 + state.pulse*1.5;
+
+          // opacity fades into distance
+          const a = (0.10 + (1-kk)*0.24) * exposure;
+          const col = inv ? 0 : 255;
+          ctx.strokeStyle = `rgba(${col},${col},${col},${a})`;
+          ctx.lineWidth = lw;
+
+          ctx.save();
+          ctx.rotate(rot);
+          ctx.translate(jx, jy);
+
+          // ring shape: not perfectly circular; slightly squared/diamonded for "system" feel
+          const squareness = 0.22 + 0.10*Math.sin(state.t*0.6 + i*0.03);
+          drawSuperellipse(ctx, 0, 0, rr, rr, 2.2 + squareness*2.2);
+
+          // radial spokes (funnel ribs)
+          const ribs = 8;
+          const ribA = (0.05 + (1-kk)*0.09) * exposure;
+          ctx.strokeStyle = `rgba(${col},${col},${col},${ribA})`;
+          ctx.lineWidth = Math.max(1, lw*0.75);
+
+          for(let rbi=0;rbi<ribs;rbi++){
+            const ang = (Math.PI*2/ribs)*rbi + rot*0.7;
+            const x1 = Math.cos(ang) * (rr*0.20);
+            const y1 = Math.sin(ang) * (rr*0.20);
+            const x2 = Math.cos(ang) * (rr*0.98);
+            const y2 = Math.sin(ang) * (rr*0.98);
+            ctx.beginPath();
+            ctx.moveTo(x1,y1);
+            ctx.lineTo(x2,y2);
+            ctx.stroke();
+          }
+
+          // flare aura near viewer
+          if (flare > 0){
+            const g = ctx.createRadialGradient(0,0, rr*0.05, 0,0, rr*1.05);
+            const gA1 = (0.08 + (1-kk)*0.10) * flare * exposure;
+            const gA2 = (0.00) * flare;
+            const fcol = inv ? `rgba(0,0,0,${gA1})` : `rgba(255,255,255,${gA1})`;
+            g.addColorStop(0, fcol);
+            g.addColorStop(1, inv ? `rgba(0,0,0,${gA2})` : `rgba(255,255,255,${gA2})`);
+            ctx.fillStyle = g;
+            ctx.beginPath();
+            ctx.arc(0,0, rr*1.06, 0, Math.PI*2);
+            ctx.fill();
+          }
+
+          ctx.restore();
+        }
+
+        // scraps: drifting artifacts to imply data intake
+        drawScraps(cx + driftX, cy + driftY, inv, exposure, density, jitter);
+
+        ctx.restore();
+
+        // center sink highlight (the “mouth”)
+        drawMouth(inv, exposure, cx + driftX, cy + driftY);
+      }
+
+      function drawScraps(ccx, ccy, inv, exposure, density, jitter){
+        const col = inv ? 0 : 255;
+
+        // advance scraps toward viewer; re-seed behind
+        const flow = (0.10 + (+ui.speed.value)*0.18) * (1 + Math.max(0, state.thrust)) * (state.hyper ? 2.2 : 1);
+        for (let i=0;i<scraps.length;i++){
+          const s = scraps[i];
+          const drift = (0.6 + 0.4*Math.sin(state.t*0.6 + s.phase));
+          s.z += flow * 0.008 * (0.65 + drift) * (0.7 + density*0.3);
+          s.a += s.spin * 0.002;
+
+          if (s.z > 1.02){
+            scraps[i] = makeScrap((performance.now()*1000 + i*999) | 0);
+            continue;
+          }
+
+          // perspective: map s.z -> scale
+          const z = clamp(s.z, 0, 1);
+          const k = Math.pow(1 - z, 2.0); // far smaller
+          const radius = (Math.min(W,H) * 0.52) * (0.12 + s.rad) * (0.25 + (1-k)*0.75);
+
+          // position in funnel plane with steer/warp
+          const wob = (noise1(i*0.33 + state.t*0.8) * 2 - 1) * jitter * 18;
+          const x = ccx + Math.cos(s.a) * radius + wob;
+          const y = ccy + Math.sin(s.a) * radius + wob * 0.6;
+
+          const size = (0.6 + s.w) * (0.35 + z*1.6) + state.pulse*1.4;
+          const a = (0.05 + z*0.22) * exposure;
+
+          ctx.save();
+          ctx.translate(x,y);
+          ctx.rotate(s.a*0.75 + state.t*0.08);
+
+          ctx.strokeStyle = `rgba(${col},${col},${col},${a})`;
+          ctx.fillStyle = `rgba(${col},${col},${col},${a*0.55})`;
+          ctx.lineWidth = 1 + z*1.2;
+
+          if (s.type === 'line'){
+            ctx.beginPath();
+            ctx.moveTo(-size*2, 0);
+            ctx.lineTo(size*2, 0);
+            ctx.stroke();
+          } else if (s.type === 'box'){
+            ctx.strokeRect(-size, -size, size*2, size*2);
+          } else {
+            // "glyph": minimal, no kitsch. abstract marker.
+            ctx.beginPath();
+            ctx.moveTo(-size*1.6, -size*0.2);
+            ctx.lineTo(0, -size*1.4);
+            ctx.lineTo(size*1.6, -size*0.2);
+            ctx.lineTo(0, size*1.4);
+            ctx.closePath();
+            ctx.stroke();
+          }
+
+          ctx.restore();
+        }
+      }
+
+      function drawMouth(inv, exposure, cx, cy){
+        const col = inv ? 0 : 255;
+        const r = 12 + state.pulse*14;
+        const g = ctx.createRadialGradient(cx,cy, 0, cx,cy, r*6.5);
+        const a1 = (0.18 + state.pulse*0.22) * exposure;
+        const a2 = 0.0;
+
+        g.addColorStop(0, inv ? `rgba(${col},${col},${col},0)` : `rgba(${col},${col},${col},${a1})`);
+        g.addColorStop(1, inv ? `rgba(${col},${col},${col},${a2})` : `rgba(${col},${col},${col},${a2})`);
+
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.arc(cx,cy, r*7, 0, Math.PI*2);
+        ctx.fill();
+
+        // hard sink ring
+        ctx.strokeStyle = `rgba(${col},${col},${col},${(0.35 + state.pulse*0.25) * exposure})`;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(cx,cy, r*1.6, 0, Math.PI*2);
+        ctx.stroke();
+      }
+
+      function drawGrain(inv, exposure){
+        // fast procedural grain + scanlines without offscreen buffers
+        const col = inv ? 0 : 255;
+
+        // scanlines
+        const lineA = 0.05 * exposure;
+        ctx.strokeStyle = `rgba(${col},${col},${col},${lineA})`;
+        ctx.lineWidth = 1;
+        const step = 6;
+        const yOff = (state.t * 60) % step;
+        for (let y = -step; y < H + step; y += step){
+          ctx.beginPath();
+          ctx.moveTo(0, y + yOff);
+          ctx.lineTo(W, y + yOff);
+          ctx.stroke();
+        }
+
+        // sparse grain points
+        const points = Math.floor((W*H) / 32000);
+        const a = 0.12 * exposure;
+        ctx.fillStyle = `rgba(${col},${col},${col},${a})`;
+        for (let i=0;i<points;i++){
+          const x = (noise1(i*0.91 + state.t*1.7) * W) | 0;
+          const y = (noise1(i*1.33 + state.t*1.2) * H) | 0;
+          ctx.fillRect(x,y,1,1);
+        }
+      }
+
+      function drawSuperellipse(ctx, x, y, rx, ry, n){
+        // parametric superellipse
+        const steps = 160;
+        ctx.beginPath();
+        for (let i=0;i<=steps;i++){
+          const t = (i/steps) * Math.PI*2;
+          const ct = Math.cos(t), st = Math.sin(t);
+          const px = x + Math.sign(ct) * Math.pow(Math.abs(ct), 2/n) * rx;
+          const py = y + Math.sign(st) * Math.pow(Math.abs(st), 2/n) * ry;
+          if (i===0) ctx.moveTo(px,py);
+          else ctx.lineTo(px,py);
+        }
+        ctx.closePath();
+        ctx.stroke();
+      }
+
+      function noise1(x){
+        // cheap deterministic pseudo-noise from sine
+        const s = Math.sin(x*12.9898) * 43758.5453;
+        return s - Math.floor(s);
+      }
+
+      function lerp(a,b,t){ return a + (b-a)*t; }
+      function clamp(v, a, b){ return Math.max(a, Math.min(b, v)); }
+    })();
+  </script>
+</body>
+</html>
