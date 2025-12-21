@@ -1,0 +1,755 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>KETADATA PHOTOBOOTH // CRUNCH</title>
+  <style>
+    :root{
+      --bg:#000;
+      --fg:#fff;
+      --muted:rgba(255,255,255,0.65);
+      --panel:rgba(0,0,0,0.78);
+      --stroke:rgba(255,255,255,0.22);
+      --glass:rgba(255,255,255,0.06);
+      --shadow:rgba(0,0,0,0.75);
+      --note:#fff;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%;margin:0;background:var(--bg);color:var(--fg);font-family:Arial, Helvetica, sans-serif;}
+    body{overflow:hidden;}
+    /* stage */
+    #stage{
+      position:fixed; inset:0;
+      display:flex; align-items:center; justify-content:center;
+      background:#000;
+    }
+    #frame{
+      position:relative;
+      width:min(92vw, 980px);
+      height:min(86vh, 720px);
+      border:1px solid rgba(255,255,255,0.18);
+      background:#000;
+      box-shadow:0 24px 90px var(--shadow);
+      overflow:hidden;
+    }
+    video, canvas{
+      position:absolute; inset:0;
+      width:100%; height:100%;
+      object-fit:cover;
+      image-rendering:pixelated;
+      transform:translateZ(0);
+    }
+    #overlay{
+      pointer-events:none;
+      position:absolute; inset:0;
+      mix-blend-mode:screen;
+      opacity:0.18;
+      background:
+        repeating-linear-gradient(0deg, rgba(255,255,255,0.05) 0px, rgba(255,255,255,0.05) 1px, rgba(0,0,0,0) 2px, rgba(0,0,0,0) 4px);
+    }
+
+    /* top label */
+    #brand{
+      position:absolute; left:14px; top:12px;
+      font-size:12px; letter-spacing:0.18em;
+      color:rgba(255,255,255,0.85);
+      text-transform:uppercase;
+      user-select:none;
+      display:flex; align-items:center; gap:10px;
+    }
+    .note{
+      width:10px; height:10px; background:var(--note);
+      display:inline-block;
+    }
+    #status{
+      color:rgba(255,255,255,0.55);
+      letter-spacing:0.12em;
+      font-size:11px;
+    }
+
+    /* panel */
+    #panel{
+      position:absolute; right:12px; top:12px;
+      width:min(340px, calc(100% - 24px));
+      border:1px solid var(--stroke);
+      background:var(--panel);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      padding:10px;
+      user-select:none;
+    }
+    #panelHeader{
+      display:flex; align-items:center; justify-content:space-between;
+      gap:10px;
+      padding-bottom:8px;
+      border-bottom:1px solid var(--stroke);
+    }
+    #panelHeader .title{
+      font-size:12px;
+      letter-spacing:0.16em;
+      text-transform:uppercase;
+      color:rgba(255,255,255,0.88);
+      display:flex; align-items:center; gap:8px;
+      margin:0;
+    }
+    #panelHeader button{
+      border:1px solid var(--stroke);
+      background:transparent;
+      color:rgba(255,255,255,0.9);
+      padding:6px 8px;
+      font-size:11px;
+      letter-spacing:0.12em;
+      text-transform:uppercase;
+      cursor:pointer;
+    }
+    #panelHeader button:hover{background:var(--glass);}
+    #panelBody{padding-top:10px; display:grid; gap:10px;}
+    .row{display:grid; grid-template-columns: 1fr auto; align-items:center; gap:10px;}
+    label{font-size:11px; letter-spacing:0.12em; text-transform:uppercase; color:rgba(255,255,255,0.75)}
+    input[type="range"]{width:170px}
+    .toggles{display:flex; flex-wrap:wrap; gap:8px}
+    .chip{
+      border:1px solid var(--stroke);
+      background:transparent;
+      color:rgba(255,255,255,0.85);
+      padding:7px 9px;
+      font-size:11px;
+      letter-spacing:0.12em;
+      text-transform:uppercase;
+      cursor:pointer;
+    }
+    .chip.on{background:rgba(255,255,255,0.08); border-color:rgba(255,255,255,0.35);}
+    .actions{display:flex; flex-wrap:wrap; gap:8px}
+    .hint{
+      font-size:11px;
+      line-height:1.35;
+      color:rgba(255,255,255,0.6);
+      letter-spacing:0.06em;
+    }
+    .keys{
+      border-top:1px solid var(--stroke);
+      padding-top:10px;
+      display:grid;
+      grid-template-columns: 1fr;
+      gap:6px;
+      color:rgba(255,255,255,0.65);
+      font-size:11px;
+      letter-spacing:0.08em;
+    }
+    kbd{
+      display:inline-block;
+      padding:2px 6px;
+      border:1px solid rgba(255,255,255,0.25);
+      background:rgba(255,255,255,0.06);
+      font-family:Arial, Helvetica, sans-serif;
+      font-size:11px;
+      letter-spacing:0.12em;
+      text-transform:uppercase;
+      margin-right:6px;
+    }
+
+    /* collapsed keymap overlay (glass) */
+    #keymap{
+      position:absolute; right:12px; top:12px;
+      width:min(340px, calc(100% - 24px));
+      border:1px solid var(--stroke);
+      background:rgba(0,0,0,0.40);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      padding:10px;
+      display:none;
+    }
+    #keymap .title{
+      margin:0 0 8px 0;
+      font-size:12px;
+      letter-spacing:0.16em;
+      text-transform:uppercase;
+      color:rgba(255,255,255,0.85);
+      display:flex; align-items:center; gap:8px;
+    }
+    .km-grid{
+      display:grid;
+      grid-template-columns: 1fr;
+      gap:8px;
+      font-size:11px;
+      color:rgba(255,255,255,0.70);
+      letter-spacing:0.08em;
+    }
+    .km-item{
+      display:flex; justify-content:space-between; align-items:center;
+      border:1px solid rgba(255,255,255,0.12);
+      background:rgba(255,255,255,0.04);
+      padding:8px 10px;
+    }
+    .km-item.active{
+      border-color:rgba(255,255,255,0.45);
+      background:rgba(255,255,255,0.08);
+    }
+
+    /* bottom strip */
+    #strip{
+      position:absolute; left:14px; bottom:12px;
+      display:flex; gap:10px; align-items:center;
+      color:rgba(255,255,255,0.6);
+      font-size:11px; letter-spacing:0.12em; text-transform:uppercase;
+      user-select:none;
+    }
+    #strip a{
+      color:rgba(255,255,255,0.8);
+      text-decoration:none;
+      border-bottom:1px solid rgba(255,255,255,0.25);
+    }
+    #strip a:hover{border-bottom-color:rgba(255,255,255,0.6);}
+
+    /* message */
+    #msg{
+      position:absolute; left:50%; top:50%;
+      transform:translate(-50%,-50%);
+      color:rgba(255,255,255,0.75);
+      font-size:12px;
+      letter-spacing:0.18em;
+      text-transform:uppercase;
+      padding:12px 14px;
+      border:1px solid rgba(255,255,255,0.22);
+      background:rgba(0,0,0,0.70);
+      display:none;
+      text-align:center;
+      max-width:80%;
+    }
+  </style>
+</head>
+<body>
+  <div id="stage">
+    <div id="frame">
+      <video id="video" playsinline autoplay muted></video>
+      <canvas id="out"></canvas>
+      <div id="overlay"></div>
+
+      <div id="brand">
+        <span class="note" aria-hidden="true"></span>
+        <span>KETADATA PHOTOBOOTH</span>
+        <span id="status">CRUNCH PRESET: ON</span>
+      </div>
+
+      <div id="panel" aria-label="Controls">
+        <div id="panelHeader">
+          <p class="title"><span class="note" aria-hidden="true"></span> CONTROL</p>
+          <button id="collapseBtn" type="button">Collapse [H]</button>
+        </div>
+
+        <div id="panelBody">
+          <div class="toggles" role="group" aria-label="Modes">
+            <button class="chip on" id="crunchBtn" type="button">Crunch</button>
+            <button class="chip" id="invertBtn" type="button">Invert [I]</button>
+          </div>
+
+          <div class="row">
+            <label for="pixel">Pixel</label>
+            <input id="pixel" type="range" min="2" max="16" step="1" value="8" />
+          </div>
+
+          <div class="row">
+            <label for="poster">Posterize</label>
+            <input id="poster" type="range" min="2" max="12" step="1" value="5" />
+          </div>
+
+          <div class="row">
+            <label for="noise">Noise</label>
+            <input id="noise" type="range" min="0" max="1" step="0.01" value="0.28" />
+          </div>
+
+          <div class="row">
+            <label for="sharpen">Crisp</label>
+            <input id="sharpen" type="range" min="0" max="2" step="0.01" value="1.1" />
+          </div>
+
+          <div class="row">
+            <label for="bleed">Chroma</label>
+            <input id="bleed" type="range" min="0" max="8" step="1" value="4" />
+          </div>
+
+          <div class="actions">
+            <button class="chip" id="snapBtn" type="button">Snap [Space]</button>
+            <button class="chip" id="saveBtn" type="button">Save PNG</button>
+            <button class="chip" id="resetBtn" type="button">Reset [R]</button>
+          </div>
+
+          <div class="hint">
+            Crunch is preset ON. Collapse to operate by hotkeys + mouse intensity.
+          </div>
+
+          <div class="keys">
+            <div><kbd>H</kbd> collapse / expand control panel</div>
+            <div><kbd>Space</kbd> snapshot</div>
+            <div><kbd>I</kbd> invert toggle</div>
+            <div><kbd>R</kbd> reset crunch preset</div>
+            <div><kbd>1</kbd> pixel · <kbd>2</kbd> poster · <kbd>3</kbd> noise · <kbd>4</kbd> crisp · <kbd>5</kbd> chroma</div>
+            <div>Mouse X adjusts selected parameter (collapsed). Press same key to deselect.</div>
+          </div>
+        </div>
+      </div>
+
+      <div id="keymap" aria-label="Collapsed Keymap">
+        <p class="title"><span class="note" aria-hidden="true"></span> KEYMAP</p>
+        <div class="km-grid">
+          <div class="km-item" data-km="1"><span><kbd>1</kbd> Pixel</span><span id="kmPixel">8</span></div>
+          <div class="km-item" data-km="2"><span><kbd>2</kbd> Posterize</span><span id="kmPoster">5</span></div>
+          <div class="km-item" data-km="3"><span><kbd>3</kbd> Noise</span><span id="kmNoise">0.28</span></div>
+          <div class="km-item" data-km="4"><span><kbd>4</kbd> Crisp</span><span id="kmSharp">1.10</span></div>
+          <div class="km-item" data-km="5"><span><kbd>5</kbd> Chroma</span><span id="kmBleed">4</span></div>
+          <div class="km-item"><span><kbd>I</kbd> Invert</span><span id="kmInvert">OFF</span></div>
+          <div class="km-item"><span><kbd>Space</kbd> Snap</span><span>—</span></div>
+          <div class="km-item"><span><kbd>R</kbd> Reset</span><span>—</span></div>
+          <div class="km-item"><span><kbd>H</kbd> Expand</span><span>—</span></div>
+        </div>
+      </div>
+
+      <div id="strip">
+        <span>NO GRADIENTS</span>
+        <span>BLACK ONLY</span>
+        <span>LO-FI FRIED MODE</span>
+        <span><a href="#" id="permLink">Copy State</a></span>
+      </div>
+
+      <div id="msg"></div>
+    </div>
+  </div>
+
+  <script>
+    // ====== Minimal KETADATA photobooth: crunchy lo-fi fried preset + invert ======
+    const video = document.getElementById('video');
+    const out = document.getElementById('out');
+    const octx = out.getContext('2d', { willReadFrequently: true });
+
+    const panel = document.getElementById('panel');
+    const keymap = document.getElementById('keymap');
+    const collapseBtn = document.getElementById('collapseBtn');
+
+    const crunchBtn = document.getElementById('crunchBtn');
+    const invertBtn = document.getElementById('invertBtn');
+
+    const pixel = document.getElementById('pixel');
+    const poster = document.getElementById('poster');
+    const noise = document.getElementById('noise');
+    const sharpen = document.getElementById('sharpen');
+    const bleed = document.getElementById('bleed');
+
+    const snapBtn = document.getElementById('snapBtn');
+    const saveBtn = document.getElementById('saveBtn');
+    const resetBtn = document.getElementById('resetBtn');
+
+    const statusEl = document.getElementById('status');
+    const msgEl = document.getElementById('msg');
+    const permLink = document.getElementById('permLink');
+
+    const km = {
+      pixel: document.getElementById('kmPixel'),
+      poster: document.getElementById('kmPoster'),
+      noise: document.getElementById('kmNoise'),
+      sharp: document.getElementById('kmSharp'),
+      bleed: document.getElementById('kmBleed'),
+      invert: document.getElementById('kmInvert'),
+    };
+
+    // offscreen buffers
+    const buf1 = document.createElement('canvas');
+    const b1 = buf1.getContext('2d', { willReadFrequently: true });
+    const buf2 = document.createElement('canvas');
+    const b2 = buf2.getContext('2d', { willReadFrequently: true });
+
+    let running = true;
+    let invertOn = false;
+    let crunchOn = true;
+
+    // collapsed mode: hotkey-selected param + mouse intensity
+    let collapsed = false;
+    let activeKey = null; // "1".."5"
+    let lastMouseX = 0;
+
+    function showMsg(text, ms = 900){
+      msgEl.textContent = text;
+      msgEl.style.display = 'block';
+      clearTimeout(showMsg._t);
+      showMsg._t = setTimeout(()=>{ msgEl.style.display = 'none'; }, ms);
+    }
+
+    function clamp(n, a, b){ return Math.max(a, Math.min(b, n)); }
+
+    function updateStatus(){
+      statusEl.textContent = `CRUNCH PRESET: ${crunchOn ? 'ON' : 'OFF'}  //  INVERT: ${invertOn ? 'ON' : 'OFF'}`;
+      invertBtn.classList.toggle('on', invertOn);
+      crunchBtn.classList.toggle('on', crunchOn);
+      km.invert.textContent = invertOn ? 'ON' : 'OFF';
+      km.pixel.textContent = pixel.value;
+      km.poster.textContent = poster.value;
+      km.noise.textContent = Number(noise.value).toFixed(2);
+      km.sharp.textContent = Number(sharpen.value).toFixed(2);
+      km.bleed.textContent = bleed.value;
+    }
+
+    function setCollapsed(v){
+      collapsed = v;
+      panel.style.display = collapsed ? 'none' : 'block';
+      keymap.style.display = collapsed ? 'block' : 'none';
+      collapseBtn.textContent = collapsed ? 'Expand [H]' : 'Collapse [H]';
+      activeKey = null;
+      highlightKeymap();
+      showMsg(collapsed ? 'COLLAPSED' : 'EXPANDED', 700);
+    }
+
+    function highlightKeymap(){
+      [...keymap.querySelectorAll('.km-item')].forEach(el=>{
+        const k = el.getAttribute('data-km');
+        el.classList.toggle('active', !!activeKey && k === activeKey);
+      });
+    }
+
+    function serializeState(){
+      return {
+        v: 1,
+        crunchOn,
+        invertOn,
+        pixel: Number(pixel.value),
+        poster: Number(poster.value),
+        noise: Number(noise.value),
+        sharpen: Number(sharpen.value),
+        bleed: Number(bleed.value),
+      };
+    }
+
+    function applyState(s){
+      if(!s || typeof s !== 'object') return;
+      crunchOn = !!s.crunchOn;
+      invertOn = !!s.invertOn;
+      pixel.value = clamp(Number(s.pixel ?? pixel.value), 2, 16);
+      poster.value = clamp(Number(s.poster ?? poster.value), 2, 12);
+      noise.value = clamp(Number(s.noise ?? noise.value), 0, 1);
+      sharpen.value = clamp(Number(s.sharpen ?? sharpen.value), 0, 2);
+      bleed.value = clamp(Number(s.bleed ?? bleed.value), 0, 8);
+      updateStatus();
+    }
+
+    function stateToHash(){
+      const s = serializeState();
+      const enc = btoa(unescape(encodeURIComponent(JSON.stringify(s))));
+      return '#state=' + enc;
+    }
+
+    function hashToState(){
+      const m = location.hash.match(/state=([^&]+)/);
+      if(!m) return null;
+      try{
+        const json = decodeURIComponent(escape(atob(m[1])));
+        return JSON.parse(json);
+      }catch(e){ return null; }
+    }
+
+    permLink.addEventListener('click', (e)=>{
+      e.preventDefault();
+      const hash = stateToHash();
+      const url = location.origin + location.pathname + hash;
+      navigator.clipboard?.writeText(url).then(()=>showMsg('STATE LINK COPIED', 900))
+        .catch(()=>showMsg('COPY FAILED', 900));
+      location.hash = hash;
+    });
+
+    collapseBtn.addEventListener('click', ()=> setCollapsed(!collapsed));
+    document.getElementById('invertBtn').addEventListener('click', ()=>{
+      invertOn = !invertOn; updateStatus();
+    });
+    document.getElementById('crunchBtn').addEventListener('click', ()=>{
+      crunchOn = !crunchOn; updateStatus();
+    });
+
+    resetBtn.addEventListener('click', ()=>{
+      // crunchy lo-fi fried defaults
+      crunchOn = true;
+      invertOn = false;
+      pixel.value = 8;
+      poster.value = 5;
+      noise.value = 0.28;
+      sharpen.value = 1.10;
+      bleed.value = 4;
+      updateStatus();
+      showMsg('RESET', 700);
+    });
+
+    // ===== Image Processing (crunch / lo-fi / fried) =====
+    function posterizeChannel(v, levels){
+      // levels: 2..12
+      const step = 255 / (levels - 1);
+      return Math.round(v / step) * step;
+    }
+
+    function applySharpen(data, w, h, amount){
+      // lightweight unsharp-ish: center boost, neighbor subtract
+      // amount 0..2
+      if(amount <= 0) return;
+      const src = new Uint8ClampedArray(data); // copy
+      const a = amount;
+      const idx = (x,y)=> (y*w + x) * 4;
+      for(let y=1; y<h-1; y++){
+        for(let x=1; x<w-1; x++){
+          const i = idx(x,y);
+          for(let c=0; c<3; c++){
+            const center = src[i+c];
+            const up = src[idx(x,y-1)+c];
+            const dn = src[idx(x,y+1)+c];
+            const lf = src[idx(x-1,y)+c];
+            const rt = src[idx(x+1,y)+c];
+            const v = center*(1+4*a) - (up+dn+lf+rt)*a;
+            data[i+c] = clamp(v, 0, 255);
+          }
+        }
+      }
+    }
+
+    function chromaShift(data, w, h, shift){
+      // shift: 0..8 pixels, cheap lo-fi chroma bleed
+      if(shift <= 0) return;
+      const src = new Uint8ClampedArray(data);
+      const idx = (x,y)=> (y*w + x) * 4;
+      for(let y=0; y<h; y++){
+        for(let x=0; x<w; x++){
+          const i = idx(x,y);
+          const xr = clamp(x + shift, 0, w-1);
+          const xb = clamp(x - shift, 0, w-1);
+          data[i+0] = src[idx(xr,y)+0]; // R shifted right
+          data[i+2] = src[idx(xb,y)+2]; // B shifted left
+          // G stays
+        }
+      }
+    }
+
+    function addNoiseAndInvertAndPosterize(img, levels, nAmt, doInvert){
+      const d = img.data;
+      const len = d.length;
+      for(let i=0; i<len; i+=4){
+        let r=d[i], g=d[i+1], b=d[i+2];
+
+        // add noise (lo-fi grain)
+        if(nAmt > 0){
+          const n = (Math.random()*2 - 1) * 255 * nAmt;
+          r = clamp(r + n, 0, 255);
+          g = clamp(g + n, 0, 255);
+          b = clamp(b + n, 0, 255);
+        }
+
+        // invert
+        if(doInvert){
+          r = 255 - r; g = 255 - g; b = 255 - b;
+        }
+
+        // posterize
+        r = posterizeChannel(r, levels);
+        g = posterizeChannel(g, levels);
+        b = posterizeChannel(b, levels);
+
+        d[i] = r; d[i+1] = g; d[i+2] = b;
+        // alpha unchanged
+      }
+    }
+
+    function pixelateDraw(srcCtx, srcW, srcH, destCtx, destW, destH, px){
+      // draw tiny then scale up with pixelated edges
+      buf2.width = Math.max(1, Math.floor(destW / px));
+      buf2.height = Math.max(1, Math.floor(destH / px));
+      b2.imageSmoothingEnabled = false;
+      destCtx.imageSmoothingEnabled = false;
+
+      // downsample from source
+      b2.clearRect(0,0,buf2.width,buf2.height);
+      b2.drawImage(srcCtx.canvas, 0,0, srcW, srcH, 0,0, buf2.width, buf2.height);
+
+      // scale back up
+      destCtx.clearRect(0,0,destW,destH);
+      destCtx.drawImage(buf2, 0,0, buf2.width, buf2.height, 0,0, destW, destH);
+    }
+
+    // ===== Camera setup =====
+    async function startCamera(){
+      try{
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: "user" },
+          audio: false
+        });
+        video.srcObject = stream;
+        await video.play();
+        showMsg('CAMERA ON', 900);
+      }catch(err){
+        showMsg('CAMERA DENIED', 1600);
+        console.error(err);
+      }
+    }
+
+    function resize(){
+      const rect = out.getBoundingClientRect();
+      out.width = Math.max(2, Math.floor(rect.width));
+      out.height = Math.max(2, Math.floor(rect.height));
+      buf1.width = out.width;
+      buf1.height = out.height;
+      updateStatus();
+    }
+
+    window.addEventListener('resize', resize);
+
+    // ===== Render loop =====
+    function tick(){
+      if(running){
+        const w = out.width, h = out.height;
+        if(video.readyState >= 2 && w && h){
+          // draw video into buf1
+          b1.imageSmoothingEnabled = true;
+          b1.clearRect(0,0,w,h);
+          b1.drawImage(video, 0,0, w,h);
+
+          if(crunchOn){
+            // 1) pixelate into output
+            const px = Number(pixel.value);
+            pixelateDraw(b1, w,h, octx, w,h, px);
+
+            // 2) read pixels and fry
+            const img = octx.getImageData(0,0,w,h);
+
+            // 3) chroma bleed first (works on raw)
+            chromaShift(img.data, w,h, Number(bleed.value));
+
+            // 4) noise + invert + posterize
+            addNoiseAndInvertAndPosterize(img, Number(poster.value), Number(noise.value), invertOn);
+
+            // 5) crisp/sharpen
+            applySharpen(img.data, w,h, Number(sharpen.value));
+
+            octx.putImageData(img, 0,0);
+          } else {
+            // no crunch: simple preview, optional invert
+            octx.imageSmoothingEnabled = true;
+            octx.clearRect(0,0,w,h);
+            octx.drawImage(video, 0,0, w,h);
+            if(invertOn){
+              const img = octx.getImageData(0,0,w,h);
+              addNoiseAndInvertAndPosterize(img, 12, 0, true); // invert only, minimal quantization
+              octx.putImageData(img, 0,0);
+            }
+          }
+        }
+      }
+      requestAnimationFrame(tick);
+    }
+
+    // ===== Snapshot / Save =====
+    function snapshot(){
+      showMsg('SNAP', 500);
+      // current output canvas already contains processed frame
+      // (Optional: could freeze a frame; keeping minimal for now)
+    }
+
+    function savePng(){
+      const a = document.createElement('a');
+      const ts = new Date().toISOString().replace(/[:.]/g,'-');
+      a.download = `ketadata-photobooth-${ts}.png`;
+      a.href = out.toDataURL('image/png');
+      a.click();
+      showMsg('SAVED', 700);
+    }
+
+    snapBtn.addEventListener('click', snapshot);
+    saveBtn.addEventListener('click', savePng);
+
+    // ===== Hotkeys + collapsed intensity modulation =====
+    function toggleInvert(){
+      invertOn = !invertOn;
+      updateStatus();
+      showMsg(invertOn ? 'INVERT ON' : 'INVERT OFF', 650);
+    }
+
+    function resetPreset(){
+      resetBtn.click();
+    }
+
+    function handleSelectKey(k){
+      // k is "1".."5"
+      if(activeKey === k){
+        activeKey = null;
+        highlightKeymap();
+        showMsg('DESELECT', 450);
+        return;
+      }
+      activeKey = k;
+      highlightKeymap();
+      const map = { "1":"PIXEL", "2":"POSTER", "3":"NOISE", "4":"CRISP", "5":"CHROMA" };
+      showMsg(`SELECT ${map[k]}`, 650);
+    }
+
+    function adjustByMouse(x){
+      if(!collapsed || !activeKey) return;
+      const dx = x - lastMouseX;
+      lastMouseX = x;
+      // Use dx to adjust: small steps, clamped
+      const step = dx / 220; // sensitivity
+      if(activeKey === "1"){
+        pixel.value = clamp(Math.round(Number(pixel.value) + step*10), 2, 16);
+      } else if(activeKey === "2"){
+        poster.value = clamp(Math.round(Number(poster.value) + step*8), 2, 12);
+      } else if(activeKey === "3"){
+        noise.value = clamp(Number(noise.value) + step*0.35, 0, 1).toFixed(2);
+      } else if(activeKey === "4"){
+        sharpen.value = clamp(Number(sharpen.value) + step*0.8, 0, 2).toFixed(2);
+      } else if(activeKey === "5"){
+        bleed.value = clamp(Math.round(Number(bleed.value) + step*12), 0, 8);
+      }
+      updateStatus();
+    }
+
+    window.addEventListener('mousemove', (e)=> adjustByMouse(e.clientX));
+    window.addEventListener('mousedown', (e)=>{ lastMouseX = e.clientX; });
+
+    window.addEventListener('keydown', (e)=>{
+      const key = e.key.toLowerCase();
+      if(key === ' '){
+        e.preventDefault();
+        snapshot();
+        return;
+      }
+      if(key === 'h'){
+        e.preventDefault();
+        setCollapsed(!collapsed);
+        return;
+      }
+      if(key === 'i'){
+        e.preventDefault();
+        toggleInvert();
+        return;
+      }
+      if(key === 'r'){
+        e.preventDefault();
+        resetPreset();
+        return;
+      }
+      if(['1','2','3','4','5'].includes(e.key)){
+        e.preventDefault();
+        handleSelectKey(e.key);
+        return;
+      }
+    });
+
+    // ===== Initialize =====
+    [pixel, poster, noise, sharpen, bleed].forEach(el=>{
+      el.addEventListener('input', updateStatus);
+    });
+
+    // Apply URL state if present
+    const s = hashToState();
+    if(s) applyState(s);
+
+    // Ensure crunchy preset is ON by default
+    updateStatus();
+    setTimeout(()=>{ resize(); }, 0);
+    startCamera().then(()=>{
+      resize();
+      tick();
+    });
+  </script>
+</body>
+</html>
