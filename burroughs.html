@@ -1,0 +1,968 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>KETADATA — BURROUGHS INTERFACE (CUT-UP / TAPE / CONTROL LINES)</title>
+  <style>
+    :root{
+      --bg:#000;
+      --fg:rgba(255,255,255,.92);
+      --muted:rgba(255,255,255,.56);
+      --hair:rgba(255,255,255,.14);
+      --panel:rgba(0,0,0,.55);
+      --panel2:rgba(255,255,255,.03);
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0;
+      overflow:hidden;
+      background:var(--bg);
+      color:var(--fg);
+      font-family: Arial, Helvetica, sans-serif;
+    }
+    canvas{ position:fixed; inset:0; width:100vw; height:100vh; display:block; }
+
+    /* HUD */
+    .hud{
+      position:fixed; left:18px; top:16px;
+      user-select:none; pointer-events:none;
+      mix-blend-mode:screen;
+    }
+    .brand{
+      font-weight:900;
+      letter-spacing:.18em;
+      text-transform:uppercase;
+      font-size:15px;
+      text-shadow:0 0 18px rgba(255,255,255,.18);
+    }
+    .sub{
+      margin-top:4px;
+      font-size:11px;
+      letter-spacing:.14em;
+      text-transform:uppercase;
+      color:var(--muted);
+      line-height:1.25;
+    }
+
+    /* Dock */
+    .dock{
+      position:fixed; left:18px; bottom:16px;
+      display:flex; flex-wrap:wrap;
+      gap:10px; align-items:center;
+      pointer-events:auto;
+    }
+    .btn{
+      background:rgba(255,255,255,.05);
+      border:1px solid rgba(255,255,255,.22);
+      color:rgba(255,255,255,.86);
+      padding:10px 12px;
+      border-radius:10px;
+      letter-spacing:.14em;
+      font-size:11px;
+      text-transform:uppercase;
+      cursor:pointer;
+      backdrop-filter: blur(6px);
+      transition: transform .08s ease, background .12s ease, border-color .12s ease;
+    }
+    .btn:hover{ background:rgba(255,255,255,.10); border-color:rgba(255,255,255,.36); transform: translateY(-1px); }
+    .btn:active{ transform: translateY(0px); }
+
+    /* Panel */
+    .panel{
+      position:fixed; right:16px; top:16px;
+      width:min(640px, calc(100vw - 32px));
+      max-height: calc(100vh - 32px);
+      overflow:auto;
+      border:1px solid rgba(255,255,255,.18);
+      background:var(--panel);
+      backdrop-filter: blur(10px);
+      border-radius:14px;
+      box-shadow: 0 0 0 1px rgba(255,255,255,.06) inset, 0 16px 50px rgba(0,0,0,.65);
+    }
+    .panelHeader{
+      position:sticky; top:0;
+      padding:10px 12px;
+      border-bottom:1px solid rgba(255,255,255,.12);
+      background:rgba(0,0,0,.72);
+      backdrop-filter: blur(10px);
+      display:flex; justify-content:space-between; align-items:center;
+      z-index:10;
+    }
+    .title{
+      font-weight:900;
+      letter-spacing:.14em;
+      font-size:11px;
+      text-transform:uppercase;
+      color:rgba(255,255,255,.86);
+    }
+    .hint{
+      font-size:11px;
+      letter-spacing:.08em;
+      color:rgba(255,255,255,.55);
+      text-align:right;
+      line-height:1.2;
+    }
+    .panelBody{ padding:10px 12px 14px; display:flex; flex-direction:column; gap:10px; }
+
+    .note{
+      font-size:11px;
+      color:rgba(255,255,255,.55);
+      line-height:1.35;
+      letter-spacing:.02em;
+      padding:10px 12px 0;
+    }
+
+    .grid2{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap:10px;
+    }
+    .block{
+      border:1px solid rgba(255,255,255,.12);
+      border-radius:12px;
+      overflow:hidden;
+      background:var(--panel2);
+    }
+    .block h3{
+      margin:0;
+      padding:10px 10px;
+      font-size:11px;
+      letter-spacing:.14em;
+      text-transform:uppercase;
+      color:rgba(255,255,255,.75);
+      border-bottom:1px solid rgba(255,255,255,.10);
+      background:rgba(255,255,255,.03);
+      display:flex; justify-content:space-between; align-items:center;
+    }
+    .pill{
+      font-size:10px;
+      letter-spacing:.10em;
+      text-transform:uppercase;
+      color:rgba(255,255,255,.62);
+      border:1px solid rgba(255,255,255,.18);
+      padding:4px 8px;
+      border-radius:999px;
+      background:rgba(0,0,0,.20);
+    }
+    .rows{ padding:10px; display:flex; flex-direction:column; gap:10px; }
+
+    .row{
+      display:grid;
+      grid-template-columns: 180px 1fr 70px;
+      gap:10px;
+      align-items:center;
+    }
+    .label{
+      font-size:11px;
+      text-transform:uppercase;
+      letter-spacing:.12em;
+      color:rgba(255,255,255,.62);
+      white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+    }
+    input[type="range"]{ width:100%; accent-color: rgba(255,255,255,.92); }
+    .val{ font-variant-numeric: tabular-nums; font-size:11px; color:rgba(255,255,255,.76); text-align:right; }
+
+    textarea{
+      width:100%;
+      min-height:170px;
+      resize:vertical;
+      border:1px solid rgba(255,255,255,.14);
+      border-radius:12px;
+      background:rgba(0,0,0,.50);
+      color:rgba(255,255,255,.86);
+      padding:10px 10px;
+      font-family: Arial, Helvetica, sans-serif;
+      font-size:12px;
+      line-height:1.35;
+      outline:none;
+    }
+    textarea:focus{ border-color: rgba(255,255,255,.32); }
+
+    .smallRow{
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+      align-items:center;
+      padding:10px;
+      border-top:1px solid rgba(255,255,255,.10);
+      background:rgba(0,0,0,.12);
+    }
+    .chip{
+      display:inline-flex; align-items:center; gap:8px;
+      padding:8px 10px;
+      border-radius:10px;
+      border:1px solid rgba(255,255,255,.18);
+      background:rgba(255,255,255,.03);
+      cursor:pointer;
+      user-select:none;
+    }
+    .chip input{ transform: translateY(1px); }
+    .chip span{
+      font-size:11px;
+      letter-spacing:.12em;
+      text-transform:uppercase;
+      color:rgba(255,255,255,.78);
+      white-space:nowrap;
+    }
+
+    .tapeWrap{
+      padding:10px;
+      border-top:1px solid rgba(255,255,255,.10);
+    }
+    .tape{
+      width:100%;
+      height:54px;
+      border-radius:12px;
+      border:1px solid rgba(255,255,255,.14);
+      background:rgba(0,0,0,.50);
+      position:relative;
+      overflow:hidden;
+    }
+    .tape .cursor{
+      position:absolute; top:0; bottom:0;
+      width:2px;
+      background:rgba(255,255,255,.65);
+      box-shadow:0 0 12px rgba(255,255,255,.35);
+    }
+    .tape .seg{
+      position:absolute; top:8px; bottom:8px;
+      border-radius:10px;
+      border:1px solid rgba(255,255,255,.18);
+      background:rgba(255,255,255,.05);
+    }
+    .tape .seg.hot{
+      background:rgba(255,255,255,.10);
+      border-color:rgba(255,255,255,.28);
+    }
+    .legend{
+      margin-top:8px;
+      font-size:11px;
+      color:rgba(255,255,255,.55);
+      letter-spacing:.02em;
+      line-height:1.35;
+    }
+
+    /* output block */
+    .outHead{
+      display:flex; justify-content:space-between; align-items:center;
+      gap:10px;
+      padding:10px;
+      border-top:1px solid rgba(255,255,255,.10);
+      background:rgba(0,0,0,.12);
+    }
+    .meter{
+      display:flex; align-items:center; gap:10px;
+      min-width:240px;
+      justify-content:flex-end;
+    }
+    .bar{
+      width:160px; height:10px;
+      border-radius:999px;
+      border:1px solid rgba(255,255,255,.16);
+      background:rgba(255,255,255,.04);
+      overflow:hidden;
+    }
+    .barFill{
+      height:100%;
+      width:40%;
+      background:rgba(255,255,255,.55);
+    }
+    .mono{
+      font-variant-numeric: tabular-nums;
+      letter-spacing:.08em;
+      text-transform:uppercase;
+      font-size:10px;
+      color:rgba(255,255,255,.70);
+    }
+  </style>
+</head>
+<body>
+  <canvas id="c"></canvas>
+
+  <div class="hud">
+    <div class="brand">KETADATA</div>
+    <div class="sub">BURROUGHS MODE · CUT-UP ENGINE · TAPE SPLICER · CONTROL-LINE OVERLAY</div>
+  </div>
+
+  <div class="dock">
+    <button class="btn" id="invert">INVERT</button>
+    <button class="btn" id="pause">PAUSE</button>
+    <button class="btn" id="cutup">CUT-UP</button>
+    <button class="btn" id="splice">SPLICE</button>
+    <button class="btn" id="loop">LOOP</button>
+    <button class="btn" id="reset">RESET</button>
+  </div>
+
+  <div class="panel" id="panel">
+    <div class="panelHeader">
+      <div class="title">CUT-UP CONTROL PANEL</div>
+      <div class="hint">
+        DRAG = PAN · SCROLL = ZOOM<br/>
+        [H] PANEL · [I] INVERT · [P] PAUSE
+      </div>
+    </div>
+
+    <div class="note">
+      This is a working cut-up interface: you feed text, it splices into “tape,” then renders a live control-field overlay.
+      You control: segmentation, reorder, repetition, interference, and residue.
+    </div>
+
+    <div class="panelBody">
+
+      <div class="grid2">
+        <div class="block">
+          <h3>INPUT A <span class="pill">source</span></h3>
+          <div class="rows">
+            <textarea id="inA" spellcheck="false">KETADATA IS A MULTIMODAL APPARATUS.
+THE ROOM IS A TOOL.
+ARCHIVE IS NOT STORAGE — IT IS AN ENGINE.
+THE SYSTEM WANTS NEW CONNECTIONS.
+THE USER ENTERS AND THE FIELD RECONFIGURES.</textarea>
+          </div>
+        </div>
+
+        <div class="block">
+          <h3>INPUT B <span class="pill">source</span></h3>
+          <div class="rows">
+            <textarea id="inB" spellcheck="false">WORDS ARE SWITCHES.
+REPETITION IS A CONTROL DEVICE.
+CUT THE TAPE.
+RE-ORDER THE SIGNAL.
+MAKE THE CONTROL LINES VISIBLE.
+LET THE INTERFERENCE SPEAK.</textarea>
+          </div>
+        </div>
+      </div>
+
+      <div class="block">
+        <h3>ENGINE <span class="pill">parameters</span></h3>
+        <div class="rows">
+          <div class="row">
+            <div class="label">time scale (slow-mo)</div>
+            <input id="timeScale" type="range" min="0.000" max="2.000" step="0.001" value="0.35">
+            <div class="val" id="timeScaleV">0.350</div>
+          </div>
+          <div class="row">
+            <div class="label">segment length</div>
+            <input id="segLen" type="range" min="2" max="18" step="1" value="7">
+            <div class="val" id="segLenV">7</div>
+          </div>
+          <div class="row">
+            <div class="label">shuffle</div>
+            <input id="shuffle" type="range" min="0.00" max="1.00" step="0.01" value="0.65">
+            <div class="val" id="shuffleV">0.65</div>
+          </div>
+          <div class="row">
+            <div class="label">repeat / loopiness</div>
+            <input id="repeat" type="range" min="0.00" max="1.00" step="0.01" value="0.35">
+            <div class="val" id="repeatV">0.35</div>
+          </div>
+          <div class="row">
+            <div class="label">interference</div>
+            <input id="noise" type="range" min="0.00" max="1.00" step="0.01" value="0.38">
+            <div class="val" id="noiseV">0.38</div>
+          </div>
+          <div class="row">
+            <div class="label">trace (residue)</div>
+            <input id="trace" type="range" min="0.000" max="0.20" step="0.001" value="0.050">
+            <div class="val" id="traceV">0.050</div>
+          </div>
+          <div class="row">
+            <div class="label">line thickness</div>
+            <input id="thick" type="range" min="0.4" max="3.6" step="0.01" value="1.10">
+            <div class="val" id="thickV">1.10</div>
+          </div>
+          <div class="row">
+            <div class="label">contrast</div>
+            <input id="contrast" type="range" min="0.6" max="3.2" step="0.01" value="1.55">
+            <div class="val" id="contrastV">1.55</div>
+          </div>
+          <div class="row">
+            <div class="label">zoom</div>
+            <input id="zoom" type="range" min="0.55" max="2.60" step="0.01" value="1.20">
+            <div class="val" id="zoomV">1.20</div>
+          </div>
+        </div>
+
+        <div class="smallRow">
+          <label class="chip"><input id="T_field" type="checkbox" checked><span>control-field</span></label>
+          <label class="chip"><input id="T_text" type="checkbox" checked><span>text fragments</span></label>
+          <label class="chip"><input id="T_raster" type="checkbox" checked><span>scanlines</span></label>
+          <label class="chip"><input id="T_threads" type="checkbox" checked><span>threads</span></label>
+          <label class="chip"><input id="T_labels" type="checkbox"><span>labels</span></label>
+        </div>
+
+        <div class="tapeWrap">
+          <div class="tape" id="tape">
+            <div class="cursor" id="cursor"></div>
+          </div>
+          <div class="legend">
+            Tape = sequence of fragments. “CUT-UP” rebuilds fragments from Input A/B. “SPLICE” toggles between A/B dominance.
+            “LOOP” increases repetition weight inside the tape.
+          </div>
+        </div>
+
+        <div class="outHead">
+          <div class="mono" id="outStat">CONTROL INDEX: 0.00 · FRAGMENTS: 0 · LOOPS: 0</div>
+          <div class="meter">
+            <div class="mono">CONTROL LINES</div>
+            <div class="bar"><div class="barFill" id="barFill"></div></div>
+            <div class="mono" id="barVal">0%</div>
+          </div>
+        </div>
+
+        <div class="rows" style="padding-top:0;">
+          <textarea id="out" spellcheck="false" readonly></textarea>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (() => {
+      const canvas = document.getElementById('c');
+      const ctx = canvas.getContext('2d', { alpha:false });
+
+      let W=0, H=0, DPR=Math.min(2, window.devicePixelRatio||1);
+      function resize(){
+        W=innerWidth; H=innerHeight;
+        canvas.width = Math.floor(W*DPR);
+        canvas.height = Math.floor(H*DPR);
+        canvas.style.width = W+'px';
+        canvas.style.height = H+'px';
+        ctx.setTransform(DPR,0,0,DPR,0,0);
+      }
+      addEventListener('resize', resize);
+      resize();
+
+      const $ = (id)=>document.getElementById(id);
+
+      const ui = {
+        inA: $('inA'),
+        inB: $('inB'),
+        out: $('out'),
+        timeScale: $('timeScale'),
+        segLen: $('segLen'),
+        shuffle: $('shuffle'),
+        repeat: $('repeat'),
+        noise: $('noise'),
+        trace: $('trace'),
+        thick: $('thick'),
+        contrast: $('contrast'),
+        zoom: $('zoom'),
+        T_field: $('T_field'),
+        T_text: $('T_text'),
+        T_raster: $('T_raster'),
+        T_threads: $('T_threads'),
+        T_labels: $('T_labels'),
+      };
+
+      function compLabel(v){ return v===0?'source-over':(v===1?'lighter':'screen'); }
+
+      function sync(){
+        $('timeScaleV').textContent = (+ui.timeScale.value).toFixed(3);
+        $('segLenV').textContent = ui.segLen.value;
+        $('shuffleV').textContent = (+ui.shuffle.value).toFixed(2);
+        $('repeatV').textContent = (+ui.repeat.value).toFixed(2);
+        $('noiseV').textContent = (+ui.noise.value).toFixed(2);
+        $('traceV').textContent = (+ui.trace.value).toFixed(3);
+        $('thickV').textContent = (+ui.thick.value).toFixed(2);
+        $('contrastV').textContent = (+ui.contrast.value).toFixed(2);
+        $('zoomV').textContent = (+ui.zoom.value).toFixed(2);
+      }
+      Object.values(ui).forEach(el=>{
+        if (!el || !el.addEventListener) return;
+        el.addEventListener('input', sync);
+        el.addEventListener('change', sync);
+      });
+      sync();
+
+      const st = {
+        t:0,
+        invert:false,
+        paused:false,
+        ox:0, oy:0,
+        drag:false,
+        lx:0, ly:0,
+        mx:0.5, my:0.5,
+        seed:(Math.random()*1e9)|0,
+        bias:0.5,     // splice: A vs B dominance
+        loopBoost:0.0 // loop button adds repetition
+      };
+
+      // ===== Burroughs cut-up engine =====
+      let tape = []; // {text, src, w, key}
+      let loops = 0;
+
+      function clamp(v,a,b){ return Math.max(a, Math.min(b, v)); }
+      function lerp(a,b,t){ return a + (b-a)*t; }
+
+      function hash32(n){
+        n = (n ^ (n >>> 16)) >>> 0;
+        n = Math.imul(n, 2246822519) >>> 0;
+        n = (n ^ (n >>> 13)) >>> 0;
+        n = Math.imul(n, 3266489917) >>> 0;
+        n = (n ^ (n >>> 16)) >>> 0;
+        return n >>> 0;
+      }
+      function rnd01(n){ return hash32(n) / 4294967295; }
+
+      function normalizeText(s){
+        return (s || '')
+          .replace(/\r/g,'\n')
+          .replace(/[ \t]+/g,' ')
+          .replace(/\n{3,}/g,'\n\n')
+          .trim();
+      }
+
+      function tokenize(s){
+        // keep punctuation as tokens to keep "tape" texture
+        const out = [];
+        const re = /[A-Za-z0-9_]+|[^\sA-Za-z0-9_]/g;
+        let m;
+        while ((m = re.exec(s)) !== null) out.push(m[0]);
+        return out;
+      }
+
+      function detokenize(tokens){
+        // minimal spacing logic
+        let s = '';
+        for (let i=0;i<tokens.length;i++){
+          const t = tokens[i];
+          if (i===0) { s += t; continue; }
+          const prev = tokens[i-1];
+          const noSpaceBefore = /[,\.\!\?\:\;\)\]\}]/.test(t);
+          const noSpaceAfterPrev = /[\(\[\{]/.test(prev);
+          if (noSpaceBefore || noSpaceAfterPrev) s += t;
+          else s += ' ' + t;
+        }
+        return s;
+      }
+
+      function buildFragments(A, B, segLen){
+        const a = tokenize(normalizeText(A));
+        const b = tokenize(normalizeText(B));
+
+        // create segments of length segLen (with overlap for cadence)
+        function segments(tokens, src){
+          const segs = [];
+          const step = Math.max(2, Math.floor(segLen*0.65));
+          for (let i=0;i<tokens.length;i+=step){
+            const slice = tokens.slice(i, i+segLen);
+            if (slice.length >= 2){
+              segs.push({
+                text: detokenize(slice),
+                src,
+                w: 1,
+                key: src + ':' + i + ':' + slice.join('|')
+              });
+            }
+          }
+          return segs;
+        }
+
+        const sa = segments(a,'A');
+        const sb = segments(b,'B');
+        return { sa, sb };
+      }
+
+      function rebuildTape(mode='cutup'){
+        st.seed = (Math.random()*1e9)|0;
+
+        const segLen = (+ui.segLen.value)|0;
+        const { sa, sb } = buildFragments(ui.inA.value, ui.inB.value, segLen);
+
+        // choose mix by bias (splice)
+        const mix = [];
+        const total = Math.max(1, sa.length + sb.length);
+
+        // base sampling density
+        const target = clamp(Math.floor(lerp(60, 180, (total/260))), 40, 220);
+
+        for (let i=0;i<target;i++){
+          const r = rnd01(st.seed + i*97);
+          const pickA = r < st.bias;
+
+          const pool = pickA ? sa : sb;
+          if (pool.length === 0) continue;
+
+          const j = Math.floor(rnd01(st.seed + i*193 + (pickA?11:29)) * pool.length);
+          mix.push({ ...pool[j] });
+        }
+
+        // shuffle intensity
+        const sh = +ui.shuffle.value;
+        for (let k=0;k<Math.floor(mix.length*sh);k++){
+          const i = Math.floor(rnd01(st.seed + k*31) * mix.length);
+          const j = Math.floor(rnd01(st.seed + k*73) * mix.length);
+          const tmp = mix[i]; mix[i]=mix[j]; mix[j]=tmp;
+        }
+
+        // add repetition / loops
+        const rep = clamp(+ui.repeat.value + st.loopBoost, 0, 1);
+        loops = 0;
+        if (rep > 0.001 && mix.length > 8){
+          const copies = Math.floor(lerp(0, 14, rep));
+          for (let c=0;c<copies;c++){
+            const start = Math.floor(rnd01(st.seed + c*211) * (mix.length-6));
+            const len = 3 + Math.floor(rnd01(st.seed + c*389) * 6);
+            const frag = mix.slice(start, start+len).map(x => ({...x, w:x.w*1.1}));
+            const pos = Math.floor(rnd01(st.seed + c*571) * mix.length);
+            mix.splice(pos, 0, ...frag);
+            loops += 1;
+          }
+        }
+
+        tape = mix.slice(0, 260); // hard cap
+
+        // output text
+        ui.out.value = tape.map(x=>x.text).join('\n');
+
+        // render tape bar segments in UI
+        renderTapeBar();
+
+        updateControlIndex();
+      }
+
+      function renderTapeBar(){
+        const el = $('tape');
+        // remove existing segments (keep cursor)
+        [...el.querySelectorAll('.seg')].forEach(n=>n.remove());
+
+        const n = tape.length || 1;
+        const w = el.clientWidth;
+        const pad = 8;
+        const inner = w - pad*2;
+
+        // show up to 60 visible segments (compressed)
+        const shown = Math.min(60, tape.length);
+        for (let i=0;i<shown;i++){
+          const idx = Math.floor(i/shown * tape.length);
+          const seg = tape[idx];
+          const x = pad + (i/shown)*inner;
+          const ww = Math.max(6, inner/shown - 2);
+
+          const d = document.createElement('div');
+          d.className = 'seg' + ((seg.src==='A') ? '' : ' hot');
+          d.style.left = x + 'px';
+          d.style.width = ww + 'px';
+          el.appendChild(d);
+        }
+      }
+
+      function updateControlIndex(){
+        // "control lines" heuristic: repetition + dominant tokens + punctuation density.
+        const text = ui.out.value || '';
+        const tokens = tokenize(text.toUpperCase());
+        const total = Math.max(1, tokens.length);
+
+        // token frequency
+        const freq = new Map();
+        for (const t of tokens){
+          if (!/^[A-Z0-9_]+$/.test(t)) continue;
+          if (t.length < 3) continue;
+          freq.set(t, (freq.get(t)||0)+1);
+        }
+        const entries = [...freq.entries()].sort((a,b)=>b[1]-a[1]).slice(0, 10);
+
+        // dominance: top token share
+        const topCount = entries.length ? entries[0][1] : 0;
+        const dominance = topCount / Math.max(1, total);
+
+        // repetition: sum of top shares
+        let sumTop = 0;
+        for (const [,c] of entries) sumTop += c;
+        const rep = sumTop / Math.max(1, total);
+
+        // punctuation density
+        let punct = 0;
+        for (const t of tokens) if (!/^[A-Z0-9_]+$/.test(t)) punct++;
+        const punctD = punct / total;
+
+        // control index (0..1)
+        const baseRep = clamp(+ui.repeat.value + st.loopBoost, 0, 1);
+        const control = clamp(
+          0.40*rep + 0.25*dominance + 0.15*punctD + 0.20*baseRep,
+          0, 1
+        );
+
+        // update UI
+        $('barFill').style.width = Math.round(control*100) + '%';
+        $('barVal').textContent = Math.round(control*100) + '%';
+        $('outStat').textContent =
+          `CONTROL INDEX: ${control.toFixed(2)} · FRAGMENTS: ${tape.length} · LOOPS: ${loops}`;
+
+        // store control tokens for labels overlay
+        st.controlTokens = entries.map(([t,c])=>({t,c, share:c/total}));
+        st.control = control;
+      }
+
+      // ===== Visual field (control lines + interference + text shards) =====
+      function edgeFadeAlpha(x,y,cx,cy){
+        const nx = (x - cx) / (W*0.5);
+        const ny = (y - cy) / (H*0.5);
+        const d = Math.sqrt(nx*nx + ny*ny);
+        return clamp(1 - 0.55*clamp((d-0.55)/0.7, 0, 1), 0, 1);
+      }
+
+      function draw(){
+        const inv = st.invert;
+        const bg = inv ? 255 : 0;
+        const fg = inv ? 0 : 255;
+
+        // residue
+        const trace = +ui.trace.value;
+        if (trace > 0){
+          ctx.fillStyle = `rgba(${bg},${bg},${bg},${clamp(trace,0,1)})`;
+          ctx.fillRect(0,0,W,H);
+        } else {
+          ctx.fillStyle = `rgb(${bg},${bg},${bg})`;
+          ctx.fillRect(0,0,W,H);
+        }
+
+        // transform
+        const Z = +ui.zoom.value;
+        const cx = W*0.5 + st.ox;
+        const cy = H*0.5 + st.oy;
+
+        // line params
+        const thick = +ui.thick.value;
+        const contrast = +ui.contrast.value;
+        const noise = +ui.noise.value;
+
+        ctx.lineWidth = thick;
+
+        // background interference field (cheap, rhythmic)
+        if (ui.T_field.checked){
+          // invert-safe: keep source-over in invert mode so black shows
+          ctx.globalCompositeOperation = inv ? 'source-over' : 'screen';
+
+          const k = st.control || 0;
+          const density = Math.floor(lerp(90, 260, k) * lerp(0.6, 1.0, contrast));
+          const amp = lerp(18, 70, noise);
+
+          for (let i=0;i<density;i++){
+            const r1 = rnd01(st.seed + i*19 + ((st.t*1000)|0));
+            const r2 = rnd01(st.seed + i*41 + 777);
+            const a = (r1*Math.PI*2) + st.t*0.12;
+            const rr = Math.sqrt(r2) * Math.min(W,H) * 0.62;
+
+            const x = cx + Math.cos(a)*rr;
+            const y = cy + Math.sin(a)*rr;
+
+            // control-line direction: combine radial + tape rhythm
+            const tapePhase = (tape.length ? (i % tape.length)/tape.length : 0);
+            const dir = a + Math.sin(st.t*0.7 + tapePhase*12.0)*0.9;
+            const vx = Math.cos(dir + Math.PI/2);
+            const vy = Math.sin(dir + Math.PI/2);
+
+            const len = (amp * (0.45 + 0.55*Math.sin(st.t*0.9 + tapePhase*10.0))) * Z;
+            const x0 = x - vx*len;
+            const y0 = y - vy*len;
+            const x1 = x + vx*len;
+            const y1 = y + vy*len;
+
+            const alpha = (0.020 + 0.070*k) * contrast * edgeFadeAlpha(x,y,cx,cy);
+            ctx.strokeStyle = `rgba(${fg},${fg},${fg},${clamp(alpha,0,0.55)})`;
+
+            ctx.beginPath();
+            ctx.moveTo(x0,y0);
+            ctx.lineTo(x1,y1);
+            ctx.stroke();
+          }
+        }
+
+        // threads between repeated fragments (make repetition visible)
+        if (ui.T_threads.checked && tape.length){
+          ctx.globalCompositeOperation = inv ? 'source-over' : 'lighter';
+
+          const k = st.control || 0;
+          const N = Math.floor(lerp(18, 80, k) * lerp(0.6, 1.0, contrast));
+          for (let i=0;i<N;i++){
+            const a = Math.floor(rnd01(st.seed + i*101) * tape.length);
+            const b = Math.floor(rnd01(st.seed + i*211) * tape.length);
+            const sa = tape[a], sb = tape[b];
+            if (!sa || !sb) continue;
+
+            // prefer linking same source or similar prefix
+            const sameSrc = sa.src === sb.src;
+            const sim = (sa.text.slice(0,6) === sb.text.slice(0,6)) ? 1 : 0;
+            if (!(sameSrc || sim || rnd01(st.seed + i*733) < (st.control||0))) continue;
+
+            const aa = (a/tape.length)*Math.PI*2 + st.t*0.07;
+            const bb = (b/tape.length)*Math.PI*2 - st.t*0.05;
+
+            const R = Math.min(W,H)*0.44 * Z;
+            const x0 = cx + Math.cos(aa)*R;
+            const y0 = cy + Math.sin(aa)*R;
+            const x1 = cx + Math.cos(bb)*R;
+            const y1 = cy + Math.sin(bb)*R;
+
+            const alpha = (0.03 + 0.11*(st.control||0)) * contrast * 0.85;
+            ctx.strokeStyle = `rgba(${fg},${fg},${fg},${clamp(alpha,0,0.75)})`;
+            ctx.beginPath();
+            ctx.moveTo(x0,y0);
+            // bowed curve
+            const mx = (x0+x1)*0.5 + (Math.sin(st.t*0.8+i)*22);
+            const my = (y0+y1)*0.5 + (Math.cos(st.t*0.6+i)*22);
+            ctx.quadraticCurveTo(mx,my,x1,y1);
+            ctx.stroke();
+          }
+        }
+
+        // text shards floating in the field
+        if (ui.T_text.checked && tape.length){
+          ctx.globalCompositeOperation = 'source-over';
+          const k = st.control || 0;
+          const show = Math.floor(lerp(10, 42, clamp(k + noise*0.5, 0, 1)));
+          ctx.font = '12px Arial';
+          ctx.textBaseline = 'middle';
+
+          for (let i=0;i<show;i++){
+            const idx = Math.floor(rnd01(st.seed + i*311 + ((st.t*120)|0)) * tape.length);
+            const frag = tape[idx];
+            if (!frag) continue;
+
+            const rr = Math.sqrt(rnd01(st.seed + i*521)) * Math.min(W,H) * 0.46;
+            const a = rnd01(st.seed + i*127) * Math.PI*2 + st.t*(0.08 + 0.08*noise);
+            const x = cx + Math.cos(a)*rr;
+            const y = cy + Math.sin(a)*rr;
+
+            const alpha = (0.12 + 0.25*k) * contrast * edgeFadeAlpha(x,y,cx,cy);
+            const fill = inv ? `rgba(0,0,0,${clamp(alpha,0,0.90)})` : `rgba(255,255,255,${clamp(alpha,0,0.90)})`;
+            ctx.fillStyle = fill;
+
+            const shard = frag.text.length > 56 ? frag.text.slice(0,56) + '…' : frag.text;
+            ctx.fillText(shard, x, y);
+          }
+        }
+
+        // control tokens labels (optional)
+        if (ui.T_labels.checked && st.controlTokens && st.controlTokens.length){
+          ctx.globalCompositeOperation = 'source-over';
+          ctx.font = '11px Arial';
+          ctx.textBaseline = 'middle';
+
+          for (let i=0;i<st.controlTokens.length;i++){
+            const tok = st.controlTokens[i];
+            const R = Math.min(W,H)*0.32 * Z;
+            const a = (i/st.controlTokens.length)*Math.PI*2 + st.t*0.06;
+            const x = cx + Math.cos(a)*R;
+            const y = cy + Math.sin(a)*R;
+            const alpha = clamp(0.30 + tok.share*3.0, 0, 0.85) * (+ui.contrast.value);
+            ctx.fillStyle = inv ? `rgba(0,0,0,${clamp(alpha,0,0.9)})` : `rgba(255,255,255,${clamp(alpha,0,0.9)})`;
+            ctx.fillText(tok.t + ' · ' + Math.round(tok.share*100) + '%', x, y);
+          }
+        }
+
+        // scanlines
+        if (ui.T_raster.checked){
+          ctx.globalCompositeOperation = 'source-over';
+          const step = 9;
+          const yOff = (st.t*70) % step;
+          ctx.lineWidth = 1;
+          ctx.strokeStyle = `rgba(${fg},${fg},${fg},${0.040*(+ui.contrast.value)})`;
+          for (let y=-step; y<H+step; y+=step){
+            ctx.beginPath();
+            ctx.moveTo(0, y+yOff);
+            ctx.lineTo(W, y+yOff);
+            ctx.stroke();
+          }
+        }
+
+        ctx.globalCompositeOperation = 'source-over';
+      }
+
+      // ===== Interaction =====
+      $('invert').onclick = ()=> st.invert = !st.invert;
+      $('pause').onclick = ()=> st.paused = !st.paused;
+
+      $('cutup').onclick = ()=> rebuildTape('cutup');
+      $('splice').onclick = ()=> { st.bias = clamp(1 - st.bias, 0.12, 0.88); rebuildTape('splice'); };
+      $('loop').onclick = ()=> { st.loopBoost = clamp(st.loopBoost + 0.12, 0, 0.70); rebuildTape('loop'); };
+
+      $('reset').onclick = ()=>{
+        st.t=0; st.invert=false; st.paused=false; st.ox=0; st.oy=0; st.loopBoost=0; st.bias=0.5;
+        rebuildTape('reset');
+      };
+
+      addEventListener('keydown', (e)=>{
+        if (e.key==='i' || e.key==='I') st.invert = !st.invert;
+        if (e.key==='p' || e.key==='P') st.paused = !st.paused;
+        if (e.key==='h' || e.key==='H'){
+          const panel = document.getElementById('panel');
+          panel.style.display = (panel.style.display === 'none') ? '' : 'none';
+        }
+        if (e.key==='Enter' && (e.ctrlKey || e.metaKey)){
+          rebuildTape('cutup');
+        }
+      });
+
+      addEventListener('pointerdown', (e)=>{
+        st.drag=true; st.lx=e.clientX; st.ly=e.clientY;
+      });
+      addEventListener('pointerup', ()=> st.drag=false);
+      addEventListener('pointercancel', ()=> st.drag=false);
+      addEventListener('pointermove', (e)=>{
+        if (!st.drag) return;
+        const dx = e.clientX - st.lx;
+        const dy = e.clientY - st.ly;
+        st.lx=e.clientX; st.ly=e.clientY;
+        st.ox += dx;
+        st.oy += dy;
+        st.ox = clamp(st.ox, -W*0.60, W*0.60);
+        st.oy = clamp(st.oy, -H*0.60, H*0.60);
+      });
+
+      // update control index whenever output changes (including sliders)
+      const recomputeTriggers = ['segLen','shuffle','repeat'];
+      recomputeTriggers.forEach(id => ui[id].addEventListener('input', ()=> rebuildTape('param')));
+      ui.inA.addEventListener('input', ()=> debounceRebuild());
+      ui.inB.addEventListener('input', ()=> debounceRebuild());
+
+      let debTimer = null;
+      function debounceRebuild(){
+        clearTimeout(debTimer);
+        debTimer = setTimeout(()=> rebuildTape('typing'), 250);
+      }
+
+      // tape bar cursor animation
+      function updateTapeCursor(){
+        const el = $('tape');
+        const cur = $('cursor');
+        const w = el.clientWidth;
+        const pad = 8;
+        const inner = w - pad*2;
+        const phase = (st.t*0.18) % 1;
+        cur.style.left = (pad + inner*phase) + 'px';
+      }
+
+      // ===== Main loop =====
+      let last = performance.now();
+      function loop(now){
+        const rawDt = Math.min(0.033, (now-last)/1000);
+        last = now;
+
+        const dt = rawDt * (+ui.timeScale.value);
+        if (!st.paused) st.t += dt;
+
+        // subtle loopBoost decay (so "LOOP" isn't permanent unless you keep hitting it)
+        st.loopBoost *= Math.pow(0.18, dt*0.20);
+
+        draw();
+        updateTapeCursor();
+        requestAnimationFrame(loop);
+      }
+
+      // Initial build
+      rebuildTape('init');
+      requestAnimationFrame(loop);
+
+      // keep tape UI responsive on resize
+      addEventListener('resize', ()=> setTimeout(renderTapeBar, 50));
+    })();
+  </script>
+</body>
+</html>
