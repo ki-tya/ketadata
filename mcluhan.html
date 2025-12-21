@@ -1,0 +1,917 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>KETADATA — McLUHAN INTERFACE (MEDIA ENVIRONMENT MIXER)</title>
+  <style>
+    :root{
+      --bg:#000;
+      --fg:rgba(255,255,255,.92);
+      --muted:rgba(255,255,255,.56);
+      --panel:rgba(0,0,0,.55);
+      --hair:rgba(255,255,255,.14);
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0;
+      overflow:hidden;
+      background:var(--bg);
+      color:var(--fg);
+      font-family: Arial, Helvetica, sans-serif;
+    }
+    canvas{ position:fixed; inset:0; width:100vw; height:100vh; display:block; }
+
+    /* HUD */
+    .hud{
+      position:fixed; left:18px; top:16px;
+      user-select:none; pointer-events:none;
+      mix-blend-mode:screen;
+    }
+    .brand{
+      font-weight:900;
+      letter-spacing:.18em;
+      text-transform:uppercase;
+      font-size:15px;
+      text-shadow:0 0 18px rgba(255,255,255,.18);
+    }
+    .sub{
+      margin-top:4px;
+      font-size:11px;
+      letter-spacing:.14em;
+      text-transform:uppercase;
+      color:var(--muted);
+      line-height:1.25;
+    }
+
+    /* Dock */
+    .dock{
+      position:fixed; left:18px; bottom:16px;
+      display:flex; flex-wrap:wrap;
+      gap:10px; align-items:center;
+      pointer-events:auto;
+    }
+    .btn{
+      background:rgba(255,255,255,.05);
+      border:1px solid rgba(255,255,255,.22);
+      color:rgba(255,255,255,.86);
+      padding:10px 12px;
+      border-radius:10px;
+      letter-spacing:.14em;
+      font-size:11px;
+      text-transform:uppercase;
+      cursor:pointer;
+      backdrop-filter: blur(6px);
+      transition: transform .08s ease, background .12s ease, border-color .12s ease;
+    }
+    .btn:hover{ background:rgba(255,255,255,.10); border-color:rgba(255,255,255,.36); transform: translateY(-1px); }
+    .btn:active{ transform: translateY(0px); }
+
+    /* Panel */
+    .panel{
+      position:fixed; right:16px; top:16px;
+      width:min(620px, calc(100vw - 32px));
+      max-height: calc(100vh - 32px);
+      overflow:auto;
+      border:1px solid rgba(255,255,255,.18);
+      background:var(--panel);
+      backdrop-filter: blur(10px);
+      border-radius:14px;
+      box-shadow: 0 0 0 1px rgba(255,255,255,.06) inset, 0 16px 50px rgba(0,0,0,.65);
+    }
+    .panelHeader{
+      position:sticky; top:0;
+      padding:10px 12px;
+      border-bottom:1px solid rgba(255,255,255,.12);
+      background:rgba(0,0,0,.72);
+      backdrop-filter: blur(10px);
+      display:flex; justify-content:space-between; align-items:center;
+      z-index:10;
+    }
+    .title{
+      font-weight:900;
+      letter-spacing:.14em;
+      font-size:11px;
+      text-transform:uppercase;
+      color:rgba(255,255,255,.86);
+    }
+    .hint{
+      font-size:11px;
+      letter-spacing:.08em;
+      color:rgba(255,255,255,.55);
+      text-align:right;
+      line-height:1.2;
+    }
+    .note{
+      font-size:11px;
+      color:rgba(255,255,255,.55);
+      line-height:1.35;
+      letter-spacing:.02em;
+      padding:10px 12px 0;
+    }
+    .panelBody{ padding:10px 12px 14px; display:flex; flex-direction:column; gap:10px; }
+
+    .block{
+      border:1px solid rgba(255,255,255,.12);
+      border-radius:12px;
+      overflow:hidden;
+      background:rgba(255,255,255,.02);
+    }
+    .block h3{
+      margin:0;
+      padding:10px 10px;
+      font-size:11px;
+      letter-spacing:.14em;
+      text-transform:uppercase;
+      color:rgba(255,255,255,.75);
+      border-bottom:1px solid rgba(255,255,255,.10);
+      background:rgba(255,255,255,.03);
+      display:flex; justify-content:space-between; align-items:center;
+    }
+    .pill{
+      font-size:10px;
+      letter-spacing:.10em;
+      text-transform:uppercase;
+      color:rgba(255,255,255,.62);
+      border:1px solid rgba(255,255,255,.18);
+      padding:4px 8px;
+      border-radius:999px;
+      background:rgba(0,0,0,.20);
+      white-space:nowrap;
+    }
+
+    .rows{ padding:10px; display:flex; flex-direction:column; gap:10px; }
+    .row{
+      display:grid;
+      grid-template-columns: 220px 1fr 70px;
+      gap:10px;
+      align-items:center;
+    }
+    .label{
+      font-size:11px;
+      text-transform:uppercase;
+      letter-spacing:.12em;
+      color:rgba(255,255,255,.62);
+      white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+    }
+    input[type="range"]{ width:100%; accent-color: rgba(255,255,255,.92); }
+    .val{ font-variant-numeric: tabular-nums; font-size:11px; color:rgba(255,255,255,.76); text-align:right; }
+
+    .toggles{ display:flex; flex-wrap:wrap; gap:8px; padding:10px; border-top:1px solid rgba(255,255,255,.10); background:rgba(0,0,0,.10); }
+    .toggle{
+      display:inline-flex; align-items:center; gap:8px;
+      padding:8px 10px;
+      border-radius:10px;
+      border:1px solid rgba(255,255,255,.18);
+      background:rgba(255,255,255,.03);
+      cursor:pointer;
+      user-select:none;
+    }
+    .toggle input{ transform: translateY(1px); }
+    .toggle span{
+      font-size:11px;
+      letter-spacing:.12em;
+      text-transform:uppercase;
+      color:rgba(255,255,255,.78);
+      white-space:nowrap;
+    }
+
+    .status{
+      padding:10px;
+      border-top:1px solid rgba(255,255,255,.10);
+      background:rgba(0,0,0,.12);
+      display:flex; gap:10px; flex-wrap:wrap; align-items:center; justify-content:space-between;
+    }
+    .mono{
+      font-variant-numeric: tabular-nums;
+      letter-spacing:.10em;
+      text-transform:uppercase;
+      font-size:10px;
+      color:rgba(255,255,255,.70);
+      line-height:1.35;
+    }
+    .bar{
+      width:200px; height:10px;
+      border-radius:999px;
+      border:1px solid rgba(255,255,255,.16);
+      background:rgba(255,255,255,.04);
+      overflow:hidden;
+    }
+    .barFill{
+      height:100%;
+      width:40%;
+      background:rgba(255,255,255,.55);
+    }
+  </style>
+</head>
+<body>
+  <canvas id="c"></canvas>
+
+  <div class="hud">
+    <div class="brand">KETADATA</div>
+    <div class="sub">McLUHAN MODE · MEDIA ENVIRONMENT MIXER · THE MEDIUM IS THE INTERFACE</div>
+  </div>
+
+  <div class="dock">
+    <button class="btn" id="invert">INVERT</button>
+    <button class="btn" id="pause">PAUSE</button>
+    <button class="btn" id="reseed">RESEED</button>
+    <button class="btn" id="reset">RESET</button>
+  </div>
+
+  <div class="panel" id="panel">
+    <div class="panelHeader">
+      <div class="title">MEDIA ENVIRONMENT MIXER</div>
+      <div class="hint">
+        DRAG = PAN · SCROLL = ZOOM<br/>
+        CLICK = PULSE SOURCE · SHIFT+CLICK = PIN SOURCE<br/>
+        [H] PANEL · [I] INVERT · [P] PAUSE
+      </div>
+    </div>
+
+    <div class="note">
+      You are not “using a tool.” You are entering a medium. These sliders change the environment’s cognition:
+      definition vs participation, sequence vs mosaic, private index vs tribal field — plus the tetrad.
+    </div>
+
+    <div class="panelBody">
+      <div class="block">
+        <h3>Core Media Dials <span class="pill">environment</span></h3>
+        <div class="rows">
+          <div class="row">
+            <div class="label">HOT ↔ COOL (definition ↔ participation)</div>
+            <input id="hotCool" type="range" min="0" max="1" step="0.01" value="0.55">
+            <div class="val" id="hotCoolV">0.55</div>
+          </div>
+          <div class="row">
+            <div class="label">LINEAR ↔ MOSAIC (sequence ↔ collage)</div>
+            <input id="linearMosaic" type="range" min="0" max="1" step="0.01" value="0.70">
+            <div class="val" id="linearMosaicV">0.70</div>
+          </div>
+          <div class="row">
+            <div class="label">INDIVIDUAL ↔ TRIBAL (private ↔ shared)</div>
+            <input id="indTribal" type="range" min="0" max="1" step="0.01" value="0.62">
+            <div class="val" id="indTribalV">0.62</div>
+          </div>
+          <div class="row">
+            <div class="label">SPEED (refresh / drift)</div>
+            <input id="speed" type="range" min="0.00" max="2.00" step="0.01" value="0.75">
+            <div class="val" id="speedV">0.75</div>
+          </div>
+          <div class="row">
+            <div class="label">SIGNAL ↔ NOISE (legibility ↔ interference)</div>
+            <input id="signalNoise" type="range" min="0" max="1" step="0.01" value="0.35">
+            <div class="val" id="signalNoiseV">0.35</div>
+          </div>
+          <div class="row">
+            <div class="label">COMPRESSION (density / packing)</div>
+            <input id="compress" type="range" min="0" max="1" step="0.01" value="0.48">
+            <div class="val" id="compressV">0.48</div>
+          </div>
+          <div class="row">
+            <div class="label">TRACE (residue / memory)</div>
+            <input id="trace" type="range" min="0.000" max="0.22" step="0.001" value="0.050">
+            <div class="val" id="traceV">0.050</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="block">
+        <h3>McLuhan Tetrad <span class="pill">logic</span></h3>
+        <div class="rows">
+          <div class="row">
+            <div class="label">AMPLIFY (intensity / reach)</div>
+            <input id="amp" type="range" min="0" max="1" step="0.01" value="0.70">
+            <div class="val" id="ampV">0.70</div>
+          </div>
+          <div class="row">
+            <div class="label">RETRIEVE (older medium returns)</div>
+            <input id="ret" type="range" min="0" max="1" step="0.01" value="0.35">
+            <div class="val" id="retV">0.35</div>
+          </div>
+          <div class="row">
+            <div class="label">OBSOLESCENCE (what gets pushed out)</div>
+            <input id="obs" type="range" min="0" max="1" step="0.01" value="0.42">
+            <div class="val" id="obsV">0.42</div>
+          </div>
+          <div class="row">
+            <div class="label">REVERSAL (when pushed to limit)</div>
+            <input id="rev" type="range" min="0" max="1" step="0.01" value="0.25">
+            <div class="val" id="revV">0.25</div>
+          </div>
+        </div>
+
+        <div class="toggles">
+          <label class="toggle"><input id="T_grid" type="checkbox" checked><span>mosaic grid</span></label>
+          <label class="toggle"><input id="T_lines" type="checkbox" checked><span>scanlines</span></label>
+          <label class="toggle"><input id="T_sources" type="checkbox" checked><span>sources</span></label>
+          <label class="toggle"><input id="T_labels" type="checkbox" checked><span>labels</span></label>
+          <label class="toggle"><input id="T_threads" type="checkbox" checked><span>tribal threads</span></label>
+        </div>
+
+        <div class="status">
+          <div class="mono" id="modeText">MODE: —</div>
+          <div style="display:flex; align-items:center; gap:10px;">
+            <div class="mono">ATTENTION PRESSURE</div>
+            <div class="bar"><div class="barFill" id="attFill"></div></div>
+            <div class="mono" id="attVal">0%</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (() => {
+      const canvas = document.getElementById('c');
+      const ctx = canvas.getContext('2d', { alpha:false });
+
+      let W=0, H=0, DPR=Math.min(2, window.devicePixelRatio||1);
+      function resize(){
+        W=innerWidth; H=innerHeight;
+        canvas.width = Math.floor(W*DPR);
+        canvas.height = Math.floor(H*DPR);
+        canvas.style.width = W+'px';
+        canvas.style.height = H+'px';
+        ctx.setTransform(DPR,0,0,DPR,0,0);
+      }
+      addEventListener('resize', resize);
+      resize();
+
+      const $ = (id)=>document.getElementById(id);
+      const ui = {
+        hotCool: $('hotCool'),
+        linearMosaic: $('linearMosaic'),
+        indTribal: $('indTribal'),
+        speed: $('speed'),
+        signalNoise: $('signalNoise'),
+        compress: $('compress'),
+        trace: $('trace'),
+        amp: $('amp'),
+        ret: $('ret'),
+        obs: $('obs'),
+        rev: $('rev'),
+        T_grid: $('T_grid'),
+        T_lines: $('T_lines'),
+        T_sources: $('T_sources'),
+        T_labels: $('T_labels'),
+        T_threads: $('T_threads'),
+      };
+
+      const vals = {
+        hotCoolV: $('hotCoolV'),
+        linearMosaicV: $('linearMosaicV'),
+        indTribalV: $('indTribalV'),
+        speedV: $('speedV'),
+        signalNoiseV: $('signalNoiseV'),
+        compressV: $('compressV'),
+        traceV: $('traceV'),
+        ampV: $('ampV'),
+        retV: $('retV'),
+        obsV: $('obsV'),
+        revV: $('revV'),
+      };
+
+      function sync(){
+        vals.hotCoolV.textContent = (+ui.hotCool.value).toFixed(2);
+        vals.linearMosaicV.textContent = (+ui.linearMosaic.value).toFixed(2);
+        vals.indTribalV.textContent = (+ui.indTribal.value).toFixed(2);
+        vals.speedV.textContent = (+ui.speed.value).toFixed(2);
+        vals.signalNoiseV.textContent = (+ui.signalNoise.value).toFixed(2);
+        vals.compressV.textContent = (+ui.compress.value).toFixed(2);
+        vals.traceV.textContent = (+ui.trace.value).toFixed(3);
+
+        vals.ampV.textContent = (+ui.amp.value).toFixed(2);
+        vals.retV.textContent = (+ui.ret.value).toFixed(2);
+        vals.obsV.textContent = (+ui.obs.value).toFixed(2);
+        vals.revV.textContent = (+ui.rev.value).toFixed(2);
+      }
+      Object.values(ui).forEach(el=>{
+        if (!el || !el.addEventListener) return;
+        el.addEventListener('input', sync);
+        el.addEventListener('change', sync);
+      });
+      sync();
+
+      // ===== State =====
+      const st = {
+        t:0,
+        invert:false,
+        paused:false,
+        seed:(Math.random()*1e9)|0,
+        ox:0, oy:0,
+        drag:false,
+        lx:0, ly:0,
+        wheel:0,
+        zoom:1.0,
+        focus:-1,
+      };
+
+      function clamp(v,a,b){ return Math.max(a, Math.min(b, v)); }
+      function lerp(a,b,t){ return a + (b-a)*t; }
+      function hash32(n){
+        n = (n ^ (n >>> 16)) >>> 0;
+        n = Math.imul(n, 2246822519) >>> 0;
+        n = (n ^ (n >>> 13)) >>> 0;
+        n = Math.imul(n, 3266489917) >>> 0;
+        n = (n ^ (n >>> 16)) >>> 0;
+        return n >>> 0;
+      }
+      function rnd01(n){ return hash32(n) / 4294967295; }
+
+      // ===== Sources (content attractors) =====
+      // These are not "pages"; they are environmental biases.
+      const ROOMS = [
+        "STUDIO","LAB","TEMPLE","VAULT","CINEMA","LIBRARY","OBSERVATORY","LOBBY","STORE","MAP","DEX","NOTES"
+      ];
+      const sources = [];
+      const pinned = new Set();
+
+      function reseed(){
+        st.seed = (Math.random()*1e9)|0;
+        sources.length = 0;
+        pinned.clear();
+        st.focus = -1;
+
+        const N = 12;
+        for (let i=0;i<N;i++){
+          const s = (st.seed + i*997) | 0;
+          const ang = rnd01(s)*Math.PI*2;
+          const rr = lerp(0.12, 0.46, rnd01(s^0x9e3779b9));
+          const x = Math.cos(ang)*rr;
+          const y = Math.sin(ang)*rr;
+          sources.push({
+            name: ROOMS[i % ROOMS.length],
+            x, y,
+            vx: lerp(-0.08, 0.08, rnd01(s^0x85ebca6b)),
+            vy: lerp(-0.08, 0.08, rnd01(s^0xc2b2ae35)),
+            heat: 0,
+          });
+        }
+      }
+      reseed();
+
+      function worldToScreen(nx,ny){
+        // nx,ny are normalized world coords (-1..1-ish)
+        const S = Math.min(W,H) * 0.62 * st.zoom;
+        const cx = W*0.5 + st.ox;
+        const cy = H*0.5 + st.oy;
+        return { x: cx + nx*S, y: cy + ny*S };
+      }
+      function screenToWorld(x,y){
+        const S = Math.min(W,H) * 0.62 * st.zoom;
+        const cx = W*0.5 + st.ox;
+        const cy = H*0.5 + st.oy;
+        return { x: (x-cx)/S, y: (y-cy)/S };
+      }
+
+      function hitSource(sx,sy){
+        const p = screenToWorld(sx,sy);
+        let best=-1, bd=1e9;
+        for (let i=0;i<sources.length;i++){
+          const a = sources[i];
+          const dx = a.x - p.x;
+          const dy = a.y - p.y;
+          const d2 = dx*dx + dy*dy;
+          if (d2 < 0.018 && d2 < bd){ bd=d2; best=i; }
+        }
+        return best;
+      }
+
+      // ===== Interaction =====
+      $('invert').onclick = ()=> st.invert = !st.invert;
+      $('pause').onclick = ()=> st.paused = !st.paused;
+      $('reseed').onclick = ()=> reseed();
+      $('reset').onclick = ()=>{
+        st.t=0; st.invert=false; st.paused=false; st.ox=0; st.oy=0; st.wheel=0; st.zoom=1.0;
+        ui.hotCool.value=0.55; ui.linearMosaic.value=0.70; ui.indTribal.value=0.62;
+        ui.speed.value=0.75; ui.signalNoise.value=0.35; ui.compress.value=0.48; ui.trace.value=0.050;
+        ui.amp.value=0.70; ui.ret.value=0.35; ui.obs.value=0.42; ui.rev.value=0.25;
+        sync();
+        reseed();
+      };
+
+      addEventListener('keydown', (e)=>{
+        if (e.key==='i' || e.key==='I') st.invert = !st.invert;
+        if (e.key==='p' || e.key==='P') st.paused = !st.paused;
+        if (e.key==='h' || e.key==='H'){
+          const panel = document.getElementById('panel');
+          panel.style.display = (panel.style.display === 'none') ? '' : 'none';
+        }
+      });
+
+      addEventListener('wheel', (e)=>{
+        const d = Math.max(-160, Math.min(160, e.deltaY));
+        st.wheel += (-d/160) * 0.18;
+        st.wheel = clamp(st.wheel, -0.85, 0.95);
+      }, { passive:true });
+
+      addEventListener('pointerdown', (e)=>{
+        st.drag=true; st.lx=e.clientX; st.ly=e.clientY;
+
+        const hit = hitSource(e.clientX, e.clientY);
+        if (hit !== -1){
+          if (e.shiftKey){
+            if (pinned.has(hit)) pinned.delete(hit); else pinned.add(hit);
+            sources[hit].heat = 1.25;
+          } else {
+            st.focus = hit;
+            sources[hit].heat = 1.4;
+          }
+        }
+      });
+      addEventListener('pointerup', ()=> st.drag=false);
+      addEventListener('pointercancel', ()=> st.drag=false);
+      addEventListener('pointermove', (e)=>{
+        if (!st.drag) return;
+        const dx = e.clientX - st.lx;
+        const dy = e.clientY - st.ly;
+        st.lx=e.clientX; st.ly=e.clientY;
+        st.ox += dx;
+        st.oy += dy;
+        st.ox = clamp(st.ox, -W*0.60, W*0.60);
+        st.oy = clamp(st.oy, -H*0.60, H*0.60);
+      });
+
+      // ===== Environment model (McLuhan) =====
+      function modeString(hot, mosaic, tribal){
+        const a = hot >= 0.5 ? "HOT" : "COOL";
+        const b = mosaic >= 0.5 ? "MOSAIC" : "LINEAR";
+        const c = tribal >= 0.5 ? "TRIBAL" : "INDIVIDUAL";
+        return `${a} · ${b} · ${c}`;
+      }
+
+      function attentionPressure(hot, mosaic, tribal, speed, noise, amp, rev){
+        // A single scalar that modulates density + pull. Rev increases “pressure” at extremes.
+        const base = 0.35*hot + 0.25*mosaic + 0.25*tribal + 0.15*clamp(speed/2,0,1);
+        const stress = 0.35*noise + 0.40*amp + 0.55*rev*Math.max(0, base-0.55);
+        return clamp(base + 0.35*stress, 0, 1);
+      }
+
+      // ===== Simulation =====
+      function step(dt){
+        const hot = +ui.hotCool.value;
+        const mosaic = +ui.linearMosaic.value;
+        const tribal = +ui.indTribal.value;
+        const speed = +ui.speed.value;
+        const noise = +ui.signalNoise.value;
+        const compress = +ui.compress.value;
+
+        const amp = +ui.amp.value;
+        const ret = +ui.ret.value;
+        const obs = +ui.obs.value;
+        const rev = +ui.rev.value;
+
+        // Zoom smoothing
+        st.wheel *= 0.88;
+        st.zoom += st.wheel;
+        st.zoom = clamp(st.zoom, 0.55, 2.60);
+
+        // Attention drives motion + clustering
+        const att = attentionPressure(hot, mosaic, tribal, speed, noise, amp, rev);
+
+        // Movement rules:
+        // - HOT: sources stabilize (less drift) but get "sharp pull" when focused
+        // - COOL: more drift / participation
+        // - MOSAIC: orbit + collage motion
+        // - LINEAR: drift along a “scan” direction (sequence)
+        // - TRIBAL: stronger coupling (threads)
+        // - INDIVIDUAL: weaker coupling, more solitary
+        const drift = lerp(0.35, 1.40, (1-hot)) * speed;            // cool = more drift
+        const orbit = lerp(0.15, 1.30, mosaic) * speed;             // mosaic = more orbit
+        const scan  = lerp(1.15, 0.25, mosaic) * speed;             // linear = more scan
+        const couple = lerp(0.25, 1.35, tribal) * (0.45 + 0.55*amp); // tribal + amp
+
+        // “Retrieve” reintroduces older, slower periodicity; “Obsolescence” removes fine detail via damping.
+        const retro = lerp(0.0, 1.0, ret);
+        const damp = lerp(0.08, 0.38, obs); // higher obs = stronger damping (push out micro-motion)
+
+        // reversal at extremes: if environment is too hot+mosaic+tribal with high amp, it flips into jitter/glitch.
+        const extreme = clamp((hot*mosaic*tribal*amp - 0.22) / 0.45, 0, 1) * rev;
+        const jitter = lerp(0.0, 1.0, extreme) * (0.25 + 0.75*noise);
+
+        // base direction for "linear" scan
+        const scanDir = (Math.sin(st.t*0.12) + 0.65*Math.cos(st.t*0.07)) * 0.5;
+        const sx = Math.cos(scanDir), sy = Math.sin(scanDir);
+
+        for (let i=0;i<sources.length;i++){
+          const a = sources[i];
+
+          a.heat *= Math.pow(0.12, dt*0.25);
+
+          if (!pinned.has(i)){
+            // drift
+            a.vx += (rnd01(st.seed + ((st.t*1000)|0) + i*911) - 0.5) * 0.35 * noise * drift * dt;
+            a.vy += (rnd01(st.seed + ((st.t*1000)|0) + i*733) - 0.5) * 0.35 * noise * drift * dt;
+
+            // mosaic orbit around center
+            const dx = a.x, dy = a.y;
+            const d = Math.sqrt(dx*dx+dy*dy) + 1e-6;
+            const tx = -dy/d, ty = dx/d;
+            a.vx += tx * orbit * 0.22 * dt;
+            a.vy += ty * orbit * 0.22 * dt;
+
+            // linear scan
+            a.vx += sx * scan * 0.09 * dt;
+            a.vy += sy * scan * 0.09 * dt;
+
+            // retro periodicity
+            if (retro > 0.001){
+              a.vx += Math.sin(st.t*0.35 + i)*0.08*retro*dt;
+              a.vy += Math.cos(st.t*0.30 + i)*0.08*retro*dt;
+            }
+
+            // focus pull (hot makes it snappier)
+            if (st.focus === i){
+              a.vx += (-a.x) * (0.35 + 0.85*hot) * (0.55 + 0.65*att) * dt;
+              a.vy += (-a.y) * (0.35 + 0.85*hot) * (0.55 + 0.65*att) * dt;
+            }
+
+            // jitter when reversed
+            if (jitter > 0.001){
+              a.vx += (Math.sin(st.t*22 + i*3.1) * 0.10) * jitter * dt;
+              a.vy += (Math.cos(st.t*21 + i*2.7) * 0.10) * jitter * dt;
+            }
+
+            // damping (obsolescence)
+            a.vx *= Math.pow(0.35, dt*damp);
+            a.vy *= Math.pow(0.35, dt*damp);
+
+            // integrate
+            a.x += a.vx * dt;
+            a.y += a.vy * dt;
+          }
+
+          // soft bounds (keep it "environmental", not off-screen)
+          const bx = lerp(0.72, 0.52, compress);
+          const by = lerp(0.72, 0.52, compress);
+          if (a.x < -bx) a.x = bx;
+          if (a.x >  bx) a.x = -bx;
+          if (a.y < -by) a.y = by;
+          if (a.y >  by) a.y = -by;
+        }
+
+        // tribal coupling: sources attract/repel based on distance, stronger when tribal.
+        if (couple > 0.001){
+          for (let i=0;i<sources.length;i++){
+            for (let j=i+1;j<sources.length;j++){
+              const A = sources[i], B = sources[j];
+              const dx = B.x - A.x;
+              const dy = B.y - A.y;
+              const d2 = dx*dx + dy*dy + 1e-6;
+              const d = Math.sqrt(d2);
+
+              const target = lerp(0.32, 0.18, compress); // compress packs closer
+              const diff = d - target;
+
+              const strength = couple * 0.12 * (0.70 + 0.60*att);
+              const fx = (dx/d) * (diff * strength);
+              const fy = (dy/d) * (diff * strength);
+
+              if (!pinned.has(i)){ A.vx += fx; A.vy += fy; }
+              if (!pinned.has(j)){ B.vx -= fx; B.vy -= fy; }
+            }
+          }
+        }
+
+        // status UI
+        const att2 = attentionPressure(hot, mosaic, tribal, speed, noise, amp, rev);
+        $('modeText').textContent = `MODE: ${modeString(hot, mosaic, tribal)} · SPEED ${(speed).toFixed(2)} · REV ${(rev).toFixed(2)}`;
+        $('attFill').style.width = Math.round(att2*100) + '%';
+        $('attVal').textContent = Math.round(att2*100) + '%';
+      }
+
+      // ===== Rendering =====
+      function draw(){
+        const inv = st.invert;
+        const bg = inv ? 255 : 0;
+        const fg = inv ? 0 : 255;
+
+        const hot = +ui.hotCool.value;
+        const mosaic = +ui.linearMosaic.value;
+        const tribal = +ui.indTribal.value;
+        const speed = +ui.speed.value;
+        const noise = +ui.signalNoise.value;
+        const compress = +ui.compress.value;
+
+        const amp = +ui.amp.value;
+        const ret = +ui.ret.value;
+        const obs = +ui.obs.value;
+        const rev = +ui.rev.value;
+
+        const trace = +ui.trace.value;
+
+        if (trace > 0){
+          ctx.fillStyle = `rgba(${bg},${bg},${bg},${clamp(trace,0,1)})`;
+          ctx.fillRect(0,0,W,H);
+        } else {
+          ctx.fillStyle = `rgb(${bg},${bg},${bg})`;
+          ctx.fillRect(0,0,W,H);
+        }
+
+        // In invert mode: keep source-over so black stays visible on white.
+        ctx.globalCompositeOperation = inv ? 'source-over' : 'screen';
+
+        const att = attentionPressure(hot, mosaic, tribal, speed, noise, amp, rev);
+
+        // Mosaic grid (environment texture)
+        if (ui.T_grid.checked){
+          const base = lerp(34, 110, compress);      // compression reduces cell size (more dense)
+          const grid = Math.floor(lerp(base, base*0.55, mosaic)); // mosaic shifts toward smaller, more tiles
+          const jitter = lerp(0, 18, noise) + 22*att*rev;
+
+          ctx.lineWidth = 1;
+          const alpha = clamp(0.03 + 0.10*(1-hot) + 0.08*att, 0, 0.32);
+          ctx.strokeStyle = `rgba(${fg},${fg},${fg},${alpha})`;
+
+          // Linear mode creates scanning diagonals; Mosaic mode makes more orthogonal lattice.
+          const skew = lerp(0.85, 0.12, mosaic);
+          const phase = st.t*(0.35 + 0.65*speed);
+
+          for (let y=-grid; y<H+grid; y+=grid){
+            ctx.beginPath();
+            for (let x=-grid; x<W+grid; x+=grid){
+              const nx = x + Math.sin(phase + (x+y)*0.002)*jitter*skew;
+              const ny = y + Math.cos(phase*0.9 + (x-y)*0.002)*jitter*(1-skew);
+              ctx.rect(nx, ny, grid, grid);
+            }
+            ctx.stroke();
+          }
+
+          // Retrieve: bring back “print” blocks (thicker, fewer, quieter)
+          if (ret > 0.001){
+            ctx.lineWidth = 1.6;
+            const a2 = clamp(0.02 + 0.10*ret, 0, 0.22);
+            ctx.strokeStyle = `rgba(${fg},${fg},${fg},${a2})`;
+            const big = grid * lerp(2.2, 3.2, ret);
+            for (let y=-big; y<H+big; y+=big){
+              ctx.beginPath();
+              ctx.moveTo(0, y + Math.sin(phase*0.4 + y*0.01)*8*ret);
+              ctx.lineTo(W, y + Math.sin(phase*0.4 + y*0.01)*8*ret);
+              ctx.stroke();
+            }
+          }
+        }
+
+        // Tribal threads (shared field coupling)
+        if (ui.T_threads.checked){
+          ctx.lineWidth = 1.2;
+          const alpha = clamp(0.03 + 0.16*tribal + 0.10*att, 0, 0.55);
+          ctx.strokeStyle = `rgba(${fg},${fg},${fg},${alpha})`;
+
+          for (let i=0;i<sources.length;i++){
+            for (let j=i+1;j<sources.length;j++){
+              // show only some links to keep it light
+              const gate = rnd01(st.seed + i*131 + j*271);
+              const keep = gate < (0.25 + 0.55*tribal + 0.10*att);
+              if (!keep) continue;
+
+              const A = worldToScreen(sources[i].x, sources[i].y);
+              const B = worldToScreen(sources[j].x, sources[j].y);
+              const mx = (A.x+B.x)*0.5 + Math.sin(st.t*0.8 + i + j)*18*noise;
+              const my = (A.y+B.y)*0.5 + Math.cos(st.t*0.7 + i - j)*18*noise;
+
+              ctx.beginPath();
+              ctx.moveTo(A.x, A.y);
+              ctx.quadraticCurveTo(mx, my, B.x, B.y);
+              ctx.stroke();
+            }
+          }
+        }
+
+        // Sources (attractors) — “media centers”
+        if (ui.T_sources.checked){
+          const baseR = lerp(3.0, 1.6, compress);
+          const glow = lerp(1.8, 3.2, amp);
+          for (let i=0;i<sources.length;i++){
+            const s = sources[i];
+            const p = worldToScreen(s.x, s.y);
+            const heat = clamp(s.heat, 0, 1.5);
+            const isFocus = (st.focus === i);
+            const isPinned = pinned.has(i);
+
+            // HOT increases sharpness: smaller, brighter points.
+            const r = (baseR + 4.5*(1-hot) + 2.8*heat + (isFocus?2.0:0)) * (0.8 + 0.6*st.zoom*0.2);
+            const a = clamp((0.35 + 0.55*hot + 0.35*heat + (isPinned?0.25:0)) * (0.65 + 0.55*amp), 0, 1);
+
+            // halo ring
+            ctx.lineWidth = 1.2;
+            ctx.strokeStyle = `rgba(${fg},${fg},${fg},${clamp(0.08 + 0.22*glow + 0.25*heat,0,0.7)})`;
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, r*(0.85 + 0.35*glow), 0, Math.PI*2);
+            ctx.stroke();
+
+            // core
+            ctx.lineWidth = 1.2;
+            ctx.strokeStyle = `rgba(${fg},${fg},${fg},${a})`;
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, r*0.55, 0, Math.PI*2);
+            ctx.stroke();
+
+            if (isPinned){
+              ctx.beginPath();
+              ctx.moveTo(p.x-r*0.9, p.y);
+              ctx.lineTo(p.x+r*0.9, p.y);
+              ctx.stroke();
+            }
+          }
+        }
+
+        // Labels
+        if (ui.T_labels.checked){
+          ctx.globalCompositeOperation = 'source-over';
+          ctx.font = '11px Arial';
+          ctx.textBaseline = 'middle';
+          ctx.fillStyle = inv ? 'rgba(0,0,0,0.86)' : 'rgba(255,255,255,0.82)';
+
+          for (let i=0;i<sources.length;i++){
+            const s = sources[i];
+            const p = worldToScreen(s.x, s.y);
+            const tag = s.name + (pinned.has(i) ? " · PIN" : (st.focus===i ? " · PULSE" : ""));
+            ctx.fillText(tag, p.x + 12, p.y);
+          }
+
+          // show tetrad summary (tiny)
+          const t = `TETRAD: AMP ${amp.toFixed(2)} · RET ${ret.toFixed(2)} · OBS ${obs.toFixed(2)} · REV ${rev.toFixed(2)}`;
+          ctx.fillText(t, 18, H-54);
+        }
+
+        // Scanlines
+        if (ui.T_lines.checked){
+          ctx.globalCompositeOperation = 'source-over';
+          const step = 9;
+          const yOff = (st.t*(60 + 80*speed)) % step;
+          ctx.lineWidth = 1;
+          const a = clamp(0.028 + 0.055*(1-hot) + 0.035*noise, 0, 0.10);
+          ctx.strokeStyle = `rgba(${fg},${fg},${fg},${a})`;
+          for (let y=-step; y<H+step; y+=step){
+            ctx.beginPath();
+            ctx.moveTo(0, y+yOff);
+            ctx.lineTo(W, y+yOff);
+            ctx.stroke();
+          }
+        }
+
+        // Reversal “glitch” at extreme: introduce a few tearing lines (still light).
+        const extreme = clamp((hot*mosaic*tribal*amp - 0.22) / 0.45, 0, 1) * rev;
+        if (extreme > 0.01){
+          ctx.globalCompositeOperation = 'source-over';
+          ctx.lineWidth = 1;
+          const a = clamp(0.03 + 0.18*extreme, 0, 0.22);
+          ctx.strokeStyle = `rgba(${fg},${fg},${fg},${a})`;
+          const n = Math.floor(lerp(3, 18, extreme));
+          for (let i=0;i<n;i++){
+            const y = rnd01(st.seed + ((st.t*1000)|0) + i*199) * H;
+            const dx = (rnd01(st.seed + i*733) - 0.5) * 220 * extreme;
+            ctx.beginPath();
+            ctx.moveTo(0, y);
+            ctx.lineTo(W, y + dx);
+            ctx.stroke();
+          }
+        }
+
+        ctx.globalCompositeOperation = 'source-over';
+      }
+
+      // ===== Loop =====
+      let last = performance.now();
+      function frame(now){
+        const rawDt = Math.min(0.033, (now-last)/1000);
+        last = now;
+
+        const dt = rawDt * (0.25 + 1.35*(+ui.speed.value));
+        if (!st.paused){
+          st.t += dt;
+
+          // drive heat decay
+          for (const s of sources) s.heat *= Math.pow(0.10, dt*0.22);
+
+          step(dt);
+        }
+
+        draw();
+        requestAnimationFrame(frame);
+      }
+      requestAnimationFrame(frame);
+
+      // pulse on click if not hit any source (environment reaction)
+      addEventListener('pointerdown', (e)=>{
+        const hit = hitSource(e.clientX, e.clientY);
+        if (hit === -1){
+          // pulse nearest source slightly
+          let best=-1, bd=1e9;
+          const p = screenToWorld(e.clientX,e.clientY);
+          for (let i=0;i<sources.length;i++){
+            const s=sources[i];
+            const dx=s.x-p.x, dy=s.y-p.y;
+            const d2=dx*dx+dy*dy;
+            if (d2 < bd){ bd=d2; best=i; }
+          }
+          if (best !== -1) sources[best].heat = Math.max(sources[best].heat, 0.9);
+        }
+      });
+    })();
+  </script>
+</body>
+</html>
