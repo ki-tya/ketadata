@@ -1,0 +1,911 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>KETADATA — DELEUZIAN FIELD (ONE FILE)</title>
+  <style>
+    :root{
+      --bg:#000;
+      --fg:rgba(255,255,255,.92);
+      --muted:rgba(255,255,255,.55);
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0;
+      overflow:hidden;
+      background:var(--bg);
+      font-family: Arial, Helvetica, sans-serif;
+      color:var(--fg);
+    }
+    canvas{ position:fixed; inset:0; width:100vw; height:100vh; display:block; }
+
+    .hud{
+      position:fixed; left:22px; top:18px;
+      user-select:none; pointer-events:none;
+      mix-blend-mode:screen;
+    }
+    .brand{
+      font-weight:800;
+      letter-spacing:.18em;
+      text-transform:uppercase;
+      font-size:16px;
+      text-shadow: 0 0 18px rgba(255,255,255,.18);
+    }
+    .sub{
+      margin-top:4px;
+      font-size:11px;
+      letter-spacing:.14em;
+      text-transform:uppercase;
+      color:var(--muted);
+    }
+
+    .dock{
+      position:fixed; left:22px; bottom:18px;
+      display:flex; gap:10px; pointer-events:auto;
+      align-items:center;
+    }
+    .btn{
+      background:rgba(255,255,255,.05);
+      border:1px solid rgba(255,255,255,.22);
+      color:rgba(255,255,255,.86);
+      padding:10px 12px;
+      border-radius:10px;
+      letter-spacing:.14em;
+      font-size:11px;
+      text-transform:uppercase;
+      cursor:pointer;
+      backdrop-filter: blur(6px);
+      transition: transform .08s ease, background .12s ease, border-color .12s ease;
+    }
+    .btn:hover{ background:rgba(255,255,255,.10); border-color:rgba(255,255,255,.36); transform: translateY(-1px); }
+    .btn:active{ transform: translateY(0px); }
+
+    .panel{
+      position:fixed; right:18px; top:18px;
+      width:min(560px, calc(100vw - 36px));
+      max-height: calc(100vh - 36px);
+      overflow:auto;
+      border:1px solid rgba(255,255,255,.18);
+      background:rgba(0,0,0,.46);
+      backdrop-filter: blur(10px);
+      border-radius:14px;
+      box-shadow: 0 0 0 1px rgba(255,255,255,.06) inset, 0 16px 50px rgba(0,0,0,.65);
+    }
+    .panelHeader{
+      position:sticky; top:0;
+      padding:10px 12px;
+      border-bottom:1px solid rgba(255,255,255,.12);
+      background:rgba(0,0,0,.66);
+      backdrop-filter: blur(10px);
+      display:flex; justify-content:space-between; align-items:center;
+      z-index:10;
+    }
+    .panelHeader .title{
+      font-weight:800;
+      letter-spacing:.14em;
+      font-size:11px;
+      text-transform:uppercase;
+      color:rgba(255,255,255,.86);
+    }
+    .panelHeader .hint{
+      font-size:11px;
+      letter-spacing:.08em;
+      color:rgba(255,255,255,.55);
+      text-align:right;
+      line-height:1.2;
+    }
+    .panelBody{ padding:10px 12px 12px; display:flex; flex-direction:column; gap:10px; }
+    .note{
+      font-size:11px;
+      color:rgba(255,255,255,.55);
+      line-height:1.35;
+      letter-spacing:.02em;
+      padding:10px 12px 0;
+    }
+
+    .group{
+      border:1px solid rgba(255,255,255,.12);
+      border-radius:12px;
+      overflow:hidden;
+      background:rgba(255,255,255,.02);
+    }
+    .group h3{
+      margin:0;
+      padding:10px 10px;
+      font-size:11px;
+      letter-spacing:.14em;
+      text-transform:uppercase;
+      color:rgba(255,255,255,.75);
+      border-bottom:1px solid rgba(255,255,255,.10);
+      background:rgba(255,255,255,.03);
+      display:flex; justify-content:space-between; align-items:center;
+    }
+    .pill{
+      font-size:10px;
+      letter-spacing:.10em;
+      text-transform:uppercase;
+      color:rgba(255,255,255,.62);
+      border:1px solid rgba(255,255,255,.18);
+      padding:4px 8px;
+      border-radius:999px;
+      background:rgba(0,0,0,.20);
+    }
+    .rows{ padding:10px; display:flex; flex-direction:column; gap:10px; }
+    .row{
+      display:grid;
+      grid-template-columns: 180px 1fr 70px;
+      gap:10px;
+      align-items:center;
+    }
+    .label{
+      font-size:11px;
+      text-transform:uppercase;
+      letter-spacing:.12em;
+      color:rgba(255,255,255,.62);
+      white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+    }
+    input[type="range"]{ width:100%; accent-color: rgba(255,255,255,.92); }
+    .val{ font-variant-numeric: tabular-nums; font-size:11px; color:rgba(255,255,255,.76); text-align:right; }
+
+    .toggles{ display:flex; flex-wrap:wrap; gap:8px; padding:10px; }
+    .toggle{
+      display:inline-flex; align-items:center; gap:8px;
+      padding:8px 10px;
+      border-radius:10px;
+      border:1px solid rgba(255,255,255,.18);
+      background:rgba(255,255,255,.03);
+      cursor:pointer;
+      user-select:none;
+    }
+    .toggle input{ transform: translateY(1px); }
+    .toggle span{
+      font-size:11px;
+      letter-spacing:.12em;
+      text-transform:uppercase;
+      color:rgba(255,255,255,.78);
+      white-space:nowrap;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="c"></canvas>
+
+  <div class="hud">
+    <div class="brand">KETADATA</div>
+    <div class="sub">DELEUZIAN FIELD · RHIZOME · CONTINUOUS VARIATION</div>
+  </div>
+
+  <div class="dock">
+    <button class="btn" id="invert">INVERT</button>
+    <button class="btn" id="pause">PAUSE</button>
+    <button class="btn" id="reseed">RESEED</button>
+    <button class="btn" id="reset">RESET</button>
+  </div>
+
+  <div class="panel" id="panel">
+    <div class="panelHeader">
+      <div class="title">FIELD CONTROLS</div>
+      <div class="hint">
+        SCROLL = ZOOM · DRAG = PAN<br/>
+        CLICK = CRYSTALLIZE · SHIFT+CLICK = PIN<br/>
+        [H] PANEL · [P] PAUSE · [I] INVERT
+      </div>
+    </div>
+
+    <div class="note">
+      One file. One field. No hierarchy. Your controls modulate an assemblage: nodes + relations + drift + trace + decay.
+      Invert flips background and all strokes; invert forces source-over so black remains visible.
+    </div>
+
+    <div class="panelBody">
+
+      <div class="group">
+        <h3>Time & Flow <span class="pill">becoming</span></h3>
+        <div class="rows">
+          <div class="row">
+            <div class="label">time scale (slow-mo)</div>
+            <input id="timeScale" type="range" min="0.000" max="2.000" step="0.001" value="0.35">
+            <div class="val" id="timeScaleV">0.350</div>
+          </div>
+          <div class="row">
+            <div class="label">drift</div>
+            <input id="drift" type="range" min="0.00" max="2.00" step="0.01" value="0.85">
+            <div class="val" id="driftV">0.85</div>
+          </div>
+          <div class="row">
+            <div class="label">swirl</div>
+            <input id="swirl" type="range" min="0.00" max="2.00" step="0.01" value="0.55">
+            <div class="val" id="swirlV">0.55</div>
+          </div>
+          <div class="row">
+            <div class="label">noise (micro-variation)</div>
+            <input id="noise" type="range" min="0.00" max="1.00" step="0.01" value="0.35">
+            <div class="val" id="noiseV">0.35</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="group">
+        <h3>Graph <span class="pill">rhizome</span></h3>
+        <div class="rows">
+          <div class="row">
+            <div class="label">node count</div>
+            <input id="count" type="range" min="40" max="520" step="1" value="220">
+            <div class="val" id="countV">220</div>
+          </div>
+          <div class="row">
+            <div class="label">link radius</div>
+            <input id="linkR" type="range" min="40" max="420" step="1" value="170">
+            <div class="val" id="linkRV">170</div>
+          </div>
+          <div class="row">
+            <div class="label">max links per node</div>
+            <input id="maxK" type="range" min="1" max="10" step="1" value="4">
+            <div class="val" id="maxKV">4</div>
+          </div>
+          <div class="row">
+            <div class="label">repulsion</div>
+            <input id="repel" type="range" min="0.0" max="2.5" step="0.01" value="1.05">
+            <div class="val" id="repelV">1.05</div>
+          </div>
+          <div class="row">
+            <div class="label">cohesion</div>
+            <input id="cohesion" type="range" min="0.0" max="2.5" step="0.01" value="0.75">
+            <div class="val" id="cohesionV">0.75</div>
+          </div>
+          <div class="row">
+            <div class="label">affinity (tag bias)</div>
+            <input id="affinity" type="range" min="0.0" max="2.0" step="0.01" value="0.85">
+            <div class="val" id="affinityV">0.85</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="group">
+        <h3>Look <span class="pill">immersion</span></h3>
+        <div class="rows">
+          <div class="row">
+            <div class="label">scale</div>
+            <input id="scale" type="range" min="0.40" max="3.60" step="0.01" value="1.55">
+            <div class="val" id="scaleV">1.55</div>
+          </div>
+          <div class="row">
+            <div class="label">line thickness</div>
+            <input id="thick" type="range" min="0.4" max="3.6" step="0.01" value="1.10">
+            <div class="val" id="thickV">1.10</div>
+          </div>
+          <div class="row">
+            <div class="label">contrast</div>
+            <input id="contrast" type="range" min="0.6" max="3.2" step="0.01" value="1.55">
+            <div class="val" id="contrastV">1.55</div>
+          </div>
+          <div class="row">
+            <div class="label">trace (residue)</div>
+            <input id="trace" type="range" min="0.00" max="0.22" step="0.001" value="0.045">
+            <div class="val" id="traceV">0.045</div>
+          </div>
+          <div class="row">
+            <div class="label">halo</div>
+            <input id="halo" type="range" min="0.00" max="1.00" step="0.01" value="0.45">
+            <div class="val" id="haloV">0.45</div>
+          </div>
+          <div class="row">
+            <div class="label">composite</div>
+            <input id="comp" type="range" min="0" max="2" step="1" value="2">
+            <div class="val" id="compV">screen</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="group">
+        <h3>Overlays <span class="pill">optional</span></h3>
+        <div class="toggles">
+          <label class="toggle"><input id="T_nodes" type="checkbox" checked><span>nodes</span></label>
+          <label class="toggle"><input id="T_links" type="checkbox" checked><span>links</span></label>
+          <label class="toggle"><input id="T_labels" type="checkbox"><span>labels</span></label>
+          <label class="toggle"><input id="T_scan" type="checkbox" checked><span>scanlines</span></label>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    (() => {
+      const canvas = document.getElementById('c');
+      const ctx = canvas.getContext('2d', { alpha:false });
+
+      let W=0, H=0, DPR=Math.min(2, window.devicePixelRatio||1);
+      function resize(){
+        W=innerWidth; H=innerHeight;
+        canvas.width = Math.floor(W*DPR);
+        canvas.height = Math.floor(H*DPR);
+        canvas.style.width = W+'px';
+        canvas.style.height = H+'px';
+        ctx.setTransform(DPR,0,0,DPR,0,0);
+      }
+      addEventListener('resize', resize);
+      resize();
+
+      const $ = (id)=>document.getElementById(id);
+
+      const sliders = [
+        'timeScale','drift','swirl','noise',
+        'count','linkR','maxK','repel','cohesion','affinity',
+        'scale','thick','contrast','trace','halo','comp'
+      ];
+      const ui = {};
+      for (const id of sliders) ui[id] = $(id);
+
+      const toggles = {
+        nodes: $('T_nodes'),
+        links: $('T_links'),
+        labels: $('T_labels'),
+        scan: $('T_scan')
+      };
+
+      function compLabel(v){ return v===0 ? 'source-over' : (v===1 ? 'lighter' : 'screen'); }
+      function sync(){
+        $('timeScaleV').textContent = (+ui.timeScale.value).toFixed(3);
+        $('driftV').textContent = (+ui.drift.value).toFixed(2);
+        $('swirlV').textContent = (+ui.swirl.value).toFixed(2);
+        $('noiseV').textContent = (+ui.noise.value).toFixed(2);
+
+        $('countV').textContent = ui.count.value;
+        $('linkRV').textContent = ui.linkR.value;
+        $('maxKV').textContent = ui.maxK.value;
+        $('repelV').textContent = (+ui.repel.value).toFixed(2);
+        $('cohesionV').textContent = (+ui.cohesion.value).toFixed(2);
+        $('affinityV').textContent = (+ui.affinity.value).toFixed(2);
+
+        $('scaleV').textContent = (+ui.scale.value).toFixed(2);
+        $('thickV').textContent = (+ui.thick.value).toFixed(2);
+        $('contrastV').textContent = (+ui.contrast.value).toFixed(2);
+        $('traceV').textContent = (+ui.trace.value).toFixed(3);
+        $('haloV').textContent = (+ui.halo.value).toFixed(2);
+
+        $('compV').textContent = compLabel((+ui.comp.value)|0);
+      }
+      sliders.forEach(id => ui[id].addEventListener('input', () => { sync(); dirtyGraph=true; }));
+      Object.values(toggles).forEach(ch => ch.addEventListener('change', sync));
+      sync();
+
+      const st = {
+        t: 0,
+        invert:false,
+        paused:false,
+        zoom: 1.0,
+        wheel: 0,
+        drag:false,
+        ox:0, oy:0,
+        lx:0, ly:0,
+        mx:0.5, my:0.5,
+        seed: (Math.random()*1e9)|0,
+        focus: null
+      };
+
+      const TAGS = ["STUDIO","LAB","TEMPLE","VAULT","CINEMA","LIBRARY","OBSERVATORY","LOBBY","STORE","MAP","DEX","NOTES"];
+      const nodes = [];
+      let edges = [];   // list of {a,b,w} (built each frame lightly, capped)
+
+      function clamp(v,a,b){ return Math.max(a, Math.min(b, v)); }
+      function lerp(a,b,t){ return a + (b-a)*t; }
+
+      function hash01(n){
+        n = (n ^ (n >>> 16)) >>> 0;
+        n = Math.imul(n, 2246822519) >>> 0;
+        n = (n ^ (n >>> 13)) >>> 0;
+        n = Math.imul(n, 3266489917) >>> 0;
+        n = (n ^ (n >>> 16)) >>> 0;
+        return (n / 4294967295);
+      }
+
+      function randSpan(n, a, b){ return lerp(a,b, hash01(n)); }
+
+      function reseedGraph(){
+        nodes.length = 0;
+        st.seed = (Math.random()*1e9)|0;
+
+        const N = (+ui.count.value)|0;
+        for (let i=0;i<N;i++){
+          const s = (st.seed + i*1013) | 0;
+          const x = randSpan(s, -W*0.55, W*0.55);
+          const y = randSpan(s^0x9e3779b9, -H*0.55, H*0.55);
+          const vx = randSpan(s^0x85ebca6b, -40, 40);
+          const vy = randSpan(s^0xc2b2ae35, -40, 40);
+
+          // assign 2 tags (affinity)
+          const t1 = TAGS[(randSpan(s^0x27d4eb2d, 0, TAGS.length-0.0001))|0];
+          const t2 = TAGS[(randSpan(s^0x165667b1, 0, TAGS.length-0.0001))|0];
+
+          nodes.push({
+            x,y,vx,vy,
+            tagA:t1, tagB:t2,
+            mass: lerp(0.6, 1.6, hash01(s^0x51)),
+            pin:false,
+            heat:0,
+            label: (t1 + "//" + t2),
+          });
+        }
+        st.focus = null;
+        dirtyGraph = true;
+      }
+
+      let dirtyGraph = true;
+
+      $('invert').onclick = ()=> st.invert = !st.invert;
+      $('pause').onclick = ()=> st.paused = !st.paused;
+      $('reseed').onclick = ()=> { reseedGraph(); };
+      $('reset').onclick = ()=> {
+        st.t=0; st.invert=false; st.paused=false; st.zoom=1.0; st.wheel=0; st.ox=0; st.oy=0;
+        reseedGraph();
+      };
+
+      addEventListener('keydown', (e)=>{
+        if (e.key === 'i' || e.key === 'I') st.invert = !st.invert;
+        if (e.key === 'p' || e.key === 'P') st.paused = !st.paused;
+        if (e.key === 'h' || e.key === 'H'){
+          const panel = document.getElementById('panel');
+          panel.style.display = (panel.style.display === 'none') ? '' : 'none';
+        }
+      });
+
+      addEventListener('wheel', (e)=>{
+        const d = Math.max(-160, Math.min(160, e.deltaY));
+        st.wheel += (-d/160) * 0.18;
+        st.wheel = clamp(st.wheel, -0.85, 0.95);
+      }, { passive:true });
+
+      addEventListener('pointerdown', (e)=>{
+        st.drag = true;
+        st.lx = e.clientX; st.ly = e.clientY;
+
+        // hit-test for crystallize/pin
+        const hit = hitTest(e.clientX, e.clientY);
+        if (hit != null){
+          if (e.shiftKey){
+            nodes[hit].pin = !nodes[hit].pin;
+            nodes[hit].heat = 1;
+          } else {
+            crystallize(hit);
+          }
+        }
+      });
+
+      addEventListener('pointerup', ()=> st.drag=false);
+      addEventListener('pointercancel', ()=> st.drag=false);
+      addEventListener('pointermove', (e)=>{
+        st.mx = clamp(e.clientX / Math.max(1,W), 0, 1);
+        st.my = clamp(e.clientY / Math.max(1,H), 0, 1);
+
+        if (!st.drag) return;
+        const dx = e.clientX - st.lx;
+        const dy = e.clientY - st.ly;
+        st.lx = e.clientX; st.ly = e.clientY;
+        st.ox += dx;
+        st.oy += dy;
+        st.ox = clamp(st.ox, -W*0.60, W*0.60);
+        st.oy = clamp(st.oy, -H*0.60, H*0.60);
+      });
+
+      function worldToScreen(x,y){
+        const S = (+ui.scale.value) * st.zoom;
+        return { x: W*0.5 + st.ox + x*S, y: H*0.5 + st.oy + y*S };
+      }
+
+      function screenToWorld(x,y){
+        const S = (+ui.scale.value) * st.zoom;
+        return { x: (x - (W*0.5 + st.ox))/S, y: (y - (H*0.5 + st.oy))/S };
+      }
+
+      function hitTest(sx,sy){
+        const p = screenToWorld(sx,sy);
+        const r = 10 / ((+ui.scale.value)*st.zoom);
+        let best = null, bd = 1e9;
+        for (let i=0;i<nodes.length;i++){
+          const n = nodes[i];
+          const dx = n.x - p.x, dy = n.y - p.y;
+          const d = dx*dx + dy*dy;
+          if (d < r*r && d < bd){ bd=d; best=i; }
+        }
+        return best;
+      }
+
+      function crystallize(i){
+        st.focus = i;
+        nodes[i].heat = 1.2;
+
+        // pull neighbors with shared tags closer (reterritorialize)
+        const A = nodes[i].tagA, B = nodes[i].tagB;
+        for (let k=0;k<nodes.length;k++){
+          if (k===i) continue;
+          const n = nodes[k];
+          const shared = (n.tagA===A)||(n.tagB===A)||(n.tagA===B)||(n.tagB===B);
+          if (shared){
+            // nudge toward focus
+            const dx = nodes[i].x - n.x;
+            const dy = nodes[i].y - n.y;
+            n.vx += dx * 0.35;
+            n.vy += dy * 0.35;
+            n.heat = Math.max(n.heat, 0.65);
+          } else {
+            // slight push away
+            const dx = n.x - nodes[i].x;
+            const dy = n.y - nodes[i].y;
+            n.vx += dx * 0.05;
+            n.vy += dy * 0.05;
+          }
+        }
+        dirtyGraph = true;
+      }
+
+      function buildEdges(){
+        // Lightweight: for each node, connect to up to maxK nearby nodes inside linkR.
+        const linkR = +ui.linkR.value / ((+ui.scale.value)*st.zoom);
+        const maxK = (+ui.maxK.value)|0;
+        const affinity = +ui.affinity.value;
+
+        edges = [];
+        const N = nodes.length;
+        // approximate: sample comparisons in a bounded way (keeps it light)
+        // Use a spatial bin (uniform grid) for near-neighbor lookup.
+        const cell = linkR; // cell size = link radius
+        const invCell = 1/Math.max(1e-6, cell);
+        const bins = new Map();
+
+        function key(ix,iy){ return ix + ',' + iy; }
+        for (let i=0;i<N;i++){
+          const n=nodes[i];
+          const ix = (n.x*invCell)|0;
+          const iy = (n.y*invCell)|0;
+          const k = key(ix,iy);
+          let arr = bins.get(k);
+          if (!arr){ arr=[]; bins.set(k,arr); }
+          arr.push(i);
+        }
+
+        for (let i=0;i<N;i++){
+          const a = nodes[i];
+          const ix = (a.x*invCell)|0;
+          const iy = (a.y*invCell)|0;
+
+          const candidates = [];
+          for (let ox=-1; ox<=1; ox++){
+            for (let oy=-1; oy<=1; oy++){
+              const arr = bins.get(key(ix+ox, iy+oy));
+              if (!arr) continue;
+              for (const j of arr){
+                if (j===i) continue;
+                const b = nodes[j];
+                const dx=b.x-a.x, dy=b.y-a.y;
+                const d2=dx*dx+dy*dy;
+                if (d2 <= linkR*linkR) candidates.push({ j, d2 });
+              }
+            }
+          }
+
+          // choose nearest candidates (cap)
+          candidates.sort((p,q)=>p.d2-q.d2);
+          const take = Math.min(maxK, candidates.length);
+
+          for (let t=0;t<take;t++){
+            const j = candidates[t].j;
+            // avoid duplicates: only add if i<j
+            if (i < j){
+              const b = nodes[j];
+
+              // affinity weight: shared tags strengthen link
+              const shared =
+                (a.tagA===b.tagA)||(a.tagA===b.tagB)||(a.tagB===b.tagA)||(a.tagB===b.tagB);
+              const w = shared ? (0.55 + 0.45*affinity) : (0.35 - 0.10*(affinity-1));
+
+              edges.push({ a:i, b:j, w: clamp(w, 0.12, 0.95) });
+            }
+          }
+        }
+      }
+
+      function step(dt){
+        const drift = +ui.drift.value;
+        const swirl = +ui.swirl.value;
+        const noise = +ui.noise.value;
+        const repel = +ui.repel.value;
+        const cohesion = +ui.cohesion.value;
+        const linkR = +ui.linkR.value / ((+ui.scale.value)*st.zoom);
+        const linkR2 = linkR*linkR;
+
+        const centerX = 0, centerY = 0;
+
+        // micro-variation (cheap pseudo-noise)
+        function micro(n, t, k){
+          return (Math.sin(t*0.9 + n*1.7) + Math.cos(t*1.3 + n*1.1)) * 0.5 * k;
+        }
+
+        // forces
+        for (let i=0;i<nodes.length;i++){
+          const n = nodes[i];
+
+          // decay heat
+          n.heat *= Math.pow(0.10, dt*0.25); // slow decay
+
+          if (n.pin) { n.vx *= 0.8; n.vy *= 0.8; continue; }
+
+          // swirl around center (smooth space)
+          const dx = n.x - centerX;
+          const dy = n.y - centerY;
+          const d = Math.sqrt(dx*dx+dy*dy) + 1e-6;
+          const sx = -dy/d, sy = dx/d; // tangential
+          n.vx += sx * swirl * 18 * dt;
+          n.vy += sy * swirl * 18 * dt;
+
+          // mild “gravity” cohesion to keep in frame
+          n.vx += (-dx) * cohesion * 0.45 * dt;
+          n.vy += (-dy) * cohesion * 0.45 * dt;
+
+          // micro jitter
+          const mjx = micro(i, st.t, noise);
+          const mjy = micro(i+999, st.t, noise);
+          n.vx += mjx * 22 * dt;
+          n.vy += mjy * 22 * dt;
+
+          // base drift
+          n.vx *= Math.pow(0.35, dt*drift*0.15);
+          n.vy *= Math.pow(0.35, dt*drift*0.15);
+        }
+
+        // neighbor repulsion (local, via edges only: keeps it light)
+        // also use edges for cohesion along connections
+        const Krep = 28 * repel;
+        const Kspr = 0.08 * cohesion;
+
+        for (let e=0;e<edges.length;e++){
+          const E = edges[e];
+          const a = nodes[E.a], b = nodes[E.b];
+          let dx = b.x - a.x, dy = b.y - a.y;
+          const d2 = dx*dx + dy*dy + 1e-6;
+          const d = Math.sqrt(d2);
+
+          // spring toward preferred distance (field reterritorialization)
+          const target = linkR * lerp(0.42, 0.78, E.w);
+          const diff = (d - target);
+          const fx = (dx/d) * (diff * Kspr * E.w);
+          const fy = (dy/d) * (diff * Kspr * E.w);
+
+          if (!a.pin){ a.vx += fx; a.vy += fy; }
+          if (!b.pin){ b.vx -= fx; b.vy -= fy; }
+
+          // repulsion when too close
+          if (d2 < (target*target*0.65)){
+            const rx = (dx/d) * (Krep / (d2));
+            const ry = (dy/d) * (Krep / (d2));
+            if (!a.pin){ a.vx -= rx; a.vy -= ry; }
+            if (!b.pin){ b.vx += rx; b.vy += ry; }
+          }
+        }
+
+        // integrate
+        for (let i=0;i<nodes.length;i++){
+          const n = nodes[i];
+          if (n.pin) continue;
+
+          n.x += n.vx * dt;
+          n.y += n.vy * dt;
+
+          // soft bounds (wrap-ish) to maintain endless field feel
+          const bx = W*0.70, by = H*0.70;
+          if (n.x < -bx) n.x += 2*bx;
+          if (n.x >  bx) n.x -= 2*bx;
+          if (n.y < -by) n.y += 2*by;
+          if (n.y >  by) n.y -= 2*by;
+        }
+
+        // focus “attractor” (becoming a neighborhood)
+        if (st.focus != null && nodes[st.focus]){
+          const f = nodes[st.focus];
+          const pull = 0.25 * cohesion;
+          for (let i=0;i<nodes.length;i++){
+            if (i===st.focus) continue;
+            const n = nodes[i];
+            const shared =
+              (n.tagA===f.tagA)||(n.tagB===f.tagA)||(n.tagA===f.tagB)||(n.tagB===f.tagB);
+            if (!shared) continue;
+            const dx = f.x - n.x, dy = f.y - n.y;
+            n.vx += dx * pull * dt;
+            n.vy += dy * pull * dt;
+          }
+        }
+      }
+
+      function draw(){
+        const inv = st.invert;
+        const bg = inv ? 255 : 0;
+        const fg = inv ? 0 : 255;
+
+        // trace / residue: draw a translucent rect instead of full clear
+        const trace = +ui.trace.value;
+        if (trace > 0){
+          ctx.fillStyle = `rgba(${bg},${bg},${bg},${clamp(trace,0,1)})`;
+          ctx.fillRect(0,0,W,H);
+        } else {
+          ctx.fillStyle = `rgb(${bg},${bg},${bg})`;
+          ctx.fillRect(0,0,W,H);
+        }
+
+        // composite: invert forces source-over so black is visible on white
+        const comp = (+ui.comp.value)|0;
+        ctx.globalCompositeOperation = inv
+          ? 'source-over'
+          : (comp===0 ? 'source-over' : (comp===1 ? 'lighter' : 'screen'));
+
+        const thick = +ui.thick.value;
+        const contrast = +ui.contrast.value;
+        const halo = +ui.halo.value;
+
+        // halo underlay (cheap glow): thicker + low alpha, only if enabled
+        function strokeRGBA(a){
+          ctx.strokeStyle = `rgba(${fg},${fg},${fg},${a})`;
+        }
+
+        // Links
+        if (toggles.links.checked){
+          // halo pass
+          if (halo > 0.001){
+            ctx.lineWidth = thick * lerp(1.8, 3.0, halo);
+            for (let e=0;e<edges.length;e++){
+              const E = edges[e];
+              const a = nodes[E.a], b = nodes[E.b];
+              const pa = worldToScreen(a.x,a.y);
+              const pb = worldToScreen(b.x,b.y);
+              const alpha = (0.020 + 0.050*E.w) * contrast * halo;
+              strokeRGBA(alpha);
+              ctx.beginPath();
+              ctx.moveTo(pa.x,pa.y);
+              ctx.lineTo(pb.x,pb.y);
+              ctx.stroke();
+            }
+          }
+
+          ctx.lineWidth = thick;
+          for (let e=0;e<edges.length;e++){
+            const E = edges[e];
+            const a = nodes[E.a], b = nodes[E.b];
+            const pa = worldToScreen(a.x,a.y);
+            const pb = worldToScreen(b.x,b.y);
+
+            const ha = (a.heat + b.heat) * 0.5;
+            const alpha = (0.06 + 0.12*E.w + 0.08*ha) * contrast;
+            strokeRGBA(clamp(alpha, 0, 0.95));
+            ctx.beginPath();
+            ctx.moveTo(pa.x,pa.y);
+            ctx.lineTo(pb.x,pb.y);
+            ctx.stroke();
+          }
+        }
+
+        // Nodes
+        if (toggles.nodes.checked){
+          // halo circles
+          if (halo > 0.001){
+            ctx.lineWidth = thick * lerp(1.6, 2.8, halo);
+            for (let i=0;i<nodes.length;i++){
+              const n = nodes[i];
+              const p = worldToScreen(n.x,n.y);
+              const r = (2.0 + 2.6*n.mass) * (0.85 + 0.35*halo);
+              const a = (0.06 + 0.12*n.heat) * contrast * halo;
+              ctx.strokeStyle = `rgba(${fg},${fg},${fg},${clamp(a,0,0.5)})`;
+              ctx.beginPath();
+              ctx.arc(p.x,p.y,r+2,0,Math.PI*2);
+              ctx.stroke();
+            }
+          }
+
+          ctx.lineWidth = thick;
+          for (let i=0;i<nodes.length;i++){
+            const n = nodes[i];
+            const p = worldToScreen(n.x,n.y);
+            const r = 1.6 + 2.4*n.mass;
+            const a = clamp((0.55 + 0.60*n.heat) * contrast, 0, 1);
+
+            ctx.strokeStyle = `rgba(${fg},${fg},${fg},${a})`;
+            ctx.beginPath();
+            ctx.arc(p.x,p.y,r,0,Math.PI*2);
+            ctx.stroke();
+
+            if (n.pin){
+              // pinned mark
+              ctx.beginPath();
+              ctx.moveTo(p.x-r-4, p.y);
+              ctx.lineTo(p.x+r+4, p.y);
+              ctx.stroke();
+            }
+          }
+        }
+
+        // Labels (optional, capped)
+        if (toggles.labels.checked){
+          ctx.globalCompositeOperation = 'source-over';
+          ctx.font = '11px Arial';
+          ctx.textBaseline = 'middle';
+          ctx.fillStyle = inv ? 'rgba(0,0,0,0.85)' : 'rgba(255,255,255,0.80)';
+
+          // show only hottest / pinned nodes (bounded)
+          const idx = [];
+          for (let i=0;i<nodes.length;i++){
+            const n=nodes[i];
+            const score = (n.pin ? 2 : 0) + n.heat;
+            if (score > 0.35) idx.push({ i, score });
+          }
+          idx.sort((a,b)=>b.score-a.score);
+          const max = Math.min(18, idx.length);
+
+          for (let k=0;k<max;k++){
+            const n = nodes[idx[k].i];
+            const p = worldToScreen(n.x,n.y);
+            ctx.fillText(n.label, p.x + 10, p.y);
+          }
+        }
+
+        // scanlines overlay (always source-over so it reads)
+        ctx.globalCompositeOperation = 'source-over';
+        if (toggles.scan.checked){
+          const step = 9;
+          const yOff = (st.t*70) % step;
+          ctx.lineWidth = 1;
+          ctx.strokeStyle = `rgba(${fg},${fg},${fg},${0.040*contrast})`;
+          for (let y=-step; y<H+step; y+=step){
+            ctx.beginPath();
+            ctx.moveTo(0, y+yOff);
+            ctx.lineTo(W, y+yOff);
+            ctx.stroke();
+          }
+        }
+      }
+
+      // loop
+      let last = performance.now();
+
+      function loop(now){
+        const rawDt = Math.min(0.033, (now-last)/1000);
+        last = now;
+
+        // zoom via wheel (smooth)
+        st.wheel *= 0.88;
+        st.zoom += st.wheel;
+        st.zoom = clamp(st.zoom, 0.55, 2.60);
+
+        // dynamic graph rebuild if node count changed
+        const wantN = (+ui.count.value)|0;
+        if (wantN !== nodes.length){
+          reseedGraph();
+        }
+
+        const dt = rawDt * (+ui.timeScale.value);
+        if (!st.paused){
+          st.t += dt;
+
+          // rebuild edges at a controlled cadence (keeps it light)
+          // (cadence increases as count increases)
+          const cadence = clamp(0.10 + (nodes.length/520)*0.18, 0.10, 0.28);
+          if ((st.t % cadence) < dt || dirtyGraph){
+            buildEdges();
+            dirtyGraph = false;
+          }
+
+          step(dt);
+        }
+
+        draw();
+        requestAnimationFrame(loop);
+      }
+
+      // init
+      reseedGraph();
+      buildEdges();
+      requestAnimationFrame(loop);
+
+    })();
+  </script>
+</body>
+</html>
