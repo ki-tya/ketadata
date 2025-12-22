@@ -1,0 +1,796 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>KETADATA // INFINITY POOL (VI)</title>
+  <style>
+    :root{
+      --bg:#000;
+      --fg:#fff;
+      --stroke:rgba(255,255,255,0.16);
+      --stroke2:rgba(255,255,255,0.10);
+      --glass:rgba(255,255,255,0.06);
+      --muted:rgba(255,255,255,0.52);
+      --muted2:rgba(255,255,255,0.34);
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%;margin:0;background:var(--bg);color:var(--fg);font-family:Arial, Helvetica, sans-serif;}
+    body{overflow:hidden;}
+    button,input,select,textarea{font-family:inherit}
+    ::selection{background:rgba(255,255,255,0.18);}
+
+    /* TOPBAR */
+    #topbar{
+      position:fixed; left:0; right:0; top:0;
+      height:48px;
+      display:flex; align-items:center; justify-content:space-between;
+      padding:10px 12px;
+      border-bottom:1px solid var(--stroke2);
+      background:#000;
+      user-select:none;
+      z-index:80;
+    }
+    #brand{
+      display:flex; align-items:center; gap:10px;
+      font-size:11px;
+      letter-spacing:0.18em;
+      text-transform:uppercase;
+      color:rgba(255,255,255,0.80);
+      min-width:240px;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      white-space:nowrap;
+    }
+    .whiteBox{width:10px;height:10px;background:#fff;display:inline-block;}
+    .btn{
+      border:1px solid var(--stroke);
+      background:transparent;
+      color:rgba(255,255,255,0.86);
+      padding:7px 10px;
+      font-size:11px;
+      letter-spacing:0.14em;
+      text-transform:uppercase;
+      cursor:pointer;
+      user-select:none;
+      white-space:nowrap;
+    }
+    .btn:hover{background:var(--glass);border-color:rgba(255,255,255,0.34);}
+    .btnPrimary{background:rgba(255,255,255,0.06);border-color:rgba(255,255,255,0.30);}
+    .btnPrimary:hover{background:rgba(255,255,255,0.09);border-color:rgba(255,255,255,0.44);}
+    #noteIcon{
+      width:28px;height:28px;
+      display:grid;place-items:center;
+      border:1px solid rgba(255,255,255,0.20);
+      background:rgba(255,255,255,0.10);
+      cursor:pointer;
+      padding:0;
+    }
+    #noteIcon:hover{border-color:rgba(255,255,255,0.36);background:rgba(255,255,255,0.14);}
+
+    /* FULLSCREEN STAGE */
+    #stage{
+      position:fixed;
+      inset:48px 0 0 0;
+      width:100%;
+      height:calc(100% - 48px);
+      background:#000;
+      overflow:hidden;
+    }
+    canvas{
+      position:absolute; inset:0;
+      width:100%; height:100%;
+      display:block;
+    }
+
+    /* Minimal (nearly invisible) affordances */
+    #nodes{
+      position:absolute; left:14px; bottom:14px;
+      display:flex; gap:10px; align-items:center;
+      opacity:0.22;
+      user-select:none;
+      z-index:20;
+    }
+    .node{
+      width:7px;height:7px;border-radius:999px;
+      border:1px solid rgba(255,255,255,0.45);
+      background:rgba(255,255,255,0.08);
+      cursor:pointer;
+    }
+    .node.on{background:rgba(255,255,255,0.42);}
+    #nodes:hover{opacity:0.55;}
+
+    /* Draggable system note window (non-blocking layer) */
+    #noteLayer{
+      position:absolute; inset:0;
+      pointer-events:none;
+      z-index:140;
+    }
+    .noteWin{
+      position:absolute;
+      width:420px;
+      max-width:calc(100% - 24px);
+      border:1px solid rgba(255,255,255,0.22);
+      background:rgba(0,0,0,0.92);
+      box-shadow:0 28px 110px rgba(0,0,0,0.82);
+      pointer-events:auto;
+      user-select:none;
+    }
+    .noteHead{
+      display:flex;align-items:center;justify-content:space-between;gap:10px;
+      padding:10px 10px 8px 10px;
+      border-bottom:1px solid rgba(255,255,255,0.10);
+      cursor:grab;
+    }
+    .noteHead:active{cursor:grabbing;}
+    .noteTitle{
+      margin:0;
+      font-size:11px;
+      letter-spacing:0.18em;
+      text-transform:uppercase;
+      color:rgba(255,255,255,0.82);
+      display:flex;align-items:center;gap:10px;
+      overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+    }
+    .noteBody{
+      padding:10px;
+      display:grid;
+      gap:10px;
+      user-select:text;
+    }
+    .noteBody textarea{
+      min-height:120px;
+      resize:vertical;
+      pointer-events:auto;
+      user-select:text;
+      width:100%;
+      border:1px solid rgba(255,255,255,0.16);
+      background:rgba(255,255,255,0.04);
+      color:rgba(255,255,255,0.90);
+      padding:9px 10px;
+      font-size:12px;
+      outline:none;
+    }
+    .noteBody textarea:focus{
+      border-color:rgba(255,255,255,0.36);
+      background:rgba(255,255,255,0.06);
+    }
+
+    /* Prompt (right edge, hidden by default; appears on hover over topbar) */
+    #promptDock{
+      position:absolute;
+      top:14px; right:14px;
+      width:min(460px, calc(100% - 28px));
+      max-height:calc(100% - 28px);
+      border:1px solid rgba(255,255,255,0.12);
+      background:rgba(0,0,0,0.70);
+      padding:12px;
+      overflow:auto;
+      display:none;
+      z-index:60;
+    }
+    pre{
+      margin:0;
+      color:rgba(255,255,255,0.76);
+      font-size:11px;
+      letter-spacing:0.04em;
+      line-height:1.35;
+      white-space:pre-wrap;
+      word-break:break-word;
+    }
+
+    /* Subtle scanline + vignette */
+    #fx{
+      position:absolute; inset:0;
+      pointer-events:none;
+      z-index:10;
+      background:
+        radial-gradient(1200px 700px at 50% 55%, rgba(255,255,255,0.06), rgba(0,0,0,0.70) 60%, rgba(0,0,0,0.92)),
+        repeating-linear-gradient(to bottom, rgba(255,255,255,0.02) 0px, rgba(255,255,255,0.00) 2px, rgba(0,0,0,0.00) 6px);
+      mix-blend-mode:screen;
+      opacity:0.45;
+    }
+
+    /* INVERT MODE (toggle via I) */
+    body.invert {
+      filter: invert(1) hue-rotate(180deg);
+      background:#fff;
+    }
+    body.invert #topbar { background:#fff; border-bottom:1px solid rgba(0,0,0,0.10); }
+    body.invert .whiteBox { background:#000; }
+    body.invert .btn { color:rgba(0,0,0,0.84); border-color:rgba(0,0,0,0.18); }
+    body.invert .btn:hover { background:rgba(0,0,0,0.06); border-color:rgba(0,0,0,0.28); }
+    body.invert #noteIcon { border-color:rgba(0,0,0,0.22); background:rgba(0,0,0,0.08); }
+  </style>
+</head>
+
+<body>
+  <div id="topbar">
+    <div id="brand">
+      <span class="whiteBox" aria-hidden="true"></span>
+      <span>KETADATA // INFINITY POOL (VI)</span>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;">
+      <button id="exportState" class="btn btnPrimary" type="button">Export State</button>
+      <button id="copyPrompt" class="btn" type="button">Copy Prompt</button>
+      <button id="noteIcon" type="button" aria-label="System Note"><span class="whiteBox" aria-hidden="true"></span></button>
+    </div>
+  </div>
+
+  <div id="stage">
+    <canvas id="c"></canvas>
+    <div id="fx"></div>
+
+    <!-- nearly invisible nodes (toggles) -->
+    <div id="nodes" aria-hidden="true">
+      <div class="node on" title="Motion" data-k="motion"></div>
+      <div class="node on" title="Mist" data-k="mist"></div>
+      <div class="node on" title="Shimmer" data-k="shimmer"></div>
+      <div class="node on" title="Grain" data-k="grain"></div>
+    </div>
+
+    <div id="promptDock"><pre id="promptPre"></pre></div>
+    <div id="noteLayer"></div>
+  </div>
+
+  <script>
+    // =========================================================
+    // KETADATA // INFINITY POOL (VI)
+    //
+    // NEW CONTROLS (as requested):
+    // - Tap SPACE: start/stop (freeze/unfreeze time)
+    // - Hold SPACE: accelerates smoothly while held; eases down on release
+    // - I: invert toggle
+    // =========================================================
+
+    const el = (id)=>document.getElementById(id);
+    const c = el('c');
+    const ctx = c.getContext('2d', { alpha:false });
+
+    const uid = ()=>Math.random().toString(36).slice(2,9)+"-"+Date.now().toString(36);
+    function encode(obj){ return btoa(unescape(encodeURIComponent(JSON.stringify(obj)))); }
+    function decode(b64){ return JSON.parse(decodeURIComponent(escape(atob(b64)))); }
+    async function copyText(s){
+      try{ await navigator.clipboard.writeText(s); }
+      catch{ window.prompt("Copy:", s); }
+    }
+    function clamp(n,a,b){ return Math.max(a, Math.min(b,n)); }
+
+    // State (exportable)
+    let state = {
+      v: 3,
+      page: "infinity_pool_vi",
+      toggles: { motion:true, mist:true, shimmer:true, grain:true },
+      systemNoteText: "",
+      systemNoteWin: { open:false, x: 40, y: 40, w: 460, z: 180 },
+      seed: Math.random()*1000,
+
+      // control state
+      running: true,         // tap SPACE toggles this
+      invert: false,         // I toggles this
+      speed: 1.0,            // current effective speed multiplier
+      speedTarget: 1.0       // ramps up/down based on holding SPACE
+    };
+
+    // Load from hash if present
+    (function(){
+      const m = location.hash.match(/state=([^&]+)/);
+      if(!m) return;
+      try{
+        const s = decode(m[1]);
+        if(!s) return;
+        state = { ...state, ...s };
+        state.toggles = state.toggles || { motion:true, mist:true, shimmer:true, grain:true };
+        state.systemNoteWin = state.systemNoteWin || { open:false, x:40,y:40,w:460,z:180 };
+        state.running = (typeof state.running === "boolean") ? state.running : true;
+        state.invert = !!state.invert;
+        state.speed = (typeof state.speed === "number") ? state.speed : 1.0;
+        state.speedTarget = (typeof state.speedTarget === "number") ? state.speedTarget : 1.0;
+      }catch{}
+    })();
+
+    // apply invert (from state)
+    function syncInvert(){
+      document.body.classList.toggle("invert", !!state.invert);
+    }
+    syncInvert();
+
+    // Resize with DPR
+    function resize(){
+      const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+      const w = c.clientWidth|0;
+      const h = c.clientHeight|0;
+      c.width = Math.floor(w*dpr);
+      c.height = Math.floor(h*dpr);
+      ctx.setTransform(dpr,0,0,dpr,0,0);
+    }
+    window.addEventListener('resize', resize);
+
+    // Pointer
+    const pointer = { x: 0.5, y: 0.55, vx:0, vy:0 };
+    let target = { x: 0.5, y: 0.55 };
+
+    window.addEventListener('mousemove', (e)=>{
+      const r = c.getBoundingClientRect();
+      target.x = clamp((e.clientX - r.left) / r.width, 0, 1);
+      target.y = clamp((e.clientY - r.top) / r.height, 0, 1);
+    }, { passive:true });
+
+    window.addEventListener('touchmove', (e)=>{
+      if(!e.touches || !e.touches[0]) return;
+      const t = e.touches[0];
+      const r = c.getBoundingClientRect();
+      target.x = clamp((t.clientX - r.left) / r.width, 0, 1);
+      target.y = clamp((t.clientY - r.top) / r.height, 0, 1);
+    }, { passive:true });
+
+    // Tiny RNG helpers
+    function hash11(x){
+      const s = Math.sin(x*127.1 + 311.7) * 43758.5453123;
+      return s - Math.floor(s);
+    }
+    function smoothstep(a,b,t){
+      t = clamp((t-a)/(b-a), 0, 1);
+      return t*t*(3-2*t);
+    }
+
+    // ------------------------------------------------------------------
+    // TIME / SPEED CONTROL
+    // ------------------------------------------------------------------
+    let worldT = 0;               // "simulation time" (advances only when running)
+    let spaceDown = false;        // holding SPACE accelerates
+    let lastSpaceDownAt = 0;
+    let spaceTapGuard = false;    // prevents auto-repeat toggles
+
+    // Behavior targets:
+    // - base speed = 1.0
+    // - hold speed target ramps toward ~4.5
+    // - release eases back to 1.0
+    const BASE_SPEED = 1.0;
+    const HOLD_SPEED = 4.5;
+
+    function updateSpeed(dt){
+      // set target based on hold
+      state.speedTarget = spaceDown ? HOLD_SPEED : BASE_SPEED;
+
+      // ramp time constants:
+      // accelerate faster than decelerate, to feel like "throttle"
+      const tau = spaceDown ? 0.18 : 0.32; // seconds
+      const a = 1 - Math.exp(-dt / tau);
+
+      state.speed = state.speed + (state.speedTarget - state.speed) * a;
+      state.speed = clamp(state.speed, 0.0, 8.0);
+    }
+
+    // Render loop
+    let t0 = performance.now();
+    function tick(now){
+      const dt = Math.min(0.05, (now - t0) / 1000);
+      t0 = now;
+
+      // pointer easing (sensual drift)
+      const ax = (target.x - pointer.x) * 2.1;
+      const ay = (target.y - pointer.y) * 1.6;
+      pointer.vx = (pointer.vx + ax*dt) * 0.92;
+      pointer.vy = (pointer.vy + ay*dt) * 0.92;
+      pointer.x = clamp(pointer.x + pointer.vx*dt, 0, 1);
+      pointer.y = clamp(pointer.y + pointer.vy*dt, 0, 1);
+
+      updateSpeed(dt);
+
+      // advance simulation time only if running
+      if(state.running){
+        worldT += dt * state.speed;
+      }
+
+      draw(worldT);
+      requestAnimationFrame(tick);
+    }
+
+    function draw(t){
+      const w = c.clientWidth;
+      const h = c.clientHeight;
+
+      // "breath" tempo (slow, bodily) — uses simulation time now
+      const breath = 0.5 + 0.5*Math.sin(t*0.55);
+      const drift  = 0.5 + 0.5*Math.sin(t*0.12 + 1.1);
+
+      // Horizon position: slightly responsive to pointer (sensory)
+      const horizon = h * (0.34 + 0.06*(pointer.y-0.5));
+      const horizonBand = 10;
+
+      // Background sky gradient (deep blue to black)
+      const skyGrad = ctx.createLinearGradient(0, 0, 0, horizon);
+      skyGrad.addColorStop(0.00, "rgb(0,0,0)");
+      skyGrad.addColorStop(0.35, "rgb(4,8,18)");
+      skyGrad.addColorStop(1.00, "rgb(18,28,52)");
+      ctx.fillStyle = skyGrad;
+      ctx.fillRect(0,0,w,horizon);
+
+      // Sky light columns / aurora streaks (very subtle, vertical)
+      if(state.toggles.shimmer){
+        ctx.save();
+        ctx.globalAlpha = 0.18 + 0.08*breath;
+        for(let i=0;i<46;i++){
+          const x = (i/45)*w;
+          const n = hash11(i*19.7 + state.seed);
+          const width = 10 + n*40;
+          const y0 = 0;
+          const y1 = horizon * (0.7 + 0.25*n);
+          const g = ctx.createLinearGradient(0,y0,0,y1);
+          const a = 0.06 + 0.14*n;
+          g.addColorStop(0, `rgba(255,255,255,0.00)`);
+          g.addColorStop(0.25, `rgba(180,210,255,${a})`);
+          g.addColorStop(1, `rgba(255,255,255,0.00)`);
+          ctx.fillStyle = g;
+          const wobble = Math.sin(t*0.7 + i*0.9) * (2 + 8*n);
+          ctx.fillRect(x + wobble, 0, width, y1);
+        }
+        ctx.restore();
+      }
+
+      // Horizon line / spill (infinity edge)
+      ctx.save();
+      ctx.globalAlpha = 0.75;
+      const edgeGrad = ctx.createLinearGradient(0, horizon - horizonBand, 0, horizon + horizonBand);
+      edgeGrad.addColorStop(0, "rgba(0,0,0,0.00)");
+      edgeGrad.addColorStop(0.35, "rgba(0,0,0,0.65)");
+      edgeGrad.addColorStop(0.55, "rgba(255,255,255,0.04)");
+      edgeGrad.addColorStop(0.85, "rgba(0,0,0,0.85)");
+      edgeGrad.addColorStop(1, "rgba(0,0,0,0.00)");
+      ctx.fillStyle = edgeGrad;
+      ctx.fillRect(0, horizon - horizonBand, w, horizonBand*2);
+      ctx.restore();
+
+      // Water base
+      const waterGrad = ctx.createLinearGradient(0, horizon, 0, h);
+      waterGrad.addColorStop(0.00, "rgb(6,14,28)");
+      waterGrad.addColorStop(0.20, "rgb(4,12,26)");
+      waterGrad.addColorStop(0.55, "rgb(2,7,16)");
+      waterGrad.addColorStop(1.00, "rgb(0,0,0)");
+      ctx.fillStyle = waterGrad;
+      ctx.fillRect(0, horizon, w, h-horizon);
+
+      // Caustic ripples (procedural line field)
+      if(state.toggles.motion){
+        ctx.save();
+        ctx.globalCompositeOperation = "screen";
+        ctx.globalAlpha = 0.22 + 0.08*breath;
+
+        const amp = 6 + 18*breath;
+        const freq = 0.013 + 0.008*drift;
+        const px = (pointer.x - 0.5) * 2;
+        const py = (pointer.y - 0.5) * 2;
+
+        ctx.strokeStyle = "rgba(180,210,255,0.06)";
+        ctx.lineWidth = 1;
+
+        const bands = 90;
+        for(let i=0;i<bands;i++){
+          const yy = horizon + (i/(bands-1))*(h-horizon);
+          const depth = (yy - horizon) / (h-horizon);
+          const fade = smoothstep(0.0, 0.35, depth) * (1 - smoothstep(0.75, 1.0, depth));
+          const wob = Math.sin(t*0.9 + i*0.12 + state.seed*0.01) * (0.5 + 1.8*fade);
+          ctx.globalAlpha = (0.04 + 0.11*fade) * (0.7 + 0.3*breath);
+
+          ctx.beginPath();
+          for(let x=0;x<=w;x+=8){
+            const nx = x / w;
+            const phase = t*1.25 + i*0.08 + nx*8.0 + state.seed*0.001;
+            const y =
+              yy
+              + Math.sin(phase + px*1.6) * amp * (0.10 + 0.55*fade)
+              + Math.sin(phase*0.7 + ny(depth)*4.0 + py*1.2) * amp * 0.06
+              + wob;
+            if(x===0) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+          }
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
+
+      // Water shimmer (soft specular glints)
+      if(state.toggles.shimmer){
+        ctx.save();
+        ctx.globalCompositeOperation = "screen";
+        ctx.globalAlpha = 0.14 + 0.10*breath;
+
+        for(let i=0;i<180;i++){
+          const n = hash11(i*33.3 + state.seed);
+          const x = n*w;
+          const y = horizon + hash11(i*91.7 + state.seed)* (h-horizon);
+          const d = (y-horizon)/(h-horizon);
+          const size = 10 + 80*(1-d)*(0.25+n*0.75);
+          const a = (0.03 + 0.18*(1-d))*(0.35 + 0.65*hash11(i*17.1));
+          ctx.fillStyle = `rgba(200,220,255,${a})`;
+          const sx = x + Math.sin(t*0.8 + i)* (2 + 10*(1-d)) + (pointer.x-0.5)*18*(1-d);
+          const sy = y + Math.cos(t*0.7 + i)* (1 + 6*(1-d));
+          ctx.fillRect(sx, sy, size, 1);
+        }
+        ctx.restore();
+      }
+
+      // Mist / haze above water
+      if(state.toggles.mist){
+        ctx.save();
+        ctx.globalCompositeOperation = "screen";
+        const g = ctx.createLinearGradient(0, horizon-40, 0, horizon+120);
+        g.addColorStop(0, "rgba(255,255,255,0.00)");
+        g.addColorStop(0.4, `rgba(170,200,255,${0.10 + 0.10*breath})`);
+        g.addColorStop(1, "rgba(255,255,255,0.00)");
+        ctx.fillStyle = g;
+        ctx.globalAlpha = 0.75;
+        ctx.fillRect(0, horizon-40, w, 180);
+        ctx.restore();
+      }
+
+      // Subtle grain (fast, sensual texture)
+      if(state.toggles.grain){
+        ctx.save();
+        ctx.globalCompositeOperation = "overlay";
+        ctx.globalAlpha = 0.10;
+        const step = 2;
+        for(let y=0;y<h;y+=step){
+          for(let x=0;x<w;x+=step){
+            const n = hash11((x*12.9898 + y*78.233 + (t*60))*0.01 + state.seed);
+            const v = (n>0.78) ? 255 : 0;
+            if(v){
+              ctx.fillStyle = `rgba(255,255,255,${0.02 + 0.05*n})`;
+              ctx.fillRect(x,y,1,1);
+            }
+          }
+        }
+        ctx.restore();
+      }
+    }
+
+    function ny(d){ return d*1.7 + 0.3; }
+
+    // Nodes toggles
+    const nodes = [...document.querySelectorAll('.node')];
+    function syncNodes(){
+      nodes.forEach(n=>{
+        const k = n.dataset.k;
+        n.classList.toggle('on', !!state.toggles[k]);
+      });
+    }
+    nodes.forEach(n=>{
+      n.addEventListener('click', ()=>{
+        const k = n.dataset.k;
+        state.toggles[k] = !state.toggles[k];
+        syncNodes();
+        renderPrompt();
+      });
+    });
+    syncNodes();
+
+    // Prompt
+    const promptDock = el('promptDock');
+    const promptPre = el('promptPre');
+    function renderPrompt(){
+      const payload = {
+        system: "KETADATA",
+        page: "INFINITY_POOL_VI",
+        toggles: state.toggles,
+        systemNote: state.systemNoteText || "",
+        seed: state.seed,
+        controls: {
+          running: state.running,
+          invert: state.invert,
+          speed: +state.speed.toFixed(3)
+        }
+      };
+      const txt = [
+        "KETADATA // INFINITY POOL (VI) / PROMPT",
+        "AIM: immersive, sensual, full-screen infinity pool environment.",
+        "CONTROLS:",
+        "- SPACE tap: start/stop",
+        "- SPACE hold: accelerate; release: decelerate",
+        "- I: invert",
+        "",
+        "STATE(JSON):",
+        JSON.stringify(payload, null, 2)
+      ].join("\\n");
+      promptPre.textContent = txt;
+    }
+    renderPrompt();
+
+    el('copyPrompt').addEventListener('click', ()=> copyText(promptPre.textContent));
+    el('exportState').addEventListener('click', async ()=>{
+      const safe = JSON.parse(JSON.stringify(state));
+      const b64 = encode(safe);
+      const url = location.origin + location.pathname + "#state=" + b64;
+      await copyText(url);
+      location.hash = "state=" + b64;
+    });
+
+    // Optional: show prompt dock when hovering topbar (keeps screen clean)
+    const topbar = el('topbar');
+    let dockTimer = null;
+    topbar.addEventListener('mouseenter', ()=>{
+      clearTimeout(dockTimer);
+      promptDock.style.display = 'block';
+    });
+    topbar.addEventListener('mouseleave', ()=>{
+      clearTimeout(dockTimer);
+      dockTimer = setTimeout(()=> promptDock.style.display = 'none', 350);
+    });
+
+    // Draggable system note window
+    const noteLayer = el('noteLayer');
+
+    function renderSystemNote(){
+      noteLayer.innerHTML = "";
+      if(!state.systemNoteWin.open) return;
+
+      const win = document.createElement('div');
+      win.className = "noteWin";
+      win.style.left = (state.systemNoteWin.x|0) + "px";
+      win.style.top  = (state.systemNoteWin.y|0) + "px";
+      win.style.width= (state.systemNoteWin.w||460) + "px";
+      win.style.zIndex = String(state.systemNoteWin.z || 180);
+
+      win.innerHTML = `
+        <div class="noteHead">
+          <p class="noteTitle"><span class="whiteBox" style="width:9px;height:9px;"></span> SYSTEM NOTE</p>
+          <div style="display:flex;gap:6px;align-items:center;">
+            <button class="btn" style="padding:6px 8px;font-size:10px;" data-act="min">MIN</button>
+            <button class="btn" style="padding:6px 8px;font-size:10px;" data-act="close">CLOSE</button>
+          </div>
+        </div>
+        <div class="noteBody" id="noteBody">
+          <textarea id="sysNoteArea" placeholder="global constraints / laws / reminders">${(state.systemNoteText||"").replace(/</g,"&lt;")}</textarea>
+          <div style="display:flex;gap:8px;">
+            <button class="btn btnPrimary" data-act="save">SAVE</button>
+            <button class="btn" data-act="clear">CLEAR</button>
+          </div>
+          <div style="color:rgba(255,255,255,0.45);font-size:11px;letter-spacing:0.04em;line-height:1.35;">
+            Window is movable and does not block the pool.
+          </div>
+        </div>
+      `;
+      noteLayer.appendChild(win);
+
+      // bring to front
+      win.addEventListener('mousedown', ()=>{
+        state.systemNoteWin.z = (state.systemNoteWin.z||180) + 1;
+        win.style.zIndex = String(state.systemNoteWin.z);
+      });
+
+      // drag header
+      const head = win.querySelector('.noteHead');
+      let dragging = false, dx = 0, dy = 0;
+      const stageRect = el('stage').getBoundingClientRect();
+
+      function onMove(e){
+        if(!dragging) return;
+        const x = clamp(e.clientX - stageRect.left - dx, 6, stageRect.width - 40);
+        const y = clamp(e.clientY - stageRect.top - dy, 6, stageRect.height - 40);
+        win.style.left = x + "px";
+        win.style.top  = y + "px";
+      }
+      function onUp(){
+        dragging = false;
+        document.removeEventListener('mousemove', onMove);
+        state.systemNoteWin.x = parseFloat(win.style.left) || state.systemNoteWin.x;
+        state.systemNoteWin.y = parseFloat(win.style.top) || state.systemNoteWin.y;
+      }
+      head.addEventListener('mousedown', (e)=>{
+        if(e.target && e.target.tagName && e.target.tagName.toLowerCase()==='button') return;
+        dragging = true;
+        const r = win.getBoundingClientRect();
+        dx = e.clientX - r.left;
+        dy = e.clientY - r.top;
+        document.addEventListener('mousemove', onMove);
+        document.addEventListener('mouseup', onUp, { once:true });
+      });
+
+      // textarea
+      win.querySelector('#sysNoteArea').addEventListener('input', (e)=>{
+        state.systemNoteText = e.target.value;
+        renderPrompt();
+      });
+
+      // actions
+      win.addEventListener('click', (e)=>{
+        const act = e.target.dataset.act;
+        if(!act) return;
+        if(act === "close"){
+          state.systemNoteWin.open = false;
+          renderSystemNote();
+          renderPrompt();
+        }
+        if(act === "min"){
+          const body = win.querySelector('#noteBody');
+          body.style.display = (body.style.display === "none") ? "grid" : "none";
+        }
+        if(act === "save"){
+          renderPrompt();
+        }
+        if(act === "clear"){
+          state.systemNoteText = "";
+          win.querySelector('#sysNoteArea').value = "";
+          renderPrompt();
+        }
+      });
+    }
+
+    el('noteIcon').addEventListener('click', ()=>{
+      state.systemNoteWin.open = !state.systemNoteWin.open;
+      if(state.systemNoteWin.open){
+        const r = el('stage').getBoundingClientRect();
+        state.systemNoteWin.x = clamp(Math.floor(r.width - (state.systemNoteWin.w||460) - 18), 10, r.width - 40);
+        state.systemNoteWin.y = 14;
+      }
+      renderSystemNote();
+      renderPrompt();
+    });
+
+    // ------------------------------------------------------------------
+    // KEYBINDS (SPACE, I) — includes textarea focus guard
+    // ------------------------------------------------------------------
+    function isTyping(){
+      const tag = document.activeElement?.tagName?.toLowerCase() || '';
+      return (tag === 'input' || tag === 'textarea' || document.activeElement?.isContentEditable);
+    }
+
+    window.addEventListener('keydown', (e)=>{
+      if(isTyping()) return;
+
+      if(e.key === 'Escape'){
+        if(state.systemNoteWin.open){
+          state.systemNoteWin.open = false;
+          renderSystemNote();
+        }
+        promptDock.style.display = 'none';
+      }
+
+      // SPACE: tap toggles run; hold accelerates
+      if(e.code === "Space"){
+        e.preventDefault();
+
+        // prevent autorepeat toggling
+        if(!spaceTapGuard){
+          // toggle running on initial keydown only
+          state.running = !state.running;
+          spaceTapGuard = true;
+          renderPrompt();
+        }
+
+        // holding space accelerates regardless of running state,
+        // but if it's stopped you won't see it until you tap again.
+        spaceDown = true;
+        lastSpaceDownAt = performance.now();
+      }
+
+      // invert
+      if(e.key === 'i' || e.key === 'I'){
+        state.invert = !state.invert;
+        syncInvert();
+        renderPrompt();
+      }
+
+      // subtle toggles retained
+      if(e.key === 'm' || e.key === 'M'){ state.toggles.motion = !state.toggles.motion; syncNodes(); renderPrompt(); }
+      if(e.key === 's' || e.key === 'S'){ state.toggles.shimmer = !state.toggles.shimmer; syncNodes(); renderPrompt(); }
+      if(e.key === 'g' || e.key === 'G'){ state.toggles.grain = !state.toggles.grain; syncNodes(); renderPrompt(); }
+      if(e.key === 'h' || e.key === 'H'){ state.toggles.mist = !state.toggles.mist; syncNodes(); renderPrompt(); }
+    });
+
+    window.addEventListener('keyup', (e)=>{
+      if(e.code === "Space"){
+        e.preventDefault();
+        spaceDown = false;
+        spaceTapGuard = false; // allow next tap toggle
+        renderPrompt();
+      }
+    });
+
+    // Init
+    resize();
+    renderSystemNote();
+    requestAnimationFrame(tick);
+  </script>
+</body>
+</html>
