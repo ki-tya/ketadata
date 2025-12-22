@@ -1,0 +1,820 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>KETADATA // SLOPSTREAM (OBSERVATORY HOLD)</title>
+  <style>
+    :root{
+      --bg:#000;
+      --fg:#fff;
+      --stroke:rgba(255,255,255,0.16);
+      --stroke2:rgba(255,255,255,0.10);
+      --glass:rgba(255,255,255,0.06);
+      --glass2:rgba(255,255,255,0.10);
+      --red:#ff2b2b;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%;margin:0;background:var(--bg);color:var(--fg);font-family:Arial, Helvetica, sans-serif;}
+    body{overflow:hidden;}
+    ::selection{background:rgba(255,255,255,0.18);}
+
+    /* Stage */
+    #stage{
+      position:fixed;
+      inset:0;
+      background:#000;
+      overflow:hidden;
+    }
+    canvas{
+      position:absolute; inset:0;
+      width:100%; height:100%;
+      display:block;
+    }
+
+    /* Minimal UI rail */
+    #ui{
+      position:fixed;
+      top:0; right:0;
+      width:260px;
+      height:100%;
+      border-left:1px solid rgba(255,255,255,0.10);
+      background:linear-gradient(to bottom, rgba(0,0,0,0.00), rgba(0,0,0,0.30));
+      pointer-events:none; /* only buttons enable pointer */
+      z-index:30;
+    }
+    #uiInner{
+      position:absolute;
+      top:18px; right:18px;
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+      pointer-events:auto;
+      user-select:none;
+      align-items:flex-end;
+    }
+    .btn{
+      min-width:140px;
+      border:1px solid rgba(255,255,255,0.26);
+      background:rgba(0,0,0,0.40);
+      color:rgba(255,255,255,0.86);
+      padding:9px 10px;
+      font-size:11px;
+      letter-spacing:0.16em;
+      text-transform:uppercase;
+      cursor:pointer;
+    }
+    .btn:hover{background:rgba(255,255,255,0.06); border-color:rgba(255,255,255,0.40);}
+    .btn.on{
+      background:rgba(255,255,255,0.10);
+      border-color:rgba(255,255,255,0.48);
+    }
+
+    /* Brand tag */
+    #brand{
+      position:fixed;
+      left:14px;
+      top:14px;
+      display:flex;
+      align-items:center;
+      gap:10px;
+      z-index:20;
+      user-select:none;
+      pointer-events:none;
+      font-size:11px;
+      letter-spacing:0.18em;
+      text-transform:uppercase;
+      color:rgba(255,255,255,0.80);
+    }
+    .whiteBox{width:10px;height:10px;background:#fff;display:inline-block;}
+
+    /* Micro HUD (almost invisible) */
+    #hud{
+      position:fixed;
+      left:14px;
+      bottom:12px;
+      z-index:20;
+      font-size:10px;
+      letter-spacing:0.14em;
+      text-transform:uppercase;
+      color:rgba(255,255,255,0.42);
+      user-select:none;
+      pointer-events:none;
+      max-width:min(520px, calc(100% - 28px));
+      line-height:1.35;
+    }
+    #hud b{color:rgba(255,255,255,0.62); font-weight:600;}
+  </style>
+</head>
+<body>
+  <div id="stage">
+    <canvas id="c"></canvas>
+  </div>
+
+  <div id="brand">
+    <span class="whiteBox" aria-hidden="true"></span>
+    <span>KETADATA // SLOPSTREAM (OBSERVATORY HOLD)</span>
+  </div>
+
+  <div id="ui">
+    <div id="uiInner">
+      <button id="autoBtn" class="btn on" type="button">AUTO ROTATE</button>
+      <button id="resetBtn" class="btn" type="button">RESET VIEW</button>
+      <button id="pulseBtn" class="btn on" type="button">SLOP PULSE</button>
+      <button id="lockBtn" class="btn" type="button">LOCK CAMERA</button>
+    </div>
+  </div>
+
+  <div id="hud">
+    <div><b>DRAG</b> ROTATE · <b>WHEEL</b> ZOOM · <b>CLICK</b> DROP A NODE · <b>I</b> INVERT</div>
+  </div>
+
+  <script>
+    // =========================================================
+    // KETADATA // SLOPSTREAM (OBSERVATORY HOLD)
+    //
+    // Goals:
+    // - Reference aesthetic: wireframe globe, graticule, nodes.
+    // - Monochrome + red nodes. Hard, clean, addictive motion.
+    // - No focal “pull” gimmick. The whole field stays in motion.
+    //
+    // Implementation notes:
+    // - 2D canvas, sphere projection, yaw/pitch camera.
+    // - Land is procedural (noise-defined mask) to read as continents.
+    // - Slopstream = orbiting particle ribbons + event bursts.
+    // =========================================================
+
+    const canvas = document.getElementById('c');
+    const ctx = canvas.getContext('2d', { alpha:false });
+
+    const autoBtn  = document.getElementById('autoBtn');
+    const resetBtn = document.getElementById('resetBtn');
+    const pulseBtn = document.getElementById('pulseBtn');
+    const lockBtn  = document.getElementById('lockBtn');
+
+    const clamp = (n,a,b)=>Math.max(a,Math.min(b,n));
+    const mix = (a,b,t)=>a+(b-a)*t;
+    const smoothstep=(a,b,t)=>{ t=clamp((t-a)/(b-a),0,1); return t*t*(3-2*t); };
+
+    // DPR resize
+    function resize(){
+      const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+      const w = canvas.clientWidth|0;
+      const h = canvas.clientHeight|0;
+      canvas.width  = Math.floor(w*dpr);
+      canvas.height = Math.floor(h*dpr);
+      ctx.setTransform(dpr,0,0,dpr,0,0);
+    }
+    window.addEventListener('resize', resize);
+
+    // Camera state
+    const cam = {
+      yaw: 0.65,
+      pitch: -0.18,
+      yawV: 0,
+      pitchV: 0,
+      zoom: 1.0,
+      auto: true,
+      locked: false
+    };
+    const base = { yaw: cam.yaw, pitch: cam.pitch, zoom: 1.0 };
+
+    // Invert
+    let invert = false;
+    window.addEventListener('keydown', (e)=>{
+      if(e.key === 'i' || e.key === 'I'){
+        invert = !invert;
+        document.body.style.filter = invert ? 'invert(1)' : '';
+      }
+    });
+
+    // Pointer / drag rotate
+    let dragging = false;
+    let lastX=0, lastY=0;
+
+    function onDown(e){
+      if(cam.locked) return;
+      dragging = true;
+      lastX = e.clientX;
+      lastY = e.clientY;
+    }
+    function onMove(e){
+      if(!dragging || cam.locked) return;
+      const dx = e.clientX - lastX;
+      const dy = e.clientY - lastY;
+      lastX = e.clientX;
+      lastY = e.clientY;
+
+      cam.yawV   += dx * 0.0022;
+      cam.pitchV += dy * 0.0018;
+    }
+    function onUp(){
+      dragging = false;
+    }
+    window.addEventListener('mousedown', onDown);
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+
+    // Zoom
+    window.addEventListener('wheel', (e)=>{
+      e.preventDefault();
+      const z = Math.exp(-e.deltaY * 0.0012);
+      cam.zoom = clamp(cam.zoom * z, 0.72, 1.55);
+    }, { passive:false });
+
+    // Buttons
+    autoBtn.addEventListener('click', ()=>{
+      cam.auto = !cam.auto;
+      autoBtn.classList.toggle('on', cam.auto);
+    });
+    resetBtn.addEventListener('click', ()=>{
+      cam.yaw = base.yaw; cam.pitch = base.pitch; cam.zoom = base.zoom;
+      cam.yawV = 0; cam.pitchV = 0;
+      burst(1.0);
+    });
+    let slopPulse = true;
+    pulseBtn.addEventListener('click', ()=>{
+      slopPulse = !slopPulse;
+      pulseBtn.classList.toggle('on', slopPulse);
+    });
+    lockBtn.addEventListener('click', ()=>{
+      cam.locked = !cam.locked;
+      lockBtn.classList.toggle('on', cam.locked);
+    });
+
+    // Math: rotation
+    function rotY(p, a){
+      const ca=Math.cos(a), sa=Math.sin(a);
+      return { x: p.x*ca + p.z*sa, y: p.y, z: -p.x*sa + p.z*ca };
+    }
+    function rotX(p, a){
+      const ca=Math.cos(a), sa=Math.sin(a);
+      return { x: p.x, y: p.y*ca - p.z*sa, z: p.y*sa + p.z*ca };
+    }
+
+    // Projection: simple perspective for depth
+    function project(p, cx, cy, r){
+      // p is already rotated, unit sphere-ish
+      const z = p.z; // [-1..1]
+      const persp = 0.90 + 0.35 * (z + 1) * 0.5; // modest
+      return {
+        x: cx + p.x * r * persp,
+        y: cy + p.y * r * persp,
+        z
+      };
+    }
+
+    // Deterministic noise (fast)
+    const seed = Math.random()*9999;
+    function h2(x,y){
+      const s = Math.sin(x*127.1 + y*311.7 + seed*0.01) * 43758.5453123;
+      return s - Math.floor(s);
+    }
+    function vnoise(x,y){
+      const ix=Math.floor(x), iy=Math.floor(y);
+      const fx=x-ix, fy=y-iy;
+      const a=h2(ix,iy), b=h2(ix+1,iy), c=h2(ix,iy+1), d=h2(ix+1,iy+1);
+      const ux=fx*fx*(3-2*fx), uy=fy*fy*(3-2*fy);
+      return mix(mix(a,b,ux), mix(c,d,ux), uy);
+    }
+    function fbm(x,y){
+      let v=0, a=0.5;
+      for(let i=0;i<5;i++){
+        v += a*vnoise(x,y);
+        x*=2.02; y*=2.01; a*=0.5;
+      }
+      return v;
+    }
+
+    // Procedural "land mask" on sphere (reads as continents in wireframe)
+    // We sample noise in equirectangular space and threshold.
+    function isLand(lat, lon){
+      // lat [-pi/2..pi/2], lon [-pi..pi]
+      const u = (lon + Math.PI) / (2*Math.PI);
+      const v = (lat + Math.PI/2) / Math.PI;
+
+      // multi-noise with slight anisotropy
+      const n1 = fbm(u*3.4, v*2.6);
+      const n2 = fbm(u*6.8 + 10.0, v*5.2 + 3.0);
+      const n = n1*0.75 + n2*0.25;
+
+      // carve oceans (adds recognizability)
+      const band = Math.abs(v-0.52);
+      const cut = 0.10 * (1 - smoothstep(0.08, 0.32, band));
+      const val = n - cut;
+
+      // threshold tuned to produce large blobs
+      return val > 0.54;
+    }
+
+    // Precompute land points (wire look)
+    const landPts = [];
+    function buildLand(){
+      landPts.length = 0;
+      // Adaptive density based on typical screen sizes; keep modest.
+      const latSteps = 140;
+      const lonSteps = 260;
+      for(let i=0;i<=latSteps;i++){
+        const lat = mix(-Math.PI/2, Math.PI/2, i/latSteps);
+        for(let j=0;j<=lonSteps;j++){
+          const lon = mix(-Math.PI, Math.PI, j/lonSteps);
+          // sample sparse for performance
+          if(((i*lonSteps + j) % 3) !== 0) continue;
+          if(isLand(lat, lon)){
+            // store as unit sphere point
+            const x = Math.cos(lat) * Math.cos(lon);
+            const y = Math.sin(lat);
+            const z = Math.cos(lat) * Math.sin(lon);
+            landPts.push({ x, y, z });
+          }
+        }
+      }
+    }
+
+    // Nodes (red points) — seeded + user-added
+    const nodes = [];
+    function addNodeOnSphere(lat, lon, strength=1){
+      const x = Math.cos(lat) * Math.cos(lon);
+      const y = Math.sin(lat);
+      const z = Math.cos(lat) * Math.sin(lon);
+      nodes.push({
+        x,y,z,
+        t: 0,
+        strength
+      });
+    }
+    function seedNodes(){
+      nodes.length = 0;
+      // distribute: a lot in "north" + europe-ish band, some elsewhere
+      for(let i=0;i<160;i++){
+        const a = Math.random();
+        let lat = mix(-0.85, 0.95, Math.random());
+        let lon = mix(-Math.PI, Math.PI, Math.random());
+        // bias a chunk to northern mid-lats
+        if(a < 0.55){
+          lat = mix(0.10, 0.75, Math.random());
+          lon = mix(-0.30, 1.20, Math.random());
+        }else if(a < 0.70){
+          lat = mix(0.10, 0.55, Math.random());
+          lon = mix(-2.50, -0.90, Math.random());
+        }else if(a < 0.85){
+          lat = mix(-0.55, 0.25, Math.random());
+          lon = mix(1.00, 2.60, Math.random());
+        }
+        addNodeOnSphere(lat, lon, 0.6 + Math.random()*0.9);
+      }
+    }
+
+    // Click: drop a node where you clicked on the projected globe (if on globe)
+    function screenToSphere(mx, my, cx, cy, r){
+      const dx = (mx - cx) / r;
+      const dy = (my - cy) / r;
+      const rr = dx*dx + dy*dy;
+      if(rr > 1.0) return null;
+
+      // z on near hemisphere
+      const z = Math.sqrt(1.0 - rr);
+
+      // This is in camera space; inverse rotate to world
+      let p = { x: dx, y: dy, z: z };
+
+      // inverse pitch then inverse yaw
+      p = rotX(p, -cam.pitch);
+      p = rotY(p, -cam.yaw);
+
+      // return world unit vector
+      const L = Math.hypot(p.x,p.y,p.z) || 1;
+      return { x:p.x/L, y:p.y/L, z:p.z/L };
+    }
+
+    window.addEventListener('click', (e)=>{
+      // ignore clicks on UI buttons
+      const ui = document.getElementById('uiInner');
+      if(ui.contains(e.target)) return;
+
+      const w = canvas.clientWidth;
+      const h = canvas.clientHeight;
+      const cx = w * 0.50;
+      const cy = h * 0.52;
+      const r = Math.min(w, h) * 0.32 * cam.zoom;
+
+      const p = screenToSphere(e.clientX, e.clientY, cx, cy, r);
+      if(!p) return;
+
+      nodes.push({ ...p, t:0, strength: 1.2 });
+      burst(0.8, p);
+    });
+
+    // Slopstream particles (orbit ribbons)
+    const slop = [];
+    function spawnSlop(n=1){
+      for(let k=0;k<n;k++){
+        const band = Math.random();
+        // pick a random great-circle-ish orbit defined by a normal vector
+        const nx = Math.random()*2-1;
+        const ny = Math.random()*2-1;
+        const nz = Math.random()*2-1;
+        const L = Math.hypot(nx,ny,nz) || 1;
+        const nrm = { x:nx/L, y:ny/L, z:nz/L };
+
+        // orbit phase and speed
+        const phase = Math.random()*Math.PI*2;
+        const spd = (0.20 + Math.random()*0.55) * (band<0.4 ? 1.25 : 1.0);
+
+        slop.push({
+          n: nrm,
+          phase,
+          spd,
+          life: 0.6 + Math.random()*1.4,
+          age: 0,
+          len: 18 + Math.random()*55,
+          bright: 0.16 + Math.random()*0.30
+        });
+      }
+    }
+
+    function pointOnGreatCircle(nrm, ang){
+      // Build basis vectors orthogonal to nrm
+      // Choose arbitrary vector not parallel to nrm
+      const ax = Math.abs(nrm.x) < 0.9 ? 1 : 0;
+      const ay = 0;
+      const az = Math.abs(nrm.x) < 0.9 ? 0 : 1;
+
+      // u = n x a
+      let ux = nrm.y*az - nrm.z*ay;
+      let uy = nrm.z*ax - nrm.x*az;
+      let uz = nrm.x*ay - nrm.y*ax;
+      const uL = Math.hypot(ux,uy,uz) || 1;
+      ux/=uL; uy/=uL; uz/=uL;
+
+      // v = n x u
+      let vx = nrm.y*uz - nrm.z*uy;
+      let vy = nrm.z*ux - nrm.x*uz;
+      let vz = nrm.x*uy - nrm.y*ux;
+      const vL = Math.hypot(vx,vy,vz) || 1;
+      vx/=vL; vy/=vL; vz/=vL;
+
+      const ca = Math.cos(ang), sa = Math.sin(ang);
+      return { x: ux*ca + vx*sa, y: uy*ca + vy*sa, z: uz*ca + vz*sa };
+    }
+
+    // Burst events (addictive hits)
+    const bursts = [];
+    function burst(intensity=1.0, center=null){
+      bursts.push({
+        t:0,
+        intensity,
+        center
+      });
+      // inject more slop on burst
+      spawnSlop(Math.floor(18 + 30*intensity));
+    }
+
+    // Initial build
+    resize();
+    buildLand();
+    seedNodes();
+    spawnSlop(120);
+    burst(0.6);
+
+    // Render helpers
+    function clearBG(w,h){
+      // monochrome gradient + subtle hard banding (KETADATA feel)
+      const g = ctx.createLinearGradient(0, 0, 0, h);
+      g.addColorStop(0.00, "rgb(0,0,0)");
+      g.addColorStop(0.35, "rgb(10,10,10)");
+      g.addColorStop(0.62, "rgb(22,22,22)");
+      g.addColorStop(1.00, "rgb(0,0,0)");
+      ctx.fillStyle = g;
+      ctx.fillRect(0,0,w,h);
+
+      // faint diagonal interference (addictive texture, not skeuo)
+      ctx.save();
+      ctx.globalAlpha = 0.06;
+      for(let i=-h; i<w+h; i+=24){
+        ctx.fillStyle = "rgba(255,255,255,0.03)";
+        ctx.fillRect(i, 0, 2, h);
+      }
+      ctx.restore();
+    }
+
+    function drawGlow(cx,cy,r, pulse){
+      ctx.save();
+      // outer halo
+      const halo = ctx.createRadialGradient(cx,cy,r*0.85, cx,cy,r*1.18);
+      halo.addColorStop(0, "rgba(255,255,255,0.00)");
+      halo.addColorStop(0.55, `rgba(255,255,255,${0.05 + 0.05*pulse})`);
+      halo.addColorStop(1, "rgba(255,255,255,0.00)");
+      ctx.fillStyle = halo;
+      ctx.beginPath();
+      ctx.arc(cx,cy,r*1.18,0,Math.PI*2);
+      ctx.fill();
+
+      // rim line
+      ctx.globalAlpha = 0.9;
+      ctx.strokeStyle = "rgba(255,255,255,0.92)";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.arc(cx,cy,r,0,Math.PI*2);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    function drawGraticule(cx,cy,r, yaw,pitch, pulse){
+      ctx.save();
+      ctx.globalCompositeOperation = "screen";
+      ctx.strokeStyle = `rgba(255,255,255,${0.10 + 0.06*pulse})`;
+      ctx.lineWidth = 1;
+
+      const latLines = 12;
+      const lonLines = 18;
+
+      // clip to sphere
+      ctx.beginPath();
+      ctx.arc(cx,cy,r,0,Math.PI*2);
+      ctx.clip();
+
+      // latitude
+      for(let i=1;i<latLines;i++){
+        const lat = mix(-Math.PI/2, Math.PI/2, i/latLines);
+        ctx.beginPath();
+        let started=false;
+        for(let j=0;j<=240;j++){
+          const lon = mix(-Math.PI, Math.PI, j/240);
+          let p = {
+            x: Math.cos(lat)*Math.cos(lon),
+            y: Math.sin(lat),
+            z: Math.cos(lat)*Math.sin(lon)
+          };
+          p = rotY(p, yaw);
+          p = rotX(p, pitch);
+          if(p.z < 0) { started=false; continue; } // only near hemisphere for crispness
+          const s = project(p, cx, cy, r);
+          if(!started){ ctx.moveTo(s.x, s.y); started=true; }
+          else ctx.lineTo(s.x, s.y);
+        }
+        ctx.stroke();
+      }
+
+      // longitude
+      for(let i=0;i<lonLines;i++){
+        const lon = mix(-Math.PI, Math.PI, i/lonLines);
+        ctx.beginPath();
+        let started=false;
+        for(let j=0;j<=240;j++){
+          const lat = mix(-Math.PI/2, Math.PI/2, j/240);
+          let p = {
+            x: Math.cos(lat)*Math.cos(lon),
+            y: Math.sin(lat),
+            z: Math.cos(lat)*Math.sin(lon)
+          };
+          p = rotY(p, yaw);
+          p = rotX(p, pitch);
+          if(p.z < 0) { started=false; continue; }
+          const s = project(p, cx, cy, r);
+          if(!started){ ctx.moveTo(s.x, s.y); started=true; }
+          else ctx.lineTo(s.x, s.y);
+        }
+        ctx.stroke();
+      }
+
+      ctx.restore();
+    }
+
+    function drawLand(cx,cy,r,yaw,pitch,pulse){
+      ctx.save();
+      ctx.globalCompositeOperation = "screen";
+
+      // clip to sphere
+      ctx.beginPath();
+      ctx.arc(cx,cy,r,0,Math.PI*2);
+      ctx.clip();
+
+      // land dots (reads like coast/land wire without a loaded map)
+      const a = 0.18 + 0.10*pulse;
+      ctx.fillStyle = `rgba(255,255,255,${a})`;
+
+      // dynamic shimmer on land a bit
+      const jitter = 0.35 + 0.35*pulse;
+
+      for(let i=0;i<landPts.length;i++){
+        let p = landPts[i];
+        p = rotY(p, yaw);
+        p = rotX(p, pitch);
+        if(p.z < 0) continue;
+
+        const s = project(p, cx, cy, r);
+        // micro size depends on depth
+        const sz = 0.6 + 1.2 * (p.z*0.5 + 0.5);
+        ctx.fillRect((s.x|0)+0.5, (s.y|0)+0.5, sz, sz);
+      }
+
+      ctx.restore();
+    }
+
+    function drawNodes(cx,cy,r,yaw,pitch, t, pulse){
+      ctx.save();
+      ctx.globalCompositeOperation = "screen";
+
+      for(let i=0;i<nodes.length;i++){
+        const n = nodes[i];
+        n.t += 0.016;
+
+        let p = { x:n.x, y:n.y, z:n.z };
+        p = rotY(p, yaw);
+        p = rotX(p, pitch);
+        if(p.z < 0) continue;
+
+        const s = project(p, cx, cy, r);
+
+        // pulse ring (addictive)
+        const ring = 0.5 + 0.5*Math.sin(t*1.8 + i*0.07);
+        const rr = (2.4 + 2.6*ring) * n.strength * (0.85 + 0.50*pulse);
+        const a = 0.55 + 0.35*pulse;
+
+        // red core
+        ctx.fillStyle = `rgba(255,43,43,${0.95})`;
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, 1.35*n.strength, 0, Math.PI*2);
+        ctx.fill();
+
+        // white hot edge
+        ctx.strokeStyle = `rgba(255,255,255,${0.12 + 0.18*pulse})`;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, rr, 0, Math.PI*2);
+        ctx.stroke();
+      }
+
+      ctx.restore();
+    }
+
+    function drawSlopstream(cx,cy,r,yaw,pitch, t, pulse){
+      ctx.save();
+      ctx.globalCompositeOperation = "screen";
+
+      // clip to sphere (keeps it inside)
+      ctx.beginPath();
+      ctx.arc(cx,cy,r,0,Math.PI*2);
+      ctx.clip();
+
+      // update particles
+      const baseAlpha = 0.10 + 0.24*pulse;
+      const lenBoost = 0.9 + 1.8*pulse;
+
+      for(let i=slop.length-1;i>=0;i--){
+        const p = slop[i];
+        p.age += 0.016;
+        p.phase += p.spd * 0.016;
+
+        // respawn dead
+        if(p.age > p.life){
+          slop.splice(i,1);
+          continue;
+        }
+
+        const lifeK = 1 - p.age/p.life;
+        const a = baseAlpha * p.bright * (0.35 + 0.65*lifeK);
+
+        // draw short ribbon as dashed polyline along its orbit
+        const steps = 10;
+        const segLen = (p.len * lenBoost) / steps;
+
+        ctx.strokeStyle = `rgba(255,255,255,${a})`;
+        ctx.lineWidth = 1;
+
+        ctx.beginPath();
+        let started=false;
+
+        for(let k=0;k<steps;k++){
+          const ang = p.phase - (k/steps)*0.55*(1.0 + 1.2*pulse);
+          let q = pointOnGreatCircle(p.n, ang);
+
+          // slight radial "lift" to fake speed (still geometric)
+          const lift = (0.010 + 0.020*pulse) * Math.sin(t*2.2 + i*0.02 + k);
+          q = { x:q.x*(1+lift), y:q.y*(1+lift), z:q.z*(1+lift) };
+
+          // rotate camera
+          q = rotY(q, yaw);
+          q = rotX(q, pitch);
+
+          // only near hemisphere for crispness
+          if(q.z < 0) { started=false; continue; }
+
+          const s = project(q, cx, cy, r);
+          if(!started){ ctx.moveTo(s.x, s.y); started=true; }
+          else{
+            // dashes: skip every other segment
+            if((k % 2) === 0) ctx.lineTo(s.x, s.y);
+            else ctx.moveTo(s.x, s.y);
+          }
+        }
+        ctx.stroke();
+      }
+
+      // keep density
+      if(slop.length < 220) spawnSlop(8);
+
+      ctx.restore();
+    }
+
+    function drawFrame(w,h,pulse){
+      // Hard containment lines: KETADATA
+      ctx.save();
+      ctx.globalAlpha = 0.32;
+      ctx.strokeStyle = "rgba(255,255,255,0.14)";
+      ctx.lineWidth = 1;
+      ctx.strokeRect(0.5,0.5,w-1,h-1);
+
+      // thin vertical rail at right (matches reference)
+      ctx.globalAlpha = 0.24;
+      ctx.beginPath();
+      ctx.moveTo(w-260+0.5, 0);
+      ctx.lineTo(w-260+0.5, h);
+      ctx.stroke();
+
+      // corner ticks
+      ctx.globalAlpha = 0.30 + 0.12*pulse;
+      ctx.strokeStyle = "rgba(255,255,255,0.18)";
+      ctx.beginPath();
+      ctx.moveTo(18, 18); ctx.lineTo(46, 18);
+      ctx.moveTo(18, 18); ctx.lineTo(18, 46);
+
+      ctx.moveTo(w-18, 18); ctx.lineTo(w-46, 18);
+      ctx.moveTo(w-18, 18); ctx.lineTo(w-18, 46);
+
+      ctx.moveTo(18, h-18); ctx.lineTo(46, h-18);
+      ctx.moveTo(18, h-18); ctx.lineTo(18, h-46);
+
+      ctx.moveTo(w-18, h-18); ctx.lineTo(w-46, h-18);
+      ctx.moveTo(w-18, h-18); ctx.lineTo(w-18, h-46);
+      ctx.stroke();
+
+      ctx.restore();
+    }
+
+    // Main loop
+    let t0 = performance.now();
+    function tick(now){
+      const dt = Math.min(0.05, (now - t0)/1000);
+      t0 = now;
+
+      const w = canvas.clientWidth;
+      const h = canvas.clientHeight;
+      const cx = w * 0.50;
+      const cy = h * 0.52;
+      const r  = Math.min(w, h) * 0.30 * cam.zoom;
+
+      // background
+      clearBG(w,h);
+
+      // motion
+      const pulse = slopPulse ? (0.5 + 0.5*Math.sin(now*0.0011)) : 0.25;
+
+      if(cam.auto){
+        cam.yawV += 0.0014 + 0.0010*pulse;
+        cam.pitchV += 0.00020 * Math.sin(now*0.001);
+      }
+
+      // integrate with damping
+      cam.yaw   += cam.yawV;
+      cam.pitch += cam.pitchV;
+      cam.yawV *= 0.92;
+      cam.pitchV *= 0.92;
+
+      cam.pitch = clamp(cam.pitch, -1.05, 1.05);
+
+      // draw layers
+      drawGlow(cx,cy,r,pulse);
+      drawGraticule(cx,cy,r,cam.yaw,cam.pitch,pulse);
+      drawLand(cx,cy,r,cam.yaw,cam.pitch,pulse);
+      drawSlopstream(cx,cy,r,cam.yaw,cam.pitch, now*0.001, pulse);
+      drawNodes(cx,cy,r,cam.yaw,cam.pitch, now*0.001, pulse);
+
+      // bursts
+      for(let i=bursts.length-1;i>=0;i--){
+        const b = bursts[i];
+        b.t += dt;
+        if(b.t > 1.2){ bursts.splice(i,1); continue; }
+        const k = 1 - b.t/1.2;
+        const ring = (1 - k);
+        ctx.save();
+        ctx.globalCompositeOperation = "screen";
+        ctx.globalAlpha = 0.22 * k * b.intensity;
+        ctx.strokeStyle = "rgba(255,255,255,0.22)";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.arc(cx, cy, r*(1.05 + ring*0.18), 0, Math.PI*2);
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      drawFrame(w,h,pulse);
+
+      requestAnimationFrame(tick);
+    }
+
+    requestAnimationFrame(tick);
+  </script>
+</body>
+</html>
