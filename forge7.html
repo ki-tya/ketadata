@@ -1,0 +1,1613 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>KETADATA // ROOM KERNEL FORGE</title>
+
+  <style>
+    :root{
+      --bg:#07080a;
+      --panel:#0b0d10;
+      --panel2:#0a0c0f;
+      --line:rgba(255,255,255,.10);
+      --line2:rgba(255,255,255,.06);
+      --txt:rgba(255,255,255,.92);
+      --muted:rgba(255,255,255,.62);
+      --dim:rgba(255,255,255,.38);
+      --focus:rgba(255,255,255,.18);
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      --ui: Arial, Helvetica, sans-serif;
+
+      /* BIG MODULES */
+      --roomMin: 620px;
+      --roomMax: 760px;
+      --imgH: 240px;
+      --notesH: 140px;
+      --htmlH: 180px;
+
+      /* no rounding */
+      --r:0px;
+    }
+
+    *{ box-sizing:border-box; }
+    html,body{ height:100%; margin:0; background:var(--bg); color:var(--txt); font-family:var(--ui); overflow:hidden; }
+
+    /* ROOM SORTER HARD GRID + drift */
+    body::before{
+      content:"";
+      position:fixed; inset:0;
+      background:
+        linear-gradient(rgba(255,255,255,.06) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,.06) 1px, transparent 1px),
+        radial-gradient(900px 520px at 18% 32%, rgba(255,255,255,.040), transparent 60%),
+        radial-gradient(900px 520px at 82% 68%, rgba(255,255,255,.030), transparent 64%);
+      background-size: 44px 44px, 44px 44px, auto, auto;
+      pointer-events:none;
+      z-index:0;
+      animation: drift 18s linear infinite;
+      opacity:.55;
+    }
+    @keyframes drift{
+      from{ background-position: 0 0, 0 0, center, center; }
+      to{ background-position: 88px 88px, 88px 88px, center, center; }
+    }
+
+    .app{
+      position:relative;
+      z-index:1;
+      height:100%;
+      display:grid;
+      grid-template-rows: auto 1fr;
+    }
+
+    /* TOP BAR */
+    .top{
+      display:flex;
+      align-items:flex-start;
+      justify-content:space-between;
+      gap:18px;
+      padding: 14px 16px;
+      border-bottom:1px solid var(--line);
+      background: rgba(0,0,0,.55);
+      backdrop-filter: blur(6px);
+    }
+
+    .brand{
+      display:flex;
+      flex-direction:column;
+      gap:6px;
+      min-width: 420px;
+    }
+
+    /* NEW: icon + title paired */
+    .brandTopRow{
+      display:flex;
+      align-items:center;
+      gap:10px;
+      white-space:nowrap;
+    }
+    .ketaNote{
+      width:18px; height:18px;
+      border:1px solid rgba(255,255,255,.78);
+      background: rgba(255,255,255,.02);
+      position:relative;
+      flex:0 0 auto;
+    }
+    /* inner cut / hard geometry */
+    .ketaNote::after{
+      content:"";
+      position:absolute;
+      inset:4px;
+      border:1px solid rgba(255,255,255,.20);
+      background: transparent;
+    }
+
+    .brand .t{
+      font-weight:900;
+      letter-spacing:.22em;
+      text-transform:uppercase;
+      font-size:12px;
+      line-height:1.2;
+      white-space:nowrap;
+      margin:0;
+    }
+    .brand .s{
+      font-weight:900;
+      letter-spacing:.14em;
+      text-transform:uppercase;
+      font-size:11px;
+      color:var(--muted);
+      line-height:1.35;
+    }
+
+    .actions{
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+      align-items:center;
+      justify-content:flex-end;
+    }
+    .btn{
+      border:1px solid var(--line);
+      background: rgba(255,255,255,.04);
+      color:var(--txt);
+      padding:8px 10px;
+      font-size:11px;
+      letter-spacing:.16em;
+      text-transform:uppercase;
+      font-weight:900;
+      cursor:pointer;
+      user-select:none;
+    }
+    .btn:hover{ border-color: rgba(255,255,255,.22); }
+    .btn:active{ transform: translateY(1px); }
+    .btn.danger{
+      border-color: rgba(255,255,255,.16);
+      background: rgba(255,255,255,.02);
+      color: rgba(255,255,255,.78);
+    }
+    .btn.danger:hover{ border-color: rgba(255,255,255,.30); color:#fff; }
+
+    .kbd{
+      border:1px solid rgba(255,255,255,.20);
+      padding:2px 6px;
+      background: rgba(255,255,255,.04);
+      font-weight:900;
+      font-size:10px;
+      letter-spacing:.12em;
+    }
+
+    /* MAIN LAYOUT */
+    .main{
+      min-height:0;
+      display:grid;
+      grid-template-columns: 420px 1fr 480px;
+      gap:0;
+    }
+
+    /* LEFT: SOURCE LINKS / PARSER */
+    .left{
+      min-height:0;
+      border-right:1px solid var(--line);
+      background: rgba(0,0,0,.40);
+      display:flex;
+      flex-direction:column;
+    }
+    .paneHead{
+      padding: 12px 12px 10px 12px;
+      border-bottom:1px solid var(--line);
+      display:flex;
+      align-items:flex-start;
+      justify-content:space-between;
+      gap:12px;
+    }
+    .paneHead .title{
+      font-weight:900;
+      letter-spacing:.18em;
+      text-transform:uppercase;
+      font-size:11px;
+      margin:0;
+    }
+    .paneHead .sub{
+      margin-top:6px;
+      color: var(--muted);
+      font-weight:900;
+      letter-spacing:.12em;
+      text-transform:uppercase;
+      font-size:10px;
+      line-height:1.35;
+    }
+    .paneBody{
+      padding:12px;
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+      min-height:0;
+    }
+    .ta{
+      width:100%;
+      min-height:0;
+      flex: 1 1 auto;
+      border:1px solid var(--line);
+      background: rgba(255,255,255,.02);
+      color: var(--txt);
+      padding:10px;
+      font-family: var(--mono);
+      font-size: 11px;
+      line-height: 1.4;
+      resize:none;
+      outline:none;
+      white-space:pre;
+      overflow:auto;
+    }
+    .ta:focus{
+      border-color: rgba(255,255,255,.26);
+      box-shadow: 0 0 0 2px rgba(255,255,255,.06);
+    }
+    .miniRow{
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+      justify-content:flex-end;
+      align-items:center;
+      color: var(--muted);
+      font-weight:900;
+      letter-spacing:.12em;
+      text-transform:uppercase;
+      font-size:10px;
+    }
+    .smallBtn{
+      border:1px solid var(--line);
+      background: rgba(255,255,255,.03);
+      padding:7px 9px;
+      font-size:10px;
+      letter-spacing:.16em;
+      text-transform:uppercase;
+      font-weight:900;
+      cursor:pointer;
+      user-select:none;
+      color: rgba(255,255,255,.86);
+    }
+    .smallBtn:hover{ border-color: rgba(255,255,255,.22); }
+
+    select{
+      border:1px solid var(--line);
+      background: rgba(255,255,255,.03);
+      color: var(--txt);
+      padding:7px 9px;
+      font-size:10px;
+      letter-spacing:.14em;
+      text-transform:uppercase;
+      font-weight:900;
+      outline:none;
+    }
+
+    /* CENTER: ROOMS GRID */
+    .center{
+      min-height:0;
+      overflow:auto;
+      padding: 14px 14px 64px 14px;
+    }
+    .metaRow{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:12px;
+      margin: 4px 0 12px 0;
+      padding: 10px 12px;
+      border:1px solid var(--line);
+      background: rgba(0,0,0,.32);
+    }
+    .metaRow .l{
+      display:flex;
+      flex-direction:column;
+      gap:4px;
+    }
+    .metaRow .l .h{
+      font-weight:900;
+      letter-spacing:.22em;
+      text-transform:uppercase;
+      font-size:11px;
+    }
+    .metaRow .l .p{
+      font-weight:900;
+      letter-spacing:.14em;
+      text-transform:uppercase;
+      font-size:10px;
+      color:var(--muted);
+    }
+    .metaRow .r{
+      display:flex;
+      gap:10px;
+      align-items:center;
+      flex-wrap:wrap;
+      justify-content:flex-end;
+      color:var(--muted);
+      font-weight:900;
+      letter-spacing:.14em;
+      text-transform:uppercase;
+      font-size:10px;
+    }
+
+    .rooms{
+      display:grid;
+      grid-template-columns: repeat(auto-fit, minmax(var(--roomMin), 1fr));
+      gap: 14px;
+      align-items:start;
+    }
+
+    /* ROOM MODULE */
+    .room{
+      border:1px solid var(--line);
+      background: rgba(0,0,0,.38);
+      display:flex;
+      flex-direction:column;
+      min-width: min(var(--roomMax), 100%);
+    }
+    .roomHead{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      padding: 10px 12px;
+      border-bottom:1px solid var(--line2);
+      background: rgba(0,0,0,.40);
+    }
+    .roomHead .tag{
+      display:flex;
+      align-items:center;
+      gap:10px;
+      min-width:0;
+    }
+    .idBox{
+      border:1px solid var(--line);
+      padding:2px 6px;
+      font-weight:900;
+      letter-spacing:.14em;
+      text-transform:uppercase;
+      font-size:10px;
+      color:var(--muted);
+      background: rgba(255,255,255,.03);
+      flex:0 0 auto;
+    }
+    .roomName{
+      font-weight:900;
+      letter-spacing:.10em;
+      text-transform:uppercase;
+      font-size:12px;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      min-width:0;
+    }
+    .headBtns{
+      display:flex;
+      gap:8px;
+      flex:0 0 auto;
+    }
+    .iconBtn{
+      width:26px; height:24px;
+      display:grid; place-items:center;
+      border:1px solid var(--line);
+      background: rgba(255,255,255,.03);
+      color:var(--txt);
+      cursor:pointer;
+      font-weight:900;
+      user-select:none;
+    }
+    .iconBtn:hover{ border-color: rgba(255,255,255,.22); }
+    .iconBtn.x{ color: rgba(255,255,255,.78); }
+    .iconBtn.x:hover{ color:#fff; border-color: rgba(255,255,255,.30); }
+
+    .roomBody{
+      padding: 12px;
+      display:flex;
+      flex-direction:column;
+      gap: 10px;
+    }
+
+    /* collapsible blocks */
+    .block{
+      border:1px solid var(--line2);
+      background: rgba(0,0,0,.20);
+    }
+    .blockHead{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      padding: 9px 10px;
+      border-bottom:1px solid var(--line2);
+      cursor:pointer;
+      user-select:none;
+    }
+    .blockHead .h{
+      font-weight:900;
+      letter-spacing:.18em;
+      text-transform:uppercase;
+      font-size:10px;
+      color: rgba(255,255,255,.84);
+    }
+    .blockHead .m{
+      font-weight:900;
+      letter-spacing:.14em;
+      text-transform:uppercase;
+      font-size:10px;
+      color: var(--dim);
+      display:flex;
+      gap:10px;
+      align-items:center;
+    }
+    .blockBody{ padding:10px; }
+    .block.collapsed .blockBody{ display:none; }
+    .block.collapsed .blockHead{ border-bottom:none; }
+
+    label{
+      display:block;
+      font-size:10px;
+      letter-spacing:.16em;
+      text-transform:uppercase;
+      font-weight:900;
+      color: var(--muted);
+      margin-bottom:6px;
+    }
+    input[type="text"], input[type="url"], textarea{
+      width:100%;
+      border:1px solid var(--line);
+      background: rgba(255,255,255,.03);
+      color:var(--txt);
+      padding: 10px 10px;
+      outline:none;
+      font-family: var(--ui);
+      font-size: 12px;
+    }
+    textarea{
+      resize: vertical;
+      min-height: 64px;
+      font-family: var(--mono);
+      font-size: 11px;
+      line-height: 1.35;
+    }
+    input:focus, textarea:focus{
+      border-color: rgba(255,255,255,.26);
+      box-shadow: 0 0 0 2px rgba(255,255,255,.06);
+    }
+
+    .pillRow{
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+      align-items:center;
+      justify-content:flex-start;
+      margin-top:10px;
+    }
+    .pill{
+      border:1px solid var(--line);
+      background: rgba(255,255,255,.03);
+      padding:6px 8px;
+      font-size:10px;
+      letter-spacing:.16em;
+      text-transform:uppercase;
+      font-weight:900;
+      cursor:pointer;
+      user-select:none;
+      color: rgba(255,255,255,.82);
+    }
+    .pill.on{
+      background: rgba(255,255,255,.10);
+      border-color: rgba(255,255,255,.22);
+      color:#fff;
+    }
+
+    .row2{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap:10px;
+      align-items:end;
+    }
+
+    /* PAGES LIST */
+    .pagesMeta{
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap:10px;
+      flex-wrap:wrap;
+      margin-bottom:10px;
+      color: var(--muted);
+      font-weight:900;
+      letter-spacing:.12em;
+      text-transform:uppercase;
+      font-size:10px;
+    }
+
+    .page{
+      border:1px solid var(--line);
+      background: rgba(0,0,0,.30);
+      margin-bottom:10px;
+    }
+    .pageHead{
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap:10px;
+      padding: 9px 10px;
+      border-bottom:1px solid var(--line2);
+      background: rgba(0,0,0,.35);
+    }
+    .pageHead .left{
+      display:flex;
+      align-items:center;
+      gap:10px;
+      min-width:0;
+    }
+    .pageTag{
+      border:1px solid var(--line);
+      padding:2px 6px;
+      font-weight:900;
+      letter-spacing:.14em;
+      text-transform:uppercase;
+      font-size:10px;
+      color:var(--muted);
+      background: rgba(255,255,255,.03);
+      flex:0 0 auto;
+    }
+    .pageTitle{
+      font-weight:900;
+      letter-spacing:.10em;
+      text-transform:uppercase;
+      font-size:11px;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      min-width:0;
+      color: rgba(255,255,255,.90);
+    }
+    .pageBtns{
+      display:flex;
+      gap:8px;
+      flex-wrap:wrap;
+      justify-content:flex-end;
+      align-items:center;
+    }
+    .pageBody{ padding:10px; }
+    .shot{
+      border:1px dashed rgba(255,255,255,.16);
+      background: rgba(0,0,0,.24);
+      height: var(--imgH);
+      display:grid;
+      place-items:center;
+      overflow:hidden;
+      position:relative;
+      margin: 8px 0;
+    }
+    .shot img{
+      width:100%;
+      height:100%;
+      object-fit:cover;
+      display:block;
+      filter: grayscale(100%);
+      opacity:.92;
+    }
+    .shot .ph{
+      font-weight:900;
+      letter-spacing:.18em;
+      text-transform:uppercase;
+      font-size:10px;
+      color: var(--muted);
+      padding: 8px 10px;
+      text-align:center;
+    }
+    .shotBar{
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+      align-items:center;
+      justify-content:space-between;
+      margin: 6px 0 10px 0;
+    }
+    .hint{
+      color: var(--dim);
+      font-weight:900;
+      letter-spacing:.14em;
+      text-transform:uppercase;
+      font-size:10px;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      max-width: 60%;
+    }
+    .twoCol{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap:10px;
+    }
+    .notesBox textarea{ min-height: var(--notesH); }
+    .htmlBox textarea{ min-height: var(--htmlH); }
+
+    /* RIGHT: EXPORT PANEL */
+    .right{
+      min-height:0;
+      border-left:1px solid var(--line);
+      background: rgba(0,0,0,.40);
+      display:flex;
+      flex-direction:column;
+    }
+    .out{
+      flex:1 1 auto;
+      min-height:0;
+      border:1px solid var(--line);
+      background: rgba(255,255,255,.02);
+      padding:10px;
+      font-family: var(--mono);
+      font-size: 11px;
+      line-height: 1.4;
+      white-space:pre-wrap;
+      overflow:auto;
+      color: rgba(255,255,255,.90);
+    }
+
+    @media (max-width: 1320px){
+      .main{ grid-template-columns: 380px 1fr; }
+      .right{ display:none; }
+    }
+    @media (max-width: 980px){
+      .main{ grid-template-columns: 1fr; }
+      .left{ display:none; }
+      .right{ display:none; }
+    }
+
+    ::selection{ background: rgba(255,255,255,.18); color:#fff; }
+  </style>
+</head>
+
+<body>
+  <div class="app">
+    <div class="top">
+      <div class="brand">
+        <!-- NEW: KETA_NOTE icon paired with title -->
+        <div class="brandTopRow">
+          <div class="ketaNote" aria-label="KETA_NOTE" title="KETA_NOTE"></div>
+          <div class="t">KETADATA // ROOM KERNEL FORGE</div>
+        </div>
+
+        <div class="s">ROOM MODULES + PAGE SPECIMENS • COLLAPSIBLE EVERYTHING • SCREENSHOT/HTML/NOTES • EXPORT PROMPTS/JSON • LOCAL-FIRST STORAGE</div>
+      </div>
+
+      <div class="actions">
+        <button class="btn" id="addRoom">add room module</button>
+        <button class="btn" id="collapseAllRooms">collapse all rooms</button>
+        <button class="btn" id="expandAllRooms">expand all rooms</button>
+        <button class="btn" id="exportAllPrompts">export prompts (all)</button>
+        <button class="btn" id="copyOut">copy output</button>
+        <button class="btn" id="downloadOut">download output.txt</button>
+        <button class="btn" id="exportJSON">export.json</button>
+        <button class="btn" id="importJSON">import.json</button>
+        <button class="btn danger" id="reset">reset</button>
+      </div>
+    </div>
+
+    <div class="main">
+      <!-- LEFT: SOURCE LINKS -->
+      <div class="left">
+        <div class="paneHead">
+          <div>
+            <div class="title">SOURCE LINKS</div>
+            <div class="sub">paste links one per line • optional "ROOM:" directives • parse into pages</div>
+          </div>
+          <div class="miniRow" id="srcCount">0 lines</div>
+        </div>
+
+        <div class="paneBody">
+          <textarea class="ta" id="src" spellcheck="false" placeholder="EXAMPLE:
+ROOM: LOBBY
+https://ketadata.com/blacklotus.html
+https://ketadata.com/lobby1.html
+
+ROOM: TEMPLE
+https://ketadata.com/temple1.html
+..."></textarea>
+
+          <div class="miniRow">
+            <select id="targetRoom"></select>
+            <button class="smallBtn" id="parse">parse → add pages</button>
+            <button class="smallBtn" id="clearSrc">clear</button>
+          </div>
+
+          <div class="miniRow">
+            <span><span class="kbd">/</span> quick find room/page</span>
+            <span><span class="kbd">⌘/ctrl</span>+<span class="kbd">enter</span> export all prompts</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- CENTER: ROOMS -->
+      <div class="center">
+        <div class="metaRow">
+          <div class="l">
+            <div class="h">ROOM MODULES</div>
+            <div class="p">each room holds pages (link + screenshot + html + notes)</div>
+          </div>
+          <div class="r" id="counts">rooms: 0 • pages: 0</div>
+        </div>
+
+        <div class="rooms" id="rooms"></div>
+      </div>
+
+      <!-- RIGHT: OUTPUT -->
+      <div class="right">
+        <div class="paneHead">
+          <div>
+            <div class="title">OUTPUT / EXPORT PROMPTS</div>
+            <div class="sub">generated text or json snippets • copy/download</div>
+          </div>
+          <div class="miniRow" id="status">idle</div>
+        </div>
+        <div class="paneBody" style="min-height:0;">
+          <div class="out" id="out">hit "export prompts (all)"</div>
+          <div class="miniRow" style="justify-content:flex-end;">
+            <button class="smallBtn" id="wrapToggle">wrap: on</button>
+            <button class="smallBtn" id="onlyPinnedToggle">only pinned: off</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+/* ============================
+   ROOM KERNEL FORGE
+   - Rooms contain Pages
+   - Everything collapsible
+   - Reorder rooms/pages
+   - Screenshot stored as DataURL
+   - Export prompts / Export JSON / Import JSON
+   - LocalStorage persistence
+   - Source link parser -> creates pages
+============================ */
+
+const LS_KEY = "KDT_ROOM_KERNEL_FORGE_V1";
+
+const roomsEl = document.getElementById("rooms");
+const outEl = document.getElementById("out");
+const statusEl = document.getElementById("status");
+const countsEl = document.getElementById("counts");
+const srcTa = document.getElementById("src");
+const srcCount = document.getElementById("srcCount");
+const targetRoomSel = document.getElementById("targetRoom");
+
+let WRAP = true;
+let ONLY_PINNED = false;
+
+function uid(){ return Math.random().toString(16).slice(2) + Date.now().toString(16); }
+function nowISO(){
+  const d = new Date();
+  return d.toISOString().replace("T"," ").replace(/\.\d+Z$/,"Z");
+}
+function setStatus(s){
+  statusEl.textContent = s;
+  setTimeout(()=>{ if(statusEl.textContent === s) statusEl.textContent = "idle"; }, 1200);
+}
+function safe(s){ return (s || "").toString().trim(); }
+
+function loadState(){
+  try{
+    const raw = localStorage.getItem(LS_KEY);
+    if(!raw) return { rooms: [], wrap:true, onlyPinned:false };
+    const obj = JSON.parse(raw);
+    return {
+      rooms: Array.isArray(obj.rooms) ? obj.rooms : [],
+      wrap: (typeof obj.wrap === "boolean") ? obj.wrap : true,
+      onlyPinned: (typeof obj.onlyPinned === "boolean") ? obj.onlyPinned : false
+    };
+  }catch(e){
+    return { rooms: [], wrap:true, onlyPinned:false };
+  }
+}
+function saveState(){
+  localStorage.setItem(LS_KEY, JSON.stringify({
+    version:"KDT_ROOM_KERNEL_FORGE_V1",
+    savedAt: nowISO(),
+    wrap: WRAP,
+    onlyPinned: ONLY_PINNED,
+    rooms: state.rooms
+  }));
+  updateCounts();
+  hydrateTargetRoomSelect();
+}
+
+let state = loadState();
+WRAP = state.wrap;
+ONLY_PINNED = state.onlyPinned;
+
+document.getElementById("wrapToggle").textContent = WRAP ? "wrap: on" : "wrap: off";
+document.getElementById("onlyPinnedToggle").textContent = ONLY_PINNED ? "only pinned: on" : "only pinned: off";
+
+function defaultRoom(n){
+  return {
+    id: uid(),
+    name: `ROOM ${n}`,
+    pinned: false,
+    collapsed: false,
+    collapsedBlocks: { notes:false, pages:false },
+    notes: "purpose / constraints / what belongs here...",
+    pages: [],
+    updatedAt: nowISO()
+  };
+}
+function defaultPage(n){
+  return {
+    id: uid(),
+    title: `PAGE ${n}`,
+    link: "",
+    pinned: false,
+    collapsed: false,
+    collapsedBlocks: { shot:false, html:false, notes:false },
+    screenshotDataUrl: "",
+    html: "",
+    notes: {
+      likes:"",
+      dislikes:"",
+      works:"",
+      fails:"",
+      primitives:"",
+      bugs:"",
+      extra:""
+    },
+    updatedAt: nowISO()
+  };
+}
+
+/* ============================
+   RENDER
+============================ */
+function el(tag, cls, html){
+  const e = document.createElement(tag);
+  if(cls) e.className = cls;
+  if(html !== undefined) e.innerHTML = html;
+  return e;
+}
+function labelEl(text){
+  const l = document.createElement("label");
+  l.textContent = text;
+  return l;
+}
+function inputField(label, type, value, onChange, placeholder=""){
+  const wrap = el("div","");
+  wrap.appendChild(labelEl(label));
+  const inp = document.createElement("input");
+  inp.type = type;
+  inp.value = value || "";
+  if(placeholder) inp.placeholder = placeholder;
+  inp.addEventListener("input", ()=> onChange(inp.value));
+  wrap.appendChild(inp);
+  return wrap;
+}
+function textAreaField(label, value, onChange, minH=110, placeholder=""){
+  const wrap = el("div","");
+  wrap.appendChild(labelEl(label));
+  const ta = document.createElement("textarea");
+  ta.value = value || "";
+  if(placeholder) ta.placeholder = placeholder;
+  ta.style.minHeight = minH + "px";
+  ta.addEventListener("input", ()=> onChange(ta.value));
+  wrap.appendChild(ta);
+  return wrap;
+}
+function block(title, collapsed, onToggle){
+  const b = el("div","block"+(collapsed ? " collapsed" : ""));
+  const h = el("div","blockHead");
+  const left = el("div","h", title);
+  const right = el("div","m", `<span>${collapsed ? "collapsed" : "expanded"}</span><span class="kbd">${collapsed ? "+" : "–"}</span>`);
+  h.appendChild(left);
+  h.appendChild(right);
+
+  const body = el("div","blockBody");
+  h.onclick = ()=>{
+    const nextCollapsed = !b.classList.contains("collapsed");
+    if(nextCollapsed){
+      b.classList.add("collapsed");
+      right.innerHTML = `<span>collapsed</span><span class="kbd">+</span>`;
+      onToggle(true);
+    }else{
+      b.classList.remove("collapsed");
+      right.innerHTML = `<span>expanded</span><span class="kbd">–</span>`;
+      onToggle(false);
+    }
+  };
+
+  b.appendChild(h);
+  b.appendChild(body);
+  return b;
+}
+
+function updateCounts(){
+  const rooms = state.rooms.length;
+  const pages = state.rooms.reduce((acc,r)=>acc + (r.pages ? r.pages.length : 0), 0);
+  countsEl.textContent = `rooms: ${rooms} • pages: ${pages}`;
+}
+
+function hydrateTargetRoomSelect(){
+  targetRoomSel.innerHTML = "";
+  state.rooms.forEach((r, i)=>{
+    const opt = document.createElement("option");
+    opt.value = r.id;
+    opt.textContent = `${i+1}. ${r.name}`;
+    targetRoomSel.appendChild(opt);
+  });
+  if(!state.rooms.length){
+    const opt = document.createElement("option");
+    opt.value = "";
+    opt.textContent = "no rooms";
+    targetRoomSel.appendChild(opt);
+  }
+}
+
+function render(){
+  roomsEl.innerHTML = "";
+
+  state.rooms.forEach((room, ri)=>{
+    const roomCard = el("div","room");
+
+    // header
+    const head = el("div","roomHead");
+    const tag = el("div","tag");
+    tag.appendChild(el("div","idBox", `#${ri+1}`));
+    tag.appendChild(el("div","roomName", room.name.toUpperCase()));
+
+    const btns = el("div","headBtns");
+    const bUp = el("div","iconBtn","↑");
+    const bDn = el("div","iconBtn","↓");
+    const bPin = el("div","iconBtn", room.pinned ? "●" : "○");
+    const bCol = el("div","iconBtn", room.collapsed ? "+" : "–");
+    const bX  = el("div","iconBtn x","×");
+    btns.appendChild(bUp); btns.appendChild(bDn); btns.appendChild(bPin); btns.appendChild(bCol); btns.appendChild(bX);
+
+    head.appendChild(tag);
+    head.appendChild(btns);
+
+    // body
+    const body = el("div","roomBody");
+    if(room.collapsed) body.style.display = "none";
+
+    // room name + actions
+    const row2 = el("div","row2");
+    const nameField = inputField("room name", "text", room.name, (v)=>{
+      room.name = v;
+      room.updatedAt = nowISO();
+      saveState();
+      render(); // updates title
+    }, "e.g. TEMPLE");
+
+    const targetFlag = inputField("room tag / target", "text", room.target || "", (v)=>{
+      room.target = v;
+      room.updatedAt = nowISO();
+      saveState();
+    }, "e.g. target: temple");
+    row2.appendChild(nameField);
+    row2.appendChild(targetFlag);
+
+    const pills = el("div","pillRow");
+    const pPinned = el("div","pill"+(room.pinned?" on":""), "pinned");
+    const pAddPage = el("div","pill","add page");
+    const pExportRoom = el("div","pill","export room prompts");
+    const pCopyRoom = el("div","pill","copy room prompts");
+    pills.appendChild(pPinned);
+    pills.appendChild(pAddPage);
+    pills.appendChild(pExportRoom);
+    pills.appendChild(pCopyRoom);
+
+    body.appendChild(row2);
+    body.appendChild(pills);
+
+    // room notes
+    const bNotes = block("ROOM NOTES (PURPOSE / CONSTRAINTS / BELONGS HERE)", room.collapsedBlocks.notes, (c)=>{
+      room.collapsedBlocks.notes = c; room.updatedAt = nowISO(); saveState();
+    });
+    bNotes.querySelector(".blockBody").appendChild(
+      textAreaField("notes", room.notes, (v)=>{ room.notes=v; room.updatedAt=nowISO(); saveState(); }, 120)
+    );
+    body.appendChild(bNotes);
+
+    // pages
+    const bPages = block("PAGES", room.collapsedBlocks.pages, (c)=>{
+      room.collapsedBlocks.pages = c; room.updatedAt = nowISO(); saveState();
+    });
+    const pagesBody = bPages.querySelector(".blockBody");
+
+    const pagesMeta = el("div","pagesMeta", `<span>pages: ${(room.pages||[]).length}</span><span>local-first • screenshots stored as data urls</span>`);
+    pagesBody.appendChild(pagesMeta);
+
+    (room.pages || []).forEach((pg, pi)=>{
+      pagesBody.appendChild(renderPage(room, pg, ri, pi));
+    });
+
+    body.appendChild(bPages);
+
+    roomCard.appendChild(head);
+    roomCard.appendChild(body);
+
+    // room header actions
+    bUp.onclick = ()=> moveRoom(ri, -1);
+    bDn.onclick = ()=> moveRoom(ri, +1);
+    bX.onclick  = ()=> removeRoom(ri);
+    bPin.onclick = ()=>{
+      room.pinned = !room.pinned;
+      room.updatedAt = nowISO();
+      render();
+    };
+    bCol.onclick = ()=>{
+      room.collapsed = !room.collapsed;
+      room.updatedAt = nowISO();
+      render();
+    };
+
+    // room pills
+    pPinned.onclick = ()=>{ room.pinned = !room.pinned; room.updatedAt=nowISO(); render(); };
+    pAddPage.onclick = ()=>{ addPage(ri); };
+    pExportRoom.onclick = ()=>{
+      const txt = exportRoomPrompts(room);
+      outEl.textContent = txt || "(empty)";
+      setStatus("room exported");
+    };
+    pCopyRoom.onclick = async ()=>{
+      const txt = exportRoomPrompts(room);
+      try{ await navigator.clipboard.writeText(txt); setStatus("room copied"); }
+      catch(e){ setStatus("clipboard blocked"); }
+    };
+
+    roomsEl.appendChild(roomCard);
+  });
+
+  saveState();
+}
+
+function renderPage(room, pg, ri, pi){
+  const page = el("div","page");
+
+  const head = el("div","pageHead");
+  const left = el("div","left");
+  left.appendChild(el("div","pageTag", `P${pi+1}`));
+  left.appendChild(el("div","pageTitle", (pg.title || `PAGE ${pi+1}`).toUpperCase()));
+
+  const btns = el("div","pageBtns");
+  const bUp = el("div","iconBtn","↑");
+  const bDn = el("div","iconBtn","↓");
+  const bPin = el("div","iconBtn", pg.pinned ? "●" : "○");
+  const bCol = el("div","iconBtn", pg.collapsed ? "+" : "–");
+  const bX  = el("div","iconBtn x","×");
+  btns.appendChild(bUp); btns.appendChild(bDn); btns.appendChild(bPin); btns.appendChild(bCol); btns.appendChild(bX);
+
+  head.appendChild(left);
+  head.appendChild(btns);
+
+  const body = el("div","pageBody");
+  if(pg.collapsed) body.style.display = "none";
+
+  // title/link
+  const row2 = el("div","row2");
+  row2.appendChild(inputField("title", "text", pg.title, (v)=>{ pg.title=v; pg.updatedAt=nowISO(); render(); }, "e.g. BLACK LOTUS"));
+  row2.appendChild(inputField("link", "url", pg.link, (v)=>{ pg.link=v; pg.updatedAt=nowISO(); saveState(); }, "https://..."));
+  body.appendChild(row2);
+
+  // quick page actions
+  const pills = el("div","pillRow");
+  const pPinned = el("div","pill"+(pg.pinned?" on":""), "pinned");
+  const pOpen = el("div","pill","open");
+  const pCopyLink = el("div","pill","copy link");
+  const pExport = el("div","pill","export page prompt");
+  const pCopy = el("div","pill","copy page prompt");
+  pills.appendChild(pPinned);
+  pills.appendChild(pOpen);
+  pills.appendChild(pCopyLink);
+  pills.appendChild(pExport);
+  pills.appendChild(pCopy);
+  body.appendChild(pills);
+
+  // screenshot block
+  const bShot = block("SCREENSHOT", pg.collapsedBlocks.shot, (c)=>{
+    pg.collapsedBlocks.shot = c; pg.updatedAt=nowISO(); saveState();
+  });
+  const shotBody = bShot.querySelector(".blockBody");
+
+  const file = document.createElement("input");
+  file.type = "file";
+  file.accept = "image/*";
+  file.style.display = "none";
+
+  const shot = el("div","shot");
+  if(pg.screenshotDataUrl){
+    const img = new Image();
+    img.src = pg.screenshotDataUrl;
+    shot.appendChild(img);
+  }else{
+    shot.appendChild(el("div","ph","UPLOAD A SCREENSHOT"));
+  }
+
+  const shotBar = el("div","shotBar");
+  const upBtn = el("div","smallBtn","upload");
+  const clrBtn = el("div","smallBtn","clear");
+  const hint = el("div","hint", pg.screenshotDataUrl ? `saved • ${pg.screenshotDataUrl.length.toLocaleString()} chars` : "no screenshot");
+  shotBar.appendChild(upBtn);
+  shotBar.appendChild(clrBtn);
+  shotBar.appendChild(hint);
+
+  shotBody.appendChild(file);
+  shotBody.appendChild(shot);
+  shotBody.appendChild(shotBar);
+
+  // html block
+  const bHtml = block("HTML (OPTIONAL)", pg.collapsedBlocks.html, (c)=>{
+    pg.collapsedBlocks.html = c; pg.updatedAt=nowISO(); saveState();
+  });
+  const htmlBody = bHtml.querySelector(".blockBody");
+  const htmlWrap = el("div","htmlBox");
+  htmlWrap.appendChild(labelEl("html"));
+  const htmlTa = document.createElement("textarea");
+  htmlTa.value = pg.html || "";
+  htmlTa.placeholder = "paste html here...";
+  htmlTa.addEventListener("input", ()=>{ pg.html = htmlTa.value; pg.updatedAt=nowISO(); saveState(); });
+  htmlWrap.appendChild(htmlTa);
+  htmlBody.appendChild(htmlWrap);
+
+  // notes block
+  const bNotes = block("NOTES (LIKES / DISLIKES / WORKS / FAILS / PRIMITIVES / BUGS)", pg.collapsedBlocks.notes, (c)=>{
+    pg.collapsedBlocks.notes = c; pg.updatedAt=nowISO(); saveState();
+  });
+  const notesBody = bNotes.querySelector(".blockBody");
+
+  const twoCol = el("div","twoCol notesBox");
+  twoCol.appendChild(textAreaField("what i like", pg.notes.likes, (v)=>{ pg.notes.likes=v; pg.updatedAt=nowISO(); saveState(); }, 110));
+  twoCol.appendChild(textAreaField("what i don't like", pg.notes.dislikes, (v)=>{ pg.notes.dislikes=v; pg.updatedAt=nowISO(); saveState(); }, 110));
+  notesBody.appendChild(twoCol);
+
+  const twoCol2 = el("div","twoCol notesBox");
+  twoCol2.appendChild(textAreaField("what works", pg.notes.works, (v)=>{ pg.notes.works=v; pg.updatedAt=nowISO(); saveState(); }, 110));
+  twoCol2.appendChild(textAreaField("what fails", pg.notes.fails, (v)=>{ pg.notes.fails=v; pg.updatedAt=nowISO(); saveState(); }, 110));
+  notesBody.appendChild(twoCol2);
+
+  const twoCol3 = el("div","twoCol notesBox");
+  twoCol3.appendChild(textAreaField("features / primitives", pg.notes.primitives, (v)=>{ pg.notes.primitives=v; pg.updatedAt=nowISO(); saveState(); }, 110));
+  twoCol3.appendChild(textAreaField("bugs / edge cases", pg.notes.bugs, (v)=>{ pg.notes.bugs=v; pg.updatedAt=nowISO(); saveState(); }, 110));
+  notesBody.appendChild(twoCol3);
+
+  notesBody.appendChild(textAreaField("extra", pg.notes.extra, (v)=>{ pg.notes.extra=v; pg.updatedAt=nowISO(); saveState(); }, 110));
+
+  // assemble page
+  body.appendChild(bShot);
+  body.appendChild(bHtml);
+  body.appendChild(bNotes);
+
+  page.appendChild(head);
+  page.appendChild(body);
+
+  // page header actions
+  bUp.onclick = ()=> movePage(ri, pi, -1);
+  bDn.onclick = ()=> movePage(ri, pi, +1);
+  bX.onclick  = ()=> removePage(ri, pi);
+  bPin.onclick = ()=>{
+    pg.pinned = !pg.pinned;
+    pg.updatedAt = nowISO();
+    render();
+  };
+  bCol.onclick = ()=>{
+    pg.collapsed = !pg.collapsed;
+    pg.updatedAt = nowISO();
+    render();
+  };
+
+  // pills
+  pPinned.onclick = ()=>{ pg.pinned = !pg.pinned; pg.updatedAt=nowISO(); render(); };
+  pOpen.onclick = ()=>{ if(!pg.link) return setStatus("no link"); window.open(pg.link, "_blank", "noopener"); };
+  pCopyLink.onclick = async ()=>{
+    if(!pg.link) return setStatus("no link");
+    try{ await navigator.clipboard.writeText(pg.link); setStatus("copied link"); }
+    catch(e){ setStatus("clipboard blocked"); }
+  };
+  pExport.onclick = ()=>{
+    const txt = exportPagePrompt(room, pg);
+    outEl.textContent = txt || "(empty)";
+    setStatus("page exported");
+  };
+  pCopy.onclick = async ()=>{
+    const txt = exportPagePrompt(room, pg);
+    try{ await navigator.clipboard.writeText(txt); setStatus("page copied"); }
+    catch(e){ setStatus("clipboard blocked"); }
+  };
+
+  // screenshot actions
+  upBtn.onclick = ()=> file.click();
+  file.addEventListener("change", ()=>{
+    const f = file.files && file.files[0];
+    if(!f) return;
+    const reader = new FileReader();
+    reader.onload = ()=>{
+      pg.screenshotDataUrl = String(reader.result || "");
+      pg.updatedAt = nowISO();
+      render();
+      setStatus("screenshot saved");
+    };
+    reader.readAsDataURL(f);
+  });
+  clrBtn.onclick = ()=>{
+    pg.screenshotDataUrl = "";
+    pg.updatedAt = nowISO();
+    render();
+    setStatus("screenshot cleared");
+  };
+
+  return page;
+}
+
+/* ============================
+   MUTATIONS
+============================ */
+function addRoom(){
+  const n = state.rooms.length + 1;
+  state.rooms.push(defaultRoom(n));
+  render();
+  setStatus("room added");
+}
+function removeRoom(ri){
+  state.rooms.splice(ri,1);
+  render();
+  setStatus("room removed");
+}
+function moveRoom(ri, dir){
+  const rj = ri + dir;
+  if(rj < 0 || rj >= state.rooms.length) return;
+  const tmp = state.rooms[ri];
+  state.rooms[ri] = state.rooms[rj];
+  state.rooms[rj] = tmp;
+  render();
+  setStatus("room moved");
+}
+function addPage(ri){
+  const room = state.rooms[ri];
+  room.pages = room.pages || [];
+  room.pages.push(defaultPage(room.pages.length + 1));
+  room.updatedAt = nowISO();
+  render();
+  setStatus("page added");
+}
+function removePage(ri, pi){
+  const room = state.rooms[ri];
+  room.pages.splice(pi,1);
+  room.updatedAt = nowISO();
+  render();
+  setStatus("page removed");
+}
+function movePage(ri, pi, dir){
+  const room = state.rooms[ri];
+  const pj = pi + dir;
+  if(pj < 0 || pj >= room.pages.length) return;
+  const tmp = room.pages[pi];
+  room.pages[pi] = room.pages[pj];
+  room.pages[pj] = tmp;
+  room.updatedAt = nowISO();
+  render();
+  setStatus("page moved");
+}
+
+function collapseAllRooms(){
+  state.rooms.forEach(r=>{ r.collapsed = true; r.updatedAt = nowISO(); });
+  render();
+  setStatus("collapsed all");
+}
+function expandAllRooms(){
+  state.rooms.forEach(r=>{ r.collapsed = false; r.updatedAt = nowISO(); });
+  render();
+  setStatus("expanded all");
+}
+
+/* ============================
+   EXPORTS
+============================ */
+function exportPagePrompt(room, pg){
+  const lines = [];
+  if(WRAP) lines.push("BEGIN PAGE");
+  lines.push(`ROOM: ${safe(room.name)}`);
+  lines.push(`PAGE_TITLE: ${safe(pg.title)}`);
+  lines.push(`LINK: ${safe(pg.link)}`);
+  lines.push(`PINNED: ${pg.pinned ? "YES" : "NO"}`);
+  lines.push(`UPDATED_AT: ${safe(pg.updatedAt)}`);
+  lines.push("");
+
+  lines.push("SCREENSHOT_DATA_URL:");
+  lines.push(pg.screenshotDataUrl ? pg.screenshotDataUrl : "(none)");
+  lines.push("");
+
+  lines.push("HTML:");
+  lines.push(safe(pg.html) ? pg.html : "(none)");
+  lines.push("");
+
+  lines.push("NOTES:");
+  lines.push(`LIKES:\n${safe(pg.notes.likes) || "(none)"}`); lines.push("");
+  lines.push(`DISLIKES:\n${safe(pg.notes.dislikes) || "(none)"}`); lines.push("");
+  lines.push(`WORKS:\n${safe(pg.notes.works) || "(none)"}`); lines.push("");
+  lines.push(`FAILS:\n${safe(pg.notes.fails) || "(none)"}`); lines.push("");
+  lines.push(`PRIMITIVES:\n${safe(pg.notes.primitives) || "(none)"}`); lines.push("");
+  lines.push(`BUGS:\n${safe(pg.notes.bugs) || "(none)"}`); lines.push("");
+  lines.push(`EXTRA:\n${safe(pg.notes.extra) || "(none)"}`); lines.push("");
+
+  if(WRAP) lines.push("END PAGE");
+  return lines.join("\n");
+}
+
+function exportRoomPrompts(room){
+  const pages = (room.pages || []).filter(pg => !ONLY_PINNED || pg.pinned);
+  const lines = [];
+  if(WRAP) lines.push("BEGIN ROOM");
+  lines.push(`ROOM: ${safe(room.name)}`);
+  lines.push(`PINNED: ${room.pinned ? "YES" : "NO"}`);
+  lines.push(`UPDATED_AT: ${safe(room.updatedAt)}`);
+  lines.push("");
+  lines.push("ROOM_NOTES:");
+  lines.push(safe(room.notes) || "(none)");
+  lines.push("");
+  lines.push(`PAGES_COUNT: ${pages.length}`);
+  lines.push("");
+
+  pages.forEach((pg, i)=>{
+    lines.push(exportPagePrompt(room, pg));
+    if(i < pages.length - 1) lines.push("\n");
+  });
+
+  if(WRAP) lines.push("END ROOM");
+  return lines.join("\n");
+}
+
+function exportAllPrompts(){
+  const rooms = state.rooms.filter(r => !ONLY_PINNED || r.pinned || (r.pages||[]).some(p=>p.pinned));
+  const text = rooms.map(r => exportRoomPrompts(r)).join("\n\n");
+  outEl.textContent = text || "(empty)";
+  setStatus(`exported ${rooms.length} rooms`);
+  return text;
+}
+
+function exportJSON(){
+  const payload = {
+    version:"KDT_ROOM_KERNEL_FORGE_V1",
+    exportedAt: nowISO(),
+    wrap: WRAP,
+    onlyPinned: ONLY_PINNED,
+    rooms: state.rooms
+  };
+  const txt = JSON.stringify(payload, null, 2);
+  downloadText("room-kernel.export.json", txt);
+  setStatus("json exported");
+}
+
+function importJSONFile(){
+  const inp = document.createElement("input");
+  inp.type = "file";
+  inp.accept = "application/json,.json";
+  inp.onchange = ()=>{
+    const f = inp.files && inp.files[0];
+    if(!f) return;
+    const reader = new FileReader();
+    reader.onload = ()=>{
+      try{
+        const obj = JSON.parse(String(reader.result || "{}"));
+        if(!obj || !Array.isArray(obj.rooms)) throw new Error("invalid");
+        state.rooms = obj.rooms;
+        WRAP = (typeof obj.wrap === "boolean") ? obj.wrap : WRAP;
+        ONLY_PINNED = (typeof obj.onlyPinned === "boolean") ? obj.onlyPinned : ONLY_PINNED;
+        document.getElementById("wrapToggle").textContent = WRAP ? "wrap: on" : "wrap: off";
+        document.getElementById("onlyPinnedToggle").textContent = ONLY_PINNED ? "only pinned: on" : "only pinned: off";
+        render();
+        setStatus("json imported");
+      }catch(e){
+        setStatus("import failed");
+      }
+    };
+    reader.readAsText(f);
+  };
+  inp.click();
+}
+
+/* ============================
+   DOWNLOAD / COPY
+============================ */
+function downloadText(filename, text){
+  const blob = new Blob([text], {type:"text/plain;charset=utf-8"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url), 800);
+}
+
+/* ============================
+   SOURCE PARSER
+============================ */
+function normalizeRoomName(s){
+  return (s || "").trim().replace(/\s+/g," ").toUpperCase();
+}
+function slugTitleFromUrl(url){
+  try{
+    const u = new URL(url);
+    const last = (u.pathname.split("/").filter(Boolean).pop() || u.hostname);
+    return last.replace(/\.(html|htm|php|aspx|jsp)$/i,"").replace(/[-_]+/g," ").toUpperCase() || "PAGE";
+  }catch(e){
+    const m = (url||"").trim().split("/").filter(Boolean).pop() || "PAGE";
+    return m.replace(/\.(html|htm)$/i,"").replace(/[-_]+/g," ").toUpperCase();
+  }
+}
+function findOrCreateRoomByName(name){
+  const nm = normalizeRoomName(name);
+  let idx = state.rooms.findIndex(r => normalizeRoomName(r.name) === nm);
+  if(idx !== -1) return idx;
+  const r = defaultRoom(state.rooms.length + 1);
+  r.name = nm || r.name;
+  state.rooms.push(r);
+  return state.rooms.length - 1;
+}
+function findRoomIndexById(id){
+  return state.rooms.findIndex(r=>r.id === id);
+}
+function parseSources(){
+  const raw = srcTa.value || "";
+  const lines = raw.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
+  if(!lines.length) return setStatus("no lines");
+
+  let currentRoomIndex = -1;
+  let created = 0;
+
+  const targetId = targetRoomSel.value;
+  const defaultTargetIndex = findRoomIndexById(targetId);
+
+  lines.forEach(line=>{
+    const m = line.match(/^ROOM\s*:\s*(.+)$/i);
+    if(m){
+      currentRoomIndex = findOrCreateRoomByName(m[1]);
+      return;
+    }
+    if(!/^https?:\/\//i.test(line)) return;
+
+    let ri = currentRoomIndex;
+    if(ri === -1){
+      if(defaultTargetIndex !== -1) ri = defaultTargetIndex;
+      else ri = findOrCreateRoomByName("INBOX");
+    }
+
+    const room = state.rooms[ri];
+    room.pages = room.pages || [];
+    const pg = defaultPage(room.pages.length + 1);
+    pg.link = line;
+    pg.title = slugTitleFromUrl(line);
+    pg.updatedAt = nowISO();
+    room.pages.push(pg);
+    room.updatedAt = nowISO();
+    created++;
+  });
+
+  render();
+  setStatus(`parsed +${created} pages`);
+}
+
+/* ============================
+   QUICK FIND MODE
+============================ */
+let searchMode = false;
+let searchBuffer = "";
+
+function applyQuickFilter(term){
+  const t = (term || "").trim().toLowerCase();
+  const roomCards = Array.from(roomsEl.children);
+
+  roomCards.forEach((roomEl, ri)=>{
+    const room = state.rooms[ri];
+    const roomHay = `${room.name} ${room.target||""}`.toLowerCase();
+    const pages = room.pages || [];
+
+    let roomMatch = !t || roomHay.includes(t);
+    let anyPageMatch = false;
+
+    pages.forEach(pg=>{
+      const hay = `${pg.title} ${pg.link}`.toLowerCase();
+      if(!t || hay.includes(t)) anyPageMatch = true;
+    });
+
+    roomEl.style.display = (roomMatch || anyPageMatch) ? "" : "none";
+  });
+}
+
+/* ============================
+   WIRE EVENTS
+============================ */
+document.getElementById("addRoom").onclick = addRoom;
+document.getElementById("collapseAllRooms").onclick = collapseAllRooms;
+document.getElementById("expandAllRooms").onclick = expandAllRooms;
+
+document.getElementById("exportAllPrompts").onclick = exportAllPrompts;
+document.getElementById("copyOut").onclick = async ()=>{
+  const txt = outEl.textContent || "";
+  try{ await navigator.clipboard.writeText(txt); setStatus("copied"); }
+  catch(e){ setStatus("clipboard blocked"); }
+};
+document.getElementById("downloadOut").onclick = ()=>{
+  const txt = outEl.textContent || "";
+  downloadText("room-kernel.output.txt", txt);
+  setStatus("downloaded");
+};
+
+document.getElementById("exportJSON").onclick = exportJSON;
+document.getElementById("importJSON").onclick = importJSONFile;
+
+document.getElementById("reset").onclick = ()=>{
+  if(!confirm("RESET EVERYTHING? THIS CLEARS LOCAL STORAGE.")) return;
+  localStorage.removeItem(LS_KEY);
+  state = { rooms: [], wrap:true, onlyPinned:false };
+  WRAP = true;
+  ONLY_PINNED = false;
+  document.getElementById("wrapToggle").textContent = "wrap: on";
+  document.getElementById("onlyPinnedToggle").textContent = "only pinned: off";
+  outEl.textContent = 'hit "export prompts (all)"';
+  render();
+  setStatus("reset");
+};
+
+document.getElementById("wrapToggle").onclick = ()=>{
+  WRAP = !WRAP;
+  document.getElementById("wrapToggle").textContent = WRAP ? "wrap: on" : "wrap: off";
+  saveState();
+  setStatus(WRAP ? "wrap on" : "wrap off");
+};
+document.getElementById("onlyPinnedToggle").onclick = ()=>{
+  ONLY_PINNED = !ONLY_PINNED;
+  document.getElementById("onlyPinnedToggle").textContent = ONLY_PINNED ? "only pinned: on" : "only pinned: off";
+  saveState();
+  setStatus(ONLY_PINNED ? "filter on" : "filter off");
+};
+
+document.getElementById("parse").onclick = parseSources;
+document.getElementById("clearSrc").onclick = ()=>{ srcTa.value=""; updateSrcCount(); setStatus("cleared"); };
+
+srcTa.addEventListener("input", updateSrcCount);
+function updateSrcCount(){
+  const n = (srcTa.value || "").split(/\r?\n/).filter(x=>x.trim()).length;
+  srcCount.textContent = `${n} lines`;
+}
+updateSrcCount();
+
+document.addEventListener("keydown", (e)=>{
+  if((e.ctrlKey || e.metaKey) && e.key === "Enter"){
+    e.preventDefault();
+    exportAllPrompts();
+    return;
+  }
+
+  if(e.key === "/"){
+    e.preventDefault();
+    searchMode = true;
+    searchBuffer = "";
+    setStatus("find: type… (esc clears)");
+    return;
+  }
+
+  if(e.key === "Escape"){
+    if(searchMode){
+      searchMode = false;
+      searchBuffer = "";
+      applyQuickFilter("");
+      setStatus("find cleared");
+    }
+    return;
+  }
+
+  if(!searchMode) return;
+
+  if(e.key === "Backspace"){
+    searchBuffer = searchBuffer.slice(0,-1);
+    applyQuickFilter(searchBuffer);
+    setStatus(`find: ${searchBuffer || "(empty)"}`);
+    return;
+  }
+
+  if(e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey){
+    searchBuffer += e.key.toLowerCase();
+    applyQuickFilter(searchBuffer);
+    setStatus(`find: ${searchBuffer}`);
+  }
+});
+
+/* ============================
+   INIT
+============================ */
+(function init(){
+  if(!state.rooms.length){
+    const r1 = defaultRoom(1); r1.name = "LOBBY";
+    const r2 = defaultRoom(2); r2.name = "TEMPLE";
+    const r3 = defaultRoom(3); r3.name = "ELEVATOR";
+    state.rooms = [r1, r2, r3];
+  }
+  render();
+})();
+</script>
+</body>
+</html>
