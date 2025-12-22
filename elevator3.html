@@ -1,0 +1,564 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>K /// ELEVATOR (MIN)</title>
+  <style>
+    :root{
+      --bg:#000;
+      --txt:rgba(255,255,255,.82);
+      --muted:rgba(255,255,255,.46);
+      --edge:rgba(255,255,255,.10);
+      --edge2:rgba(255,255,255,.16);
+      --panel:rgba(255,255,255,.03);
+      --panel2:rgba(255,255,255,.02);
+      --glow:rgba(255,255,255,.18);
+
+      --r:6px;
+      --pad:10px;
+
+      --nodeW: 168px;
+      --nodeH: 88px;
+      --centerW: 190px;
+      --centerH: 106px;
+
+      --stroke:1;
+    }
+
+    *{ box-sizing:border-box; font-family: Arial, Helvetica, sans-serif; }
+    html,body{ height:100%; }
+    body{
+      margin:0;
+      background:var(--bg);
+      color:var(--txt);
+      overflow:hidden;
+    }
+
+    .hud{
+      position:fixed;
+      top:12px; right:12px;
+      display:flex; gap:8px;
+      z-index:30;
+      opacity:.9;
+    }
+    .btn{
+      border:1px solid var(--edge);
+      background:rgba(255,255,255,.02);
+      color:var(--txt);
+      padding:8px 10px;
+      font-size:11px;
+      letter-spacing:.10em;
+      text-transform:uppercase;
+      cursor:pointer;
+      border-radius:var(--r);
+      user-select:none;
+    }
+    .btn:hover{ border-color:var(--edge2); background:rgba(255,255,255,.03); }
+    .btn:active{ transform: translateY(1px); }
+
+    #stage{
+      position:absolute; inset:0;
+      overflow:hidden;
+    }
+
+    svg#wires{
+      position:absolute; inset:0;
+      width:100%; height:100%;
+      pointer-events:none;
+    }
+
+    .node{
+      position:absolute;
+      width:var(--nodeW);
+      height:var(--nodeH);
+      border:1px solid var(--edge);
+      background: linear-gradient(180deg, var(--panel), var(--panel2));
+      border-radius:var(--r);
+      user-select:none;
+      cursor:grab;
+      z-index:5;
+      box-shadow:
+        0 0 0 1px rgba(0,0,0,.55) inset,
+        0 12px 40px rgba(0,0,0,.55);
+    }
+    .node:active{ cursor:grabbing; }
+
+    .node .tag{
+      position:absolute;
+      top:8px; left:10px;
+      font-size:10px;
+      letter-spacing:.14em;
+      text-transform:uppercase;
+      color:var(--muted);
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      max-width: calc(100% - 20px);
+    }
+
+    .node .dot{
+      position:absolute;
+      right:10px; top:10px;
+      width:8px; height:8px;
+      border-radius:999px;
+      background:rgba(255,255,255,.14);
+    }
+
+    .node.center{
+      width:var(--centerW);
+      height:var(--centerH);
+      z-index:10;
+      border-color:rgba(255,255,255,.14);
+      background: linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.02));
+    }
+    .node.center .dot{ background:rgba(255,255,255,.22); }
+
+    .wire{
+      stroke: rgba(255,255,255,.16);
+      stroke-width: var(--stroke);
+      fill:none;
+    }
+    .wire.dashed{
+      stroke-dasharray: 4 8;
+      stroke: rgba(255,255,255,.12);
+    }
+
+    .current{
+      stroke: rgba(255,255,255,.72);
+      stroke-width: 2;
+      fill:none;
+      stroke-linecap:round;
+      stroke-dasharray: 10 18;
+      animation: dash 900ms linear infinite;
+      filter: drop-shadow(0 0 10px rgba(255,255,255,.10));
+    }
+    @keyframes dash{ to{ stroke-dashoffset: -56; } }
+
+    .node.active{
+      border-color:rgba(255,255,255,.24);
+      box-shadow:
+        0 0 0 1px rgba(255,255,255,.06) inset,
+        0 0 24px rgba(255,255,255,.06),
+        0 12px 40px rgba(0,0,0,.55);
+    }
+
+    .pulse{
+      position:absolute;
+      border:1px solid rgba(255,255,255,.30);
+      border-radius:var(--r);
+      pointer-events:none;
+      animation:pulse 900ms ease-out forwards;
+    }
+    @keyframes pulse{
+      0%{ opacity:0; transform:scale(.985); }
+      12%{ opacity:1; }
+      100%{ opacity:0; transform:scale(1.06); }
+    }
+
+    .veil{
+      position:absolute; inset:0;
+      background:#000;
+      opacity:0;
+      pointer-events:none;
+      transition: opacity 650ms ease;
+      z-index:25;
+    }
+    .veil.on{ opacity:1; }
+
+    .hint{
+      position:fixed;
+      left:12px; bottom:12px;
+      font-size:11px;
+      letter-spacing:.10em;
+      text-transform:uppercase;
+      color:rgba(255,255,255,.28);
+      z-index:30;
+      pointer-events:none;
+    }
+  </style>
+</head>
+<body>
+  <div class="hud">
+    <button class="btn" id="centerBtn">center</button>
+    <button class="btn" id="resetBtn">reset</button>
+    <button class="btn" id="exportBtn">export</button>
+    <button class="btn" id="importBtn">import</button>
+  </div>
+
+  <div id="stage">
+    <svg id="wires" aria-hidden="true">
+      <g id="wireBase"></g>
+      <g id="wireCurrent"></g>
+    </svg>
+    <div class="veil" id="veil"></div>
+  </div>
+
+  <div class="hint">drag to reposition • click to route</div>
+
+  <script>
+  (() => {
+    const stage = document.getElementById('stage');
+    const svg = document.getElementById('wires');
+    const wireBase = document.getElementById('wireBase');
+    const wireCurrent = document.getElementById('wireCurrent');
+    const veil = document.getElementById('veil');
+
+    const centerBtn = document.getElementById('centerBtn');
+    const resetBtn  = document.getElementById('resetBtn');
+    const exportBtn = document.getElementById('exportBtn');
+    const importBtn = document.getElementById('importBtn');
+
+    // BUMP THIS whenever you change DEFAULT nodes/urls/edges
+    const DEFAULT_VERSION = "ketadata-constellation-v2-clean+elevator-min-v3";
+
+    const DEFAULT = {
+      version: DEFAULT_VERSION,
+      nodes: [
+        { id:"elevator", tag:"router", url:"https://ketadata.com/elevator.html", role:"center" },
+
+        { id:"lobby", tag:"entry", url:"https://ketadata.com/index.html" },
+        { id:"temple", tag:"adjacent", url:"https://ketadata.com/blacklotus.html" },
+        { id:"store", tag:"commerce", url:"https://ketadata.com/shop.html" },
+
+        { id:"observatory", tag:"highest", url:"https://ketadata.com/slopstream6.html" },
+        { id:"cinema", tag:"lens", url:"https://ketadata.com/kdtv1.html" },
+        { id:"room", tag:"private", url:"https://ketadata.com/funnel4.html" },
+
+        { id:"studio", tag:"work", url:"https://ketadata.com/tester3.html" },
+        { id:"library", tag:"club", url:"https://ketadata.com/library.html" },
+        { id:"vault", tag:"sealed", url:"https://ketadata.com/page2.html" },
+        { id:"lab", tag:"sensory", url:"https://ketadata.com/labyrinth.html" },
+        { id:"basement", tag:"lowest", url:"https://ketadata.com/bleak.html" },
+      ],
+      edges: [
+        ["elevator","observatory"], ["elevator","cinema"], ["elevator","room"],
+        ["elevator","studio"], ["elevator","library"], ["elevator","vault"],
+        ["elevator","lab"], ["elevator","basement"],
+
+        ["lobby","elevator"], ["temple","elevator"], ["store","elevator"],
+        ["lobby","temple","dashed"], ["lobby","store","dashed"],
+
+        ["lab","basement","dashed"], ["vault","library","dashed"], ["studio","cinema","dashed"],
+        ["observatory","cinema","dashed"]
+      ],
+      // YOUR EXACT POSITIONS (RESET TARGET)
+      positions: {
+        "elevator":    { "x": 840,  "y": 439 },
+        "observatory": { "x": 87,   "y": 82.60000000000002 },
+        "cinema":      { "x": 88,   "y": 259.6 },
+        "library":     { "x": 88,   "y": 438.80000000000007 },
+        "lobby":       { "x": 840,  "y": 91.80000000000001 },
+        "temple":      { "x": 1120, "y": 245.60000000000002 },
+        "store":       { "x": 557,  "y": 253.60000000000002 },
+        "room":        { "x": 1619, "y": 448.44000000000005 },
+        "studio":      { "x": 551,  "y": 604.6 },
+        "vault":       { "x": 852,  "y": 792.6 },
+        "lab":         { "x": 1148, "y": 584 },
+        "basement":    { "x": 1625, "y": 822.5999999999999 }
+      }
+    };
+
+    const KEY = "ketadata_elevator_min_layout_v2";
+
+    // ---- VERSIONED LOAD: prevents localStorage from overriding new routing edits ----
+    const state = load() || structuredClone(DEFAULT);
+
+    const nodeEls = new Map();
+
+    function cssNum(name){
+      return parseInt(getComputedStyle(document.documentElement).getPropertyValue(name).trim(),10);
+    }
+
+    // RESET = apply your JSON positions exactly (not computed)
+    function resetLayout(){
+      state.positions = structuredClone(DEFAULT.positions);
+      persist();
+      layoutAll();
+    }
+
+    function makeNode(n){
+      const el = document.createElement('div');
+      el.className = "node" + (n.role==="center" ? " center" : "");
+      el.dataset.id = n.id;
+
+      el.innerHTML = `
+        <div class="tag">${escapeHtml(n.tag || "")}</div>
+        <div class="dot"></div>
+      `;
+
+      attachDrag(el);
+
+      el.addEventListener('click', () => {
+        if(el.__dragMoved) return;
+        if(n.id === "elevator") return;
+        routeTo(n.id);
+      });
+
+      stage.appendChild(el);
+      nodeEls.set(n.id, el);
+    }
+
+    function layoutAll(){
+      for(const n of state.nodes){
+        if(!nodeEls.has(n.id)) makeNode(n);
+        const el = nodeEls.get(n.id);
+        const p = state.positions[n.id];
+        if(!p) continue;
+        el.style.left = `${p.x}px`;
+        el.style.top  = `${p.y}px`;
+      }
+      drawWires();
+    }
+
+    function anchor(id, p){
+      const isCenter = (id==="elevator");
+      const w = isCenter ? cssNum('--centerW') : cssNum('--nodeW');
+      const h = isCenter ? cssNum('--centerH') : cssNum('--nodeH');
+      return { x: p.x + w/2, y: p.y + h/2 };
+    }
+
+    function curve(x1,y1,x2,y2){
+      const dx = x2-x1;
+      const c = 0.32;
+      const cx1 = x1 + dx*c;
+      const cx2 = x2 - dx*c;
+      return `M ${x1} ${y1} C ${cx1} ${y1}, ${cx2} ${y2}, ${x2} ${y2}`;
+    }
+
+    function drawWires(){
+      wireBase.innerHTML = "";
+      const r = stage.getBoundingClientRect();
+      svg.setAttribute("viewBox", `0 0 ${r.width} ${r.height}`);
+
+      for(const e of state.edges){
+        const [a,b,style] = e;
+        const pa = state.positions[a], pb = state.positions[b];
+        if(!pa || !pb) continue;
+
+        const A = anchor(a, pa);
+        const B = anchor(b, pb);
+
+        const path = document.createElementNS("http://www.w3.org/2000/svg","path");
+        path.setAttribute("d", curve(A.x,A.y,B.x,B.y));
+        path.setAttribute("class", "wire" + (style==="dashed" ? " dashed" : ""));
+        wireBase.appendChild(path);
+      }
+    }
+
+    let navLock = false;
+
+    function clearActive(){
+      for(const el of nodeEls.values()) el.classList.remove('active');
+      wireCurrent.innerHTML = "";
+      veil.classList.remove('on');
+      navLock = false;
+    }
+
+    function routeTo(targetId){
+      if(navLock) return;
+      navLock = true;
+
+      clearActive();
+      navLock = true;
+
+      const targetNode = state.nodes.find(n => n.id === targetId);
+      if(!targetNode) { navLock=false; return; }
+
+      const elevPos = state.positions.elevator;
+      const tgtPos  = state.positions[targetId];
+      if(!elevPos || !tgtPos) { navLock=false; return; }
+
+      const elevEl = nodeEls.get("elevator");
+      const tgtEl  = nodeEls.get(targetId);
+      if(elevEl) elevEl.classList.add('active');
+      if(tgtEl)  tgtEl.classList.add('active');
+
+      wireCurrent.innerHTML = "";
+      const A = anchor("elevator", elevPos);
+      const B = anchor(targetId, tgtPos);
+
+      const p = document.createElementNS("http://www.w3.org/2000/svg","path");
+      p.setAttribute("d", curve(A.x,A.y,B.x,B.y));
+      p.setAttribute("class","current");
+      wireCurrent.appendChild(p);
+
+      pulseRect(tgtEl);
+
+      const CURRENT_TIME = 1100;
+      const VEIL_TIME = 650;
+
+      setTimeout(() => {
+        veil.classList.add('on');
+        setTimeout(() => {
+          window.location.href = targetNode.url || "#";
+        }, VEIL_TIME);
+      }, CURRENT_TIME);
+    }
+
+    function pulseRect(el){
+      if(!el) return;
+      const rect = el.getBoundingClientRect();
+      const srect = stage.getBoundingClientRect();
+
+      const pulse = document.createElement('div');
+      pulse.className = "pulse";
+      pulse.style.left = (rect.left - srect.left + 6) + "px";
+      pulse.style.top  = (rect.top  - srect.top  + 6) + "px";
+      pulse.style.width = (rect.width - 12) + "px";
+      pulse.style.height = (rect.height - 12) + "px";
+      stage.appendChild(pulse);
+      setTimeout(() => pulse.remove(), 950);
+    }
+
+    function attachDrag(el){
+      let sx=0, sy=0, ox=0, oy=0;
+      el.__dragMoved = false;
+
+      const down = (e) => {
+        if(e.button !== undefined && e.button !== 0) return;
+        e.preventDefault();
+
+        el.__dragMoved = false;
+        const id = el.dataset.id;
+        const p = state.positions[id] || {x:0,y:0};
+        sx = e.clientX; sy = e.clientY;
+        ox = p.x; oy = p.y;
+
+        window.addEventListener('mousemove', move);
+        window.addEventListener('mouseup', up, { once:true });
+      };
+
+      const move = (e) => {
+        const dx = e.clientX - sx;
+        const dy = e.clientY - sy;
+        if(Math.abs(dx)+Math.abs(dy) > 2) el.__dragMoved = true;
+
+        const id = el.dataset.id;
+        state.positions[id] = { x: ox+dx, y: oy+dy };
+        el.style.left = `${state.positions[id].x}px`;
+        el.style.top  = `${state.positions[id].y}px`;
+        drawWires();
+      };
+
+      const up = () => {
+        window.removeEventListener('mousemove', move);
+        persist();
+        setTimeout(() => el.__dragMoved = false, 0);
+      };
+
+      el.addEventListener('mousedown', down);
+    }
+
+    function centerView(){
+      const r = stage.getBoundingClientRect();
+      const cx = r.width * 0.5;
+      const cy = r.height * 0.52;
+
+      const p = state.positions.elevator;
+      if(!p) return;
+
+      const cw = cssNum('--centerW'), ch = cssNum('--centerH');
+      const dx = cx - (p.x + cw/2);
+      const dy = cy - (p.y + ch/2);
+
+      for(const k in state.positions){
+        state.positions[k].x += dx;
+        state.positions[k].y += dy;
+      }
+      persist();
+      layoutAll();
+    }
+
+    centerBtn.addEventListener('click', () => { clearActive(); centerView(); });
+    resetBtn.addEventListener('click',  () => { clearActive(); resetLayout(); });
+
+    exportBtn.addEventListener('click', async () => {
+      const out = JSON.stringify({ positions: state.positions }, null, 2);
+      try{
+        await navigator.clipboard.writeText(out);
+      }catch(_){
+        const blob = new Blob([out], {type:"application/json"});
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = "layout.json";
+        a.click();
+        URL.revokeObjectURL(a.href);
+      }
+    });
+
+    importBtn.addEventListener('click', () => {
+      const raw = prompt("Paste { positions: {...} }");
+      if(!raw) return;
+      try{
+        const obj = JSON.parse(raw);
+        if(obj && obj.positions){
+          state.positions = obj.positions;
+          persist();
+          layoutAll();
+        }
+      }catch(_){}
+    });
+
+    window.addEventListener('keydown', (e) => {
+      if(e.key === "Escape") clearActive();
+    });
+
+    function persist(){
+      try{
+        state.version = DEFAULT_VERSION;
+        localStorage.setItem(KEY, JSON.stringify(state));
+      }catch(_){}
+    }
+
+    function load(){
+      try{
+        const raw = localStorage.getItem(KEY);
+        if(!raw) return null;
+        const obj = JSON.parse(raw);
+        if(!obj) return null;
+
+        // If version mismatch, refresh nodes/edges/urls so routing edits apply immediately.
+        if(obj.version !== DEFAULT_VERSION){
+          const merged = structuredClone(DEFAULT);
+
+          // Keep any saved positions (so you don't lose your layout)
+          if(obj.positions && typeof obj.positions === "object"){
+            merged.positions = obj.positions;
+          }
+
+          localStorage.setItem(KEY, JSON.stringify(merged));
+          return merged;
+        }
+
+        // Version matches: accept saved
+        if(!obj.nodes || !obj.edges) return null;
+        return obj;
+      }catch(_){
+        return null;
+      }
+    }
+
+    function escapeHtml(s){
+      return String(s).replace(/[&<>"']/g, m => ({
+        "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"
+      }[m]));
+    }
+
+    function init(){
+      for(const n of state.nodes){
+        if(!nodeEls.has(n.id)) makeNode(n);
+      }
+      if(!state.positions || Object.keys(state.positions).length === 0){
+        resetLayout();
+      }else{
+        layoutAll();
+      }
+      window.addEventListener('resize', () => drawWires());
+    }
+
+    init();
+  })();
+  </script>
+</body>
+</html>
