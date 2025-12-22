@@ -1,0 +1,467 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>KETADATA // FOREVER CURRENT</title>
+  <style>
+    :root{
+      --bg:#000;
+      --fg:#fff;
+      --stroke:rgba(255,255,255,0.16);
+      --stroke2:rgba(255,255,255,0.10);
+      --glass:rgba(255,255,255,0.06);
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%;margin:0;background:var(--bg);color:var(--fg);font-family:Arial, Helvetica, sans-serif;}
+    body{overflow:hidden;}
+    ::selection{background:rgba(255,255,255,0.18);}
+
+    #topbar{
+      position:fixed; left:0; right:0; top:0;
+      height:48px;
+      display:flex; align-items:center; justify-content:space-between;
+      padding:10px 12px;
+      border-bottom:1px solid var(--stroke2);
+      background:#000;
+      user-select:none;
+      z-index:80;
+    }
+    #brand{
+      display:flex; align-items:center; gap:10px;
+      font-size:11px;
+      letter-spacing:0.18em;
+      text-transform:uppercase;
+      color:rgba(255,255,255,0.82);
+      overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+    }
+    .whiteBox{width:10px;height:10px;background:#fff;display:inline-block;}
+    .btn{
+      border:1px solid var(--stroke);
+      background:transparent;
+      color:rgba(255,255,255,0.86);
+      padding:7px 10px;
+      font-size:11px;
+      letter-spacing:0.14em;
+      text-transform:uppercase;
+      cursor:pointer;
+      user-select:none;
+      white-space:nowrap;
+    }
+    .btn:hover{background:var(--glass);border-color:rgba(255,255,255,0.34);}
+    .btnPrimary{background:rgba(255,255,255,0.06);border-color:rgba(255,255,255,0.30);}
+    .btnPrimary:hover{background:rgba(255,255,255,0.09);border-color:rgba(255,255,255,0.44);}
+
+    #stage{
+      position:fixed;
+      inset:48px 0 0 0;
+      width:100%;
+      height:calc(100% - 48px);
+      overflow:hidden;
+      background:#000;
+    }
+    canvas{position:absolute; inset:0; width:100%; height:100%; display:block;}
+
+    /* KETADATA: sharp, minimal, angular. No “water”, no center, no vignette. */
+    #fx{
+      position:absolute; inset:0;
+      pointer-events:none;
+      z-index:10;
+      /* faint scan + hard corner falloff */
+      background:
+        linear-gradient(to bottom, rgba(255,255,255,0.03), rgba(255,255,255,0.00) 18%, rgba(0,0,0,0.00) 70%, rgba(0,0,0,0.20)),
+        repeating-linear-gradient(to bottom, rgba(255,255,255,0.012) 0px, rgba(255,255,255,0.00) 2px, rgba(0,0,0,0.00) 7px),
+        radial-gradient(closest-side at 0% 0%, rgba(0,0,0,0.35), rgba(0,0,0,0.00) 55%),
+        radial-gradient(closest-side at 100% 0%, rgba(0,0,0,0.35), rgba(0,0,0,0.00) 55%),
+        radial-gradient(closest-side at 0% 100%, rgba(0,0,0,0.35), rgba(0,0,0,0.00) 55%),
+        radial-gradient(closest-side at 100% 100%, rgba(0,0,0,0.35), rgba(0,0,0,0.00) 55%);
+      mix-blend-mode:screen;
+      opacity:0.55;
+    }
+
+    /* INVERT */
+    body.invert{filter:invert(1); background:#fff;}
+    body.invert #topbar{background:#fff;border-bottom:1px solid rgba(0,0,0,0.10);}
+    body.invert .whiteBox{background:#000;}
+    body.invert .btn{color:rgba(0,0,0,0.84);border-color:rgba(0,0,0,0.18);}
+    body.invert .btn:hover{background:rgba(0,0,0,0.06);border-color:rgba(0,0,0,0.28);}
+
+    /* Hidden micro-hint (appears on hover topbar) */
+    #hint{
+      position:fixed; right:12px; bottom:12px;
+      font-size:10px;
+      letter-spacing:0.14em;
+      text-transform:uppercase;
+      color:rgba(255,255,255,0.58);
+      opacity:0.0;
+      transition:opacity 180ms linear;
+      user-select:none;
+      pointer-events:none;
+      z-index:50;
+    }
+    #topbar:hover ~ #hint{ opacity:0.40; }
+    body.invert #hint{ color:rgba(0,0,0,0.58); }
+  </style>
+</head>
+
+<body>
+  <div id="topbar">
+    <div id="brand">
+      <span class="whiteBox" aria-hidden="true"></span>
+      <span>KETADATA // FOREVER CURRENT</span>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;">
+      <button id="reset" class="btn btnPrimary" type="button">Reset</button>
+      <button id="toggle" class="btn" type="button">Toggle Run</button>
+    </div>
+  </div>
+
+  <div id="stage">
+    <canvas id="c"></canvas>
+    <div id="fx"></div>
+  </div>
+
+  <div id="hint" aria-hidden="true">SPACE tap: run/stop · hold: accelerate · I: invert</div>
+
+  <script>
+    // =========================================================
+    // KETADATA // FOREVER CURRENT
+    //
+    // REQUIREMENTS MET:
+    // - black/white/grey only
+    // - geometric, immersive, no center pull / no vanishing focal point
+    // - the whole field translates as a continuous “current” (toroidal drift)
+    // - SPACE tap toggles run/stop
+    // - SPACE hold ramps speed up; release eases down
+    // - I toggles invert
+    //
+    // DESIGN:
+    // - Treat the plane as an infinite, wraparound flow field.
+    // - Use two orthogonal currents (U,V) with time-evolving shear.
+    // - Render as dense iso-lines + dash-shimmer + micro-grain.
+    // - No “horizon” composition, no vignette spotlight, no fake water cues.
+    // =========================================================
+
+    const el = (id)=>document.getElementById(id);
+    const canvas = el('c');
+    const ctx = canvas.getContext('2d', { alpha:false });
+
+    const clamp = (n,a,b)=>Math.max(a,Math.min(b,n));
+    const mix = (a,b,t)=>a+(b-a)*t;
+    const smoothstep=(a,b,t)=>{ t=clamp((t-a)/(b-a),0,1); return t*t*(3-2*t); };
+
+    function resize(){
+      const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+      const w = canvas.clientWidth|0;
+      const h = canvas.clientHeight|0;
+      canvas.width = Math.floor(w*dpr);
+      canvas.height = Math.floor(h*dpr);
+      ctx.setTransform(dpr,0,0,dpr,0,0);
+    }
+    window.addEventListener('resize', resize);
+
+    // Pointer affects *shear* and *phase*, not a focal point.
+    const pointer = { x:0.5, y:0.5, vx:0, vy:0 };
+    const target  = { x:0.5, y:0.5 };
+    function updatePointer(dt){
+      const ax = (target.x - pointer.x) * 2.0;
+      const ay = (target.y - pointer.y) * 2.0;
+      pointer.vx = (pointer.vx + ax*dt) * 0.88;
+      pointer.vy = (pointer.vy + ay*dt) * 0.88;
+      pointer.x = clamp(pointer.x + pointer.vx*dt, 0, 1);
+      pointer.y = clamp(pointer.y + pointer.vy*dt, 0, 1);
+    }
+    window.addEventListener('mousemove', (e)=>{
+      const r = canvas.getBoundingClientRect();
+      target.x = clamp((e.clientX - r.left)/r.width, 0, 1);
+      target.y = clamp((e.clientY - r.top)/r.height, 0, 1);
+    }, { passive:true });
+    window.addEventListener('touchmove', (e)=>{
+      if(!e.touches || !e.touches[0]) return;
+      const t = e.touches[0];
+      const r = canvas.getBoundingClientRect();
+      target.x = clamp((t.clientX - r.left)/r.width, 0, 1);
+      target.y = clamp((t.clientY - r.top)/r.height, 0, 1);
+    }, { passive:true });
+
+    // Noise
+    const seed = Math.random()*1000;
+    function h2(x,y){
+      const s = Math.sin(x*127.1 + y*311.7 + seed*0.01) * 43758.5453123;
+      return s - Math.floor(s);
+    }
+    function vnoise(x,y){
+      const ix=Math.floor(x), iy=Math.floor(y);
+      const fx=x-ix, fy=y-iy;
+      const a=h2(ix,iy), b=h2(ix+1,iy), c=h2(ix,iy+1), d=h2(ix+1,iy+1);
+      const ux=fx*fx*(3-2*fx), uy=fy*fy*(3-2*fy);
+      return mix(mix(a,b,ux), mix(c,d,ux), uy);
+    }
+    function fbm(x,y){
+      let v=0, a=0.5;
+      for(let i=0;i<4;i++){
+        v += a*vnoise(x,y);
+        x*=2.02; y*=2.01; a*=0.5;
+      }
+      return v;
+    }
+
+    // Controls
+    let running = true;
+    let invert = false;
+
+    let spaceDown=false, spaceTapGuard=false;
+    const BASE_SPEED=1.0;
+    const HOLD_SPEED=7.5;     // more “forever current”
+    let speed=BASE_SPEED, speedTarget=BASE_SPEED;
+
+    let worldT=0, t0=performance.now();
+
+    function isTyping(){
+      const tag = document.activeElement?.tagName?.toLowerCase() || '';
+      return tag === 'input' || tag === 'textarea' || document.activeElement?.isContentEditable;
+    }
+
+    window.addEventListener('keydown', (e)=>{
+      if(isTyping()) return;
+
+      if(e.code==='Space'){
+        e.preventDefault();
+        if(!spaceTapGuard){ running=!running; spaceTapGuard=true; }
+        spaceDown=true;
+      }
+      if(e.key==='i' || e.key==='I'){
+        invert=!invert;
+        document.body.classList.toggle('invert', invert);
+      }
+      if(e.key==='r' || e.key==='R'){
+        reset();
+      }
+    });
+
+    window.addEventListener('keyup', (e)=>{
+      if(e.code==='Space'){
+        e.preventDefault();
+        spaceDown=false;
+        spaceTapGuard=false;
+      }
+    });
+
+    el('toggle').addEventListener('click', ()=> running=!running);
+    el('reset').addEventListener('click', ()=> reset());
+
+    function reset(){
+      worldT=0;
+      speed=BASE_SPEED;
+      speedTarget=BASE_SPEED;
+    }
+
+    function updateSpeed(dt){
+      speedTarget = spaceDown ? HOLD_SPEED : BASE_SPEED;
+      const tau = spaceDown ? 0.11 : 0.30;
+      const a = 1 - Math.exp(-dt/tau);
+      speed += (speedTarget - speed)*a;
+      speed = clamp(speed, 0.0, 14.0);
+    }
+
+    // ---- Wrap helper (toroidal space) ----
+    function wrap01(x){ x = x % 1; return x < 0 ? x + 1 : x; }
+
+    // ---- Field definition (no center) ----
+    // A continuous flow that never “points” to a single place:
+    // - uniform drift + evolving shear
+    // - local curl from fbm (small)
+    // - pointer modulates shear axes, not focal attraction
+    function flowField(u,v,t, rush){
+      // base currents (two directions) — no vanishing point
+      const baseU = 0.10 + 0.22*rush;
+      const baseV = 0.08 + 0.18*rush;
+
+      // shear: varies with v and u (like an endless conveyor belt, but not convergent)
+      const shearA = (pointer.x-0.5) * (0.35 + 0.55*rush);
+      const shearB = (pointer.y-0.5) * (0.35 + 0.55*rush);
+
+      // time-evolving rotation of shear axis
+      const ang = t*(0.10 + 0.25*rush) + seed*0.001;
+      const ca = Math.cos(ang), sa = Math.sin(ang);
+
+      // rotate coords for shear
+      const ur = u*ca - v*sa;
+      const vr = u*sa + v*ca;
+
+      const s1 = Math.sin((vr*6.0) + t*(0.9 + 1.6*rush));
+      const s2 = Math.sin((ur*6.5) - t*(0.7 + 1.3*rush));
+
+      // small curl noise (keeps it alive, still geometric)
+      const n = fbm(u*5.0 + t*0.08, v*5.0 - t*0.06) - 0.5;
+
+      const du = baseU + shearA*s1*0.22 + n*(0.05 + 0.12*rush);
+      const dv = baseV + shearB*s2*0.22 + n*(0.05 + 0.12*rush);
+
+      return { du, dv };
+    }
+
+    // ---- Scalar field (iso-lines) ----
+    // Think: moving contour lattice, not water.
+    function scalarField(u,v,t,rush){
+      // advect coordinates through the flow (wrap)
+      const f = flowField(u,v,t,rush);
+      const adv = 0.18 + 0.55*rush;
+
+      const au = wrap01(u + f.du*adv);
+      const av = wrap01(v + f.dv*adv);
+
+      // build a crisp geometric interference:
+      // - two angle-rotated gratings
+      // - plus a faint fbm to break perfect regularity
+      const a1 = t*(0.40 + 1.00*rush) + seed*0.002;
+      const a2 = t*(0.33 + 0.85*rush) - seed*0.001;
+
+      const c1 = Math.cos(a1), s1 = Math.sin(a1);
+      const c2 = Math.cos(a2), s2 = Math.sin(a2);
+
+      const x1 = (au-0.5)*c1 - (av-0.5)*s1;
+      const y1 = (au-0.5)*s1 + (av-0.5)*c1;
+
+      const x2 = (au-0.5)*c2 - (av-0.5)*s2;
+      const y2 = (au-0.5)*s2 + (av-0.5)*c2;
+
+      const g1 = Math.sin((x1*12.0 + y1*4.0) * Math.PI * (1.0 + 0.45*rush));
+      const g2 = Math.sin((x2*9.0  - y2*6.0) * Math.PI * (1.0 + 0.35*rush));
+
+      const n = (fbm(au*6.0 + t*0.07, av*6.0 - t*0.05)-0.5) * (0.35 + 0.55*rush);
+
+      return g1*0.55 + g2*0.55 + n*0.25;
+    }
+
+    function draw(t){
+      const w = canvas.clientWidth;
+      const h = canvas.clientHeight;
+
+      const thr = clamp((speed-BASE_SPEED)/(HOLD_SPEED-BASE_SPEED), 0, 1);
+      const rush = thr*thr;
+
+      // Background: pure monochrome gradient (no vignette center)
+      const bg = ctx.createLinearGradient(0,0,0,h);
+      bg.addColorStop(0.0, "rgb(0,0,0)");
+      bg.addColorStop(0.55, "rgb(18,18,18)");
+      bg.addColorStop(1.0, "rgb(0,0,0)");
+      ctx.fillStyle = bg;
+      ctx.fillRect(0,0,w,h);
+
+      // Immersive “field density” (more lines at speed)
+      const bands = Math.floor(120 + 110*rush);
+      const stepX = 8; // performance knob
+
+      // Camera drift is global phase only (no focal pull)
+      const phaseU = (t*(0.06 + 0.18*rush) + (pointer.x-0.5)*0.20);
+      const phaseV = (t*(0.05 + 0.16*rush) + (pointer.y-0.5)*0.20);
+
+      // Iso-lines
+      ctx.save();
+      ctx.globalCompositeOperation = "screen";
+
+      for(let i=0;i<bands;i++){
+        const y = (i/(bands-1))*h;
+        const v = wrap01((y/h) + phaseV);
+
+        // depth-ish fade without a horizon: symmetric rolloff
+        const p = i/(bands-1);
+        const mid = 1 - Math.abs(p-0.5)*2;
+        const fade = (0.20 + 0.80*Math.pow(mid, 1.15)) * (0.70 + 0.70*rush);
+
+        // stroke alpha: crisp, KETADATA minimal
+        const a = (0.010 + 0.065*fade) * (1.0 + 1.35*rush);
+        ctx.strokeStyle = `rgba(255,255,255,${a})`;
+        ctx.lineWidth = 1;
+
+        ctx.beginPath();
+        for(let x=0;x<=w;x+=stepX){
+          const u = wrap01((x/w) + phaseU);
+
+          // sample scalar field
+          const s = scalarField(u,v,t,rush);
+
+          // convert scalar to vertical displacement (geometry wave)
+          const amp = (5 + 22*rush) * (0.25 + 0.75*fade);
+          const yy = y + s*amp;
+
+          if(x===0) ctx.moveTo(x, yy);
+          else ctx.lineTo(x, yy);
+        }
+        ctx.stroke();
+      }
+      ctx.restore();
+
+      // Shimmer dashes: rectangular, geometric, distributed (no center bias)
+      ctx.save();
+      ctx.globalCompositeOperation = "screen";
+      ctx.globalAlpha = 0.14 + 0.42*rush;
+
+      const dashCount = Math.floor(220 + 420*rush);
+      for(let i=0;i<dashCount;i++){
+        // pseudo-random uniform placement
+        const u = wrap01(vnoise(i*0.17 + seed, t*0.03) + phaseU);
+        const v = wrap01(vnoise(i*0.19 + seed*0.5, t*0.035) + phaseV);
+
+        const x = u*w;
+        const y = v*h;
+
+        // local brightness from field (so dashes “belong” to current)
+        const s = scalarField(u,v,t,rush);
+        const b = clamp((s+1)*0.5, 0, 1);
+
+        const len = (6 + 46*b) * (0.9 + 1.8*rush);
+        const thick = (b > 0.66 ? 2 : 1);
+
+        ctx.fillStyle = `rgba(255,255,255,${0.04 + 0.20*b + 0.22*rush*b})`;
+        ctx.fillRect((x|0)+0.5, (y|0)+0.5, len, thick);
+      }
+      ctx.restore();
+
+      // Micro grain (distributed)
+      ctx.save();
+      ctx.globalCompositeOperation = "overlay";
+      ctx.globalAlpha = 0.05 + 0.08*rush;
+      const step = 3;
+      const tt = t*(70 + 170*rush);
+      for(let yy=0; yy<h; yy+=step){
+        for(let xx=0; xx<w; xx+=step){
+          const n = h2(xx*0.05 + tt*0.02, yy*0.05 + seed);
+          if(n>0.88){
+            ctx.fillStyle = `rgba(255,255,255,${0.02 + 0.05*n})`;
+            ctx.fillRect(xx,yy,1,1);
+          }
+        }
+      }
+      ctx.restore();
+
+      // Hard edge frame (KETADATA containment)
+      ctx.save();
+      ctx.globalAlpha = 0.35;
+      ctx.strokeStyle = "rgba(255,255,255,0.12)";
+      ctx.lineWidth = 1;
+      ctx.strokeRect(0.5,0.5,w-1,h-1);
+      ctx.restore();
+    }
+
+    function loop(now){
+      const dt = Math.min(0.05, (now - t0)/1000);
+      t0 = now;
+
+      updatePointer(dt);
+      updateSpeed(dt);
+
+      if(running) worldT += dt * speed;
+
+      draw(worldT);
+      requestAnimationFrame(loop);
+    }
+
+    // init
+    resize();
+    document.body.classList.toggle('invert', invert);
+    requestAnimationFrame(loop);
+  </script>
+</body>
+</html>
