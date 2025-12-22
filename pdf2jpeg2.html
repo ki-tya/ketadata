@@ -1,0 +1,563 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>KETADATA // PDF → JPEG (STREAM-SAFE)</title>
+  <style>
+    :root{--bg:#fff;--fg:#000;--muted:rgba(0,0,0,.58);--line:rgba(0,0,0,.14);--line2:rgba(0,0,0,.08);
+      --mono: ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace;
+      --sans: Arial,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,sans-serif;--r:10px}
+    *{box-sizing:border-box}
+    body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--sans)}
+    header{position:sticky;top:0;z-index:10;background:rgba(255,255,255,.92);backdrop-filter:blur(8px);
+      border-bottom:1px solid var(--line);padding:14px 16px;display:flex;align-items:center;justify-content:space-between;gap:12px}
+    .brand{user-select:none}
+    .brand .k{font-weight:700;font-size:14px;letter-spacing:1.4px}
+    .brand .s{font-family:var(--mono);font-size:12px;color:var(--muted)}
+    .actions{display:flex;gap:10px;align-items:center}
+    .btn{appearance:none;border:1px solid var(--fg);background:transparent;color:var(--fg);padding:9px 10px;border-radius:999px;
+      font-size:12px;font-family:var(--mono);cursor:pointer;transition:.12s;user-select:none}
+    .btn:hover{background:var(--fg);color:var(--bg)}
+    .btn.secondary{border-color:var(--line)}
+    .btn.secondary:hover{background:rgba(0,0,0,.06);color:var(--fg);border-color:rgba(0,0,0,.22)}
+    main{display:grid;grid-template-columns:1fr 360px;min-height:calc(100vh - 56px)}
+    @media (max-width:980px){main{grid-template-columns:1fr}}
+    .work{padding:16px;border-right:1px solid var(--line);display:flex;flex-direction:column;gap:12px;min-width:0}
+    @media (max-width:980px){.work{border-right:none;border-bottom:1px solid var(--line)}}
+    .rail{padding:16px;display:flex;flex-direction:column;gap:12px}
+    details.keta{border:1px solid var(--line);border-radius:var(--r);overflow:hidden;background:#fff}
+    details.keta>summary{list-style:none;cursor:pointer;user-select:none;padding:12px;border-bottom:1px solid var(--line2);
+      display:flex;align-items:center;justify-content:space-between;gap:12px;font-family:var(--mono);font-size:12px;letter-spacing:.7px;text-transform:uppercase}
+    details.keta>summary::-webkit-details-marker{display:none}
+    .content{padding:12px}
+    .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    @media (max-width:720px){.grid2{grid-template-columns:1fr}}
+    label{display:flex;flex-direction:column;gap:6px;font-family:var(--mono);font-size:12px;color:var(--muted)}
+    input[type="file"],select{width:100%;border:1px solid var(--line);border-radius:8px;padding:10px;background:#fff;color:#000;font-family:var(--mono);font-size:12px}
+    input[type="range"]{width:100%}
+    .inline{display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-family:var(--mono);font-size:12px;color:var(--muted)}
+    .pill{border:1px solid var(--line);border-radius:999px;padding:6px 10px;background:#fff;color:#000}
+    .pill strong{color:#000}
+    .small{font-family:var(--mono);font-size:11px;color:var(--muted);line-height:1.35}
+    .stage{border:1px solid var(--line);border-radius:var(--r);padding:12px;min-height:360px;display:grid;place-items:center}
+    canvas{max-width:100%;height:auto;display:block;background:#fff}
+    .progress{width:220px;height:10px;border:1px solid var(--line);border-radius:999px;overflow:hidden;background:#fff}
+    .progress>div{height:100%;width:0%;background:#000;transition:width .12s}
+    textarea{width:100%;min-height:160px;resize:vertical;border:1px solid var(--line);border-radius:8px;padding:10px;
+      font-family:var(--mono);font-size:12px;line-height:1.35}
+    .kbd{font-family:var(--mono);border:1px solid var(--line);border-bottom-width:2px;border-radius:6px;padding:2px 6px;background:#fff;color:#000;font-size:11px}
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <div class="k">KETADATA</div>
+      <div class="s">PDF → JPEG CONVERTER // STREAM-SAFE (100–200 PAGES / 100MB+)</div>
+    </div>
+    <div class="actions">
+      <button class="btn secondary" id="btnClear">CLEAR</button>
+      <button class="btn" id="btnConvert">CONVERT → ZIP</button>
+    </div>
+  </header>
+
+  <main>
+    <section class="work">
+      <details class="keta" open>
+        <summary><span>INPUT</span><span class="small">PDF in, ZIP out — no upload</span></summary>
+        <div class="content">
+          <div class="grid2">
+            <label>
+              PDF FILE(S)
+              <input id="pdfInput" type="file" accept="application/pdf" multiple />
+              <div class="small">
+                This build loads via ObjectURL (no giant Uint8Array copy). If your PDF is encrypted, you’ll see it in ERROR DETAIL.
+              </div>
+            </label>
+
+            <div>
+              <div class="inline">
+                <span class="pill"><strong id="countPDF">0</strong> PDF</span>
+                <span class="pill"><strong id="countPages">0</strong> pages</span>
+                <span class="pill"><strong id="modeLabel">—</strong></span>
+              </div>
+              <div style="height:10px"></div>
+              <div class="inline">
+                <span>Progress</span><span class="kbd" id="progLabel">0%</span>
+                <div class="progress"><div id="progBar"></div></div>
+              </div>
+              <div style="height:10px"></div>
+              <div class="small" id="statusLine">No files loaded.</div>
+            </div>
+          </div>
+        </div>
+      </details>
+
+      <details class="keta" open>
+        <summary><span>OUTPUT CONTROLS</span><span class="small">scale, quality, inversion</span></summary>
+        <div class="content">
+          <div class="grid2">
+            <label>
+              OUTPUT FORMAT
+              <select id="outFormat">
+                <option value="jpeg" selected>JPEG (.jpg)</option>
+                <option value="png">PNG (.png) [larger]</option>
+              </select>
+            </label>
+
+            <label id="qWrap">
+              JPEG QUALITY
+              <input id="quality" type="range" min="0.4" max="1" step="0.05" value="0.92" />
+              <div class="inline"><span>Quality</span><span class="pill"><strong id="qualityVal">0.92</strong></span></div>
+            </label>
+
+            <label>
+              RENDER SCALE (DETAIL)
+              <input id="scale" type="range" min="1" max="3" step="0.25" value="2" />
+              <div class="inline"><span>Scale</span><span class="pill"><strong id="scaleVal">2.00</strong></span></div>
+              <div class="small">If conversion strains, drop to 1.5x.</div>
+            </label>
+
+            <label>
+              INVERT OUTPUT
+              <select id="invert">
+                <option value="on" selected>ON (black page / white writing)</option>
+                <option value="off">OFF (normal output)</option>
+              </select>
+            </label>
+
+            <label>
+              FOLDER NAMING
+              <select id="nameMode">
+                <option value="pdfName" selected>Folder per PDF (filename)</option>
+                <option value="timestamp">Folder per PDF (timestamp)</option>
+              </select>
+            </label>
+          </div>
+        </div>
+      </details>
+
+      <details class="keta" open>
+        <summary><span>PREVIEW</span><span class="small">single-page render</span></summary>
+        <div class="content">
+          <div class="stage"><canvas id="preview"></canvas></div>
+          <div class="small" style="margin-top:10px">
+            Controls: <span class="kbd">←</span> <span class="kbd">→</span> page,
+            <span class="kbd">I</span> invert,
+            <span class="kbd">C</span> convert.
+          </div>
+        </div>
+      </details>
+    </section>
+
+    <aside class="rail">
+      <details class="keta" open>
+        <summary><span>KETA NOTE</span><span class="small">page-level note</span></summary>
+        <div class="content">
+          <textarea id="noteText" placeholder="SYSTEM NOTE // decisions, constraints, next actions"></textarea>
+          <div style="height:10px"></div>
+          <button class="btn secondary" id="btnNoteExport">EXPORT NOTE JSON</button>
+          <div style="height:10px"></div>
+          <div class="small" id="noteMeta"></div>
+        </div>
+      </details>
+
+      <details class="keta" open>
+        <summary><span>ERROR DETAIL</span><span class="small">actual PDF.js error</span></summary>
+        <div class="content">
+          <div class="small" id="errBox">—</div>
+        </div>
+      </details>
+
+      <details class="keta">
+        <summary><span>DIAGNOSTICS</span><span class="small">what to change</span></summary>
+        <div class="content">
+          <div class="small">
+            If ERROR DETAIL mentions <b>PasswordException</b> or <b>Encrypted</b>, export a non-encrypted PDF first.
+            If it mentions <b>InvalidPDFException</b>, the file is structurally broken—re-export from Preview or Acrobat.
+            If it mentions <b>NetworkError</b> or <b>CORS</b> while using a file input, you have a site CSP issue blocking blob/object URLs.
+          </div>
+        </div>
+      </details>
+    </aside>
+  </main>
+
+  <!-- Keep CDNs for now; we can self-host after it works. -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.6.82/pdf.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+
+  <script>
+    const PDFJS_VERSION = "4.6.82";
+    const CDN_BASE = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/" + PDFJS_VERSION;
+    if (window.pdfjsLib) pdfjsLib.GlobalWorkerOptions.workerSrc = CDN_BASE + "/pdf.worker.min.js";
+
+    const el = {
+      pdfInput: document.getElementById("pdfInput"),
+      btnConvert: document.getElementById("btnConvert"),
+      btnClear: document.getElementById("btnClear"),
+      outFormat: document.getElementById("outFormat"),
+      nameMode: document.getElementById("nameMode"),
+      scale: document.getElementById("scale"),
+      scaleVal: document.getElementById("scaleVal"),
+      quality: document.getElementById("quality"),
+      qualityVal: document.getElementById("qualityVal"),
+      qWrap: document.getElementById("qWrap"),
+      invert: document.getElementById("invert"),
+      countPDF: document.getElementById("countPDF"),
+      countPages: document.getElementById("countPages"),
+      modeLabel: document.getElementById("modeLabel"),
+      statusLine: document.getElementById("statusLine"),
+      progBar: document.getElementById("progBar"),
+      progLabel: document.getElementById("progLabel"),
+      preview: document.getElementById("preview"),
+      noteText: document.getElementById("noteText"),
+      noteMeta: document.getElementById("noteMeta"),
+      btnNoteExport: document.getElementById("btnNoteExport"),
+      errBox: document.getElementById("errBox"),
+    };
+
+    const state = {
+      docs: [],            // { file, doc, numPages, objectUrl }
+      totalPages: 0,
+      selected: { docIndex: 0, pageIndex: 0 },
+      busy: false,
+      workerMode: "UNKNOWN",
+    };
+
+    function clamp(n,a,b){ return Math.max(a, Math.min(b,n)); }
+    function pad3(n){ return String(n).padStart(3,"0"); }
+    function safeName(name){
+      return (name||"PDF").replace(/\.pdf$/i,"").replace(/[^\w\-]+/g,"_").replace(/_+/g,"_").slice(0,80);
+    }
+    function setProgress(p){
+      const pct = Math.round(clamp(p,0,1)*100);
+      el.progBar.style.width = pct + "%";
+      el.progLabel.textContent = pct + "%";
+    }
+    function setCounts(){
+      el.countPDF.textContent = state.docs.length;
+      el.countPages.textContent = state.totalPages;
+      el.modeLabel.textContent =
+        state.workerMode === "WORKER" ? "WORKER" :
+        state.workerMode === "NO_WORKER" ? "NO_WORKER" : "—";
+    }
+    function updateQualityVisibility(){
+      el.qWrap.style.display = (el.outFormat.value === "jpeg") ? "block" : "none";
+    }
+
+    function invertCanvas(ctx, w, h){
+      const img = ctx.getImageData(0,0,w,h);
+      const d = img.data;
+      for (let i=0; i<d.length; i+=4){
+        d[i] = 255 - d[i];
+        d[i+1] = 255 - d[i+1];
+        d[i+2] = 255 - d[i+2];
+      }
+      ctx.putImageData(img,0,0);
+    }
+
+    function dataURLToBlob(dataURL){
+      const parts = dataURL.split(",");
+      const mime = parts[0].match(/:(.*?);/)[1];
+      const bstr = atob(parts[1]);
+      let n = bstr.length;
+      const u8arr = new Uint8Array(n);
+      while(n--) u8arr[n] = bstr.charCodeAt(n);
+      return new Blob([u8arr], { type: mime });
+    }
+
+    function selectedDoc(){
+      return state.docs[state.selected.docIndex] || null;
+    }
+
+    function setError(err){
+      const msg = err?.stack || err?.message || String(err);
+      el.errBox.textContent = msg;
+      console.error(err);
+    }
+
+    async function getDocumentWithFallback(objectUrl){
+      // We try WORKER first; if it fails, retry NO_WORKER.
+      // We also harden CSP-related options.
+      const base = {
+        url: objectUrl,
+        isEvalSupported: false,
+        disableFontFace: true,
+        useSystemFonts: true,
+        stopAtErrors: false,
+        // range + streaming settings (ObjectURL tends to behave best with range disabled)
+        disableRange: true,
+        disableStream: false,
+        disableAutoFetch: true,
+      };
+
+      try{
+        const task = pdfjsLib.getDocument({ ...base, disableWorker: false });
+        const doc = await task.promise;
+        state.workerMode = "WORKER";
+        return doc;
+      } catch (e1){
+        // Surface the real underlying error first
+        setError(e1);
+        try{
+          const task = pdfjsLib.getDocument({ ...base, disableWorker: true });
+          const doc = await task.promise;
+          state.workerMode = "NO_WORKER";
+          return doc;
+        } catch (e2){
+          setError(e2);
+          throw e2;
+        }
+      }
+    }
+
+    async function loadFiles(fileList){
+      clearSession();
+      const files = Array.from(fileList || []).filter(f => f.type === "application/pdf" || /\.pdf$/i.test(f.name));
+      if (!files.length) return;
+
+      state.busy = true;
+      setProgress(0);
+      el.btnConvert.textContent = "LOADING…";
+      el.btnConvert.disabled = true;
+      el.statusLine.textContent = "Loading PDFs…";
+      el.errBox.textContent = "—";
+
+      try{
+        for (let i=0; i<files.length; i++){
+          const file = files[i];
+
+          // CRITICAL CHANGE: ObjectURL streaming load (avoids 100MB buffer duplication).
+          const objectUrl = URL.createObjectURL(file);
+
+          let doc;
+          try{
+            doc = await getDocumentWithFallback(objectUrl);
+          } catch (err){
+            // revoke on failure
+            URL.revokeObjectURL(objectUrl);
+            throw new Error(`PDF load failed for ${file.name}. See ERROR DETAIL above.`);
+          }
+
+          const numPages = doc.numPages;
+          state.docs.push({ file, doc, numPages, objectUrl });
+          state.totalPages += numPages;
+
+          setProgress((i+1)/files.length * 0.25);
+          el.statusLine.textContent = `Loaded: ${file.name} (${numPages} pages).`;
+        }
+
+        setCounts();
+        state.selected = { docIndex: 0, pageIndex: 0 };
+        await renderPreview();
+
+        el.statusLine.textContent = `Ready. ${state.docs.length} PDF(s), ${state.totalPages} pages. Mode: ${state.workerMode}.`;
+
+      } finally {
+        state.busy = false;
+        el.btnConvert.textContent = "CONVERT → ZIP";
+        el.btnConvert.disabled = !state.docs.length;
+        setProgress(0);
+      }
+    }
+
+    function clearSession(){
+      // Revoke any object URLs
+      for (const d of state.docs){
+        if (d.objectUrl) URL.revokeObjectURL(d.objectUrl);
+      }
+      state.docs = [];
+      state.totalPages = 0;
+      state.selected = { docIndex:0, pageIndex:0 };
+      state.workerMode = "UNKNOWN";
+      setCounts();
+      setProgress(0);
+      el.statusLine.textContent = "No files loaded.";
+      el.errBox.textContent = "—";
+      const ctx = el.preview.getContext("2d");
+      ctx.clearRect(0,0,el.preview.width, el.preview.height);
+      updateNoteMeta();
+    }
+
+    async function renderPreview(){
+      const d = selectedDoc();
+      if (!d) return;
+
+      const pageNumber = state.selected.pageIndex + 1;
+      const page = await d.doc.getPage(pageNumber);
+
+      const scale = parseFloat(el.scale.value || "2");
+      const viewport = page.getViewport({ scale });
+
+      const canvas = el.preview;
+      const ctx = canvas.getContext("2d", { willReadFrequently: true });
+      canvas.width = Math.ceil(viewport.width);
+      canvas.height = Math.ceil(viewport.height);
+
+      await page.render({ canvasContext: ctx, viewport }).promise;
+
+      if (el.invert.value === "on") invertCanvas(ctx, canvas.width, canvas.height);
+
+      updateNoteMeta();
+      el.statusLine.textContent = `Preview: ${d.file.name} — page ${pageNumber}/${d.numPages} (Mode: ${state.workerMode})`;
+    }
+
+    function updateNoteMeta(){
+      const d = selectedDoc();
+      const payload = {
+        page: "KETADATA_PDF_TO_JPEG_CONVERTER_STREAM_SAFE",
+        room: "STUDIO/TOOLS",
+        clearance: "INTERNAL",
+        polarity: "MIND (ANGULAR)",
+        timestamp: new Date().toISOString(),
+        selection: d ? { pdf: d.file.name, page: state.selected.pageIndex + 1 } : null
+      };
+      el.noteMeta.textContent = "META: " + JSON.stringify(payload);
+    }
+
+    function exportNoteJSON(){
+      const d = selectedDoc();
+      const payload = {
+        id: "note_" + Date.now(),
+        room: "STUDIO/TOOLS",
+        clearance: "INTERNAL",
+        type: "spec/decision",
+        polarity: "mind",
+        timestamp: new Date().toISOString(),
+        source: "KETADATA PDF→JPEG Converter (STREAM-SAFE)",
+        selection: d ? { pdf: d.file.name, page: state.selected.pageIndex + 1 } : null,
+        note: el.noteText.value || ""
+      };
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+      saveAs(blob, `KETA_NOTE_${Date.now()}.json`);
+    }
+
+    async function convertAllToZip(){
+      if (state.busy) return;
+      if (!state.docs.length) return alert("Load a PDF first.");
+
+      state.busy = true;
+      el.btnConvert.textContent = "CONVERTING…";
+      el.btnConvert.disabled = true;
+      setProgress(0);
+      el.errBox.textContent = "—";
+
+      const zip = new JSZip();
+      const format = el.outFormat.value;
+      const jpegQuality = parseFloat(el.quality.value || "0.92");
+      const scale = parseFloat(el.scale.value || "2");
+      const invertOn = (el.invert.value === "on");
+
+      let done = 0;
+      const total = state.totalPages;
+
+      try{
+        for (const d of state.docs){
+          const folderName = (el.nameMode.value === "timestamp")
+            ? `${Date.now()}_${safeName(d.file.name)}`
+            : safeName(d.file.name);
+
+          const folder = zip.folder(folderName);
+
+          for (let p=1; p<=d.numPages; p++){
+            const page = await d.doc.getPage(p);
+            const viewport = page.getViewport({ scale });
+
+            const c = document.createElement("canvas");
+            const ctx = c.getContext("2d", { willReadFrequently: true });
+            c.width = Math.ceil(viewport.width);
+            c.height = Math.ceil(viewport.height);
+
+            await page.render({ canvasContext: ctx, viewport }).promise;
+            if (invertOn) invertCanvas(ctx, c.width, c.height);
+
+            const filename = `page-${pad3(p)}.${format === "jpeg" ? "jpg" : "png"}`;
+            const dataUrl = (format === "jpeg")
+              ? c.toDataURL("image/jpeg", jpegQuality)
+              : c.toDataURL("image/png");
+
+            folder.file(filename, dataURLToBlob(dataUrl));
+
+            done++;
+            if (done % 2 === 0) setProgress(done / total);
+            if (p % 10 === 0) el.statusLine.textContent = `Converting: ${d.file.name} page ${p}/${d.numPages}…`;
+          }
+        }
+
+        zip.file("KETADATA_MANIFEST.txt", [
+          "KETADATA // PDF → JPEG (STREAM-SAFE)",
+          "Generated: " + new Date().toISOString(),
+          "Mode: " + state.workerMode,
+          "Format: " + format,
+          "Scale: " + scale.toFixed(2),
+          "Invert: " + (invertOn ? "ON" : "OFF"),
+          (format === "jpeg" ? ("JPEG Quality: " + jpegQuality.toFixed(2)) : ""),
+          "",
+          "Files:",
+          ...state.docs.map(x => `- ${x.file.name} (${x.numPages} pages)`)
+        ].filter(Boolean).join("\n"));
+
+        const blob = await zip.generateAsync({ type:"blob" });
+        saveAs(blob, `KETADATA_PDF_TO_JPEG_${Date.now()}.zip`);
+        el.statusLine.textContent = "Done. ZIP downloaded.";
+      } catch(err){
+        setError(err);
+        alert("Conversion failed. ERROR DETAIL shows the real reason. If it’s CPU/RAM, drop scale to 1.5x.");
+      } finally{
+        state.busy = false;
+        el.btnConvert.textContent = "CONVERT → ZIP";
+        el.btnConvert.disabled = !state.docs.length;
+        setProgress(0);
+      }
+    }
+
+    // Events
+    el.pdfInput.addEventListener("change", e => loadFiles(e.target.files));
+    el.btnConvert.addEventListener("click", convertAllToZip);
+    el.btnClear.addEventListener("click", () => { if(!state.busy){ el.pdfInput.value=""; clearSession(); } });
+
+    el.scale.addEventListener("input", async () => {
+      el.scaleVal.textContent = parseFloat(el.scale.value).toFixed(2);
+      if (state.docs.length && !state.busy) await renderPreview();
+    });
+    el.quality.addEventListener("input", () => el.qualityVal.textContent = parseFloat(el.quality.value).toFixed(2));
+    el.outFormat.addEventListener("change", updateQualityVisibility);
+    el.invert.addEventListener("change", async () => { if (state.docs.length && !state.busy) await renderPreview(); });
+    el.btnNoteExport.addEventListener("click", exportNoteJSON);
+
+    // Shortcuts
+    document.addEventListener("keydown", async (e) => {
+      if (state.busy) return;
+      const d = selectedDoc();
+      if (!d) return;
+
+      if (e.key === "ArrowRight"){
+        e.preventDefault();
+        state.selected.pageIndex = Math.min(d.numPages - 1, state.selected.pageIndex + 1);
+        await renderPreview();
+      }
+      if (e.key === "ArrowLeft"){
+        e.preventDefault();
+        state.selected.pageIndex = Math.max(0, state.selected.pageIndex - 1);
+        await renderPreview();
+      }
+      if (e.key.toLowerCase() === "i"){
+        el.invert.value = (el.invert.value === "on") ? "off" : "on";
+        await renderPreview();
+      }
+      if (e.key.toLowerCase() === "c"){
+        await convertAllToZip();
+      }
+    });
+
+    // Init
+    el.scaleVal.textContent = parseFloat(el.scale.value).toFixed(2);
+    el.qualityVal.textContent = parseFloat(el.quality.value).toFixed(2);
+    updateQualityVisibility();
+    setCounts();
+    setProgress(0);
+    updateNoteMeta();
+  </script>
+</body>
+</html>
