@@ -1,0 +1,1289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>KETADATA // INTERFACE ANALYZER (ROOM SORTER EDITION)</title>
+
+  <style>
+    :root{
+      --bg:#07080a;
+      --panel:#0b0d10;
+      --panel2:#0a0c0f;
+      --line:rgba(255,255,255,.10);
+      --line2:rgba(255,255,255,.06);
+      --txt:rgba(255,255,255,.92);
+      --muted:rgba(255,255,255,.62);
+      --dim:rgba(255,255,255,.38);
+      --ink:#000;
+      --focus:rgba(255,255,255,.18);
+
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      --ui: Arial, Helvetica, sans-serif;
+
+      --pad:14px;
+      --gap:14px;
+
+      /* BIG MODULES */
+      --cardMin: 560px; /* increase for bigger modules */
+      --cardMax: 680px;
+      --imgH: 210px;
+      --areaH: 160px;
+      --smallH: 96px;
+
+      /* no rounding */
+      --r:0px;
+    }
+
+    *{ box-sizing:border-box; }
+    html, body{
+      height:100%;
+      margin:0;
+      background:var(--bg);
+      color:var(--txt);
+      font-family:var(--ui);
+      overflow:hidden;
+    }
+
+    /* subtle room-sorter vibe: hard grid + faint sweep */
+    body::before{
+      content:"";
+      position:fixed; inset:0;
+      background:
+        linear-gradient(rgba(255,255,255,.06) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,.06) 1px, transparent 1px),
+        radial-gradient(900px 520px at 18% 32%, rgba(255,255,255,.045), transparent 60%),
+        radial-gradient(900px 520px at 82% 68%, rgba(255,255,255,.035), transparent 64%);
+      background-size: 44px 44px, 44px 44px, auto, auto;
+      pointer-events:none;
+      z-index:0;
+      animation: drift 18s linear infinite;
+      opacity:.55;
+    }
+    @keyframes drift{
+      from{ background-position: 0 0, 0 0, center, center; }
+      to{ background-position: 88px 88px, 88px 88px, center, center; }
+    }
+
+    .app{
+      position:relative;
+      z-index:1;
+      height:100%;
+      display:grid;
+      grid-template-rows: auto 1fr;
+    }
+
+    /* TOP BAR */
+    .top{
+      display:flex;
+      align-items:flex-start;
+      justify-content:space-between;
+      gap:18px;
+      padding: 14px 16px;
+      border-bottom:1px solid var(--line);
+      background: rgba(0,0,0,.55);
+      backdrop-filter: blur(6px);
+    }
+    .brand{
+      display:flex;
+      flex-direction:column;
+      gap:6px;
+      min-width: 380px;
+    }
+    .brand .t{
+      font-weight:900;
+      letter-spacing:.22em;
+      text-transform:uppercase;
+      font-size:12px;
+      line-height:1.2;
+      white-space:nowrap;
+    }
+    .brand .s{
+      font-weight:900;
+      letter-spacing:.14em;
+      text-transform:uppercase;
+      font-size:11px;
+      color:var(--muted);
+      line-height:1.35;
+    }
+    .actions{
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+      align-items:center;
+      justify-content:flex-end;
+    }
+    .btn{
+      border:1px solid var(--line);
+      background: rgba(255,255,255,.04);
+      color:var(--txt);
+      padding:8px 10px;
+      font-size:11px;
+      letter-spacing:.16em;
+      text-transform:uppercase;
+      font-weight:900;
+      cursor:pointer;
+      user-select:none;
+    }
+    .btn:hover{ border-color: rgba(255,255,255,.22); }
+    .btn:active{ transform: translateY(1px); }
+    .btn.danger{
+      border-color: rgba(255,255,255,.16);
+      background: rgba(255,255,255,.02);
+      color: rgba(255,255,255,.78);
+    }
+    .btn.danger:hover{ border-color: rgba(255,255,255,.30); color:#fff; }
+
+    .kbd{
+      border:1px solid rgba(255,255,255,.20);
+      padding:2px 6px;
+      background: rgba(255,255,255,.04);
+      font-weight:900;
+      font-size:10px;
+      letter-spacing:.12em;
+    }
+
+    /* MAIN LAYOUT */
+    .main{
+      min-height:0;
+      display:grid;
+      grid-template-columns: 1fr 420px;
+      gap: 0;
+    }
+
+    /* LEFT: GRID */
+    .left{
+      min-height:0;
+      overflow:auto;
+      padding: 14px 14px 64px 14px;
+    }
+
+    .metaRow{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:12px;
+      margin: 4px 0 12px 0;
+      padding: 10px 12px;
+      border:1px solid var(--line);
+      background: rgba(0,0,0,.32);
+    }
+    .metaRow .l{
+      display:flex;
+      flex-direction:column;
+      gap:4px;
+    }
+    .metaRow .l .h{
+      font-weight:900;
+      letter-spacing:.22em;
+      text-transform:uppercase;
+      font-size:11px;
+    }
+    .metaRow .l .p{
+      font-weight:900;
+      letter-spacing:.14em;
+      text-transform:uppercase;
+      font-size:10px;
+      color:var(--muted);
+    }
+    .metaRow .r{
+      display:flex;
+      gap:10px;
+      align-items:center;
+      flex-wrap:wrap;
+      justify-content:flex-end;
+      color:var(--muted);
+      font-weight:900;
+      letter-spacing:.14em;
+      text-transform:uppercase;
+      font-size:10px;
+    }
+
+    .grid{
+      display:grid;
+      grid-template-columns: repeat(auto-fit, minmax(var(--cardMin), 1fr));
+      gap: 14px;
+      align-items:start;
+    }
+
+    /* CARD */
+    .card{
+      border:1px solid var(--line);
+      background: rgba(0,0,0,.38);
+      display:flex;
+      flex-direction:column;
+      min-width: min(var(--cardMax), 100%);
+    }
+
+    .cardHead{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      padding: 10px 12px;
+      border-bottom:1px solid var(--line2);
+      background: rgba(0,0,0,.40);
+    }
+    .tag{
+      display:flex;
+      align-items:center;
+      gap:10px;
+      min-width:0;
+    }
+    .tag .id{
+      border:1px solid var(--line);
+      padding:2px 6px;
+      font-weight:900;
+      letter-spacing:.14em;
+      text-transform:uppercase;
+      font-size:10px;
+      color:var(--muted);
+      background: rgba(255,255,255,.03);
+      flex:0 0 auto;
+    }
+    .tag .name{
+      font-weight:900;
+      letter-spacing:.10em;
+      text-transform:uppercase;
+      font-size:12px;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      min-width:0;
+    }
+
+    .headBtns{
+      display:flex;
+      gap:8px;
+      flex:0 0 auto;
+    }
+    .iconBtn{
+      width:26px; height:24px;
+      display:grid; place-items:center;
+      border:1px solid var(--line);
+      background: rgba(255,255,255,.03);
+      color:var(--txt);
+      cursor:pointer;
+      font-weight:900;
+      user-select:none;
+    }
+    .iconBtn:hover{ border-color: rgba(255,255,255,.22); }
+    .iconBtn.x{ color: rgba(255,255,255,.78); }
+    .iconBtn.x:hover{ color:#fff; border-color: rgba(255,255,255,.30); }
+
+    .cardBody{
+      padding: 12px;
+      display:flex;
+      flex-direction:column;
+      gap: 10px;
+    }
+
+    .row2{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      align-items:end;
+    }
+
+    label{
+      display:block;
+      font-size:10px;
+      letter-spacing:.16em;
+      text-transform:uppercase;
+      font-weight:900;
+      color: var(--muted);
+      margin-bottom:6px;
+    }
+
+    input[type="text"], input[type="url"], textarea{
+      width:100%;
+      border:1px solid var(--line);
+      background: rgba(255,255,255,.03);
+      color:var(--txt);
+      padding: 10px 10px;
+      outline:none;
+      font-family: var(--ui);
+      font-size: 12px;
+    }
+    textarea{
+      resize: vertical;
+      min-height: 64px;
+      font-family: var(--mono);
+      font-size: 11px;
+      line-height: 1.35;
+    }
+    input:focus, textarea:focus{
+      border-color: rgba(255,255,255,.26);
+      box-shadow: 0 0 0 2px rgba(255,255,255,.06);
+    }
+
+    .shot{
+      border:1px dashed rgba(255,255,255,.16);
+      background: rgba(0,0,0,.24);
+      height: var(--imgH);
+      display:grid;
+      place-items:center;
+      overflow:hidden;
+      position:relative;
+    }
+    .shot img{
+      width:100%;
+      height:100%;
+      object-fit:cover;
+      display:block;
+      filter: grayscale(100%);
+      opacity:.92;
+    }
+    .shot .ph{
+      font-weight:900;
+      letter-spacing:.18em;
+      text-transform:uppercase;
+      font-size:10px;
+      color: var(--muted);
+      padding: 8px 10px;
+      text-align:center;
+    }
+    .shotBar{
+      display:flex;
+      gap:10px;
+      align-items:center;
+      justify-content:space-between;
+      margin-top:8px;
+    }
+    .shotBar .miniBtn{
+      border:1px solid var(--line);
+      background: rgba(255,255,255,.03);
+      padding: 7px 9px;
+      font-size:10px;
+      letter-spacing:.16em;
+      text-transform:uppercase;
+      font-weight:900;
+      cursor:pointer;
+      user-select:none;
+    }
+    .shotBar .miniBtn:hover{ border-color: rgba(255,255,255,.22); }
+    .shotBar .hint{
+      color: var(--dim);
+      font-weight:900;
+      letter-spacing:.14em;
+      text-transform:uppercase;
+      font-size:10px;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      max-width: 60%;
+    }
+
+    /* COLLAPSIBLES */
+    .section{
+      border:1px solid var(--line2);
+      background: rgba(0,0,0,.20);
+    }
+    .secHead{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      padding: 9px 10px;
+      border-bottom:1px solid var(--line2);
+      cursor:pointer;
+      user-select:none;
+    }
+    .secHead .h{
+      font-weight:900;
+      letter-spacing:.18em;
+      text-transform:uppercase;
+      font-size:10px;
+      color: rgba(255,255,255,.84);
+    }
+    .secHead .m{
+      font-weight:900;
+      letter-spacing:.14em;
+      text-transform:uppercase;
+      font-size:10px;
+      color: var(--dim);
+      display:flex;
+      gap:10px;
+      align-items:center;
+    }
+    .secBody{
+      padding: 10px;
+      display:block;
+    }
+    .section.collapsed .secBody{ display:none; }
+    .section.collapsed .secHead{ border-bottom:none; }
+
+    .quad{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+    .areaBig textarea{ min-height: var(--areaH); }
+    .areaSmall textarea{ min-height: var(--smallH); }
+
+    .pillRow{
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+      align-items:center;
+      justify-content:flex-start;
+    }
+    .pill{
+      border:1px solid var(--line);
+      background: rgba(255,255,255,.03);
+      padding:6px 8px;
+      font-size:10px;
+      letter-spacing:.16em;
+      text-transform:uppercase;
+      font-weight:900;
+      cursor:pointer;
+      user-select:none;
+      color: rgba(255,255,255,.82);
+    }
+    .pill.on{
+      background: rgba(255,255,255,.10);
+      border-color: rgba(255,255,255,.22);
+      color:#fff;
+    }
+
+    /* RIGHT: EXPORT PANEL */
+    .right{
+      min-height:0;
+      border-left:1px solid var(--line);
+      background: rgba(0,0,0,.40);
+      display:flex;
+      flex-direction:column;
+    }
+    .rightHead{
+      padding: 12px 12px 10px 12px;
+      border-bottom:1px solid var(--line);
+      display:flex;
+      align-items:flex-start;
+      justify-content:space-between;
+      gap:12px;
+    }
+    .rightHead .title{
+      font-weight:900;
+      letter-spacing:.18em;
+      text-transform:uppercase;
+      font-size:11px;
+      margin:0;
+    }
+    .rightHead .sub{
+      margin-top:6px;
+      color: var(--muted);
+      font-weight:900;
+      letter-spacing:.12em;
+      text-transform:uppercase;
+      font-size:10px;
+      line-height:1.35;
+    }
+    .rightHead .status{
+      color: var(--dim);
+      font-weight:900;
+      letter-spacing:.14em;
+      text-transform:uppercase;
+      font-size:10px;
+      white-space:nowrap;
+    }
+    .rightBody{
+      padding:12px;
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+      min-height:0;
+    }
+    .out{
+      flex:1 1 auto;
+      min-height:0;
+      border:1px solid var(--line);
+      background: rgba(255,255,255,.02);
+      padding:10px;
+      font-family: var(--mono);
+      font-size: 11px;
+      line-height: 1.4;
+      white-space:pre-wrap;
+      overflow:auto;
+      color: rgba(255,255,255,.90);
+    }
+    .rightBtns{
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+      justify-content:flex-end;
+      padding-top: 2px;
+    }
+
+    /* RESPONSIVE */
+    @media (max-width: 1180px){
+      .main{ grid-template-columns: 1fr; }
+      .right{ border-left:none; border-top:1px solid var(--line); height: 42vh; }
+    }
+
+    /* NO SOFT UI */
+    ::selection{ background: rgba(255,255,255,.18); color:#fff; }
+  </style>
+</head>
+
+<body>
+  <div class="app">
+    <div class="top">
+      <div class="brand">
+        <div class="t">INTERFACE ANALYZER + EXTRACTOR</div>
+        <div class="s">ROOM SORTER AESTHETICS • BIG MODULES • EVERYTHING COLLAPSIBLE • JSON EXPORT/IMPORT • PROMPT EXPORT</div>
+      </div>
+
+      <div class="actions">
+        <button class="btn" id="add">add interface</button>
+        <button class="btn" id="collapseAll">collapse all</button>
+        <button class="btn" id="expandAll">expand all</button>
+        <button class="btn" id="exportPrompts">export prompts</button>
+        <button class="btn" id="copyPrompts">copy prompts</button>
+        <button class="btn" id="downloadPrompts">download prompts.txt</button>
+        <button class="btn" id="exportJSON">export.json</button>
+        <button class="btn" id="importJSON">import.json</button>
+        <button class="btn danger" id="reset">reset</button>
+      </div>
+    </div>
+
+    <div class="main">
+      <div class="left">
+        <div class="metaRow">
+          <div class="l">
+            <div class="h">GRID</div>
+            <div class="p">each card = one interface specimen • stored local-first (browser)</div>
+          </div>
+          <div class="r" id="counts">
+            <span>interfaces: 0</span>
+            <span><span class="kbd">/</span> focus search</span>
+            <span><span class="kbd">⌘/ctrl</span>+<span class="kbd">enter</span> export prompts</span>
+          </div>
+        </div>
+
+        <div class="grid" id="grid"></div>
+      </div>
+
+      <div class="right">
+        <div class="rightHead">
+          <div>
+            <div class="title">EXPORT PROMPTS</div>
+            <div class="sub">includes title + link + screenshot + html + notes (likes/dislikes/features/bugs)</div>
+          </div>
+          <div class="status" id="status">idle</div>
+        </div>
+
+        <div class="rightBody">
+          <div class="out" id="out">hit "export prompts"</div>
+          <div class="rightBtns">
+            <button class="btn" id="wrapOn">wrap: on</button>
+            <button class="btn" id="onlyPinned">only pinned: off</button>
+            <button class="btn" id="openLinks">open first match</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+/* ===========================
+   KETADATA INTERFACE ANALYZER
+   - big modules
+   - per-card + per-section collapsibles
+   - reorder
+   - screenshot -> dataURL
+   - export prompts + export json + import json
+   - localStorage persistence
+=========================== */
+
+const LS_KEY = "KDT_INTERFACE_ANALYZER_V2_ROOM_SORTER";
+const grid = document.getElementById("grid");
+const out  = document.getElementById("out");
+const statusEl = document.getElementById("status");
+const countsEl = document.getElementById("counts");
+
+let WRAP = true;
+let ONLY_PINNED = false;
+
+function uid(){
+  return Math.random().toString(16).slice(2) + Date.now().toString(16);
+}
+
+function nowISO(){
+  const d = new Date();
+  return d.toISOString().replace("T"," ").replace(/\.\d+Z$/,"Z");
+}
+
+function setStatus(s){
+  statusEl.textContent = s;
+  setTimeout(()=>{ if(statusEl.textContent === s) statusEl.textContent = "idle"; }, 1200);
+}
+
+function loadState(){
+  try{
+    const raw = localStorage.getItem(LS_KEY);
+    if(!raw) return { items: [], wrap:true, onlyPinned:false };
+    const s = JSON.parse(raw);
+    return {
+      items: Array.isArray(s.items) ? s.items : [],
+      wrap: (typeof s.wrap === "boolean") ? s.wrap : true,
+      onlyPinned: (typeof s.onlyPinned === "boolean") ? s.onlyPinned : false
+    };
+  }catch(e){
+    return { items: [], wrap:true, onlyPinned:false };
+  }
+}
+function saveState(){
+  const payload = { items: state.items, wrap: WRAP, onlyPinned: ONLY_PINNED, savedAt: nowISO() };
+  localStorage.setItem(LS_KEY, JSON.stringify(payload));
+  countsEl.innerHTML = `
+    <span>interfaces: ${state.items.length}</span>
+    <span><span class="kbd">/</span> focus search</span>
+    <span><span class="kbd">⌘/ctrl</span>+<span class="kbd">enter</span> export prompts</span>
+  `;
+}
+
+let state = loadState();
+WRAP = state.wrap;
+ONLY_PINNED = state.onlyPinned;
+
+document.getElementById("wrapOn").textContent = WRAP ? "wrap: on" : "wrap: off";
+document.getElementById("onlyPinned").textContent = ONLY_PINNED ? "only pinned: on" : "only pinned: off";
+
+/* ===========================
+   DATA MODEL (per interface)
+=========================== */
+function defaultItem(n){
+  return {
+    id: uid(),
+    idxLabel: n,                      // display only; recalculated on render
+    title: `Interface ${n}`,
+    link: "",
+    pinned: false,
+    screenshotDataUrl: "",
+
+    html: "",
+
+    notes: {
+      whatILike: "",
+      whatIDontLike: "",
+      whatWorks: "",
+      whatFails: "",
+      primitives: "",
+      bugs: "",
+      extra: ""
+    },
+
+    collapsed: false,
+    collapsedSections: {
+      meta: false,
+      screenshot: false,
+      html: false,
+      notes: false
+    },
+
+    updatedAt: nowISO()
+  };
+}
+
+/* ===========================
+   RENDER
+=========================== */
+function el(tag, cls, html){
+  const e = document.createElement(tag);
+  if(cls) e.className = cls;
+  if(html !== undefined) e.innerHTML = html;
+  return e;
+}
+
+function render(){
+  grid.innerHTML = "";
+  state.items.forEach((it, i) => {
+    it.idxLabel = i + 1;
+    grid.appendChild(renderCard(it, i));
+  });
+  saveState();
+}
+
+function renderCard(it, index){
+  const card = el("div","card");
+
+  // head
+  const head = el("div","cardHead");
+  const tagWrap = el("div","tag");
+  const idBox = el("div","id", `#${it.idxLabel}`);
+  const name = el("div","name", (it.title || `Interface ${it.idxLabel}`).toUpperCase());
+  tagWrap.appendChild(idBox);
+  tagWrap.appendChild(name);
+
+  const headBtns = el("div","headBtns");
+  const bUp = el("div","iconBtn","↑");
+  const bDn = el("div","iconBtn","↓");
+  const bPin = el("div","iconBtn", it.pinned ? "●" : "○");
+  const bCol = el("div","iconBtn", it.collapsed ? "+" : "–");
+  const bX  = el("div","iconBtn x","×");
+
+  headBtns.appendChild(bUp);
+  headBtns.appendChild(bDn);
+  headBtns.appendChild(bPin);
+  headBtns.appendChild(bCol);
+  headBtns.appendChild(bX);
+
+  head.appendChild(tagWrap);
+  head.appendChild(headBtns);
+
+  // body
+  const body = el("div","cardBody");
+  if(it.collapsed) body.style.display = "none";
+
+  // SECTION: META (title/link + quick pills)
+  const secMeta = sectionBlock("META / IDENTIFICATION", it.collapsedSections.meta, (isCollapsed) => {
+    it.collapsedSections.meta = isCollapsed; it.updatedAt = nowISO(); saveState();
+  });
+  const metaBody = secMeta.querySelector(".secBody");
+
+  const row2 = el("div","row2");
+  const fTitle = field("title", "text", it.title, (v)=>{ it.title=v; it.updatedAt=nowISO(); render(); }, { placeholder:"e.g. LANDING PAGE" });
+  const fLink = field("link", "url", it.link, (v)=>{ it.link=v; it.updatedAt=nowISO(); saveState(); }, { placeholder:"https://..." });
+  row2.appendChild(fTitle);
+  row2.appendChild(fLink);
+
+  const pills = el("div","pillRow");
+  const pPinned = el("div","pill"+(it.pinned?" on":""), "pinned");
+  const pCopyLink = el("div","pill", "copy link");
+  const pOpen = el("div","pill", "open");
+  const pDup = el("div","pill", "duplicate");
+  pills.appendChild(pPinned);
+  pills.appendChild(pCopyLink);
+  pills.appendChild(pOpen);
+  pills.appendChild(pDup);
+
+  metaBody.appendChild(row2);
+  metaBody.appendChild(pills);
+
+  // SECTION: SCREENSHOT
+  const secShot = sectionBlock("SCREENSHOT", it.collapsedSections.screenshot, (isCollapsed)=>{
+    it.collapsedSections.screenshot = isCollapsed; it.updatedAt = nowISO(); saveState();
+  });
+  const shotBody = secShot.querySelector(".secBody");
+
+  const shot = el("div","shot");
+  if(it.screenshotDataUrl){
+    const img = new Image();
+    img.src = it.screenshotDataUrl;
+    shot.appendChild(img);
+  }else{
+    shot.appendChild(el("div","ph","UPLOAD A SCREENSHOT (LOCAL-FIRST, STORED AS DATA URL)"));
+  }
+
+  const shotBar = el("div","shotBar");
+  const file = document.createElement("input");
+  file.type = "file";
+  file.accept = "image/*";
+  file.style.width = "100%";
+  file.style.maxWidth = "260px";
+
+  const upBtn = el("div","miniBtn","upload");
+  const clrBtn = el("div","miniBtn","clear");
+  const hint = el("div","hint", it.screenshotDataUrl ? `saved • ${it.screenshotDataUrl.length.toLocaleString()} chars` : "no screenshot");
+
+  shotBar.appendChild(upBtn);
+  shotBar.appendChild(clrBtn);
+  shotBar.appendChild(hint);
+
+  // keep native file input hidden-ish; trigger from button
+  file.style.display = "none";
+  shotBody.appendChild(file);
+  shotBody.appendChild(shot);
+  shotBody.appendChild(shotBar);
+
+  // SECTION: HTML
+  const secHTML = sectionBlock("HTML CODE (OPTIONAL)", it.collapsedSections.html, (isCollapsed)=>{
+    it.collapsedSections.html = isCollapsed; it.updatedAt = nowISO(); saveState();
+  });
+  const htmlBody = secHTML.querySelector(".secBody");
+  const htmlArea = document.createElement("textarea");
+  htmlArea.placeholder = "paste html here...";
+  htmlArea.value = it.html || "";
+  htmlArea.addEventListener("input", ()=>{
+    it.html = htmlArea.value;
+    it.updatedAt = nowISO();
+    saveState();
+  });
+  htmlArea.style.minHeight = "200px";
+  htmlBody.appendChild(htmlArea);
+
+  // SECTION: NOTES (likes/dislikes + works/fails + primitives/bugs + extra)
+  const secNotes = sectionBlock("INTERFACE NOTES", it.collapsedSections.notes, (isCollapsed)=>{
+    it.collapsedSections.notes = isCollapsed; it.updatedAt = nowISO(); saveState();
+  });
+  const notesBody = secNotes.querySelector(".secBody");
+
+  const quad = el("div","quad");
+  quad.appendChild(areaSmall("what i like", it.notes.whatILike, (v)=>{ it.notes.whatILike=v; it.updatedAt=nowISO(); saveState(); }));
+  quad.appendChild(areaSmall("what i don't like", it.notes.whatIDontLike, (v)=>{ it.notes.whatIDontLike=v; it.updatedAt=nowISO(); saveState(); }));
+  quad.appendChild(areaSmall("what works", it.notes.whatWorks, (v)=>{ it.notes.whatWorks=v; it.updatedAt=nowISO(); saveState(); }));
+  quad.appendChild(areaSmall("what fails", it.notes.whatFails, (v)=>{ it.notes.whatFails=v; it.updatedAt=nowISO(); saveState(); }));
+  notesBody.appendChild(quad);
+
+  const quad2 = el("div","quad");
+  quad2.appendChild(areaSmall("features / primitives", it.notes.primitives, (v)=>{ it.notes.primitives=v; it.updatedAt=nowISO(); saveState(); }));
+  quad2.appendChild(areaSmall("bugs / edge cases", it.notes.bugs, (v)=>{ it.notes.bugs=v; it.updatedAt=nowISO(); saveState(); }));
+  notesBody.appendChild(quad2);
+
+  const extra = el("div","areaBig sectionless");
+  extra.appendChild(labelEl("extra / tags / consolidation notes"));
+  const extraTa = document.createElement("textarea");
+  extraTa.placeholder = "anything else...";
+  extraTa.value = it.notes.extra || "";
+  extraTa.addEventListener("input", ()=>{
+    it.notes.extra = extraTa.value;
+    it.updatedAt = nowISO();
+    saveState();
+  });
+  extra.appendChild(extraTa);
+  notesBody.appendChild(extra);
+
+  // assemble card
+  body.appendChild(secMeta);
+  body.appendChild(secShot);
+  body.appendChild(secHTML);
+  body.appendChild(secNotes);
+
+  card.appendChild(head);
+  card.appendChild(body);
+
+  // ========= head button actions =========
+  bUp.onclick = () => moveItem(index, -1);
+  bDn.onclick = () => moveItem(index, +1);
+  bX.onclick  = () => removeItem(index);
+  bPin.onclick = () => {
+    it.pinned = !it.pinned;
+    it.updatedAt = nowISO();
+    render();
+  };
+  bCol.onclick = () => {
+    it.collapsed = !it.collapsed;
+    it.updatedAt = nowISO();
+    render();
+  };
+
+  // ========= pills =========
+  pPinned.onclick = () => { it.pinned = !it.pinned; it.updatedAt = nowISO(); render(); };
+  pCopyLink.onclick = async () => {
+    if(!it.link) return setStatus("no link");
+    try{ await navigator.clipboard.writeText(it.link); setStatus("copied link"); }
+    catch(e){ setStatus("clipboard blocked"); }
+  };
+  pOpen.onclick = () => {
+    if(!it.link) return setStatus("no link");
+    window.open(it.link, "_blank", "noopener");
+  };
+  pDup.onclick = () => {
+    const clone = JSON.parse(JSON.stringify(it));
+    clone.id = uid();
+    clone.title = (clone.title || "Interface") + " (copy)";
+    clone.updatedAt = nowISO();
+    state.items.splice(index+1, 0, clone);
+    render();
+  };
+
+  // ========= screenshot upload =========
+  upBtn.onclick = () => file.click();
+  file.addEventListener("change", async ()=>{
+    const f = file.files && file.files[0];
+    if(!f) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      it.screenshotDataUrl = String(reader.result || "");
+      it.updatedAt = nowISO();
+      render();
+      setStatus("screenshot saved");
+    };
+    reader.readAsDataURL(f);
+  });
+  clrBtn.onclick = () => {
+    it.screenshotDataUrl = "";
+    it.updatedAt = nowISO();
+    render();
+    setStatus("screenshot cleared");
+  };
+
+  return card;
+}
+
+/* ===========================
+   UI HELPERS
+=========================== */
+function labelEl(text){
+  const l = document.createElement("label");
+  l.textContent = text;
+  return l;
+}
+
+function field(label, type, value, onChange, opts={}){
+  const wrap = el("div","");
+  wrap.appendChild(labelEl(label));
+  const inp = document.createElement("input");
+  inp.type = type;
+  inp.value = value || "";
+  if(opts.placeholder) inp.placeholder = opts.placeholder;
+  inp.addEventListener("input", ()=> onChange(inp.value));
+  wrap.appendChild(inp);
+  return wrap;
+}
+
+function areaSmall(title, value, onChange){
+  const wrap = el("div","areaSmall");
+  wrap.appendChild(labelEl(title));
+  const ta = document.createElement("textarea");
+  ta.placeholder = title;
+  ta.value = value || "";
+  ta.addEventListener("input", ()=> onChange(ta.value));
+  wrap.appendChild(ta);
+  return wrap;
+}
+
+function sectionBlock(title, collapsed, onToggle){
+  const s = el("div","section"+(collapsed ? " collapsed" : ""));
+  const h = el("div","secHead");
+  const left = el("div","h", title);
+  const right = el("div","m", `<span>${collapsed ? "collapsed" : "expanded"}</span><span class="kbd">${collapsed ? "+" : "–"}</span>`);
+  h.appendChild(left);
+  h.appendChild(right);
+
+  const b = el("div","secBody");
+
+  h.onclick = ()=>{
+    const isCollapsed = !s.classList.contains("collapsed");
+    // invert because click toggles
+    if(isCollapsed){
+      s.classList.add("collapsed");
+      right.innerHTML = `<span>collapsed</span><span class="kbd">+</span>`;
+      onToggle(true);
+    }else{
+      s.classList.remove("collapsed");
+      right.innerHTML = `<span>expanded</span><span class="kbd">–</span>`;
+      onToggle(false);
+    }
+  };
+
+  s.appendChild(h);
+  s.appendChild(b);
+  return s;
+}
+
+/* ===========================
+   MUTATIONS
+=========================== */
+function addItem(){
+  const n = state.items.length + 1;
+  state.items.push(defaultItem(n));
+  render();
+  setStatus("added");
+}
+
+function removeItem(i){
+  state.items.splice(i,1);
+  render();
+  setStatus("removed");
+}
+
+function moveItem(i, dir){
+  const j = i + dir;
+  if(j < 0 || j >= state.items.length) return;
+  const tmp = state.items[i];
+  state.items[i] = state.items[j];
+  state.items[j] = tmp;
+  render();
+  setStatus("moved");
+}
+
+function collapseAll(){
+  state.items.forEach(it=>{
+    it.collapsed = true;
+    it.updatedAt = nowISO();
+  });
+  render();
+  setStatus("collapsed all");
+}
+function expandAll(){
+  state.items.forEach(it=>{
+    it.collapsed = false;
+    it.updatedAt = nowISO();
+  });
+  render();
+  setStatus("expanded all");
+}
+
+/* ===========================
+   EXPORT PROMPTS
+=========================== */
+function safe(s){
+  return (s || "").toString().trim();
+}
+
+function buildPromptBlock(it){
+  const lines = [];
+  if(WRAP) lines.push("BEGIN INTERFACE");
+  lines.push(`TITLE: ${safe(it.title) || ""}`);
+  lines.push(`LINK: ${safe(it.link) || ""}`);
+  lines.push(`PINNED: ${it.pinned ? "YES" : "NO"}`);
+  lines.push(`UPDATED_AT: ${safe(it.updatedAt)}`);
+  lines.push("");
+
+  if(it.screenshotDataUrl){
+    lines.push("SCREENSHOT_DATA_URL:");
+    lines.push(it.screenshotDataUrl);
+    lines.push("");
+  }else{
+    lines.push("SCREENSHOT_DATA_URL: (none)");
+    lines.push("");
+  }
+
+  if(safe(it.html)){
+    lines.push("HTML:");
+    lines.push(it.html);
+    lines.push("");
+  }else{
+    lines.push("HTML: (none)");
+    lines.push("");
+  }
+
+  lines.push("NOTES:");
+  lines.push(`WHAT_I_LIKE:\n${safe(it.notes.whatILike) || "(none)"}`);
+  lines.push("");
+  lines.push(`WHAT_I_DONT_LIKE:\n${safe(it.notes.whatIDontLike) || "(none)"}`);
+  lines.push("");
+  lines.push(`WHAT_WORKS:\n${safe(it.notes.whatWorks) || "(none)"}`);
+  lines.push("");
+  lines.push(`WHAT_FAILS:\n${safe(it.notes.whatFails) || "(none)"}`);
+  lines.push("");
+  lines.push(`FEATURES_PRIMITIVES:\n${safe(it.notes.primitives) || "(none)"}`);
+  lines.push("");
+  lines.push(`BUGS_EDGE_CASES:\n${safe(it.notes.bugs) || "(none)"}`);
+  lines.push("");
+  lines.push(`EXTRA:\n${safe(it.notes.extra) || "(none)"}`);
+  lines.push("");
+
+  if(WRAP) lines.push("END INTERFACE");
+  return lines.join("\n");
+}
+
+function exportPrompts(){
+  const items = ONLY_PINNED ? state.items.filter(x=>x.pinned) : state.items;
+  const text = items.map(buildPromptBlock).join("\n\n");
+  out.textContent = text || "(no items)";
+  setStatus(`exported ${items.length}`);
+  return text;
+}
+
+/* ===========================
+   EXPORT/IMPORT JSON
+=========================== */
+function exportJSON(){
+  const payload = {
+    version: "KDT_INTERFACE_ANALYZER_V2_ROOM_SORTER",
+    exportedAt: nowISO(),
+    wrap: WRAP,
+    onlyPinned: ONLY_PINNED,
+    items: state.items
+  };
+  const txt = JSON.stringify(payload, null, 2);
+  downloadText("interfaces.export.json", txt);
+  setStatus("json exported");
+}
+
+function importJSONFile(){
+  const inp = document.createElement("input");
+  inp.type = "file";
+  inp.accept = "application/json,.json";
+  inp.onchange = ()=>{
+    const f = inp.files && inp.files[0];
+    if(!f) return;
+    const reader = new FileReader();
+    reader.onload = ()=>{
+      try{
+        const obj = JSON.parse(String(reader.result || "{}"));
+        if(!obj || !Array.isArray(obj.items)) throw new Error("invalid");
+        state.items = obj.items;
+        WRAP = (typeof obj.wrap === "boolean") ? obj.wrap : WRAP;
+        ONLY_PINNED = (typeof obj.onlyPinned === "boolean") ? obj.onlyPinned : ONLY_PINNED;
+        document.getElementById("wrapOn").textContent = WRAP ? "wrap: on" : "wrap: off";
+        document.getElementById("onlyPinned").textContent = ONLY_PINNED ? "only pinned: on" : "only pinned: off";
+        render();
+        setStatus("json imported");
+      }catch(e){
+        setStatus("import failed");
+      }
+    };
+    reader.readAsText(f);
+  };
+  inp.click();
+}
+
+/* ===========================
+   DOWNLOAD / COPY
+=========================== */
+function downloadText(filename, text){
+  const blob = new Blob([text], {type:"text/plain;charset=utf-8"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url), 800);
+}
+
+/* ===========================
+   QUICK LINK OPENER FROM EXPORT PANEL
+   - uses first URL found in output (or first pinned if filter on)
+=========================== */
+function openFirstMatch(){
+  const t = out.textContent || "";
+  const m = t.match(/https?:\/\/[^\s)]+/i);
+  if(m && m[0]){
+    window.open(m[0], "_blank", "noopener");
+    setStatus("opened");
+  }else{
+    setStatus("no url in output");
+  }
+}
+
+/* ===========================
+   EVENTS
+=========================== */
+document.getElementById("add").onclick = addItem;
+document.getElementById("collapseAll").onclick = collapseAll;
+document.getElementById("expandAll").onclick = expandAll;
+
+document.getElementById("exportPrompts").onclick = exportPrompts;
+
+document.getElementById("copyPrompts").onclick = async ()=>{
+  const t = exportPrompts();
+  try{
+    await navigator.clipboard.writeText(t);
+    setStatus("copied");
+  }catch(e){
+    setStatus("clipboard blocked");
+  }
+};
+
+document.getElementById("downloadPrompts").onclick = ()=>{
+  const t = exportPrompts();
+  downloadText("prompts.txt", t);
+  setStatus("downloaded");
+};
+
+document.getElementById("exportJSON").onclick = exportJSON;
+document.getElementById("importJSON").onclick = importJSONFile;
+
+document.getElementById("reset").onclick = ()=>{
+  if(!confirm("RESET EVERYTHING? THIS CLEARS LOCAL STORAGE.")) return;
+  localStorage.removeItem(LS_KEY);
+  state = { items: [], wrap:true, onlyPinned:false };
+  WRAP = true;
+  ONLY_PINNED = false;
+  document.getElementById("wrapOn").textContent = "wrap: on";
+  document.getElementById("onlyPinned").textContent = "only pinned: off";
+  render();
+  out.textContent = "hit \"export prompts\"";
+  setStatus("reset");
+};
+
+document.getElementById("wrapOn").onclick = ()=>{
+  WRAP = !WRAP;
+  document.getElementById("wrapOn").textContent = WRAP ? "wrap: on" : "wrap: off";
+  saveState();
+  setStatus(WRAP ? "wrap on" : "wrap off");
+};
+
+document.getElementById("onlyPinned").onclick = ()=>{
+  ONLY_PINNED = !ONLY_PINNED;
+  document.getElementById("onlyPinned").textContent = ONLY_PINNED ? "only pinned: on" : "only pinned: off";
+  saveState();
+  setStatus(ONLY_PINNED ? "filter on" : "filter off");
+};
+
+document.getElementById("openLinks").onclick = openFirstMatch;
+
+// keyboard: / focuses a quick search over titles/links (minimal, hard)
+let searchMode = false;
+let searchBuffer = "";
+let searchTimeout = null;
+
+document.addEventListener("keydown", (e)=>{
+  // export prompts: ctrl/cmd + enter
+  if((e.ctrlKey || e.metaKey) && e.key === "Enter"){
+    e.preventDefault();
+    exportPrompts();
+    return;
+  }
+
+  if(e.key === "/"){
+    e.preventDefault();
+    searchMode = true;
+    searchBuffer = "";
+    setStatus("search: type… (esc to clear)");
+    return;
+  }
+
+  if(e.key === "Escape"){
+    if(searchMode){
+      searchMode = false;
+      searchBuffer = "";
+      setStatus("search cleared");
+      // restore all cards
+      Array.from(grid.children).forEach(c=>c.style.display = "");
+    }
+    return;
+  }
+
+  if(!searchMode) return;
+
+  // capture typing in search mode
+  if(e.key.length === 1){
+    searchBuffer += e.key.toLowerCase();
+    setStatus(`search: ${searchBuffer}`);
+    applyQuickSearch(searchBuffer);
+    clearTimeout(searchTimeout);
+    searchTimeout = setTimeout(()=>{}, 500);
+  }
+
+  // backspace
+  if(e.key === "Backspace"){
+    searchBuffer = searchBuffer.slice(0,-1);
+    setStatus(`search: ${searchBuffer || "(empty)"}`);
+    applyQuickSearch(searchBuffer);
+  }
+});
+
+function applyQuickSearch(term){
+  const t = (term || "").trim().toLowerCase();
+  const items = state.items;
+  Array.from(grid.children).forEach((cardEl, i)=>{
+    const it = items[i];
+    const hay = `${it.title} ${it.link}`.toLowerCase();
+    cardEl.style.display = (!t || hay.includes(t)) ? "" : "none";
+  });
+}
+
+/* ===========================
+   INIT
+=========================== */
+(function init(){
+  // seed if empty
+  if(!state.items.length){
+    state.items = [
+      defaultItem(1),
+      defaultItem(2)
+    ];
+    state.items[0].title = "Landing Page";
+    state.items[1].title = "Interface 2";
+  }
+  render();
+})();
+</script>
+</body>
+</html>
