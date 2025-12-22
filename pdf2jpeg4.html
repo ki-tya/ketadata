@@ -1,0 +1,558 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>KETADATA // PDF → JPG (SIMPLE)</title>
+  <style>
+    :root{
+      --bg:#fff; --fg:#000;
+      --muted:rgba(0,0,0,.58);
+      --line:rgba(0,0,0,.14);
+      --line2:rgba(0,0,0,.08);
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      --sans: Arial, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, sans-serif;
+      --r:12px;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--sans)}
+    header{
+      position:sticky;top:0;z-index:10;
+      background:rgba(255,255,255,.94);backdrop-filter:blur(8px);
+      border-bottom:1px solid var(--line);
+      padding:14px 16px;display:flex;align-items:center;justify-content:space-between;gap:12px;
+    }
+    .brand{user-select:none}
+    .brand .k{font-weight:700;font-size:14px;letter-spacing:1.4px}
+    .brand .s{font-family:var(--mono);font-size:12px;color:var(--muted)}
+    .actions{display:flex;gap:10px;align-items:center}
+    .btn{
+      appearance:none;border:1px solid var(--fg);background:transparent;color:var(--fg);
+      padding:9px 12px;border-radius:999px;font-size:12px;font-family:var(--mono);
+      cursor:pointer;transition:.12s;user-select:none;
+    }
+    .btn:hover{background:var(--fg);color:var(--bg)}
+    .btn.secondary{border-color:var(--line)}
+    .btn.secondary:hover{background:rgba(0,0,0,.06);color:var(--fg);border-color:rgba(0,0,0,.22)}
+    .btn:disabled{opacity:.45;cursor:not-allowed}
+
+    main{display:grid;grid-template-columns:1fr 360px;min-height:calc(100vh - 56px)}
+    @media (max-width:980px){main{grid-template-columns:1fr}}
+    .work{padding:16px;border-right:1px solid var(--line);display:flex;flex-direction:column;gap:12px;min-width:0}
+    @media (max-width:980px){.work{border-right:none;border-bottom:1px solid var(--line)}}
+    .rail{padding:16px;display:flex;flex-direction:column;gap:12px}
+
+    .card{border:1px solid var(--line);border-radius:var(--r);overflow:hidden;background:#fff}
+    .card h3{
+      margin:0;padding:12px;border-bottom:1px solid var(--line2);
+      display:flex;align-items:center;justify-content:space-between;
+      font-family:var(--mono);font-size:12px;letter-spacing:.7px;text-transform:uppercase;
+    }
+    .card .c{padding:12px}
+    .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    @media (max-width:720px){.grid2{grid-template-columns:1fr}}
+
+    label{display:flex;flex-direction:column;gap:6px;font-family:var(--mono);font-size:12px;color:var(--muted)}
+    input[type="file"], select{
+      width:100%;border:1px solid var(--line);border-radius:10px;padding:10px;
+      background:#fff;color:#000;font-family:var(--mono);font-size:12px
+    }
+    input[type="range"]{width:100%}
+    .small{font-family:var(--mono);font-size:11px;color:var(--muted);line-height:1.35}
+    .inline{display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-family:var(--mono);font-size:12px;color:var(--muted)}
+    .pill{border:1px solid var(--line);border-radius:999px;padding:6px 10px;background:#fff;color:#000}
+    .pill strong{color:#000}
+    .progress{width:240px;height:10px;border:1px solid var(--line);border-radius:999px;overflow:hidden;background:#fff}
+    .progress>div{height:100%;width:0%;background:#000;transition:width .12s}
+    .stage{border:1px solid var(--line);border-radius:var(--r);padding:12px;min-height:360px;display:grid;place-items:center}
+    canvas{max-width:100%;height:auto;display:block;background:#fff}
+    textarea{
+      width:100%;min-height:180px;resize:vertical;
+      border:1px solid var(--line);border-radius:10px;padding:10px;
+      font-family:var(--mono);font-size:12px;line-height:1.35
+    }
+    .kbd{font-family:var(--mono);border:1px solid var(--line);border-bottom-width:2px;border-radius:6px;padding:2px 6px;background:#fff;color:#000;font-size:11px}
+    .mono{font-family:var(--mono)}
+  </style>
+
+  <!-- LOCAL VENDOR (NO CDN) -->
+  <script defer src="/ketadata/vendor/pdfjs/pdf.min.js"></script>
+  <script defer src="/ketadata/vendor/jszip.min.js"></script>
+  <script defer src="/ketadata/vendor/filesaver/FileSaver.min.js"></script>
+</head>
+
+<body>
+  <header>
+    <div class="brand">
+      <div class="k">KETADATA</div>
+      <div class="s">PDF → JPG // SIMPLE LOCAL BUILD (100–200 PAGES / 100MB+)</div>
+    </div>
+    <div class="actions">
+      <button class="btn secondary" id="clearBtn">CLEAR</button>
+      <button class="btn" id="zipBtn" disabled>CONVERT → ZIP</button>
+    </div>
+  </header>
+
+  <main>
+    <section class="work">
+      <div class="card">
+        <h3><span>INPUT</span><span class="small">local only</span></h3>
+        <div class="c">
+          <div class="grid2">
+            <label>
+              PDF FILE(S)
+              <input id="pdfInput" type="file" accept="application/pdf" multiple />
+              <div class="small">
+                This tool runs in-browser, no uploads. Designed for 100–200 pages. Use scale 1.5–2.0 for stability.
+              </div>
+            </label>
+            <div>
+              <div class="inline">
+                <span class="pill"><strong id="pdfCount">0</strong> PDF</span>
+                <span class="pill"><strong id="pageCount">0</strong> pages</span>
+                <span class="pill"><strong id="libStatus">LOADING LIBS…</strong></span>
+              </div>
+              <div style="height:10px"></div>
+              <div class="inline">
+                <span>Progress</span><span class="kbd" id="pct">0%</span>
+                <div class="progress"><div id="bar"></div></div>
+              </div>
+              <div style="height:10px"></div>
+              <div class="small" id="status">Idle.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3><span>OUTPUT</span><span class="small">jpg/png + invert</span></h3>
+        <div class="c">
+          <div class="grid2">
+            <label>
+              FORMAT
+              <select id="format">
+                <option value="jpeg" selected>JPEG (.jpg)</option>
+                <option value="png">PNG (.png)</option>
+              </select>
+            </label>
+
+            <label>
+              JPEG QUALITY
+              <input id="quality" type="range" min="0.4" max="1" step="0.05" value="0.92" />
+              <div class="inline"><span>Quality</span><span class="pill"><strong id="qVal">0.92</strong></span></div>
+            </label>
+
+            <label>
+              RENDER SCALE
+              <input id="scale" type="range" min="1" max="3" step="0.25" value="2" />
+              <div class="inline"><span>Scale</span><span class="pill"><strong id="sVal">2.00</strong></span></div>
+              <div class="small">If memory spikes: drop to 1.5x.</div>
+            </label>
+
+            <label>
+              INVERT OUTPUT
+              <select id="invert">
+                <option value="on" selected>ON (black page / white writing)</option>
+                <option value="off">OFF (normal)</option>
+              </select>
+            </label>
+
+            <label>
+              FOLDER NAMING
+              <select id="folder">
+                <option value="name" selected>Folder per PDF (filename)</option>
+                <option value="ts">Folder per PDF (timestamp)</option>
+              </select>
+            </label>
+
+            <label>
+              PAGE RANGE
+              <select id="rangeMode">
+                <option value="all" selected>ALL PAGES</option>
+                <option value="current">CURRENT PDF ONLY</option>
+              </select>
+              <div class="small">Use CURRENT if you want to convert one book at a time.</div>
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3><span>PREVIEW</span><span class="small">single page</span></h3>
+        <div class="c">
+          <div class="stage"><canvas id="cv"></canvas></div>
+          <div class="small" style="margin-top:10px">
+            Keys: <span class="kbd">←</span>/<span class="kbd">→</span> page, <span class="kbd">↑</span>/<span class="kbd">↓</span> PDF,
+            <span class="kbd">I</span> invert, <span class="kbd">C</span> convert.
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <aside class="rail">
+      <div class="card">
+        <h3><span>KETA NOTE</span><span class="small">page-level</span></h3>
+        <div class="c">
+          <textarea id="note" placeholder="SYSTEM NOTE // decisions, constraints, next actions"></textarea>
+          <div style="height:10px"></div>
+          <button class="btn secondary" id="noteExport">EXPORT NOTE JSON</button>
+          <div style="height:10px"></div>
+          <div class="small" id="meta">META: —</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3><span>ERROR DETAIL</span><span class="small">exact failure</span></h3>
+        <div class="c">
+          <div class="small mono" id="err">—</div>
+          <div style="height:10px"></div>
+          <div class="small">
+            If this says a vendor file 404’d, your path or filename is wrong.
+            Required paths:
+            <div class="mono" style="margin-top:6px">
+              /ketadata/vendor/pdfjs/pdf.min.js<br/>
+              /ketadata/vendor/pdfjs/pdf.worker.min.js<br/>
+              /ketadata/vendor/jszip.min.js<br/>
+              /ketadata/vendor/filesaver/FileSaver.min.js
+            </div>
+          </div>
+        </div>
+      </div>
+    </aside>
+  </main>
+
+  <script>
+    // ======== SIMPLE APP (runs after deferred vendor scripts load) ========
+    const VENDOR = {
+      worker: "/ketadata/vendor/pdfjs/pdf.worker.min.js"
+    };
+
+    const ui = {
+      pdfInput: document.getElementById("pdfInput"),
+      clearBtn: document.getElementById("clearBtn"),
+      zipBtn: document.getElementById("zipBtn"),
+      pdfCount: document.getElementById("pdfCount"),
+      pageCount: document.getElementById("pageCount"),
+      libStatus: document.getElementById("libStatus"),
+      status: document.getElementById("status"),
+      pct: document.getElementById("pct"),
+      bar: document.getElementById("bar"),
+      format: document.getElementById("format"),
+      quality: document.getElementById("quality"),
+      qVal: document.getElementById("qVal"),
+      scale: document.getElementById("scale"),
+      sVal: document.getElementById("sVal"),
+      invert: document.getElementById("invert"),
+      folder: document.getElementById("folder"),
+      rangeMode: document.getElementById("rangeMode"),
+      cv: document.getElementById("cv"),
+      err: document.getElementById("err"),
+      note: document.getElementById("note"),
+      noteExport: document.getElementById("noteExport"),
+      meta: document.getElementById("meta"),
+    };
+
+    const st = {
+      docs: [], // {file, url, doc, pages}
+      totalPages: 0,
+      selDoc: 0,
+      selPage: 1,
+      busy: false,
+    };
+
+    function setErr(e){ ui.err.textContent = e ? (e.stack || e.message || String(e)) : "—"; if(e) console.error(e); }
+    function setProgress(p){
+      const pct = Math.max(0, Math.min(100, Math.round(p*100)));
+      ui.pct.textContent = pct + "%";
+      ui.bar.style.width = pct + "%";
+    }
+    function safeName(name){ return (name||"PDF").replace(/\.pdf$/i,"").replace(/[^\w\-]+/g,"_").replace(/_+/g,"_").slice(0,80); }
+    function pad3(n){ return String(n).padStart(3,"0"); }
+
+    function invertCanvas(ctx,w,h){
+      const img = ctx.getImageData(0,0,w,h);
+      const d = img.data;
+      for(let i=0;i<d.length;i+=4){ d[i]=255-d[i]; d[i+1]=255-d[i+1]; d[i+2]=255-d[i+2]; }
+      ctx.putImageData(img,0,0);
+    }
+    function dataURLToBlob(dataURL){
+      const [head, body] = dataURL.split(",");
+      const mime = head.match(/:(.*?);/)[1];
+      const bin = atob(body);
+      const u8 = new Uint8Array(bin.length);
+      for(let i=0;i<bin.length;i++) u8[i] = bin.charCodeAt(i);
+      return new Blob([u8], {type:mime});
+    }
+
+    async function checkVendor(url){
+      const res = await fetch(url, { cache: "no-store" });
+      if(!res.ok) throw new Error("Missing vendor file (HTTP " + res.status + "): " + url);
+      return true;
+    }
+
+    async function libsReady(){
+      // Verify globals exist
+      if(!window.pdfjsLib) throw new Error("pdfjsLib not present (pdf.min.js did not load).");
+      if(!window.JSZip) throw new Error("JSZip not present (jszip.min.js did not load).");
+      if(!window.saveAs) throw new Error("saveAs not present (FileSaver.min.js did not load).");
+
+      // Verify worker path actually exists (404 here = immediate worker crash later)
+      await checkVendor(VENDOR.worker);
+
+      // Configure PDF.js worker explicitly
+      pdfjsLib.GlobalWorkerOptions.workerSrc = VENDOR.worker;
+      return true;
+    }
+
+    function updateMeta(){
+      const d = st.docs[st.selDoc] || null;
+      const payload = {
+        page: "KETADATA_PDF_TO_JPG_SIMPLE",
+        room: "STUDIO/TOOLS",
+        clearance: "INTERNAL",
+        polarity: "MIND (ANGULAR)",
+        timestamp: new Date().toISOString(),
+        selection: d ? { pdf: d.file.name, page: st.selPage } : null
+      };
+      ui.meta.textContent = "META: " + JSON.stringify(payload);
+    }
+
+    async function renderPreview(){
+      const d = st.docs[st.selDoc];
+      if(!d) return;
+      st.selPage = Math.max(1, Math.min(d.pages, st.selPage));
+
+      const page = await d.doc.getPage(st.selPage);
+      const scale = parseFloat(ui.scale.value || "2");
+      const viewport = page.getViewport({ scale });
+
+      const cv = ui.cv;
+      const ctx = cv.getContext("2d", { willReadFrequently: true });
+      cv.width = Math.ceil(viewport.width);
+      cv.height = Math.ceil(viewport.height);
+
+      await page.render({ canvasContext: ctx, viewport }).promise;
+      if(ui.invert.value === "on") invertCanvas(ctx, cv.width, cv.height);
+
+      ui.status.textContent = `Preview: ${d.file.name} — page ${st.selPage}/${d.pages}`;
+      updateMeta();
+    }
+
+    function clearAll(){
+      for(const d of st.docs){ try{ URL.revokeObjectURL(d.url); } catch{} }
+      st.docs = []; st.totalPages = 0; st.selDoc = 0; st.selPage = 1;
+      ui.pdfCount.textContent = "0";
+      ui.pageCount.textContent = "0";
+      ui.zipBtn.disabled = true;
+      ui.status.textContent = "Idle.";
+      setProgress(0);
+      setErr(null);
+      const ctx = ui.cv.getContext("2d");
+      ctx.clearRect(0,0,ui.cv.width, ui.cv.height);
+      updateMeta();
+    }
+
+    async function loadPdfs(files){
+      clearAll();
+      setErr(null);
+      ui.status.textContent = "Loading PDFs…";
+      ui.zipBtn.disabled = true;
+
+      const list = Array.from(files||[]).filter(f => f.type==="application/pdf" || /\.pdf$/i.test(f.name));
+      if(!list.length) return;
+
+      st.busy = true;
+      try{
+        for(let i=0;i<list.length;i++){
+          const file = list[i];
+          const url = URL.createObjectURL(file);
+
+          // Streaming load via URL (no 100MB Uint8Array copy)
+          const task = pdfjsLib.getDocument({
+            url,
+            isEvalSupported: false,
+            disableFontFace: true,
+            useSystemFonts: true,
+            stopAtErrors: false,
+            disableRange: true,
+            disableAutoFetch: true
+          });
+
+          const doc = await task.promise;
+          const pages = doc.numPages;
+
+          st.docs.push({ file, url, doc, pages });
+          st.totalPages += pages;
+
+          ui.pdfCount.textContent = String(st.docs.length);
+          ui.pageCount.textContent = String(st.totalPages);
+
+          setProgress((i+1)/list.length * 0.2);
+        }
+
+        st.selDoc = 0; st.selPage = 1;
+        ui.zipBtn.disabled = false;
+        await renderPreview();
+        ui.status.textContent = `Ready. ${st.docs.length} PDF(s), ${st.totalPages} pages.`;
+
+      } catch(e){
+        setErr(e);
+        ui.status.textContent = "Load failed.";
+      } finally {
+        st.busy = false;
+        setProgress(0);
+      }
+    }
+
+    async function convertToZip(){
+      if(st.busy) return;
+      if(!st.docs.length) return;
+
+      st.busy = true;
+      ui.zipBtn.disabled = true;
+      ui.status.textContent = "Converting…";
+      setErr(null);
+      setProgress(0);
+
+      const zip = new JSZip();
+      const fmt = ui.format.value; // jpeg|png
+      const q = parseFloat(ui.quality.value || "0.92");
+      const scale = parseFloat(ui.scale.value || "2");
+      const invertOn = ui.invert.value === "on";
+
+      // Choose set of PDFs to convert
+      const docsToConvert = (ui.rangeMode.value === "current")
+        ? [st.docs[st.selDoc]]
+        : st.docs;
+
+      const totalPages = docsToConvert.reduce((acc,d)=>acc+d.pages,0);
+      let done = 0;
+
+      try{
+        for(const d of docsToConvert){
+          const folderName = (ui.folder.value === "ts")
+            ? `${Date.now()}_${safeName(d.file.name)}`
+            : safeName(d.file.name);
+
+          const folder = zip.folder(folderName);
+
+          for(let p=1;p<=d.pages;p++){
+            const page = await d.doc.getPage(p);
+            const viewport = page.getViewport({ scale });
+
+            const c = document.createElement("canvas");
+            const ctx = c.getContext("2d", { willReadFrequently: true });
+            c.width = Math.ceil(viewport.width);
+            c.height = Math.ceil(viewport.height);
+
+            await page.render({ canvasContext: ctx, viewport }).promise;
+            if(invertOn) invertCanvas(ctx, c.width, c.height);
+
+            const filename = `page-${pad3(p)}.${fmt==="jpeg" ? "jpg" : "png"}`;
+            const dataUrl = (fmt==="jpeg")
+              ? c.toDataURL("image/jpeg", q)
+              : c.toDataURL("image/png");
+
+            folder.file(filename, dataURLToBlob(dataUrl));
+
+            done++;
+            if(done % 2 === 0) setProgress(done/totalPages);
+            if(p % 10 === 0) ui.status.textContent = `Converting: ${d.file.name} page ${p}/${d.pages}…`;
+          }
+        }
+
+        zip.file("KETADATA_MANIFEST.txt", [
+          "KETADATA // PDF → IMG (SIMPLE)",
+          "Generated: " + new Date().toISOString(),
+          "Format: " + fmt,
+          "Scale: " + scale.toFixed(2),
+          "Invert: " + (invertOn ? "ON" : "OFF"),
+          (fmt==="jpeg" ? ("JPEG Quality: " + q.toFixed(2)) : ""),
+          "",
+          "Converted:",
+          ...docsToConvert.map(d => `- ${d.file.name} (${d.pages} pages)`)
+        ].filter(Boolean).join("\n"));
+
+        const blob = await zip.generateAsync({ type:"blob" });
+        saveAs(blob, `KETADATA_PDF_TO_IMG_${Date.now()}.zip`);
+        ui.status.textContent = "Done. ZIP downloaded.";
+
+      } catch(e){
+        setErr(e);
+        ui.status.textContent = "Conversion failed.";
+      } finally {
+        st.busy = false;
+        ui.zipBtn.disabled = !st.docs.length;
+        setProgress(0);
+      }
+    }
+
+    function exportNote(){
+      const d = st.docs[st.selDoc] || null;
+      const payload = {
+        id: "note_" + Date.now(),
+        room: "STUDIO/TOOLS",
+        clearance: "INTERNAL",
+        type: "spec/decision",
+        polarity: "mind",
+        timestamp: new Date().toISOString(),
+        source: "KETADATA PDF→JPG SIMPLE",
+        selection: d ? { pdf: d.file.name, page: st.selPage } : null,
+        note: ui.note.value || ""
+      };
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+      saveAs(blob, `KETA_NOTE_${Date.now()}.json`);
+    }
+
+    // Boot
+    (async function init(){
+      ui.qVal.textContent = parseFloat(ui.quality.value).toFixed(2);
+      ui.sVal.textContent = parseFloat(ui.scale.value).toFixed(2);
+      updateMeta();
+
+      // Update sliders
+      ui.quality.addEventListener("input", () => ui.qVal.textContent = parseFloat(ui.quality.value).toFixed(2));
+      ui.scale.addEventListener("input", async () => {
+        ui.sVal.textContent = parseFloat(ui.scale.value).toFixed(2);
+        if(st.docs.length && !st.busy) await renderPreview();
+      });
+      ui.invert.addEventListener("change", async () => {
+        if(st.docs.length && !st.busy) await renderPreview();
+      });
+
+      ui.clearBtn.addEventListener("click", () => { if(!st.busy){ ui.pdfInput.value=""; clearAll(); } });
+      ui.zipBtn.addEventListener("click", convertToZip);
+      ui.pdfInput.addEventListener("change", (e)=> loadPdfs(e.target.files));
+      ui.noteExport.addEventListener("click", exportNote);
+
+      // Keyboard navigation
+      document.addEventListener("keydown", async (e) => {
+        if(st.busy) return;
+        if(!st.docs.length) return;
+
+        const d = st.docs[st.selDoc];
+
+        if(e.key === "ArrowRight"){ e.preventDefault(); st.selPage = Math.min(d.pages, st.selPage+1); await renderPreview(); }
+        if(e.key === "ArrowLeft"){ e.preventDefault(); st.selPage = Math.max(1, st.selPage-1); await renderPreview(); }
+        if(e.key === "ArrowUp"){ e.preventDefault(); st.selDoc = Math.max(0, st.selDoc-1); st.selPage = 1; await renderPreview(); }
+        if(e.key === "ArrowDown"){ e.preventDefault(); st.selDoc = Math.min(st.docs.length-1, st.selDoc+1); st.selPage = 1; await renderPreview(); }
+        if(e.key.toLowerCase() === "i"){ ui.invert.value = (ui.invert.value==="on") ? "off" : "on"; await renderPreview(); }
+        if(e.key.toLowerCase() === "c"){ await convertToZip(); }
+      });
+
+      // Hard vendor verification first
+      try{
+        await libsReady();
+        ui.libStatus.textContent = "READY";
+        ui.status.textContent = "Libraries OK. Load a PDF.";
+        setErr(null);
+      } catch(e){
+        ui.libStatus.textContent = "BLOCKED";
+        ui.status.textContent = "Vendor not reachable.";
+        setErr(e);
+        ui.zipBtn.disabled = true;
+      }
+    })();
+  </script>
+</body>
+</html>
