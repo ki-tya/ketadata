@@ -1,0 +1,1547 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>KETADATA // INTERFACE ANALYZER + EXTRACTOR (REFINED)</title>
+<style>
+  :root{
+    --bg:#060709;
+    --txt:rgba(255,255,255,.92);
+    --muted:rgba(255,255,255,.62);
+    --dim:rgba(255,255,255,.38);
+
+    --line:rgba(255,255,255,.12);
+    --line2:rgba(255,255,255,.07);
+
+    --panel:rgba(0,0,0,.52);
+    --panel2:rgba(0,0,0,.32);
+
+    --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    --ui: Arial, Helvetica, sans-serif;
+
+    --railW: 340px;
+    --rightW: 420px;
+
+    --cardMin: 860px;
+
+    --pad: 12px;
+    --gap: 12px;
+
+    /* Screenshot: no crop, auto aspect */
+    --shotMinH: 260px;
+    --shotMaxH: 520px;
+
+    /* Tiny note icon */
+    --noteIcon: 14px;
+  }
+
+  *{ box-sizing:border-box; }
+  html,body{ height:100%; margin:0; }
+  body{
+    background:var(--bg);
+    color:var(--txt);
+    font-family:var(--ui);
+    overflow:hidden;
+  }
+
+  /* sharp room-sorter grid */
+  body::before{
+    content:"";
+    position:fixed; inset:0;
+    background:
+      linear-gradient(rgba(255,255,255,.07) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,.07) 1px, transparent 1px);
+    background-size: 36px 36px, 36px 36px;
+    opacity:.34;
+    pointer-events:none;
+    z-index:0;
+    animation: drift 22s linear infinite;
+    transform: translateZ(0);
+  }
+  body::after{
+    content:"";
+    position:fixed; inset:0;
+    background:
+      linear-gradient(rgba(255,255,255,.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,.03) 1px, transparent 1px);
+    background-size: 9px 9px, 9px 9px;
+    opacity:.16;
+    pointer-events:none;
+    z-index:0;
+  }
+  @keyframes drift{
+    from{ background-position: 0 0, 0 0; }
+    to{ background-position: 72px 72px, 72px 72px; }
+  }
+
+  .app{
+    position:relative;
+    z-index:1;
+    height:100%;
+    display:grid;
+    grid-template-rows: auto 1fr;
+  }
+
+  /* sleek header */
+  .top{
+    position:relative;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:14px;
+    padding: 10px 12px;
+    border-bottom:1px solid var(--line);
+    background: rgba(0,0,0,.62);
+    backdrop-filter: blur(10px);
+  }
+  .brand{
+    display:flex;
+    flex-direction:column;
+    gap:2px;
+    min-width: 380px;
+  }
+  .brand .t{
+    font-weight:900;
+    letter-spacing:.22em;
+    text-transform:uppercase;
+    font-size:11px;
+    line-height:1.1;
+    white-space:nowrap;
+  }
+  .brand .s{
+    font-weight:900;
+    letter-spacing:.14em;
+    text-transform:uppercase;
+    font-size:10px;
+    color:var(--muted);
+    line-height:1.2;
+    white-space:nowrap;
+  }
+
+  .actions{
+    display:flex;
+    gap:8px;
+    align-items:center;
+    flex-wrap:wrap;
+    padding-right: 110px; /* space for note icon + label */
+  }
+  .btn{
+    border:1px solid var(--line);
+    background: rgba(255,255,255,.03);
+    color:var(--txt);
+    padding:8px 10px;
+    font-size:10px;
+    letter-spacing:.18em;
+    text-transform:uppercase;
+    font-weight:900;
+    cursor:pointer;
+    user-select:none;
+  }
+  .btn:hover{ border-color: rgba(255,255,255,.22); }
+  .btn:active{ transform: translateY(1px); }
+  .btn.danger{
+    border-color: rgba(255,255,255,.16);
+    background: rgba(255,255,255,.02);
+    color: rgba(255,255,255,.78);
+  }
+  .btn.danger:hover{ border-color: rgba(255,255,255,.30); color:#fff; }
+
+  /* tiny square icon + label (sleek) */
+  .noteDock{
+    position:absolute;
+    right: 12px;
+    top: 10px;
+    display:flex;
+    align-items:center;
+    gap:8px;
+    user-select:none;
+  }
+  .noteIcon{
+    width: var(--noteIcon);
+    height: var(--noteIcon);
+    border:1px solid rgba(255,255,255,.92);
+    background: rgba(255,255,255,.92); /* filled when closed */
+    cursor:pointer;
+  }
+  .noteIcon.open{ background: transparent; }
+  .noteLabel{
+    font-family: var(--mono);
+    font-size:10px;
+    letter-spacing:.16em;
+    text-transform:uppercase;
+    color: rgba(255,255,255,.58);
+    cursor:pointer;
+  }
+  .noteLabel:hover{ color: rgba(255,255,255,.86); }
+
+  .kbd{
+    border:1px solid rgba(255,255,255,.20);
+    padding:2px 6px;
+    background: rgba(255,255,255,.04);
+    font-weight:900;
+    font-size:10px;
+    letter-spacing:.12em;
+  }
+
+  /* layout */
+  .main{
+    min-height:0;
+    display:grid;
+    grid-template-columns: var(--railW) 1fr var(--rightW);
+  }
+
+  /* left rail */
+  .left{
+    min-height:0;
+    border-right:1px solid var(--line);
+    background: rgba(0,0,0,.44);
+    display:flex;
+    flex-direction:column;
+  }
+  .leftHead{
+    padding: 12px;
+    border-bottom:1px solid var(--line);
+  }
+  .leftHead .h{
+    font-weight:900;
+    letter-spacing:.18em;
+    text-transform:uppercase;
+    font-size:10px;
+  }
+  .leftHead .p{
+    margin-top:6px;
+    font-weight:900;
+    letter-spacing:.14em;
+    text-transform:uppercase;
+    font-size:10px;
+    color:var(--muted);
+    line-height:1.25;
+  }
+  .leftBody{
+    min-height:0;
+    padding: 12px;
+    display:flex;
+    flex-direction:column;
+    gap:10px;
+  }
+  .railInput{
+    width:100%;
+    min-height: 260px;
+    border:1px solid var(--line);
+    background: rgba(255,255,255,.02);
+    color:var(--txt);
+    padding:10px;
+    font-family: var(--mono);
+    font-size:11px;
+    line-height:1.35;
+    outline:none;
+    resize: vertical;
+  }
+  .railRow{
+    display:flex;
+    gap:8px;
+    flex-wrap:wrap;
+  }
+  .railStat{
+    margin-top:auto;
+    padding-top:8px;
+    color: var(--dim);
+    font-weight:900;
+    letter-spacing:.14em;
+    text-transform:uppercase;
+    font-size:10px;
+  }
+
+  /* center */
+  .center{
+    min-height:0;
+    overflow:auto;
+    padding: 12px 12px 64px 12px;
+  }
+  .metaRow{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:12px;
+    padding: 10px 12px;
+    border:1px solid var(--line);
+    background: rgba(0,0,0,.36);
+    margin-bottom: 12px;
+  }
+  .metaRow .l{
+    display:flex;
+    flex-direction:column;
+    gap:3px;
+  }
+  .metaRow .l .h{
+    font-weight:900;
+    letter-spacing:.22em;
+    text-transform:uppercase;
+    font-size:10px;
+  }
+  .metaRow .l .p{
+    font-weight:900;
+    letter-spacing:.14em;
+    text-transform:uppercase;
+    font-size:10px;
+    color:var(--muted);
+  }
+  .metaRow .r{
+    display:flex;
+    gap:10px;
+    align-items:center;
+    flex-wrap:wrap;
+    justify-content:flex-end;
+    color:var(--muted);
+    font-weight:900;
+    letter-spacing:.14em;
+    text-transform:uppercase;
+    font-size:10px;
+  }
+
+  .grid{
+    display:grid;
+    grid-template-columns: 1fr; /* big modules, one per row */
+    gap: 12px;
+  }
+
+  /* right */
+  .right{
+    min-height:0;
+    border-left:1px solid var(--line);
+    background: rgba(0,0,0,.42);
+    display:flex;
+    flex-direction:column;
+  }
+  .rightHead{
+    padding: 12px;
+    border-bottom:1px solid var(--line);
+    display:flex;
+    justify-content:space-between;
+    gap:12px;
+  }
+  .rightHead .h{
+    font-weight:900;
+    letter-spacing:.18em;
+    text-transform:uppercase;
+    font-size:10px;
+  }
+  .rightHead .p{
+    margin-top:6px;
+    font-weight:900;
+    letter-spacing:.14em;
+    text-transform:uppercase;
+    font-size:10px;
+    color:var(--muted);
+    line-height:1.25;
+  }
+  .status{
+    color: var(--dim);
+    font-weight:900;
+    letter-spacing:.14em;
+    text-transform:uppercase;
+    font-size:10px;
+    white-space:nowrap;
+  }
+  .rightBody{
+    min-height:0;
+    padding: 12px;
+    display:flex;
+    flex-direction:column;
+    gap:10px;
+  }
+  .out{
+    flex:1 1 auto;
+    min-height:0;
+    border:1px solid var(--line);
+    background: rgba(255,255,255,.02);
+    padding:10px;
+    font-family: var(--mono);
+    font-size:11px;
+    line-height:1.4;
+    white-space:pre-wrap;
+    overflow:auto;
+  }
+  .rightBtns{
+    display:flex;
+    gap:8px;
+    flex-wrap:wrap;
+    justify-content:flex-end;
+  }
+
+  /* form */
+  label{
+    display:block;
+    font-size:10px;
+    letter-spacing:.16em;
+    text-transform:uppercase;
+    font-weight:900;
+    color: var(--muted);
+    margin-bottom:6px;
+  }
+  input[type="text"], input[type="url"], textarea{
+    width:100%;
+    border:1px solid var(--line);
+    background: rgba(255,255,255,.03);
+    color:var(--txt);
+    padding: 10px 10px;
+    outline:none;
+    font-family: var(--ui);
+    font-size:12px;
+  }
+  textarea{
+    resize: vertical;
+    font-family: var(--mono);
+    font-size:11px;
+    line-height:1.35;
+  }
+  input:focus, textarea:focus{
+    border-color: rgba(255,255,255,.26);
+    box-shadow: 0 0 0 2px rgba(255,255,255,.06);
+  }
+
+  /* card */
+  .card{
+    border:1px solid var(--line);
+    background: rgba(0,0,0,.40);
+  }
+  .cardHead{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:10px;
+    padding: 10px 12px;
+    border-bottom:1px solid var(--line2);
+    background: rgba(0,0,0,.44);
+  }
+  .tag{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    min-width:0;
+  }
+  .id{
+    border:1px solid var(--line);
+    padding:2px 6px;
+    font-family: var(--mono);
+    font-size:10px;
+    letter-spacing:.14em;
+    text-transform:uppercase;
+    color:var(--muted);
+    background: rgba(255,255,255,.03);
+  }
+  .name{
+    font-weight:900;
+    letter-spacing:.10em;
+    text-transform:uppercase;
+    font-size:11px;
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+  }
+  .headBtns{
+    display:flex;
+    gap:8px;
+  }
+  .iconBtn{
+    width:26px; height:24px;
+    display:grid; place-items:center;
+    border:1px solid var(--line);
+    background: rgba(255,255,255,.03);
+    cursor:pointer;
+    font-weight:900;
+    user-select:none;
+  }
+  .iconBtn:hover{ border-color: rgba(255,255,255,.22); }
+  .iconBtn.x{ color: rgba(255,255,255,.78); }
+  .iconBtn.x:hover{ color:#fff; border-color: rgba(255,255,255,.30); }
+
+  .cardBody{
+    padding: 12px;
+    display:flex;
+    flex-direction:column;
+    gap: 10px;
+  }
+
+  /* collapsibles */
+  .section{
+    border:1px solid var(--line2);
+    background: rgba(0,0,0,.22);
+  }
+  .secHead{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:10px;
+    padding: 9px 10px;
+    border-bottom:1px solid var(--line2);
+    cursor:pointer;
+    user-select:none;
+  }
+  .secHead .h{
+    font-weight:900;
+    letter-spacing:.18em;
+    text-transform:uppercase;
+    font-size:10px;
+    color: rgba(255,255,255,.86);
+  }
+  .secHead .m{
+    font-family: var(--mono);
+    font-weight:900;
+    letter-spacing:.14em;
+    text-transform:uppercase;
+    font-size:10px;
+    color: var(--dim);
+    display:flex;
+    gap:10px;
+    align-items:center;
+  }
+  .secBody{ padding: 10px; }
+  .section.collapsed .secBody{ display:none; }
+  .section.collapsed .secHead{ border-bottom:none; }
+
+  .row2{
+    display:grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    align-items:end;
+  }
+
+  .pillRow{
+    display:flex;
+    gap:8px;
+    flex-wrap:wrap;
+    align-items:center;
+  }
+  .pill{
+    border:1px solid var(--line);
+    background: rgba(255,255,255,.03);
+    padding:6px 8px;
+    font-size:10px;
+    letter-spacing:.16em;
+    text-transform:uppercase;
+    font-weight:900;
+    cursor:pointer;
+    user-select:none;
+    color: rgba(255,255,255,.82);
+    font-family: var(--mono);
+  }
+  .pill.on{
+    background: rgba(255,255,255,.10);
+    border-color: rgba(255,255,255,.22);
+    color:#fff;
+  }
+
+  /* screenshot area: auto aspect based on image */
+  .shot{
+    position:relative;
+    border:1px dashed rgba(255,255,255,.16);
+    background: rgba(0,0,0,.28);
+    width:100%;
+    aspect-ratio: var(--shotAR, 16/9);
+    min-height: var(--shotMinH);
+    max-height: var(--shotMaxH);
+    overflow:hidden;
+    display:grid;
+    place-items:center;
+  }
+  .shot img{
+    width:100%;
+    height:100%;
+    object-fit: contain;
+    object-position:center;
+    display:block;
+    filter: grayscale(100%);
+    opacity:.95;
+    background:#000;
+  }
+  .shot .ph{
+    font-family: var(--mono);
+    font-weight:900;
+    letter-spacing:.16em;
+    text-transform:uppercase;
+    font-size:10px;
+    color: var(--muted);
+    text-align:center;
+    padding: 8px 10px;
+  }
+  .shotBar{
+    display:flex;
+    gap:8px;
+    align-items:center;
+    justify-content:space-between;
+    margin-top:8px;
+  }
+  .miniBtn{
+    border:1px solid var(--line);
+    background: rgba(255,255,255,.03);
+    padding: 7px 9px;
+    font-size:10px;
+    letter-spacing:.16em;
+    text-transform:uppercase;
+    font-weight:900;
+    cursor:pointer;
+    user-select:none;
+    font-family: var(--mono);
+  }
+  .miniBtn:hover{ border-color: rgba(255,255,255,.22); }
+  .shotHint{
+    color: var(--dim);
+    font-weight:900;
+    letter-spacing:.14em;
+    text-transform:uppercase;
+    font-size:10px;
+    font-family: var(--mono);
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    max-width: 55%;
+  }
+
+  .quad{
+    display:grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+  .small textarea{ min-height: 96px; }
+  .big textarea{ min-height: 160px; }
+
+  /* SYSTEM NOTE (floating square, movable, resizable) */
+  .note{
+    position:fixed;
+    top: 120px;
+    right: 120px;
+    width: 420px;
+    height: 420px;
+    border:1px solid rgba(255,255,255,.22);
+    background: rgba(0,0,0,.72);
+    backdrop-filter: blur(10px);
+    z-index: 9999;
+    display:none;
+    resize: both;
+    overflow:hidden;
+    box-shadow: 0 20px 70px rgba(0,0,0,.55);
+  }
+  .note.open{ display:block; }
+  .noteHead{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:10px;
+    padding: 10px;
+    border-bottom:1px solid rgba(255,255,255,.14);
+    background: rgba(0,0,0,.58);
+    cursor:move;
+    user-select:none;
+  }
+  .noteHead .t{
+    font-family: var(--mono);
+    font-weight:900;
+    letter-spacing:.18em;
+    text-transform:uppercase;
+    font-size:10px;
+    color: rgba(255,255,255,.88);
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+  }
+  .noteHead .x{
+    width:24px; height:24px;
+    display:grid; place-items:center;
+    border:1px solid rgba(255,255,255,.18);
+    background: rgba(255,255,255,.03);
+    cursor:pointer;
+    font-weight:900;
+  }
+  .noteHead .x:hover{ border-color: rgba(255,255,255,.30); }
+  .noteBody{ height: calc(100% - 46px); padding: 10px; }
+  .noteBody textarea{
+    height:100%;
+    border:1px solid rgba(255,255,255,.12);
+    background: rgba(255,255,255,.02);
+    color: rgba(255,255,255,.92);
+    font-family: var(--mono);
+    font-size:11px;
+    line-height:1.4;
+  }
+
+  /* responsive */
+  @media (max-width: 1280px){
+    .main{ grid-template-columns: var(--railW) 1fr; }
+    .right{ display:none; }
+    .actions{ padding-right: 110px; }
+  }
+  @media (max-width: 980px){
+    .main{ grid-template-columns: 1fr; }
+    .left{ display:none; }
+    .right{ display:none; }
+  }
+
+  ::selection{ background: rgba(255,255,255,.18); color:#fff; }
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <div class="brand">
+      <div class="t">INTERFACE ANALYZER + EXTRACTOR</div>
+      <div class="s">ROOM SORTER AESTHETICS • BIG MODULES • EVERYTHING COLLAPSIBLE • JSON EXPORT/IMPORT • PROMPT EXPORT</div>
+    </div>
+
+    <div class="actions">
+      <button class="btn" id="add">add interface</button>
+      <button class="btn" id="collapseAll">collapse all</button>
+      <button class="btn" id="expandAll">expand all</button>
+      <button class="btn" id="exportPrompts">export prompts</button>
+      <button class="btn" id="copyPrompts">copy prompts</button>
+      <button class="btn" id="downloadPrompts">download prompts.txt</button>
+      <button class="btn" id="exportJSON">export.json</button>
+      <button class="btn" id="importJSON">import.json</button>
+      <button class="btn danger" id="reset">reset</button>
+    </div>
+
+    <div class="noteDock">
+      <div class="noteIcon" id="noteIcon" title="SYSTEM NOTE (Cmd+;)"></div>
+      <div class="noteLabel" id="noteLabel">SYSTEM NOTE</div>
+    </div>
+  </header>
+
+  <div class="main">
+    <!-- LEFT -->
+    <aside class="left">
+      <div class="leftHead">
+        <div class="h">SOURCE LINKS</div>
+        <div class="p">paste urls • one per line • parse to auto-create interface cards</div>
+      </div>
+      <div class="leftBody">
+        <textarea class="railInput" id="sourceLinks" spellcheck="false"
+          placeholder="https://ketadata.com/one.html
+https://ketadata.com/two.html"></textarea>
+
+        <div class="railRow">
+          <button class="btn" id="parseLinks">parse</button>
+          <button class="btn" id="clearLinks">clear</button>
+          <button class="btn" id="addSelected">add selected</button>
+        </div>
+        <div class="railRow">
+          <button class="btn" id="inferTitles">infer titles</button>
+          <button class="btn" id="dedupe">dedupe by link</button>
+        </div>
+
+        <div class="railStat" id="railStat">0 links</div>
+      </div>
+    </aside>
+
+    <!-- CENTER -->
+    <main class="center">
+      <div class="metaRow">
+        <div class="l">
+          <div class="h">GRID</div>
+          <div class="p">each card = one interface specimen • stored local-first (browser)</div>
+        </div>
+        <div class="r" id="counts">
+          <span>interfaces: 0</span>
+          <span><span class="kbd">/</span> focus search</span>
+          <span><span class="kbd">⌘/ctrl</span>+<span class="kbd">enter</span> export prompts</span>
+          <span><span class="kbd">⌘</span>+<span class="kbd">;</span> system note</span>
+        </div>
+      </div>
+
+      <div class="grid" id="grid"></div>
+    </main>
+
+    <!-- RIGHT -->
+    <aside class="right">
+      <div class="rightHead">
+        <div>
+          <div class="h">EXPORT PROMPTS</div>
+          <div class="p">includes title + link + screenshot + html + notes (likes/dislikes/features/bugs) + system note</div>
+        </div>
+        <div class="status" id="status">idle</div>
+      </div>
+      <div class="rightBody">
+        <div class="out" id="out">hit "export prompts"</div>
+        <div class="rightBtns">
+          <button class="btn" id="wrapToggle">wrap: on</button>
+          <button class="btn" id="pinnedToggle">only pinned: off</button>
+          <button class="btn" id="openFirst">open first match</button>
+        </div>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<!-- SYSTEM NOTE -->
+<div class="note" id="note">
+  <div class="noteHead" id="noteHead">
+    <div class="t" id="noteTitle">SYSTEM NOTE</div>
+    <div class="x" id="noteClose">×</div>
+  </div>
+  <div class="noteBody">
+    <textarea id="systemNote" spellcheck="false" placeholder="SYSTEM NOTE = global free-form."></textarea>
+  </div>
+</div>
+
+<script>
+/* ===========================
+   KETADATA // INTERFACE ANALYZER + EXTRACTOR (REFINED)
+   - sleek header
+   - tiny white square note icon + label
+   - sharp grid background
+   - screenshot viewport auto aspect (no crop, no "cutoff" feel)
+   - left paste rail
+   - right export panel
+   - collapsible sections
+   - local-first persistence
+=========================== */
+
+const LS_KEY = "KDT_INTERFACE_ANALYZER_REFINED_V1";
+const gridEl = document.getElementById("grid");
+const outEl = document.getElementById("out");
+const statusEl = document.getElementById("status");
+const countsEl = document.getElementById("counts");
+
+const sourceLinksEl = document.getElementById("sourceLinks");
+const railStatEl = document.getElementById("railStat");
+
+const noteIcon = document.getElementById("noteIcon");
+const noteLabel = document.getElementById("noteLabel");
+const note = document.getElementById("note");
+const noteHead = document.getElementById("noteHead");
+const noteClose = document.getElementById("noteClose");
+const systemNoteEl = document.getElementById("systemNote");
+
+const wrapToggle = document.getElementById("wrapToggle");
+const pinnedToggle = document.getElementById("pinnedToggle");
+const openFirstBtn = document.getElementById("openFirst");
+
+let WRAP = true;
+let ONLY_PINNED = false;
+
+function uid(){
+  return Math.random().toString(16).slice(2) + Date.now().toString(16);
+}
+function nowISO(){
+  const d = new Date();
+  return d.toISOString().replace("T"," ").replace(/\.\d+Z$/,"Z");
+}
+function setStatus(s){
+  statusEl.textContent = s;
+  setTimeout(()=>{ if(statusEl.textContent === s) statusEl.textContent = "idle"; }, 1200);
+}
+function inferTitleFromUrl(url){
+  try{
+    const u = new URL(url);
+    const p = u.pathname.split("/").filter(Boolean).pop() || u.hostname;
+    return p.replace(/\.(html|htm)$/i,"").replace(/[-_]+/g," ").toUpperCase();
+  }catch(e){
+    return (url || "INTERFACE").toUpperCase();
+  }
+}
+function normalizeLinks(text){
+  return (text || "")
+    .split(/\r?\n/)
+    .map(s=>s.trim())
+    .filter(Boolean)
+    .filter(s => /^https?:\/\//i.test(s));
+}
+
+/* -------- state -------- */
+function load(){
+  try{
+    const raw = localStorage.getItem(LS_KEY);
+    if(!raw) return null;
+    const s = JSON.parse(raw);
+    if(!s || !Array.isArray(s.items)) return null;
+    return s;
+  }catch(e){ return null; }
+}
+function save(){
+  const payload = {
+    version:"refined_v1",
+    savedAt: nowISO(),
+    wrap: WRAP,
+    onlyPinned: ONLY_PINNED,
+    systemNote: state.systemNote || "",
+    items: state.items
+  };
+  localStorage.setItem(LS_KEY, JSON.stringify(payload));
+  countsEl.innerHTML = `
+    <span>interfaces: ${state.items.length}</span>
+    <span><span class="kbd">/</span> focus search</span>
+    <span><span class="kbd">⌘/ctrl</span>+<span class="kbd">enter</span> export prompts</span>
+    <span><span class="kbd">⌘</span>+<span class="kbd">;</span> system note</span>
+  `;
+}
+
+/* -------- model -------- */
+function defaultItem(n, link=""){
+  const title = link ? inferTitleFromUrl(link) : `INTERFACE ${n}`;
+  return {
+    id: uid(),
+    idxLabel: n,
+    title,
+    link,
+    pinned:false,
+
+    screenshotDataUrl:"",
+    shotAR: 16/9,          // AUTO viewport aspect
+    html:"",
+
+    notes:{
+      like:"",
+      dislike:"",
+      works:"",
+      fails:"",
+      primitives:"",
+      bugs:"",
+      extra:""
+    },
+
+    collapsed:false,
+    collapsedSections:{
+      meta:false,
+      screenshot:false,
+      html:true,
+      notes:true
+    },
+
+    updatedAt: nowISO()
+  };
+}
+
+let state = load();
+if(!state){
+  state = {
+    items: [ defaultItem(1), defaultItem(2) ],
+    systemNote: "SYSTEM NOTE = global free-form. Opens from top-right square.",
+    wrap:true,
+    onlyPinned:false
+  };
+}
+WRAP = (typeof state.wrap === "boolean") ? state.wrap : true;
+ONLY_PINNED = (typeof state.onlyPinned === "boolean") ? state.onlyPinned : false;
+if(typeof state.systemNote !== "string") state.systemNote = "";
+systemNoteEl.value = state.systemNote;
+
+wrapToggle.textContent = WRAP ? "wrap: on" : "wrap: off";
+pinnedToggle.textContent = ONLY_PINNED ? "only pinned: on" : "only pinned: off";
+
+/* -------- render helpers -------- */
+function div(cls, html){
+  const e = document.createElement("div");
+  if(cls) e.className = cls;
+  if(html !== undefined) e.innerHTML = html;
+  return e;
+}
+function label(text){
+  const l = document.createElement("label");
+  l.textContent = text;
+  return l;
+}
+function section(title, collapsed, onToggle){
+  const s = div("section" + (collapsed ? " collapsed" : ""));
+  const h = div("secHead");
+  const hl = div("h", title);
+  const hm = div("m", `${collapsed ? "collapsed" : "expanded"} <span class="kbd">${collapsed ? "+" : "–"}</span>`);
+  h.appendChild(hl); h.appendChild(hm);
+
+  const b = div("secBody");
+
+  h.onclick = () => {
+    const isCollapsed = s.classList.toggle("collapsed");
+    hm.innerHTML = `${isCollapsed ? "collapsed" : "expanded"} <span class="kbd">${isCollapsed ? "+" : "–"}</span>`;
+    onToggle(isCollapsed);
+  };
+
+  s.appendChild(h);
+  s.appendChild(b);
+  return s;
+}
+function textField(lbl, type, value, onInput, placeholder=""){
+  const w = div("");
+  w.appendChild(label(lbl));
+  const i = document.createElement("input");
+  i.type = type;
+  i.value = value || "";
+  i.placeholder = placeholder;
+  i.addEventListener("input", ()=>onInput(i.value));
+  w.appendChild(i);
+  return w;
+}
+function area(lbl, value, onInput, minH){
+  const w = div("");
+  w.appendChild(label(lbl));
+  const t = document.createElement("textarea");
+  t.value = value || "";
+  t.placeholder = lbl;
+  if(minH) t.style.minHeight = minH + "px";
+  t.addEventListener("input", ()=>onInput(t.value));
+  w.appendChild(t);
+  return w;
+}
+
+/* -------- card render -------- */
+function render(){
+  gridEl.innerHTML = "";
+  state.items.forEach((it,i)=>{
+    it.idxLabel = i + 1;
+    gridEl.appendChild(renderCard(it,i));
+  });
+  save();
+}
+
+function renderCard(it, index){
+  const card = div("card");
+  const head = div("cardHead");
+
+  const tag = div("tag");
+  tag.appendChild(div("id", `#${it.idxLabel}`));
+  tag.appendChild(div("name", (it.title || `INTERFACE ${it.idxLabel}`).toUpperCase()));
+
+  const btns = div("headBtns");
+  const bUp = div("iconBtn","↑");
+  const bDn = div("iconBtn","↓");
+  const bPin = div("iconBtn", it.pinned ? "●" : "○");
+  const bCol = div("iconBtn", it.collapsed ? "+" : "–");
+  const bX  = div("iconBtn x","×");
+  btns.appendChild(bUp); btns.appendChild(bDn); btns.appendChild(bPin); btns.appendChild(bCol); btns.appendChild(bX);
+
+  head.appendChild(tag);
+  head.appendChild(btns);
+
+  const body = div("cardBody");
+  if(it.collapsed) body.style.display = "none";
+
+  /* META */
+  const secMeta = section("META / IDENTIFICATION", it.collapsedSections.meta, (c)=>{
+    it.collapsedSections.meta = c; it.updatedAt = nowISO(); save();
+  });
+  const metaBody = secMeta.querySelector(".secBody");
+  const row2 = div("row2");
+  row2.appendChild(textField("title","text", it.title, (v)=>{ it.title=v; it.updatedAt=nowISO(); render(); }, "e.g. LANDING PAGE"));
+  row2.appendChild(textField("link","url", it.link, (v)=>{ it.link=v; it.updatedAt=nowISO(); save(); }, "https://..."));
+  metaBody.appendChild(row2);
+
+  const pills = div("pillRow");
+  const pPinned = div("pill"+(it.pinned?" on":""), "pinned");
+  const pCopy = div("pill","copy link");
+  const pOpen = div("pill","open");
+  const pDup = div("pill","duplicate");
+  pills.appendChild(pPinned); pills.appendChild(pCopy); pills.appendChild(pOpen); pills.appendChild(pDup);
+  metaBody.appendChild(pills);
+
+  /* SCREENSHOT */
+  const secShot = section("SCREENSHOT", it.collapsedSections.screenshot, (c)=>{
+    it.collapsedSections.screenshot = c; it.updatedAt = nowISO(); save();
+  });
+  const shotBody = secShot.querySelector(".secBody");
+
+  const file = document.createElement("input");
+  file.type = "file";
+  file.accept = "image/*";
+  file.style.display = "none";
+
+  const shot = div("shot");
+  shot.style.setProperty("--shotAR", (it.shotAR || (16/9)));
+  if(it.screenshotDataUrl){
+    const img = new Image();
+    img.src = it.screenshotDataUrl;
+    shot.appendChild(img);
+  }else{
+    shot.appendChild(div("ph","UPLOAD A SCREENSHOT (LOCAL-FIRST, STORED AS DATA URL)"));
+  }
+
+  const bar = div("shotBar");
+  const up = div("miniBtn","upload");
+  const clr = div("miniBtn","clear");
+  const ar = div("miniBtn", `AR: ${(it.shotAR || (16/9)).toFixed(3)}`);
+  const hint = div("shotHint", it.screenshotDataUrl ? `saved • ${it.screenshotDataUrl.length.toLocaleString()} chars` : "no screenshot");
+  bar.appendChild(up); bar.appendChild(clr); bar.appendChild(ar); bar.appendChild(hint);
+
+  shotBody.appendChild(file);
+  shotBody.appendChild(shot);
+  shotBody.appendChild(bar);
+
+  up.onclick = () => file.click();
+  file.onchange = () => {
+    const f = file.files && file.files[0];
+    if(!f) return;
+    const r = new FileReader();
+    r.onload = () => {
+      it.screenshotDataUrl = String(r.result || "");
+      const probe = new Image();
+      probe.onload = () => {
+        it.shotAR = probe.width / probe.height;
+        it.updatedAt = nowISO();
+        render();
+        setStatus("screenshot saved");
+      };
+      probe.src = it.screenshotDataUrl;
+    };
+    r.readAsDataURL(f);
+  };
+  clr.onclick = () => {
+    it.screenshotDataUrl = "";
+    it.updatedAt = nowISO();
+    render();
+    setStatus("screenshot cleared");
+  };
+  ar.onclick = () => {
+    /* if you want manual override: cycle common ARs */
+    const list = [16/9, 4/3, 1, 21/9];
+    const cur = it.shotAR || (16/9);
+    let idx = list.findIndex(x => Math.abs(x-cur) < 0.02);
+    idx = (idx + 1) % list.length;
+    it.shotAR = list[idx];
+    it.updatedAt = nowISO();
+    render();
+    setStatus("AR cycled");
+  };
+
+  /* HTML */
+  const secHTML = section("HTML CODE (OPTIONAL)", it.collapsedSections.html, (c)=>{
+    it.collapsedSections.html = c; it.updatedAt = nowISO(); save();
+  });
+  const htmlBody = secHTML.querySelector(".secBody");
+  const htmlTa = document.createElement("textarea");
+  htmlTa.value = it.html || "";
+  htmlTa.placeholder = "paste html here...";
+  htmlTa.style.minHeight = "220px";
+  htmlTa.addEventListener("input", ()=>{
+    it.html = htmlTa.value;
+    it.updatedAt = nowISO();
+    save();
+  });
+  htmlBody.appendChild(htmlTa);
+
+  /* NOTES */
+  const secNotes = section("INTERFACE NOTES", it.collapsedSections.notes, (c)=>{
+    it.collapsedSections.notes = c; it.updatedAt = nowISO(); save();
+  });
+  const notesBody = secNotes.querySelector(".secBody");
+
+  const q1 = div("quad");
+  q1.appendChild(wrapArea("what i like", it.notes.like, v=>{ it.notes.like=v; it.updatedAt=nowISO(); save(); }, 96));
+  q1.appendChild(wrapArea("what i don't like", it.notes.dislike, v=>{ it.notes.dislike=v; it.updatedAt=nowISO(); save(); }, 96));
+  q1.appendChild(wrapArea("what works", it.notes.works, v=>{ it.notes.works=v; it.updatedAt=nowISO(); save(); }, 96));
+  q1.appendChild(wrapArea("what fails", it.notes.fails, v=>{ it.notes.fails=v; it.updatedAt=nowISO(); save(); }, 96));
+  notesBody.appendChild(q1);
+
+  const q2 = div("quad");
+  q2.appendChild(wrapArea("features / primitives", it.notes.primitives, v=>{ it.notes.primitives=v; it.updatedAt=nowISO(); save(); }, 96));
+  q2.appendChild(wrapArea("bugs / edge cases", it.notes.bugs, v=>{ it.notes.bugs=v; it.updatedAt=nowISO(); save(); }, 96));
+  notesBody.appendChild(q2);
+
+  const extra = div("big");
+  extra.appendChild(label("extra / tags / consolidation notes"));
+  const extraTa = document.createElement("textarea");
+  extraTa.value = it.notes.extra || "";
+  extraTa.placeholder = "anything else...";
+  extraTa.style.minHeight = "160px";
+  extraTa.addEventListener("input", ()=>{
+    it.notes.extra = extraTa.value;
+    it.updatedAt = nowISO();
+    save();
+  });
+  extra.appendChild(extraTa);
+  notesBody.appendChild(extra);
+
+  body.appendChild(secMeta);
+  body.appendChild(secShot);
+  body.appendChild(secHTML);
+  body.appendChild(secNotes);
+
+  card.appendChild(head);
+  card.appendChild(body);
+
+  /* head buttons */
+  bUp.onclick = () => move(index, -1);
+  bDn.onclick = () => move(index, +1);
+  bX.onclick  = () => remove(index);
+  bPin.onclick = () => { it.pinned = !it.pinned; it.updatedAt=nowISO(); render(); };
+  bCol.onclick = () => { it.collapsed = !it.collapsed; it.updatedAt=nowISO(); render(); };
+
+  /* pills */
+  pPinned.onclick = () => { it.pinned = !it.pinned; it.updatedAt=nowISO(); render(); };
+  pCopy.onclick = async () => {
+    if(!it.link) return setStatus("no link");
+    try{ await navigator.clipboard.writeText(it.link); setStatus("copied link"); }
+    catch(e){ setStatus("clipboard blocked"); }
+  };
+  pOpen.onclick = () => {
+    if(!it.link) return setStatus("no link");
+    window.open(it.link, "_blank", "noopener");
+  };
+  pDup.onclick = () => {
+    const clone = JSON.parse(JSON.stringify(it));
+    clone.id = uid();
+    clone.title = (clone.title || "INTERFACE") + " (copy)";
+    clone.updatedAt = nowISO();
+    state.items.splice(index+1, 0, clone);
+    render();
+    setStatus("duplicated");
+  };
+
+  return card;
+}
+
+function wrapArea(lbl, value, onInput, minH){
+  const w = div("small");
+  w.appendChild(label(lbl));
+  const t = document.createElement("textarea");
+  t.value = value || "";
+  t.placeholder = lbl;
+  t.style.minHeight = minH + "px";
+  t.addEventListener("input", ()=>onInput(t.value));
+  w.appendChild(t);
+  return w;
+}
+
+/* -------- mutations -------- */
+function add(link=""){
+  const n = state.items.length + 1;
+  state.items.push(defaultItem(n, link));
+  render();
+  setStatus("added");
+}
+function remove(i){
+  state.items.splice(i,1);
+  render();
+  setStatus("removed");
+}
+function move(i, dir){
+  const j = i + dir;
+  if(j < 0 || j >= state.items.length) return;
+  const tmp = state.items[i];
+  state.items[i] = state.items[j];
+  state.items[j] = tmp;
+  render();
+  setStatus("moved");
+}
+function collapseAll(){
+  state.items.forEach(it=>it.collapsed = true);
+  render();
+  setStatus("collapsed all");
+}
+function expandAll(){
+  state.items.forEach(it=>it.collapsed = false);
+  render();
+  setStatus("expanded all");
+}
+
+/* -------- export prompts -------- */
+function safe(s){ return (s || "").toString().trim(); }
+function block(it){
+  const lines = [];
+  if(WRAP) lines.push("BEGIN INTERFACE");
+  lines.push(`TITLE: ${safe(it.title)}`);
+  lines.push(`LINK: ${safe(it.link)}`);
+  lines.push(`PINNED: ${it.pinned ? "YES" : "NO"}`);
+  lines.push(`UPDATED_AT: ${safe(it.updatedAt)}`);
+  lines.push(`SHOT_AR: ${Number(it.shotAR || (16/9)).toFixed(6)}`);
+  lines.push("");
+
+  lines.push("SCREENSHOT_DATA_URL:");
+  lines.push(it.screenshotDataUrl ? it.screenshotDataUrl : "(none)");
+  lines.push("");
+
+  lines.push("HTML:");
+  lines.push(safe(it.html) ? it.html : "(none)");
+  lines.push("");
+
+  lines.push("NOTES:");
+  lines.push(`WHAT_I_LIKE:\n${safe(it.notes.like) || "(none)"}`);
+  lines.push("");
+  lines.push(`WHAT_I_DONT_LIKE:\n${safe(it.notes.dislike) || "(none)"}`);
+  lines.push("");
+  lines.push(`WHAT_WORKS:\n${safe(it.notes.works) || "(none)"}`);
+  lines.push("");
+  lines.push(`WHAT_FAILS:\n${safe(it.notes.fails) || "(none)"}`);
+  lines.push("");
+  lines.push(`FEATURES_PRIMITIVES:\n${safe(it.notes.primitives) || "(none)"}`);
+  lines.push("");
+  lines.push(`BUGS_EDGE_CASES:\n${safe(it.notes.bugs) || "(none)"}`);
+  lines.push("");
+  lines.push(`EXTRA:\n${safe(it.notes.extra) || "(none)"}`);
+  lines.push("");
+  if(WRAP) lines.push("END INTERFACE");
+  return lines.join("\n");
+}
+function exportPrompts(){
+  const items = ONLY_PINNED ? state.items.filter(x=>x.pinned) : state.items;
+  const header = [
+    "BEGIN SYSTEM NOTE",
+    safe(state.systemNote) || "(empty)",
+    "END SYSTEM NOTE",
+    "",
+    `EXPORTED_AT: ${nowISO()}`,
+    `INTERFACES: ${items.length}`,
+    ""
+  ].join("\n");
+  const body = items.map(block).join("\n\n");
+  const text = header + body;
+  outEl.textContent = text;
+  setStatus(`exported ${items.length}`);
+  return text;
+}
+
+/* -------- JSON import/export -------- */
+function download(filename, text){
+  const blob = new Blob([text], {type:"text/plain;charset=utf-8"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url), 800);
+}
+function exportJSON(){
+  const payload = {
+    version:"KDT_INTERFACE_ANALYZER_REFINED_V1",
+    exportedAt: nowISO(),
+    wrap: WRAP,
+    onlyPinned: ONLY_PINNED,
+    systemNote: state.systemNote || "",
+    items: state.items
+  };
+  download("interfaces.export.json", JSON.stringify(payload, null, 2));
+  setStatus("json exported");
+}
+function importJSON(){
+  const inp = document.createElement("input");
+  inp.type = "file";
+  inp.accept = "application/json,.json";
+  inp.onchange = () => {
+    const f = inp.files && inp.files[0];
+    if(!f) return;
+    const r = new FileReader();
+    r.onload = () => {
+      try{
+        const obj = JSON.parse(String(r.result || "{}"));
+        if(!obj || !Array.isArray(obj.items)) throw new Error("invalid");
+        state.items = obj.items;
+        WRAP = (typeof obj.wrap === "boolean") ? obj.wrap : WRAP;
+        ONLY_PINNED = (typeof obj.onlyPinned === "boolean") ? obj.onlyPinned : ONLY_PINNED;
+        state.systemNote = (typeof obj.systemNote === "string") ? obj.systemNote : state.systemNote;
+        systemNoteEl.value = state.systemNote || "";
+        wrapToggle.textContent = WRAP ? "wrap: on" : "wrap: off";
+        pinnedToggle.textContent = ONLY_PINNED ? "only pinned: on" : "only pinned: off";
+        render();
+        setStatus("json imported");
+      }catch(e){
+        setStatus("import failed");
+      }
+    };
+    r.readAsText(f);
+  };
+  inp.click();
+}
+
+/* -------- left rail -------- */
+function updateRailStat(){
+  const links = normalizeLinks(sourceLinksEl.value);
+  railStatEl.textContent = `${links.length} links`;
+}
+sourceLinksEl.addEventListener("input", updateRailStat);
+
+document.getElementById("parseLinks").onclick = () => {
+  const links = normalizeLinks(sourceLinksEl.value);
+  if(!links.length) return setStatus("no links");
+  links.forEach(u => add(u));
+  setStatus(`added ${links.length}`);
+};
+document.getElementById("clearLinks").onclick = () => {
+  sourceLinksEl.value = "";
+  updateRailStat();
+  setStatus("cleared");
+};
+document.getElementById("addSelected").onclick = () => {
+  const sel = (sourceLinksEl.value || "").substring(sourceLinksEl.selectionStart, sourceLinksEl.selectionEnd);
+  const links = normalizeLinks(sel);
+  if(!links.length) return setStatus("no selection links");
+  links.forEach(u => add(u));
+  setStatus(`added ${links.length}`);
+};
+document.getElementById("inferTitles").onclick = () => {
+  state.items.forEach(it=>{
+    if((!it.title || it.title.toLowerCase().startsWith("interface")) && it.link){
+      it.title = inferTitleFromUrl(it.link);
+    }
+  });
+  render();
+  setStatus("titles inferred");
+};
+document.getElementById("dedupe").onclick = () => {
+  const seen = new Set();
+  state.items = state.items.filter(it=>{
+    const k = (it.link || "").trim().toLowerCase();
+    if(!k) return true;
+    if(seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
+  render();
+  setStatus("deduped");
+};
+
+/* -------- system note -------- */
+function openNote(){
+  note.classList.add("open");
+  noteIcon.classList.add("open");
+}
+function closeNote(){
+  note.classList.remove("open");
+  noteIcon.classList.remove("open");
+  state.systemNote = systemNoteEl.value || "";
+  save();
+}
+function toggleNote(){
+  if(note.classList.contains("open")) closeNote(); else openNote();
+}
+noteIcon.onclick = toggleNote;
+noteLabel.onclick = toggleNote;
+noteClose.onclick = closeNote;
+
+systemNoteEl.addEventListener("input", ()=>{
+  state.systemNote = systemNoteEl.value || "";
+  save();
+});
+
+/* drag note */
+(function(){
+  let dragging=false, sx=0, sy=0, ox=0, oy=0;
+  noteHead.addEventListener("mousedown",(e)=>{
+    dragging=true;
+    sx=e.clientX; sy=e.clientY;
+    const r = note.getBoundingClientRect();
+    ox=r.left; oy=r.top;
+    e.preventDefault();
+  });
+  window.addEventListener("mousemove",(e)=>{
+    if(!dragging) return;
+    const dx=e.clientX-sx;
+    const dy=e.clientY-sy;
+    note.style.left = (ox+dx)+"px";
+    note.style.top  = (oy+dy)+"px";
+    note.style.right = "auto";
+  });
+  window.addEventListener("mouseup",()=>dragging=false);
+})();
+
+/* -------- top actions -------- */
+document.getElementById("add").onclick = ()=>add();
+document.getElementById("collapseAll").onclick = collapseAll;
+document.getElementById("expandAll").onclick = expandAll;
+document.getElementById("exportPrompts").onclick = exportPrompts;
+
+document.getElementById("copyPrompts").onclick = async ()=>{
+  const t = exportPrompts();
+  try{ await navigator.clipboard.writeText(t); setStatus("copied"); }
+  catch(e){ setStatus("clipboard blocked"); }
+};
+document.getElementById("downloadPrompts").onclick = ()=>{
+  const t = exportPrompts();
+  download("prompts.txt", t);
+  setStatus("downloaded");
+};
+document.getElementById("exportJSON").onclick = exportJSON;
+document.getElementById("importJSON").onclick = importJSON;
+
+document.getElementById("reset").onclick = ()=>{
+  if(!confirm("RESET EVERYTHING? THIS CLEARS LOCAL STORAGE.")) return;
+  localStorage.removeItem(LS_KEY);
+  state.items = [ defaultItem(1), defaultItem(2) ];
+  state.systemNote = "SYSTEM NOTE = global free-form. Opens from top-right square.";
+  systemNoteEl.value = state.systemNote;
+  WRAP = true; ONLY_PINNED = false;
+  wrapToggle.textContent = "wrap: on";
+  pinnedToggle.textContent = "only pinned: off";
+  outEl.textContent = "hit \"export prompts\"";
+  render();
+  setStatus("reset");
+};
+
+wrapToggle.onclick = ()=>{
+  WRAP = !WRAP;
+  wrapToggle.textContent = WRAP ? "wrap: on" : "wrap: off";
+  save();
+  setStatus(WRAP ? "wrap on" : "wrap off");
+};
+pinnedToggle.onclick = ()=>{
+  ONLY_PINNED = !ONLY_PINNED;
+  pinnedToggle.textContent = ONLY_PINNED ? "only pinned: on" : "only pinned: off";
+  save();
+  setStatus(ONLY_PINNED ? "filter on" : "filter off");
+};
+openFirstBtn.onclick = ()=>{
+  const t = outEl.textContent || "";
+  const m = t.match(/https?:\/\/[^\s)]+/i);
+  if(m && m[0]){ window.open(m[0], "_blank", "noopener"); setStatus("opened"); }
+  else setStatus("no url in output");
+};
+
+/* keyboard: cmd/ctrl+enter export, cmd+; note, / search, esc clears */
+let searchMode=false;
+let searchBuffer="";
+document.addEventListener("keydown",(e)=>{
+  if((e.ctrlKey || e.metaKey) && e.key === "Enter"){
+    e.preventDefault();
+    exportPrompts();
+    return;
+  }
+  if(e.metaKey && e.key === ";"){
+    e.preventDefault();
+    toggleNote();
+    return;
+  }
+  if(e.key === "/"){
+    e.preventDefault();
+    searchMode=true; searchBuffer="";
+    setStatus("search: type… (esc to clear)");
+    return;
+  }
+  if(e.key === "Escape"){
+    if(searchMode){
+      searchMode=false; searchBuffer="";
+      setStatus("search cleared");
+      Array.from(gridEl.children).forEach(c=>c.style.display="");
+      return;
+    }
+    if(note.classList.contains("open")) closeNote();
+    return;
+  }
+  if(!searchMode) return;
+
+  if(e.key === "Backspace"){
+    searchBuffer = searchBuffer.slice(0,-1);
+    applySearch(searchBuffer);
+    setStatus(`search: ${searchBuffer || "(empty)"}`);
+    return;
+  }
+  if(e.key.length === 1){
+    searchBuffer += e.key.toLowerCase();
+    applySearch(searchBuffer);
+    setStatus(`search: ${searchBuffer}`);
+  }
+});
+function applySearch(term){
+  const t = (term || "").trim().toLowerCase();
+  Array.from(gridEl.children).forEach((cardEl, i)=>{
+    const it = state.items[i];
+    const hay = `${it.title} ${it.link}`.toLowerCase();
+    cardEl.style.display = (!t || hay.includes(t)) ? "" : "none";
+  });
+}
+
+/* init */
+(function(){
+  updateRailStat();
+  render();
+  save();
+})();
+</script>
+</body>
+</html>
