@@ -1,0 +1,1624 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>KETADATA // FORGE v2 (ROOM SORTER)</title>
+  <style>
+    :root{
+      --bg:#060606;
+      --panel:#0b0b0b;
+      --line:rgba(255,255,255,.12);
+      --line2:rgba(255,255,255,.06);
+      --text:rgba(255,255,255,.92);
+      --muted:rgba(255,255,255,.55);
+      --muted2:rgba(255,255,255,.35);
+      --accent:#fff;
+      --danger:#ff3b3b;
+      --ok:#5cff7a;
+      --shadow: 0 12px 40px rgba(0,0,0,.55);
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace;
+      --ui: Arial, Helvetica, sans-serif;
+      --r:0px;
+    }
+    *{ box-sizing:border-box; }
+    html,body{ height:100%; }
+    body{
+      margin:0;
+      background:var(--bg);
+      color:var(--text);
+      font-family:var(--ui);
+      overflow:hidden;
+    }
+
+    /* background grid */
+    .bggrid{
+      position:fixed; inset:0;
+      pointer-events:none;
+      background:
+        linear-gradient(to right, var(--line2) 1px, transparent 1px),
+        linear-gradient(to bottom, var(--line2) 1px, transparent 1px);
+      background-size: 48px 48px;
+      opacity:.85;
+      filter:contrast(1.05);
+    }
+    .bggrid::after{
+      content:"";
+      position:absolute; inset:0;
+      background:
+        linear-gradient(to right, rgba(255,255,255,.08) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(255,255,255,.08) 1px, transparent 1px);
+      background-size: 240px 240px;
+      opacity:.18;
+    }
+    .drift{
+      position:fixed; inset:-20%;
+      pointer-events:none;
+      background: radial-gradient(circle at 30% 45%, rgba(255,255,255,.06), transparent 55%),
+                  radial-gradient(circle at 70% 55%, rgba(255,255,255,.04), transparent 58%);
+      animation: drift 14s linear infinite;
+      opacity:.85;
+      mix-blend-mode: screen;
+    }
+    @keyframes drift{
+      0%{ transform:translate3d(-1.5%, -1.0%, 0); }
+      50%{ transform:translate3d(1.2%, 1.4%, 0); }
+      100%{ transform:translate3d(-1.5%, -1.0%, 0); }
+    }
+
+    /* layout */
+    .app{
+      position:relative;
+      height:100%;
+      display:grid;
+      grid-template-columns: 320px 1fr 420px;
+      grid-template-rows: 44px 1fr;
+      gap:0;
+    }
+    .topbar{
+      grid-column:1 / 4;
+      grid-row:1;
+      display:flex;
+      align-items:center;
+      gap:10px;
+      padding:8px 10px;
+      border-bottom:1px solid var(--line);
+      background:rgba(0,0,0,.55);
+      backdrop-filter: blur(6px);
+    }
+    .brand{
+      font-family:var(--mono);
+      letter-spacing:.08em;
+      font-size:12px;
+      color:var(--text);
+      white-space:nowrap;
+    }
+    .status{
+      margin-left:10px;
+      font-family:var(--mono);
+      font-size:11px;
+      color:var(--muted);
+      display:flex;
+      gap:14px;
+      align-items:center;
+      white-space:nowrap;
+    }
+    .status b{ color:var(--text); font-weight:700; }
+    .spacer{ flex:1; }
+
+    .btn{
+      font-family:var(--mono);
+      font-size:11px;
+      letter-spacing:.06em;
+      color:var(--text);
+      background:rgba(255,255,255,.03);
+      border:1px solid var(--line);
+      border-radius:var(--r);
+      padding:7px 10px;
+      cursor:pointer;
+      user-select:none;
+      transition: background .12s linear, border-color .12s linear, transform .06s linear;
+    }
+    .btn:hover{ background:rgba(255,255,255,.06); border-color:rgba(255,255,255,.22); }
+    .btn:active{ transform:translateY(1px); }
+    .btn.danger{ border-color: rgba(255,59,59,.4); }
+    .btn.danger:hover{ background: rgba(255,59,59,.08); border-color: rgba(255,59,59,.65); }
+    .btn.primary{ border-color: rgba(255,255,255,.35); }
+    .btn.primary:hover{ background: rgba(255,255,255,.09); }
+
+    .panel{
+      border-right:1px solid var(--line);
+      overflow:hidden;
+      min-width:0;
+    }
+    .panel.right{
+      border-right:none;
+      border-left:1px solid var(--line);
+    }
+    .paneHead{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      padding:10px 10px 8px;
+      border-bottom:1px solid var(--line);
+      background:rgba(0,0,0,.28);
+    }
+    .paneHead .title{
+      font-family:var(--mono);
+      font-size:11px;
+      letter-spacing:.08em;
+      color:var(--muted);
+      text-transform:uppercase;
+    }
+    .paneBody{
+      height:calc(100% - 42px);
+      overflow:auto;
+      padding:10px;
+    }
+
+    /* left rail: create/edit */
+    label{
+      display:block;
+      font-family:var(--mono);
+      font-size:10px;
+      letter-spacing:.08em;
+      color:var(--muted);
+      margin:10px 0 6px;
+      text-transform:uppercase;
+    }
+    input, textarea, select{
+      width:100%;
+      color:var(--text);
+      background:rgba(255,255,255,.02);
+      border:1px solid var(--line);
+      border-radius:var(--r);
+      padding:9px 10px;
+      font-family:var(--mono);
+      font-size:12px;
+      outline:none;
+    }
+    textarea{ min-height:92px; resize:vertical; }
+    input:focus, textarea:focus, select:focus{
+      border-color: rgba(255,255,255,.28);
+      background: rgba(255,255,255,.035);
+    }
+    .row{
+      display:grid;
+      grid-template-columns: 1fr 120px;
+      gap:10px;
+    }
+    .hint{
+      font-family:var(--mono);
+      font-size:10px;
+      color:var(--muted2);
+      margin-top:8px;
+      line-height:1.35;
+    }
+    .leftActions{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap:8px;
+      margin-top:10px;
+    }
+    .leftActions .btn{ width:100%; }
+
+    /* center: room sorter grid */
+    .centerWrap{
+      grid-column:2;
+      grid-row:2;
+      overflow:hidden;
+      min-width:0;
+    }
+    .centerHead{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      padding:10px 10px 8px;
+      border-bottom:1px solid var(--line);
+      background:rgba(0,0,0,.22);
+    }
+    .centerHead .title{
+      font-family:var(--mono);
+      font-size:11px;
+      letter-spacing:.08em;
+      color:var(--muted);
+      text-transform:uppercase;
+    }
+    .centerHead .controls{
+      display:flex; gap:8px; align-items:center;
+    }
+    .search{
+      width:260px;
+      max-width:40vw;
+    }
+    .grid{
+      height:calc(100% - 42px);
+      overflow:auto;
+      padding:10px;
+    }
+    .cards{
+      display:grid;
+      grid-template-columns: repeat(2, minmax(420px, 1fr));
+      gap:10px;
+      align-items:start;
+    }
+    @media (max-width: 1400px){
+      .cards{ grid-template-columns: 1fr; }
+    }
+
+    .card{
+      background:rgba(0,0,0,.25);
+      border:1px solid var(--line);
+      border-radius:var(--r);
+      box-shadow: none;
+      overflow:hidden;
+    }
+    .card.selected{
+      border-color: rgba(255,255,255,.35);
+      box-shadow: 0 0 0 1px rgba(255,255,255,.08) inset;
+    }
+    .cardHead{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      padding:8px 8px;
+      border-bottom:1px solid var(--line);
+      background:rgba(0,0,0,.18);
+    }
+    .cardHead .left{
+      display:flex;
+      gap:10px;
+      align-items:center;
+      min-width:0;
+    }
+    .badge{
+      font-family:var(--mono);
+      font-size:11px;
+      color:var(--muted);
+      border:1px solid var(--line);
+      padding:4px 6px;
+      white-space:nowrap;
+    }
+    .cardTitle{
+      font-family:var(--mono);
+      font-size:12px;
+      color:var(--text);
+      letter-spacing:.06em;
+      text-transform:uppercase;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      max-width: 340px;
+    }
+    .cardHead .right{
+      display:flex; gap:6px; align-items:center;
+    }
+    .iconBtn{
+      width:28px; height:26px;
+      display:grid; place-items:center;
+      font-family:var(--mono);
+      font-size:12px;
+      background:rgba(255,255,255,.03);
+      border:1px solid var(--line);
+      cursor:pointer;
+      user-select:none;
+    }
+    .iconBtn:hover{ background:rgba(255,255,255,.06); border-color:rgba(255,255,255,.22); }
+    .iconBtn.danger:hover{ background:rgba(255,59,59,.08); border-color:rgba(255,59,59,.65); }
+
+    /* collapsible sections */
+    details{
+      border-bottom:1px solid var(--line);
+      background:rgba(0,0,0,.12);
+    }
+    details:last-child{ border-bottom:none; }
+    summary{
+      list-style:none;
+      cursor:pointer;
+      padding:8px 10px;
+      font-family:var(--mono);
+      font-size:11px;
+      letter-spacing:.08em;
+      color:var(--muted);
+      text-transform:uppercase;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      user-select:none;
+    }
+    summary::-webkit-details-marker{ display:none; }
+    .sectBody{
+      padding:10px;
+      background:rgba(0,0,0,.18);
+    }
+
+    .two{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap:10px;
+    }
+    .mini{
+      font-size:10px;
+      color:var(--muted2);
+      font-family:var(--mono);
+      line-height:1.25;
+      margin-top:6px;
+    }
+
+    /* screenshot */
+    .shotBox{
+      border:1px dashed var(--line);
+      background:rgba(255,255,255,.02);
+      height:220px;
+      position:relative;
+      overflow:hidden;
+    }
+    .shotBox img{
+      position:absolute;
+      inset:0;
+      width:100%;
+      height:100%;
+      object-fit:contain; /* NEVER CROP */
+      background:#000;
+    }
+    .shotOverlay{
+      position:absolute; inset:0;
+      display:grid;
+      place-items:center;
+      font-family:var(--mono);
+      font-size:11px;
+      color:var(--muted);
+      pointer-events:none;
+    }
+    .shotActions{
+      display:flex; gap:8px;
+      margin-top:8px;
+    }
+    .shotActions .btn{ padding:6px 9px; }
+
+    /* module notes */
+    .mods{
+      display:grid;
+      grid-template-columns: repeat(2, minmax(220px, 1fr));
+      gap:8px;
+    }
+    .mod{
+      border:1px solid var(--line);
+      background:rgba(255,255,255,.02);
+      padding:8px;
+    }
+    .modTop{
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap:10px;
+      margin-bottom:6px;
+    }
+    .modName{
+      font-family:var(--mono);
+      font-size:11px;
+      letter-spacing:.08em;
+      color:var(--text);
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+    .modNote{
+      min-height:68px;
+      resize:vertical;
+      padding:8px;
+      font-size:11px;
+    }
+
+    /* right panel output */
+    .outBox{
+      width:100%;
+      height:420px;
+      resize:vertical;
+      font-family:var(--mono);
+      font-size:11px;
+      line-height:1.35;
+      white-space:pre;
+      overflow:auto;
+    }
+    .outMeta{
+      display:flex; gap:10px;
+      font-family:var(--mono);
+      font-size:10px;
+      color:var(--muted2);
+      margin-top:8px;
+      align-items:center;
+      justify-content:space-between;
+    }
+    .pill{
+      border:1px solid var(--line);
+      padding:4px 6px;
+      font-family:var(--mono);
+      font-size:10px;
+      color:var(--muted);
+    }
+
+    /* system note */
+    .noteIcon{
+      position:fixed;
+      top:10px;
+      right:10px;
+      width:14px;
+      height:14px;
+      border:1px solid rgba(255,255,255,.85);
+      background:#fff; /* filled = closed */
+      cursor:pointer;
+      z-index:9999;
+    }
+    .noteIcon.open{
+      background:transparent; /* outline = open */
+    }
+    .sysNote{
+      position:fixed;
+      top:44px;
+      right:10px;
+      width:360px;
+      height:260px;
+      border:1px solid rgba(255,255,255,.24);
+      background:rgba(0,0,0,.82);
+      backdrop-filter: blur(8px);
+      box-shadow: var(--shadow);
+      display:none;
+      z-index:9998;
+    }
+    .sysNote.open{ display:block; }
+    .sysNoteHead{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      padding:8px 8px;
+      border-bottom:1px solid rgba(255,255,255,.12);
+      cursor:move;
+      user-select:none;
+      font-family:var(--mono);
+      font-size:11px;
+      letter-spacing:.08em;
+      color:var(--muted);
+      text-transform:uppercase;
+    }
+    .sysNote textarea{
+      border:none;
+      border-top:0;
+      height: calc(100% - 36px);
+      resize:none;
+      background:transparent;
+      padding:10px;
+      font-family:var(--mono);
+      font-size:11px;
+      line-height:1.35;
+    }
+
+    /* prevent overlays blocking clicks */
+    .bggrid, .drift{ pointer-events:none; }
+  </style>
+</head>
+<body>
+  <div class="drift"></div>
+  <div class="bggrid"></div>
+
+  <!-- system note primitive -->
+  <div class="noteIcon" id="noteIcon" title="SYSTEM NOTE (Cmd+;)"></div>
+  <div class="sysNote" id="sysNote">
+    <div class="sysNoteHead" id="sysNoteHead">
+      <span>SYSTEM NOTE</span>
+      <button class="btn" id="sysNoteClose" style="padding:5px 8px;">CLOSE</button>
+    </div>
+    <textarea id="sysNoteText" spellcheck="false" placeholder="Global free-form system note."></textarea>
+  </div>
+
+  <div class="app">
+    <div class="topbar">
+      <div class="brand">KETADATA // FORGE v2</div>
+      <div class="status" id="statusLine">
+        <span>MODE: <b>ROOMS</b></span>
+        <span>STATE: <b id="stateLabel">DRAFT</b></span>
+        <span>ROOMS: <b id="roomsCount">0</b></span>
+        <span>SELECTED: <b id="selectedLabel">—</b></span>
+      </div>
+      <div class="spacer"></div>
+
+      <button class="btn primary" id="btnNew">NEW</button>
+      <button class="btn primary" id="btnSave">SAVE</button>
+      <button class="btn primary" id="btnGenerate">GENERATE</button>
+      <button class="btn" id="btnCopy">COPY</button>
+      <button class="btn" id="btnExportRoom">EXPORT ROOM</button>
+      <button class="btn" id="btnExportJSON">EXPORT.JSON</button>
+      <label class="btn" style="display:inline-flex; align-items:center; gap:8px;">
+        IMPORT.JSON
+        <input id="importFile" type="file" accept="application/json" style="display:none;">
+      </label>
+      <button class="btn danger" id="btnReset">RESET</button>
+    </div>
+
+    <!-- LEFT -->
+    <div class="panel">
+      <div class="paneHead">
+        <div class="title">DEFINITIONS</div>
+        <div class="pill" title="Ctrl/Cmd+S saves">Ctrl/Cmd+S</div>
+      </div>
+      <div class="paneBody">
+        <label>ROOM</label>
+
+        <div class="row">
+          <div>
+            <label style="margin-top:0">ID</label>
+            <input id="inId" placeholder="e.g. lab / studio" spellcheck="false" />
+          </div>
+          <div>
+            <label style="margin-top:0">ACCESS</label>
+            <select id="inAccess">
+              <option value="public">public</option>
+              <option value="internal">internal</option>
+              <option value="private">private</option>
+            </select>
+          </div>
+        </div>
+
+        <label>TITLE</label>
+        <input id="inTitle" placeholder="e.g. LAB" spellcheck="false" />
+
+        <label>URL</label>
+        <input id="inUrl" placeholder="e.g. /lab.html" spellcheck="false" />
+
+        <label>TAGS (comma)</label>
+        <input id="inTags" placeholder="e.g. research,tools" spellcheck="false" />
+
+        <label>NOTES</label>
+        <textarea id="inNotes" spellcheck="false" placeholder="Room-specific notes."></textarea>
+
+        <div class="leftActions">
+          <button class="btn primary" id="btnAddRoom">ADD ROOM</button>
+          <button class="btn" id="btnUpdateDraft">APPLY TO DRAFT</button>
+        </div>
+
+        <div class="leftActions">
+          <button class="btn" id="btnSelectPrev">SELECT PREV</button>
+          <button class="btn" id="btnSelectNext">SELECT NEXT</button>
+        </div>
+
+        <div class="leftActions">
+          <button class="btn danger" id="btnDelete">DELETE</button>
+          <button class="btn" id="btnDuplicate">DUPLICATE</button>
+        </div>
+
+        <div class="hint">
+          <b>Operator rules:</b><br>
+          • <b>ADD ROOM</b> creates a new room immediately (and selects it).<br>
+          • <b>SAVE</b> creates/updates by ID (registry).<br>
+          • <b>GENERATE</b> outputs HTML for the selected room.<br>
+          • Every module has its own note. Everything collapsible.
+        </div>
+
+        <label style="margin-top:14px;">REGISTRY</label>
+        <div id="regList" class="mod" style="padding:8px; max-height:240px; overflow:auto;"></div>
+
+        <div class="hint">
+          Hotkeys: Cmd+; system note • Ctrl/Cmd+S save • G generate • C copy output
+        </div>
+      </div>
+    </div>
+
+    <!-- CENTER -->
+    <div class="centerWrap">
+      <div class="centerHead">
+        <div class="title">ROOM MODULES (GRID)</div>
+        <div class="controls">
+          <input class="search" id="search" placeholder="search: id / title / tag" spellcheck="false" />
+          <button class="btn" id="btnCollapseAll">COLLAPSE ALL</button>
+          <button class="btn" id="btnExpandAll">EXPAND ALL</button>
+        </div>
+      </div>
+
+      <div class="grid">
+        <div class="cards" id="cards"></div>
+        <div class="hint" style="margin-top:10px;">
+          Room modules are the source of truth: meta + screenshot + module notes. Select a card to edit via left rail. Generate exports the selected card.
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT -->
+    <div class="panel right">
+      <div class="paneHead">
+        <div class="title">OUTPUT</div>
+        <div class="pill" title="Output is generated HTML">HTML</div>
+      </div>
+      <div class="paneBody">
+        <label style="margin-top:0;">GENERATED HTML</label>
+        <textarea class="outBox" id="out" readonly spellcheck="false">No output yet.
+(select a room → Generate)</textarea>
+        <div class="outMeta">
+          <span id="outInfo">—</span>
+          <span class="pill" id="exportHint">Export: room JSON, forge JSON, generated HTML</span>
+        </div>
+
+        <label>ROOM JSON (selected)</label>
+        <textarea class="outBox" id="roomJson" readonly style="height:220px;" spellcheck="false"></textarea>
+
+        <div class="hint">
+          If “ADD ROOM” isn’t creating rooms, your old Forge was failing because it treated the left form as “draft only” without pushing into registry. This version writes rooms immediately and keeps selection explicit.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    /***********************
+     * KETADATA // FORGE v2
+     * industrial, room-sorter, exportable state
+     ***********************/
+
+    const STORAGE_KEY = "KETADATA_FORGE_V2_STATE";
+    const NOTE_KEY = "KETADATA_SYSTEM_NOTE";
+    const CORE = {
+      cssPath: "/core/ketadata-core.css",
+      jsPath: "/core/ketadata-core.js",
+      version: "v1"
+    };
+
+    const DEFAULT_MODULES = [
+      { key: "REGISTRY", label: "REGISTRY" },
+      { key: "DIRECTORY", label: "DIRECTORY" },
+      { key: "LEDGER", label: "LEDGER" },
+      { key: "GALLERY", label: "GALLERY" },
+      { key: "CAPTURE", label: "CAPTURE" },
+      { key: "PROMPT_EXPORT", label: "PROMPT_EXPORT" },
+      { key: "AUDIT", label: "AUDIT" },
+      { key: "VI_DI_SURFACE", label: "VI_DI_SURFACE" }
+    ];
+
+    function uid(){
+      return Math.random().toString(36).slice(2,7) + "-" + Date.now().toString(36);
+    }
+    function safeId(s){
+      return (s||"").trim().toLowerCase();
+    }
+    function validId(s){
+      return /^[a-z0-9_-]+$/.test(s);
+    }
+    function parseTags(s){
+      return (s||"")
+        .split(",")
+        .map(x=>x.trim())
+        .filter(Boolean);
+    }
+    function nowISO(){
+      return new Date().toISOString();
+    }
+
+    function downloadText(filename, text){
+      const blob = new Blob([text], {type:"text/plain;charset=utf-8"});
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); }, 50);
+    }
+    function downloadJSON(filename, obj){
+      downloadText(filename, JSON.stringify(obj, null, 2));
+    }
+    async function copyToClipboard(text){
+      try{
+        await navigator.clipboard.writeText(text);
+        return true;
+      }catch(e){
+        // fallback
+        const ta = document.createElement("textarea");
+        ta.value = text;
+        document.body.appendChild(ta);
+        ta.select();
+        try{ document.execCommand("copy"); }catch(_){}
+        ta.remove();
+        return true;
+      }
+    }
+
+    function loadState(){
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if(!raw){
+        return {
+          version: "v2",
+          core: CORE,
+          rooms: [],
+          selectedRoomId: null
+        };
+      }
+      try{
+        const st = JSON.parse(raw);
+        if(!st.rooms) st.rooms = [];
+        if(!st.core) st.core = CORE;
+        if(!("selectedRoomId" in st)) st.selectedRoomId = null;
+        return st;
+      }catch(e){
+        return {
+          version: "v2",
+          core: CORE,
+          rooms: [],
+          selectedRoomId: null
+        };
+      }
+    }
+    function saveState(){
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      refreshStatus();
+    }
+
+    let state = loadState();
+
+    // UI refs
+    const roomsCount = document.getElementById("roomsCount");
+    const selectedLabel = document.getElementById("selectedLabel");
+
+    const inId = document.getElementById("inId");
+    const inAccess = document.getElementById("inAccess");
+    const inTitle = document.getElementById("inTitle");
+    const inUrl = document.getElementById("inUrl");
+    const inTags = document.getElementById("inTags");
+    const inNotes = document.getElementById("inNotes");
+
+    const cards = document.getElementById("cards");
+    const regList = document.getElementById("regList");
+    const out = document.getElementById("out");
+    const outInfo = document.getElementById("outInfo");
+    const roomJson = document.getElementById("roomJson");
+    const search = document.getElementById("search");
+
+    // buttons
+    const btnNew = document.getElementById("btnNew");
+    const btnSave = document.getElementById("btnSave");
+    const btnGenerate = document.getElementById("btnGenerate");
+    const btnCopy = document.getElementById("btnCopy");
+    const btnExportRoom = document.getElementById("btnExportRoom");
+    const btnExportJSON = document.getElementById("btnExportJSON");
+    const importFile = document.getElementById("importFile");
+    const btnReset = document.getElementById("btnReset");
+
+    const btnAddRoom = document.getElementById("btnAddRoom");
+    const btnUpdateDraft = document.getElementById("btnUpdateDraft");
+    const btnSelectPrev = document.getElementById("btnSelectPrev");
+    const btnSelectNext = document.getElementById("btnSelectNext");
+    const btnDelete = document.getElementById("btnDelete");
+    const btnDuplicate = document.getElementById("btnDuplicate");
+    const btnCollapseAll = document.getElementById("btnCollapseAll");
+    const btnExpandAll = document.getElementById("btnExpandAll");
+
+    // system note
+    const noteIcon = document.getElementById("noteIcon");
+    const sysNote = document.getElementById("sysNote");
+    const sysNoteText = document.getElementById("sysNoteText");
+    const sysNoteClose = document.getElementById("sysNoteClose");
+    const sysNoteHead = document.getElementById("sysNoteHead");
+
+    function getSelectedRoom(){
+      if(!state.selectedRoomId) return null;
+      return state.rooms.find(r=>r.id === state.selectedRoomId) || null;
+    }
+
+    function setSelectedRoom(id){
+      state.selectedRoomId = id;
+      saveState();
+      renderAll();
+      loadSelectedIntoLeftRail();
+      updateRoomJsonPanel();
+    }
+
+    function defaultRoom(seedId=""){
+      const id = seedId && validId(seedId) ? seedId : ("room-" + uid().slice(0,6));
+      const title = seedId ? seedId.toUpperCase() : "ROOM";
+      const r = {
+        id,
+        access: "public",
+        title,
+        url: "/" + id + ".html",
+        tags: [],
+        notes: "",
+        screenshotDataUrl: "",
+        modules: DEFAULT_MODULES.map(m=>({
+          key:m.key,
+          enabled:false,
+          note:""
+        })),
+        createdAt: nowISO(),
+        updatedAt: nowISO()
+      };
+      return r;
+    }
+
+    function upsertRoom(room){
+      const idx = state.rooms.findIndex(r=>r.id === room.id);
+      room.updatedAt = nowISO();
+      if(idx === -1){
+        state.rooms.push(room);
+      }else{
+        state.rooms[idx] = room;
+      }
+      saveState();
+    }
+
+    function deleteRoom(id){
+      const idx = state.rooms.findIndex(r=>r.id === id);
+      if(idx === -1) return;
+      state.rooms.splice(idx,1);
+      if(state.selectedRoomId === id){
+        state.selectedRoomId = state.rooms[0]?.id || null;
+      }
+      saveState();
+    }
+
+    function duplicateRoom(id){
+      const src = state.rooms.find(r=>r.id===id);
+      if(!src) return null;
+      const copy = structuredClone(src);
+      copy.id = src.id + "-copy";
+      if(!validId(copy.id)){
+        copy.id = "copy-" + uid().slice(0,8);
+      }
+      copy.title = src.title + " COPY";
+      copy.url = "/" + copy.id + ".html";
+      copy.createdAt = nowISO();
+      copy.updatedAt = nowISO();
+      state.rooms.push(copy);
+      state.selectedRoomId = copy.id;
+      saveState();
+      return copy;
+    }
+
+    function moveSelection(delta){
+      if(state.rooms.length === 0) return;
+      const i = state.rooms.findIndex(r=>r.id===state.selectedRoomId);
+      const next = Math.max(0, Math.min(state.rooms.length-1, (i===-1?0:i+delta)));
+      setSelectedRoom(state.rooms[next].id);
+    }
+
+    function refreshStatus(){
+      roomsCount.textContent = String(state.rooms.length);
+      selectedLabel.textContent = state.selectedRoomId || "—";
+    }
+
+    function loadSelectedIntoLeftRail(){
+      const r = getSelectedRoom();
+      if(!r){
+        inId.value = "";
+        inTitle.value = "";
+        inAccess.value = "public";
+        inUrl.value = "";
+        inTags.value = "";
+        inNotes.value = "";
+        return;
+      }
+      inId.value = r.id;
+      inTitle.value = r.title;
+      inAccess.value = r.access;
+      inUrl.value = r.url || "";
+      inTags.value = (r.tags||[]).join(", ");
+      inNotes.value = r.notes || "";
+    }
+
+    function applyLeftRailToSelected(){
+      const r = getSelectedRoom();
+      if(!r) return null;
+
+      const id = safeId(inId.value);
+      if(!id || !validId(id)){
+        alert("Invalid ID. Use only a-z 0-9 _ -");
+        return null;
+      }
+
+      // allow ID change (renaming)
+      if(id !== r.id){
+        // prevent collisions
+        if(state.rooms.some(x=>x.id===id)){
+          alert("ID already exists in registry.");
+          return null;
+        }
+        // rename
+        r.id = id;
+        if(!r.url || r.url === "/" + state.selectedRoomId + ".html"){
+          r.url = "/" + id + ".html";
+        }
+        state.selectedRoomId = id;
+      }
+
+      r.access = inAccess.value;
+      r.title = (inTitle.value || "").trim() || id.toUpperCase();
+      r.url = (inUrl.value || "").trim() || ("/" + id + ".html");
+      r.tags = parseTags(inTags.value);
+      r.notes = inNotes.value || "";
+
+      upsertRoom(r);
+      renderAll();
+      updateRoomJsonPanel();
+      return r;
+    }
+
+    function validateForSave(room){
+      if(!room) return {ok:false, msg:"No selected room."};
+      if(!room.id || !validId(room.id)) return {ok:false, msg:"Invalid room ID."};
+      if(!room.title || !room.title.trim()) return {ok:false, msg:"Missing title."};
+      return {ok:true, msg:"OK"};
+    }
+
+    function generateHTML(room){
+      const tags = (room.tags||[]).join(",");
+      const enabledMods = (room.modules||[]).filter(m=>m.enabled).map(m=>m.key);
+
+      const boot = {
+        roomId: room.id,
+        title: room.title,
+        access: room.access,
+        tags: room.tags || [],
+        url: room.url || ("/" + room.id + ".html"),
+        modules: enabledMods,
+        core: state.core || CORE
+      };
+
+      const moduleSections = enabledMods.length
+        ? enabledMods.map(k=>`<section class="kd-module" data-module="${k}">
+  <div class="kd-module__head">${k}</div>
+  <div class="kd-module__body">placeholder</div>
+</section>`).join("\n\n")
+        : `<section class="kd-module" data-module="EMPTY">
+  <div class="kd-module__head">NO MODULES SELECTED</div>
+  <div class="kd-module__body">Enable modules in the Forge.</div>
+</section>`;
+
+      return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>${escapeHtml(room.title)} // KETADATA</title>
+
+  <!-- CORE IMPORTS -->
+  <link rel="stylesheet" href="${escapeHtml((state.core||CORE).cssPath)}">
+  <script src="${escapeHtml((state.core||CORE).jsPath)}" defer></script>
+
+  <!-- ROOM OVERRIDES (keep minimal) -->
+  <style>
+    /* fallback minimal frame if core missing */
+    body{ margin:0; background:#060606; color:#fff; font-family:Arial, Helvetica, sans-serif; }
+    .kd-frame{ min-height:100vh; padding:18px; }
+    .kd-meta{ font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace; font-size:12px; opacity:.78; letter-spacing:.08em; }
+    .kd-title{ font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace; font-size:22px; letter-spacing:.12em; text-transform:uppercase; margin:10px 0 14px; }
+    .kd-module{ border:1px solid rgba(255,255,255,.12); margin:10px 0; }
+    .kd-module__head{ padding:10px; border-bottom:1px solid rgba(255,255,255,.12); font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace; letter-spacing:.08em; }
+    .kd-module__body{ padding:10px; opacity:.9; }
+  </style>
+</head>
+<body>
+  <div class="kd-frame">
+    <div class="kd-meta">id:${escapeHtml(room.id)}  // access:${escapeHtml(room.access)}  // tags:${escapeHtml(tags || "—")}</div>
+    <div class="kd-title">${escapeHtml(room.title)}</div>
+
+    ${moduleSections}
+  </div>
+
+  <script>
+    window.KETADATA_BOOT = ${JSON.stringify(boot, null, 2)};
+  </script>
+</body>
+</html>`;
+    }
+
+    function escapeHtml(str){
+      return String(str||"")
+        .replaceAll("&","&amp;")
+        .replaceAll("<","&lt;")
+        .replaceAll(">","&gt;")
+        .replaceAll('"',"&quot;")
+        .replaceAll("'","&#039;");
+    }
+
+    function updateRoomJsonPanel(){
+      const r = getSelectedRoom();
+      roomJson.value = r ? JSON.stringify(r, null, 2) : "";
+    }
+
+    function renderRegistryList(){
+      if(state.rooms.length === 0){
+        regList.innerHTML = `<div class="mini">No rooms yet. Use <b>ADD ROOM</b>.</div>`;
+        return;
+      }
+      const q = (search.value||"").trim().toLowerCase();
+      const filtered = state.rooms.filter(r=>{
+        if(!q) return true;
+        const hay = [
+          r.id, r.title, (r.tags||[]).join(" "), r.access
+        ].join(" ").toLowerCase();
+        return hay.includes(q);
+      });
+
+      regList.innerHTML = filtered.map(r=>{
+        const sel = r.id===state.selectedRoomId;
+        return `<div style="display:flex; justify-content:space-between; gap:10px; padding:6px 6px; border:1px solid rgba(255,255,255,.08); margin-bottom:6px; background:${sel?'rgba(255,255,255,.05)':'rgba(0,0,0,.18)'}; cursor:pointer;"
+          data-sel="${r.id}">
+          <div style="min-width:0;">
+            <div style="font-family:var(--mono); font-size:11px; letter-spacing:.08em; color:rgba(255,255,255,.9); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+              ${sel ? "• " : ""}${escapeHtml(r.id)} // ${escapeHtml(r.title)}
+            </div>
+            <div style="font-family:var(--mono); font-size:10px; color:rgba(255,255,255,.45); margin-top:3px;">
+              ${escapeHtml(r.access)} • ${(r.tags||[]).slice(0,4).join(", ")}
+            </div>
+          </div>
+          <div style="font-family:var(--mono); font-size:10px; color:rgba(255,255,255,.35); white-space:nowrap;">
+            ${new Date(r.updatedAt).toLocaleString()}
+          </div>
+        </div>`;
+      }).join("");
+
+      regList.querySelectorAll("[data-sel]").forEach(el=>{
+        el.addEventListener("click", ()=>{
+          setSelectedRoom(el.getAttribute("data-sel"));
+        });
+      });
+    }
+
+    function renderCards(){
+      const q = (search.value||"").trim().toLowerCase();
+      const list = state.rooms.filter(r=>{
+        if(!q) return true;
+        const hay = [r.id,r.title,r.access,(r.tags||[]).join(" ")].join(" ").toLowerCase();
+        return hay.includes(q);
+      });
+
+      if(list.length === 0){
+        cards.innerHTML = `<div class="hint">No matching rooms. Clear search or ADD ROOM.</div>`;
+        return;
+      }
+
+      cards.innerHTML = list.map((r, idx)=>{
+        const sel = r.id === state.selectedRoomId;
+        const tagStr = (r.tags||[]).join(", ") || "—";
+        const shot = r.screenshotDataUrl ? `<img alt="screenshot" src="${r.screenshotDataUrl}">` : ``;
+
+        const mods = DEFAULT_MODULES.map(m=>{
+          const entry = (r.modules||[]).find(x=>x.key===m.key) || {key:m.key,enabled:false,note:""};
+          return `<div class="mod" data-room="${r.id}" data-mod="${m.key}">
+            <div class="modTop">
+              <div class="modName">${m.label}</div>
+              <label style="margin:0; display:flex; align-items:center; gap:8px;">
+                <span class="mini" style="margin:0;">enabled</span>
+                <input type="checkbox" ${entry.enabled?"checked":""} data-mod-toggle="${m.key}" style="width:16px; height:16px;">
+              </label>
+            </div>
+            <textarea class="modNote" spellcheck="false" placeholder="notes for ${m.label}…" data-mod-note="${m.key}">${escapeHtml(entry.note||"")}</textarea>
+          </div>`;
+        }).join("");
+
+        return `<div class="card ${sel?"selected":""}" data-card="${r.id}">
+          <div class="cardHead">
+            <div class="left">
+              <div class="badge">#${idx+1}</div>
+              <div class="cardTitle">${escapeHtml(r.title)} <span style="opacity:.45;">// ${escapeHtml(r.id)}</span></div>
+            </div>
+            <div class="right">
+              <div class="iconBtn" title="Select" data-act="select">◎</div>
+              <div class="iconBtn" title="Duplicate" data-act="dup">⎘</div>
+              <div class="iconBtn danger" title="Delete" data-act="del">×</div>
+            </div>
+          </div>
+
+          <details open>
+            <summary>meta / identification <span class="mini">access:${escapeHtml(r.access)} • tags:${escapeHtml(tagStr)}</span></summary>
+            <div class="sectBody">
+              <div class="two">
+                <div>
+                  <label style="margin-top:0">ID</label>
+                  <input data-field="id" value="${escapeHtml(r.id)}" spellcheck="false">
+                </div>
+                <div>
+                  <label style="margin-top:0">ACCESS</label>
+                  <select data-field="access">
+                    <option value="public" ${r.access==="public"?"selected":""}>public</option>
+                    <option value="internal" ${r.access==="internal"?"selected":""}>internal</option>
+                    <option value="private" ${r.access==="private"?"selected":""}>private</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="two" style="margin-top:10px;">
+                <div>
+                  <label style="margin-top:0">TITLE</label>
+                  <input data-field="title" value="${escapeHtml(r.title)}" spellcheck="false">
+                </div>
+                <div>
+                  <label style="margin-top:0">URL</label>
+                  <input data-field="url" value="${escapeHtml(r.url||"")}" spellcheck="false">
+                </div>
+              </div>
+
+              <label>TAGS (comma)</label>
+              <input data-field="tags" value="${escapeHtml((r.tags||[]).join(", "))}" spellcheck="false">
+
+              <label>NOTES</label>
+              <textarea data-field="notes" spellcheck="false">${escapeHtml(r.notes||"")}</textarea>
+
+              <div class="mini">Tip: editing inside the card updates registry immediately (auto-save). Select card to edit on left rail if you prefer single-source editing.</div>
+            </div>
+          </details>
+
+          <details open>
+            <summary>screenshot <span class="mini">object-fit:contain (never crop)</span></summary>
+            <div class="sectBody">
+              <div class="shotBox">
+                ${shot}
+                <div class="shotOverlay" ${r.screenshotDataUrl ? 'style="display:none;"':''}>UPLOAD SCREENSHOT (stored as data URL)</div>
+              </div>
+              <div class="shotActions">
+                <label class="btn" style="display:inline-flex; align-items:center; gap:8px;">
+                  UPLOAD
+                  <input type="file" accept="image/*" data-shot="${r.id}" style="display:none;">
+                </label>
+                <button class="btn" data-clear-shot="${r.id}">CLEAR</button>
+              </div>
+            </div>
+          </details>
+
+          <details>
+            <summary>modules + notes <span class="mini">everything exportable</span></summary>
+            <div class="sectBody">
+              <div class="mods">
+                ${mods}
+              </div>
+            </div>
+          </details>
+        </div>`;
+      }).join("");
+
+      // bind card actions + inline edits
+      cards.querySelectorAll("[data-card]").forEach(cardEl=>{
+        const roomId = cardEl.getAttribute("data-card");
+
+        cardEl.querySelectorAll("[data-act]").forEach(btn=>{
+          btn.addEventListener("click", (e)=>{
+            e.stopPropagation();
+            const act = btn.getAttribute("data-act");
+            if(act==="select") setSelectedRoom(roomId);
+            if(act==="dup"){
+              duplicateRoom(roomId);
+              renderAll();
+              loadSelectedIntoLeftRail();
+              updateRoomJsonPanel();
+            }
+            if(act==="del"){
+              if(confirm("Delete room '" + roomId + "' ?")){
+                deleteRoom(roomId);
+                renderAll();
+                loadSelectedIntoLeftRail();
+                updateRoomJsonPanel();
+              }
+            }
+          });
+        });
+
+        cardEl.addEventListener("click", ()=>{
+          if(state.selectedRoomId !== roomId) setSelectedRoom(roomId);
+        });
+
+        // inline meta edits (auto-save)
+        cardEl.querySelectorAll("[data-field]").forEach(inp=>{
+          inp.addEventListener("change", ()=>{
+            const r = state.rooms.find(x=>x.id===roomId);
+            if(!r) return;
+
+            const field = inp.getAttribute("data-field");
+            const val = inp.value;
+
+            if(field === "id"){
+              const nextId = safeId(val);
+              if(!nextId || !validId(nextId)){
+                alert("Invalid ID. Use only a-z 0-9 _ -");
+                inp.value = r.id;
+                return;
+              }
+              if(nextId !== r.id && state.rooms.some(x=>x.id===nextId)){
+                alert("ID already exists.");
+                inp.value = r.id;
+                return;
+              }
+              // rename room + update selection
+              const oldId = r.id;
+              r.id = nextId;
+              if(r.url === "/" + oldId + ".html") r.url = "/" + nextId + ".html";
+              // update selection
+              if(state.selectedRoomId === oldId) state.selectedRoomId = nextId;
+              saveState();
+              renderAll();
+              loadSelectedIntoLeftRail();
+              updateRoomJsonPanel();
+              return;
+            }
+
+            if(field === "access") r.access = val;
+            if(field === "title") r.title = val.trim() || r.id.toUpperCase();
+            if(field === "url") r.url = val.trim() || ("/" + r.id + ".html");
+            if(field === "tags") r.tags = parseTags(val);
+            if(field === "notes") r.notes = val || "";
+
+            upsertRoom(r);
+            renderRegistryList();
+            refreshStatus();
+            updateRoomJsonPanel();
+          });
+        });
+
+        // screenshot upload
+        const fileInput = cardEl.querySelector(`input[type="file"][data-shot="${CSS.escape(roomId)}"]`);
+        if(fileInput){
+          fileInput.addEventListener("change", async ()=>{
+            const f = fileInput.files?.[0];
+            if(!f) return;
+            const r = state.rooms.find(x=>x.id===roomId);
+            if(!r) return;
+
+            const dataUrl = await fileToDataURL(f);
+            r.screenshotDataUrl = dataUrl;
+            upsertRoom(r);
+            renderAll(); // re-render card
+            updateRoomJsonPanel();
+          });
+        }
+        const clearBtn = cardEl.querySelector(`[data-clear-shot="${CSS.escape(roomId)}"]`);
+        if(clearBtn){
+          clearBtn.addEventListener("click", (e)=>{
+            e.stopPropagation();
+            const r = state.rooms.find(x=>x.id===roomId);
+            if(!r) return;
+            r.screenshotDataUrl = "";
+            upsertRoom(r);
+            renderAll();
+            updateRoomJsonPanel();
+          });
+        }
+
+        // module toggles + notes
+        cardEl.querySelectorAll("[data-mod-toggle]").forEach(chk=>{
+          chk.addEventListener("change", ()=>{
+            const r = state.rooms.find(x=>x.id===roomId);
+            if(!r) return;
+            const key = chk.getAttribute("data-mod-toggle");
+            const entry = r.modules.find(m=>m.key===key);
+            if(entry) entry.enabled = chk.checked;
+            upsertRoom(r);
+            updateRoomJsonPanel();
+          });
+        });
+
+        cardEl.querySelectorAll("[data-mod-note]").forEach(ta=>{
+          ta.addEventListener("change", ()=>{
+            const r = state.rooms.find(x=>x.id===roomId);
+            if(!r) return;
+            const key = ta.getAttribute("data-mod-note");
+            const entry = r.modules.find(m=>m.key===key);
+            if(entry) entry.note = ta.value || "";
+            upsertRoom(r);
+            updateRoomJsonPanel();
+          });
+        });
+      });
+    }
+
+    async function fileToDataURL(file){
+      return new Promise((res, rej)=>{
+        const reader = new FileReader();
+        reader.onload = ()=>res(String(reader.result));
+        reader.onerror = rej;
+        reader.readAsDataURL(file);
+      });
+    }
+
+    function renderAll(){
+      refreshStatus();
+      renderRegistryList();
+      renderCards();
+      updateRoomJsonPanel();
+    }
+
+    function setOutput(text){
+      out.value = text;
+      const chars = text ? text.length : 0;
+      outInfo.textContent = `generated: ${new Date().toLocaleString()} • ${chars.toLocaleString()} chars`;
+    }
+
+    /************
+     * Actions
+     ************/
+    btnNew.addEventListener("click", ()=>{
+      // NEW = create and select a new room immediately (industrial behavior)
+      const r = defaultRoom();
+      state.rooms.push(r);
+      state.selectedRoomId = r.id;
+      saveState();
+      renderAll();
+      loadSelectedIntoLeftRail();
+      setOutput("No output yet.\n(select a room → Generate)");
+    });
+
+    btnAddRoom.addEventListener("click", ()=>{
+      const id = safeId(inId.value);
+      let r;
+      if(id){
+        if(!validId(id)){
+          alert("Invalid ID. Use only a-z 0-9 _ -");
+          return;
+        }
+        if(state.rooms.some(x=>x.id===id)){
+          alert("That ID already exists. Use SAVE to update instead.");
+          return;
+        }
+        r = defaultRoom(id);
+        r.title = (inTitle.value || "").trim() || id.toUpperCase();
+        r.access = inAccess.value;
+        r.url = (inUrl.value || "").trim() || ("/" + id + ".html");
+        r.tags = parseTags(inTags.value);
+        r.notes = inNotes.value || "";
+      }else{
+        r = defaultRoom();
+      }
+      state.rooms.push(r);
+      state.selectedRoomId = r.id;
+      saveState();
+      renderAll();
+      loadSelectedIntoLeftRail();
+      updateRoomJsonPanel();
+    });
+
+    btnUpdateDraft.addEventListener("click", ()=>{
+      if(!getSelectedRoom()){
+        alert("No selected room. Add/select a room first.");
+        return;
+      }
+      applyLeftRailToSelected();
+    });
+
+    btnSave.addEventListener("click", ()=>{
+      const r = getSelectedRoom();
+      if(!r){
+        // allow SAVE to create if left rail has id
+        const id = safeId(inId.value);
+        if(!id || !validId(id)){
+          alert("No selected room. Enter a valid ID and use ADD ROOM.");
+          return;
+        }
+        if(state.rooms.some(x=>x.id===id)){
+          // select existing by id, then apply and save
+          setSelectedRoom(id);
+          applyLeftRailToSelected();
+          return;
+        }else{
+          // create new by save (industrial fallback)
+          const nr = defaultRoom(id);
+          nr.title = (inTitle.value || "").trim() || id.toUpperCase();
+          nr.access = inAccess.value;
+          nr.url = (inUrl.value || "").trim() || ("/" + id + ".html");
+          nr.tags = parseTags(inTags.value);
+          nr.notes = inNotes.value || "";
+          state.rooms.push(nr);
+          state.selectedRoomId = nr.id;
+          saveState();
+          renderAll();
+          loadSelectedIntoLeftRail();
+          updateRoomJsonPanel();
+          return;
+        }
+      }
+      const updated = applyLeftRailToSelected();
+      if(!updated) return;
+      const check = validateForSave(updated);
+      if(!check.ok) alert(check.msg);
+    });
+
+    btnGenerate.addEventListener("click", ()=>{
+      const r = getSelectedRoom();
+      if(!r){
+        alert("Select a room first.");
+        return;
+      }
+      // ensure left rail edits are applied before generation (seamless)
+      applyLeftRailToSelected();
+
+      const check = validateForSave(getSelectedRoom());
+      if(!check.ok){
+        alert(check.msg);
+        return;
+      }
+      const html = generateHTML(getSelectedRoom());
+      setOutput(html);
+    });
+
+    btnCopy.addEventListener("click", async ()=>{
+      const txt = out.value || "";
+      if(!txt || txt.startsWith("No output yet")){
+        alert("Generate output first.");
+        return;
+      }
+      await copyToClipboard(txt);
+    });
+
+    btnExportRoom.addEventListener("click", ()=>{
+      const r = getSelectedRoom();
+      if(!r){
+        alert("Select a room first.");
+        return;
+      }
+      const txt = out.value || "";
+      if(!txt || txt.startsWith("No output yet")){
+        alert("Generate output first.");
+        return;
+      }
+      downloadText(`${r.id}.html`, txt);
+      downloadJSON(`${r.id}.room.json`, r);
+    });
+
+    btnExportJSON.addEventListener("click", ()=>{
+      downloadJSON("ketadata.forge.state.json", state);
+    });
+
+    importFile.addEventListener("change", async ()=>{
+      const f = importFile.files?.[0];
+      if(!f) return;
+      const text = await f.text();
+      try{
+        const obj = JSON.parse(text);
+        if(!obj.rooms) obj.rooms = [];
+        if(!obj.core) obj.core = CORE;
+        if(!("selectedRoomId" in obj)) obj.selectedRoomId = obj.rooms[0]?.id || null;
+
+        // normalize module slots
+        obj.rooms = obj.rooms.map(r=>{
+          const rr = {...r};
+          if(!rr.modules || !Array.isArray(rr.modules)){
+            rr.modules = DEFAULT_MODULES.map(m=>({key:m.key, enabled:false, note:""}));
+          }else{
+            // ensure all module keys exist
+            const map = new Map(rr.modules.map(m=>[m.key,m]));
+            rr.modules = DEFAULT_MODULES.map(m=>{
+              const ex = map.get(m.key) || {key:m.key, enabled:false, note:""};
+              return { key:m.key, enabled:!!ex.enabled, note: ex.note || "" };
+            });
+          }
+          if(!rr.updatedAt) rr.updatedAt = nowISO();
+          if(!rr.createdAt) rr.createdAt = nowISO();
+          if(!rr.tags) rr.tags = [];
+          if(!rr.access) rr.access = "public";
+          if(!rr.url) rr.url = "/" + rr.id + ".html";
+          if(!rr.title) rr.title = (rr.id||"ROOM").toUpperCase();
+          if(!rr.notes) rr.notes = "";
+          if(!rr.screenshotDataUrl) rr.screenshotDataUrl = "";
+          return rr;
+        });
+
+        state = obj;
+        saveState();
+        renderAll();
+        loadSelectedIntoLeftRail();
+        setOutput("Imported state.\nSelect a room → Generate.");
+      }catch(e){
+        alert("IMPORT FAILED: invalid JSON.");
+      }finally{
+        importFile.value = "";
+      }
+    });
+
+    btnReset.addEventListener("click", ()=>{
+      if(!confirm("RESET FORGE STATE? This clears local storage.")) return;
+      localStorage.removeItem(STORAGE_KEY);
+      state = loadState();
+      renderAll();
+      loadSelectedIntoLeftRail();
+      setOutput("No output yet.\n(select a room → Generate)");
+    });
+
+    btnSelectPrev.addEventListener("click", ()=> moveSelection(-1));
+    btnSelectNext.addEventListener("click", ()=> moveSelection(+1));
+
+    btnDelete.addEventListener("click", ()=>{
+      const r = getSelectedRoom();
+      if(!r){ alert("No selected room."); return; }
+      if(!confirm("Delete room '" + r.id + "' ?")) return;
+      deleteRoom(r.id);
+      renderAll();
+      loadSelectedIntoLeftRail();
+      updateRoomJsonPanel();
+    });
+
+    btnDuplicate.addEventListener("click", ()=>{
+      const r = getSelectedRoom();
+      if(!r){ alert("No selected room."); return; }
+      duplicateRoom(r.id);
+      renderAll();
+      loadSelectedIntoLeftRail();
+      updateRoomJsonPanel();
+    });
+
+    btnCollapseAll.addEventListener("click", ()=>{
+      document.querySelectorAll(".card details").forEach(d=>d.open=false);
+    });
+    btnExpandAll.addEventListener("click", ()=>{
+      document.querySelectorAll(".card details").forEach(d=>d.open=true);
+    });
+
+    search.addEventListener("input", ()=>{
+      renderAll();
+    });
+
+    // hotkeys
+    document.addEventListener("keydown", (e)=>{
+      const tag = (e.target && e.target.tagName) ? e.target.tagName.toLowerCase() : "";
+      const typing = (tag==="input" || tag==="textarea" || tag==="select");
+
+      // Cmd+; system note
+      if((e.metaKey || e.ctrlKey) && e.key === ";"){
+        e.preventDefault();
+        toggleSystemNote();
+        return;
+      }
+      // Ctrl/Cmd+S save
+      if((e.metaKey || e.ctrlKey) && (e.key === "s" || e.key === "S")){
+        e.preventDefault();
+        btnSave.click();
+        return;
+      }
+      if(typing) return;
+
+      if(e.key === "g" || e.key === "G"){
+        btnGenerate.click();
+      }
+      if(e.key === "c" || e.key === "C"){
+        btnCopy.click();
+      }
+    });
+
+    /****************
+     * System Note
+     ****************/
+    function toggleSystemNote(){
+      const open = sysNote.classList.toggle("open");
+      noteIcon.classList.toggle("open", open);
+      if(open) sysNoteText.focus();
+      localStorage.setItem(NOTE_KEY, sysNoteText.value || "");
+    }
+    noteIcon.addEventListener("click", toggleSystemNote);
+    sysNoteClose.addEventListener("click", toggleSystemNote);
+    sysNoteText.value = localStorage.getItem(NOTE_KEY) || "";
+    sysNoteText.addEventListener("input", ()=>{
+      localStorage.setItem(NOTE_KEY, sysNoteText.value || "");
+    });
+
+    // draggable system note
+    (function makeDraggable(){
+      let dragging=false, sx=0, sy=0, ox=0, oy=0;
+      sysNoteHead.addEventListener("mousedown", (e)=>{
+        dragging=true;
+        sx=e.clientX; sy=e.clientY;
+        const rect=sysNote.getBoundingClientRect();
+        ox=rect.left; oy=rect.top;
+        e.preventDefault();
+      });
+      window.addEventListener("mousemove", (e)=>{
+        if(!dragging) return;
+        const dx=e.clientX-sx, dy=e.clientY-sy;
+        sysNote.style.left = (ox+dx) + "px";
+        sysNote.style.top = (oy+dy) + "px";
+        sysNote.style.right = "auto";
+      });
+      window.addEventListener("mouseup", ()=> dragging=false);
+    })();
+
+    // first render
+    if(state.rooms.length > 0 && !state.selectedRoomId){
+      state.selectedRoomId = state.rooms[0].id;
+      saveState();
+    }
+    renderAll();
+    loadSelectedIntoLeftRail();
+    setOutput("No output yet.\n(select a room → Generate)");
+  </script>
+</body>
+</html>
