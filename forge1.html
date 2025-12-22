@@ -1,0 +1,875 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>KETADATA // FORGE v0.1</title>
+
+<style>
+:root{
+  --bg:#000;
+  --fg:#fff;
+  --muted:rgba(255,255,255,.55);
+  --line:rgba(255,255,255,.14);
+  --panel:rgba(255,255,255,.03);
+  --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  --ui: Arial, Helvetica, sans-serif;
+  --pad:12px;
+  --gap:12px;
+}
+
+*{ box-sizing:border-box; }
+html,body{ height:100%; margin:0; }
+body{
+  background:var(--bg);
+  color:var(--fg);
+  font-family:var(--ui);
+  overflow:hidden;
+}
+body::before{
+  content:"";
+  position:fixed; inset:0;
+  background:
+    linear-gradient(rgba(255,255,255,.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,.08) 1px, transparent 1px);
+  background-size: 36px 36px;
+  opacity:.28;
+  pointer-events:none;
+}
+
+.app{
+  height:100%;
+  display:grid;
+  grid-template-rows:auto 1fr;
+}
+
+.top{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  padding:10px 12px;
+  border-bottom:1px solid var(--line);
+  background:#000;
+}
+
+.brand{
+  font-weight:900;
+  font-size:11px;
+  letter-spacing:.22em;
+  text-transform:uppercase;
+  user-select:none;
+}
+
+.topRight{
+  display:flex;
+  align-items:center;
+  gap:10px;
+}
+
+.noteIcon{
+  width:14px;
+  height:14px;
+  border:1px solid #fff;
+  background:#fff;
+  cursor:pointer;
+}
+.noteIcon.open{ background:transparent; }
+
+.btn{
+  border:1px solid var(--line);
+  background:transparent;
+  color:#fff;
+  font-size:10px;
+  letter-spacing:.18em;
+  text-transform:uppercase;
+  padding:6px 10px;
+  cursor:pointer;
+}
+.btn:hover{ border-color:#fff; }
+.btn.danger{ border-color:rgba(255,255,255,.22); }
+.btn.danger:hover{ border-color:#fff; }
+
+.main{
+  height:100%;
+  display:grid;
+  grid-template-columns:320px 1fr 420px;
+}
+
+.panel{
+  height:100%;
+  display:flex;
+  flex-direction:column;
+  border-right:1px solid var(--line);
+}
+.panel:last-child{ border-right:none; }
+
+.panelHead{
+  padding:var(--pad);
+  border-bottom:1px solid var(--line);
+  font-size:10px;
+  letter-spacing:.18em;
+  text-transform:uppercase;
+  font-weight:900;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+}
+
+.panelBody{
+  padding:var(--pad);
+  overflow:auto;
+  display:flex;
+  flex-direction:column;
+  gap:var(--gap);
+}
+
+label{
+  font-size:10px;
+  letter-spacing:.14em;
+  text-transform:uppercase;
+  color:var(--muted);
+}
+
+input, textarea, select{
+  width:100%;
+  background:transparent;
+  color:#fff;
+  border:1px solid var(--line);
+  padding:8px;
+  font-family:var(--mono);
+  font-size:11px;
+}
+textarea{ resize:vertical; min-height:80px; }
+
+.row{
+  display:flex;
+  gap:10px;
+}
+.row > *{ flex:1; }
+
+.stackBtns{
+  display:flex;
+  gap:10px;
+  flex-wrap:wrap;
+}
+
+.hr{
+  height:1px;
+  background:var(--line);
+  margin:6px 0;
+}
+
+.list{
+  border:1px solid var(--line);
+}
+.item{
+  padding:8px;
+  border-bottom:1px solid var(--line);
+  cursor:pointer;
+  font-family:var(--mono);
+  font-size:11px;
+  display:flex;
+  justify-content:space-between;
+  gap:10px;
+}
+.item:last-child{ border-bottom:none; }
+.item.active{ background:rgba(255,255,255,.08); }
+
+.badge{
+  color:var(--muted);
+  font-size:10px;
+}
+
+.output{
+  border:1px solid var(--line);
+  background:rgba(255,255,255,.02);
+  padding:10px;
+  font-family:var(--mono);
+  font-size:11px;
+  white-space:pre-wrap;
+  min-height:180px;
+}
+
+.small{
+  font-family:var(--mono);
+  font-size:10px;
+  color:var(--muted);
+}
+
+.note{
+  position:fixed;
+  top:120px;
+  right:120px;
+  width:360px;
+  height:360px;
+  border:1px solid #fff;
+  background:#000;
+  display:none;
+  z-index:10;
+}
+.note.open{ display:block; }
+.noteHead{
+  padding:8px;
+  border-bottom:1px solid var(--line);
+  font-size:10px;
+  letter-spacing:.18em;
+  text-transform:uppercase;
+  cursor:move;
+  user-select:none;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+}
+.noteHead .x{
+  border:1px solid var(--line);
+  width:18px;height:18px;
+  display:flex;align-items:center;justify-content:center;
+  font-family:var(--mono);
+  cursor:pointer;
+}
+.noteHead .x:hover{ border-color:#fff; }
+.noteBody{ height:calc(100% - 34px); }
+.noteBody textarea{
+  height:100%;
+  border:none;
+  outline:none;
+}
+</style>
+</head>
+
+<body>
+<div class="app">
+
+  <!-- TOP BAR -->
+  <div class="top">
+    <div class="brand">KETADATA // FORGE v0.1</div>
+    <div class="topRight">
+      <button class="btn" id="exportJSON">export.json</button>
+      <button class="btn" id="importJSON">import.json</button>
+      <button class="btn" id="exportRoom">export room</button>
+      <div class="noteIcon" id="noteIcon" title="SYSTEM NOTE"></div>
+    </div>
+  </div>
+
+  <!-- MAIN -->
+  <div class="main">
+
+    <!-- LEFT: DEFINITIONS -->
+    <div class="panel">
+      <div class="panelHead">
+        <span>Definitions</span>
+        <span class="badge" id="selBadge">(none)</span>
+      </div>
+
+      <div class="panelBody">
+
+        <label>Mode</label>
+        <select id="mode">
+          <option value="rooms">Rooms</option>
+          <option value="primitives">Primitives</option>
+        </select>
+
+        <label>ID</label>
+        <input id="idField" placeholder="e.g. lab / studio / vault" />
+
+        <label>Title</label>
+        <input id="titleField" placeholder="e.g. LAB" />
+
+        <label>Tags (comma)</label>
+        <input id="tagsField" placeholder="e.g. research,tools" />
+
+        <label>Notes</label>
+        <textarea id="notesField" placeholder=""></textarea>
+
+        <div class="stackBtns">
+          <button class="btn" id="saveItem">save (create/update)</button>
+          <button class="btn" id="newItem">new</button>
+          <button class="btn danger" id="deleteItem">delete</button>
+        </div>
+
+        <div class="row">
+          <button class="btn" id="moveUp">move up</button>
+          <button class="btn" id="moveDown">move down</button>
+        </div>
+
+        <div class="hr"></div>
+
+        <div class="small">
+          Behavior: SAVE creates if nothing selected. NEW creates + selects.
+        </div>
+
+      </div>
+    </div>
+
+    <!-- CENTER: REGISTRY -->
+    <div class="panel">
+      <div class="panelHead">
+        <span>Registry</span>
+        <span class="badge" id="countBadge">0</span>
+      </div>
+      <div class="panelBody">
+        <label>Search</label>
+        <input id="search" placeholder="filter by id/title/tag" />
+        <div class="list" id="registry"></div>
+      </div>
+    </div>
+
+    <!-- RIGHT: OUTPUT -->
+    <div class="panel">
+      <div class="panelHead">Output</div>
+      <div class="panelBody">
+        <label>Generated Output</label>
+        <div class="output" id="output">(select a room)</div>
+        <div class="small" id="outputHint">Room export uses current selection.</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- SYSTEM NOTE -->
+<div class="note" id="note">
+  <div class="noteHead" id="noteHead">
+    <span>SYSTEM NOTE</span>
+    <div class="x" id="noteClose">x</div>
+  </div>
+  <div class="noteBody">
+    <textarea id="systemNote" placeholder="global free-form"></textarea>
+  </div>
+</div>
+
+<input type="file" id="filePick" accept="application/json" style="display:none"/>
+
+<script>
+/* ===============================
+   KETADATA FORGE v0.1 LOGIC
+   - functional registry
+   - upsert save
+   - delete, reorder, search
+   =============================== */
+
+const LS_KEY = "KETADATA_FORGE_V01";
+const LS_UI  = "KETADATA_FORGE_V01_UI";
+
+let state = loadState() || {
+  rooms: [],
+  primitives: [],
+  systemNote: ""
+};
+
+let ui = loadUI() || {
+  mode: "rooms",
+  selectedIndex: null,
+  search: ""
+};
+
+/* Elements */
+const registryEl = document.getElementById("registry");
+const outputEl = document.getElementById("output");
+const outputHint = document.getElementById("outputHint");
+
+const idField = document.getElementById("idField");
+const titleField = document.getElementById("titleField");
+const tagsField = document.getElementById("tagsField");
+const notesField = document.getElementById("notesField");
+
+const modeSelect = document.getElementById("mode");
+const searchEl = document.getElementById("search");
+const selBadge = document.getElementById("selBadge");
+const countBadge = document.getElementById("countBadge");
+
+const systemNoteEl = document.getElementById("systemNote");
+const noteIcon = document.getElementById("noteIcon");
+const note = document.getElementById("note");
+const noteHead = document.getElementById("noteHead");
+const noteClose = document.getElementById("noteClose");
+
+const filePick = document.getElementById("filePick");
+
+/* Utilities */
+function nowISO(){ return new Date().toISOString(); }
+function safeText(s){ return (s ?? "").toString(); }
+function parseTags(s){
+  return safeText(s).split(",").map(x=>x.trim()).filter(Boolean);
+}
+function displayName(item){
+  const id = safeText(item.id).trim();
+  const title = safeText(item.title).trim();
+  if(id) return id;
+  if(title) return title;
+  return "(untitled)";
+}
+
+/* Persistence */
+function saveState(){
+  localStorage.setItem(LS_KEY, JSON.stringify(state, null, 2));
+}
+function loadState(){
+  try{ return JSON.parse(localStorage.getItem(LS_KEY)); }catch(e){ return null; }
+}
+function saveUI(){
+  localStorage.setItem(LS_UI, JSON.stringify(ui));
+}
+function loadUI(){
+  try{ return JSON.parse(localStorage.getItem(LS_UI)); }catch(e){ return null; }
+}
+
+/* Current mode list */
+function list(){ return state[ui.mode]; }
+
+/* Render registry with filter */
+function renderRegistry(){
+  const q = safeText(ui.search).toLowerCase().trim();
+  const items = list();
+
+  registryEl.innerHTML = "";
+
+  let shown = 0;
+
+  items.forEach((item, i)=>{
+    const blob = [
+      safeText(item.id),
+      safeText(item.title),
+      (item.tags||[]).join(" ")
+    ].join(" ").toLowerCase();
+
+    if(q && !blob.includes(q)) return;
+
+    shown++;
+
+    const row = document.createElement("div");
+    row.className = "item" + (i===ui.selectedIndex ? " active":"");
+
+    const left = document.createElement("div");
+    left.textContent = displayName(item);
+
+    const right = document.createElement("div");
+    right.className = "badge";
+    right.textContent = ui.mode === "rooms" ? (item.url || "") : (item.version || "");
+
+    row.appendChild(left);
+    row.appendChild(right);
+
+    row.onclick = ()=>selectItem(i);
+
+    registryEl.appendChild(row);
+  });
+
+  countBadge.textContent = `${shown}/${items.length}`;
+}
+
+/* Select */
+function clearForm(){
+  idField.value = "";
+  titleField.value = "";
+  tagsField.value = "";
+  notesField.value = "";
+}
+
+function selectItem(i){
+  ui.selectedIndex = i;
+  saveUI();
+
+  const item = list()[i];
+  idField.value = item.id || "";
+  titleField.value = item.title || "";
+  tagsField.value = (item.tags||[]).join(",");
+  notesField.value = item.notes || "";
+
+  selBadge.textContent = `${ui.mode} #${i+1}`;
+
+  renderOutput(item);
+  renderRegistry();
+}
+
+/* Upsert save */
+function upsertCurrent(){
+  const items = list();
+  const payload = {
+    id: safeText(idField.value).trim(),
+    title: safeText(titleField.value).trim(),
+    tags: parseTags(tagsField.value),
+    notes: notesField.value || "",
+    updatedAt: nowISO()
+  };
+
+  // Basic derived fields for rooms (optional)
+  if(ui.mode === "rooms"){
+    if(payload.id && !payload.url) payload.url = `/${payload.id}.html`;
+    payload.url = payload.url || (payload.id ? `/${payload.id}.html` : "");
+  }
+
+  // If nothing selected, create
+  if(ui.selectedIndex === null || ui.selectedIndex === undefined){
+    items.push(payload);
+    ui.selectedIndex = items.length - 1;
+  } else {
+    // Update
+    items[ui.selectedIndex] = { ...items[ui.selectedIndex], ...payload };
+  }
+
+  saveState();
+  saveUI();
+  renderRegistry();
+  selectItem(ui.selectedIndex);
+}
+
+/* Delete */
+function deleteCurrent(){
+  const items = list();
+  if(ui.selectedIndex === null) return;
+  items.splice(ui.selectedIndex, 1);
+  // adjust selection
+  if(items.length === 0){
+    ui.selectedIndex = null;
+    clearForm();
+    outputEl.textContent = "(select an item)";
+    selBadge.textContent = "(none)";
+  } else {
+    ui.selectedIndex = Math.min(ui.selectedIndex, items.length - 1);
+    selectItem(ui.selectedIndex);
+  }
+  saveState();
+  saveUI();
+  renderRegistry();
+}
+
+/* Reorder */
+function moveCurrent(delta){
+  const items = list();
+  if(ui.selectedIndex === null) return;
+  const i = ui.selectedIndex;
+  const j = i + delta;
+  if(j < 0 || j >= items.length) return;
+  const tmp = items[i];
+  items[i] = items[j];
+  items[j] = tmp;
+  ui.selectedIndex = j;
+  saveState();
+  saveUI();
+  renderRegistry();
+  selectItem(ui.selectedIndex);
+}
+
+/* Output generation */
+function renderOutput(item){
+  if(ui.mode !== "rooms"){
+    outputEl.textContent = "(no output for primitives in v0.1)";
+    outputHint.textContent = "v0.1 exports rooms only. primitives come next.";
+    return;
+  }
+
+  const roomId = safeText(item.id).trim() || "room";
+  const title = safeText(item.title).trim() || roomId.toUpperCase();
+  const tags = (item.tags||[]).join(", ");
+
+  outputEl.textContent =
+`ROOM SUMMARY
+id: ${roomId}
+title: ${title}
+tags: ${tags}
+url: ${item.url || `/${roomId}.html`}
+
+EXPORT: click "export room" to download a standalone scaffold.`;
+  outputHint.textContent = "Export room generates a deployable HTML skeleton.";
+}
+
+/* Export JSON */
+document.getElementById("exportJSON").onclick = ()=>{
+  const blob = new Blob([JSON.stringify(state,null,2)],{type:"application/json"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "ketadata.forge.json";
+  a.click();
+};
+
+/* Import JSON */
+document.getElementById("importJSON").onclick = ()=> filePick.click();
+
+filePick.onchange = async ()=>{
+  const f = filePick.files && filePick.files[0];
+  if(!f) return;
+  try{
+    const txt = await f.text();
+    const incoming = JSON.parse(txt);
+
+    // minimal shape validation
+    state.rooms = Array.isArray(incoming.rooms) ? incoming.rooms : [];
+    state.primitives = Array.isArray(incoming.primitives) ? incoming.primitives : [];
+    state.systemNote = safeText(incoming.systemNote);
+
+    saveState();
+
+    // keep UI mode, reset selection
+    ui.selectedIndex = null;
+    saveUI();
+
+    clearForm();
+    outputEl.textContent = "(select an item)";
+    renderRegistry();
+  }catch(e){
+    alert("IMPORT FAILED: invalid JSON");
+  } finally {
+    filePick.value = "";
+  }
+};
+
+/* Export room HTML */
+document.getElementById("exportRoom").onclick = ()=>{
+  if(ui.mode !== "rooms" || ui.selectedIndex === null) return;
+  const r = state.rooms[ui.selectedIndex];
+
+  const roomId = safeText(r.id).trim() || "room";
+  const title = safeText(r.title).trim() || roomId.toUpperCase();
+
+  const html =
+`<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>${title} // KETADATA</title>
+
+<!-- CORE (to be generated in v1) -->
+<link rel="stylesheet" href="/ketadata-core.css">
+<script defer src="/ketadata-core.js"></script>
+
+<style>
+html,body{height:100%;margin:0;background:#000;color:#fff;font-family:Arial,Helvetica,sans-serif;overflow:hidden}
+body::before{
+  content:"";position:fixed;inset:0;
+  background:linear-gradient(rgba(255,255,255,.08) 1px, transparent 1px),
+             linear-gradient(90deg, rgba(255,255,255,.08) 1px, transparent 1px);
+  background-size:36px 36px;opacity:.28;pointer-events:none;
+}
+.top{
+  position:fixed;left:0;right:0;top:0;
+  padding:10px 12px;border-bottom:1px solid rgba(255,255,255,.14);
+  display:flex;align-items:center;justify-content:space-between;
+  background:#000;z-index:5;
+}
+.brand{font-weight:900;font-size:11px;letter-spacing:.22em;text-transform:uppercase}
+.noteIcon{width:14px;height:14px;border:1px solid #fff;background:#fff;cursor:pointer}
+.noteIcon.open{background:transparent}
+.stage{
+  position:absolute;inset:44px 0 0 0;
+  display:grid;grid-template-columns:320px 1fr 420px;
+}
+.rail{border-right:1px solid rgba(255,255,255,.14)}
+.rail:last-child{border-right:none}
+.pad{padding:12px}
+.h{font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:rgba(255,255,255,.55);margin-bottom:8px}
+.box{border:1px solid rgba(255,255,255,.14);padding:10px;font-family:ui-monospace,Menlo,monospace;font-size:11px;white-space:pre-wrap;background:rgba(255,255,255,.02)}
+.note{
+  position:fixed;top:120px;right:120px;width:360px;height:360px;border:1px solid #fff;background:#000;display:none;z-index:10
+}
+.note.open{display:block}
+.noteHead{padding:8px;border-bottom:1px solid rgba(255,255,255,.14);font-size:10px;letter-spacing:.18em;text-transform:uppercase;cursor:move;user-select:none;display:flex;justify-content:space-between}
+.noteClose{border:1px solid rgba(255,255,255,.14);width:18px;height:18px;display:flex;align-items:center;justify-content:center;font-family:ui-monospace,Menlo,monospace;cursor:pointer}
+.noteBody{height:calc(100% - 34px)}
+.noteBody textarea{height:100%;width:100%;border:none;outline:none;background:transparent;color:#fff;padding:10px;font-family:ui-monospace,Menlo,monospace;font-size:11px;resize:none}
+</style>
+</head>
+<body>
+
+<div class="top">
+  <div class="brand">${title} // KETADATA</div>
+  <div class="noteIcon" id="noteIcon" title="SYSTEM NOTE"></div>
+</div>
+
+<div class="stage">
+  <div class="rail pad">
+    <div class="h">LEFT RAIL</div>
+    <div class="box">inputs / controls placeholder</div>
+  </div>
+  <div class="rail pad">
+    <div class="h">CENTER STAGE</div>
+    <div class="box">content placeholder</div>
+  </div>
+  <div class="rail pad">
+    <div class="h">RIGHT RAIL</div>
+    <div class="box">output / audit placeholder</div>
+  </div>
+</div>
+
+<div class="note" id="note">
+  <div class="noteHead" id="noteHead">
+    <span>SYSTEM NOTE</span>
+    <div class="noteClose" id="noteClose">x</div>
+  </div>
+  <div class="noteBody">
+    <textarea id="systemNote">SYSTEM NOTE</textarea>
+  </div>
+</div>
+
+<script>
+(() => {
+  // NOTE TOGGLE
+  const noteIcon = document.getElementById('noteIcon');
+  const note = document.getElementById('note');
+  const noteClose = document.getElementById('noteClose');
+  const systemNote = document.getElementById('systemNote');
+  const noteHead = document.getElementById('noteHead');
+
+  function toggle(open){
+    const isOpen = open ?? !note.classList.contains('open');
+    note.classList.toggle('open', isOpen);
+    noteIcon.classList.toggle('open', isOpen);
+  }
+
+  noteIcon.addEventListener('click', ()=>toggle());
+  noteClose.addEventListener('click', ()=>toggle(false));
+
+  // HOTKEY Cmd+;
+  document.addEventListener('keydown', (e)=>{
+    const isCmd = e.metaKey || e.ctrlKey;
+    if(isCmd && e.key === ';'){
+      e.preventDefault();
+      toggle();
+    }
+  });
+
+  // DRAG NOTE
+  let dragging=false, ox=0, oy=0;
+  noteHead.addEventListener('mousedown', (e)=>{
+    dragging=true;
+    const r = note.getBoundingClientRect();
+    ox = e.clientX - r.left;
+    oy = e.clientY - r.top;
+  });
+  window.addEventListener('mousemove', (e)=>{
+    if(!dragging) return;
+    note.style.left = (e.clientX - ox) + 'px';
+    note.style.top  = (e.clientY - oy) + 'px';
+    note.style.right = 'auto';
+  });
+  window.addEventListener('mouseup', ()=>dragging=false);
+
+  // local note persistence per page
+  const KEY = 'KETADATA_ROOM_NOTE_${roomId}';
+  systemNote.value = localStorage.getItem(KEY) || systemNote.value;
+  systemNote.addEventListener('input', ()=>localStorage.setItem(KEY, systemNote.value));
+})();
+</script>
+</body>
+</html>`;
+
+  const blob = new Blob([html], {type:"text/html"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `${roomId}.html`;
+  a.click();
+};
+
+/* Buttons */
+document.getElementById("saveItem").onclick = upsertCurrent;
+
+document.getElementById("newItem").onclick = ()=>{
+  // create blank item and select it
+  list().push({
+    id:"",
+    title:"",
+    tags:[],
+    notes:"",
+    createdAt: nowISO(),
+    updatedAt: nowISO()
+  });
+  ui.selectedIndex = list().length - 1;
+  saveState();
+  saveUI();
+  renderRegistry();
+  selectItem(ui.selectedIndex);
+};
+
+document.getElementById("deleteItem").onclick = deleteCurrent;
+document.getElementById("moveUp").onclick = ()=>moveCurrent(-1);
+document.getElementById("moveDown").onclick = ()=>moveCurrent(1);
+
+/* Search */
+searchEl.value = ui.search || "";
+searchEl.oninput = ()=>{
+  ui.search = searchEl.value;
+  saveUI();
+  renderRegistry();
+};
+
+/* Mode switch */
+modeSelect.value = ui.mode || "rooms";
+modeSelect.onchange = ()=>{
+  ui.mode = modeSelect.value;
+  ui.selectedIndex = null;
+  ui.search = "";
+  saveUI();
+
+  clearForm();
+  outputEl.textContent = "(select an item)";
+  outputHint.textContent = "Select a room to see output.";
+  selBadge.textContent = "(none)";
+  searchEl.value = "";
+
+  renderRegistry();
+};
+
+/* System note toggle + persistence */
+systemNoteEl.value = state.systemNote || "";
+function toggleSystemNote(force){
+  const open = force ?? !note.classList.contains("open");
+  note.classList.toggle("open", open);
+  noteIcon.classList.toggle("open", open);
+}
+noteIcon.onclick = ()=>toggleSystemNote();
+noteClose.onclick = ()=>toggleSystemNote(false);
+
+systemNoteEl.oninput = ()=>{
+  state.systemNote = systemNoteEl.value;
+  saveState();
+};
+
+/* Cmd+; hotkey */
+document.addEventListener("keydown", (e)=>{
+  const isCmd = e.metaKey || e.ctrlKey;
+  if(isCmd && e.key === ";"){
+    e.preventDefault();
+    toggleSystemNote();
+  }
+});
+
+/* Drag system note */
+let dragging=false, ox=0, oy=0;
+noteHead.addEventListener("mousedown", (e)=>{
+  dragging=true;
+  const r = note.getBoundingClientRect();
+  ox = e.clientX - r.left;
+  oy = e.clientY - r.top;
+});
+window.addEventListener("mousemove", (e)=>{
+  if(!dragging) return;
+  note.style.left = (e.clientX - ox) + "px";
+  note.style.top  = (e.clientY - oy) + "px";
+  note.style.right = "auto";
+});
+window.addEventListener("mouseup", ()=>dragging=false);
+
+/* Init */
+(function init(){
+  // clamp invalid states
+  if(!state.rooms) state.rooms=[];
+  if(!state.primitives) state.primitives=[];
+  if(typeof state.systemNote !== "string") state.systemNote="";
+
+  renderRegistry();
+
+  // If something was selected previously, try restoring
+  const items = list();
+  if(typeof ui.selectedIndex === "number" && items[ui.selectedIndex]){
+    selectItem(ui.selectedIndex);
+  }else{
+    ui.selectedIndex = null;
+    saveUI();
+    selBadge.textContent = "(none)";
+  }
+})();
+</script>
+</body>
+</html>
