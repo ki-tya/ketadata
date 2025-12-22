@@ -1,0 +1,447 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>KETADATA // GEOMETRIC INFINITE CURRENT</title>
+  <style>
+    :root{
+      --bg:#000;
+      --fg:#fff;
+      --stroke:rgba(255,255,255,0.16);
+      --stroke2:rgba(255,255,255,0.10);
+      --glass:rgba(255,255,255,0.06);
+      --muted:rgba(255,255,255,0.52);
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%;margin:0;background:var(--bg);color:var(--fg);font-family:Arial, Helvetica, sans-serif;}
+    body{overflow:hidden;}
+    ::selection{background:rgba(255,255,255,0.18);}
+
+    #topbar{
+      position:fixed; left:0; right:0; top:0;
+      height:48px;
+      display:flex; align-items:center; justify-content:space-between;
+      padding:10px 12px;
+      border-bottom:1px solid var(--stroke2);
+      background:#000;
+      user-select:none;
+      z-index:80;
+    }
+    #brand{
+      display:flex; align-items:center; gap:10px;
+      font-size:11px;
+      letter-spacing:0.18em;
+      text-transform:uppercase;
+      color:rgba(255,255,255,0.80);
+      min-width:240px;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      white-space:nowrap;
+    }
+    .whiteBox{width:10px;height:10px;background:#fff;display:inline-block;}
+    .btn{
+      border:1px solid var(--stroke);
+      background:transparent;
+      color:rgba(255,255,255,0.86);
+      padding:7px 10px;
+      font-size:11px;
+      letter-spacing:0.14em;
+      text-transform:uppercase;
+      cursor:pointer;
+      user-select:none;
+      white-space:nowrap;
+    }
+    .btn:hover{background:var(--glass);border-color:rgba(255,255,255,0.34);}
+    .btnPrimary{background:rgba(255,255,255,0.06);border-color:rgba(255,255,255,0.30);}
+    .btnPrimary:hover{background:rgba(255,255,255,0.09);border-color:rgba(255,255,255,0.44);}
+
+    #stage{
+      position:fixed;
+      inset:48px 0 0 0;
+      width:100%;
+      height:calc(100% - 48px);
+      overflow:hidden;
+      background:#000;
+    }
+    canvas{position:absolute; inset:0; width:100%; height:100%; display:block;}
+
+    /* Hard geometric vignette (no "mist", no color) */
+    #fx{
+      position:absolute; inset:0;
+      pointer-events:none;
+      z-index:10;
+      background:
+        radial-gradient(1000px 560px at 50% 55%, rgba(255,255,255,0.07), rgba(0,0,0,0.72) 58%, rgba(0,0,0,0.94)),
+        repeating-linear-gradient(to bottom, rgba(255,255,255,0.015) 0px, rgba(255,255,255,0.00) 2px, rgba(0,0,0,0.00) 7px);
+      mix-blend-mode:screen;
+      opacity:0.55;
+    }
+
+    /* INVERT */
+    body.invert{filter:invert(1); background:#fff;}
+    body.invert #topbar{background:#fff;border-bottom:1px solid rgba(0,0,0,0.10);}
+    body.invert .whiteBox{background:#000;}
+    body.invert .btn{color:rgba(0,0,0,0.84);border-color:rgba(0,0,0,0.18);}
+    body.invert .btn:hover{background:rgba(0,0,0,0.06);border-color:rgba(0,0,0,0.28);}
+  </style>
+</head>
+
+<body>
+  <div id="topbar">
+    <div id="brand">
+      <span class="whiteBox" aria-hidden="true"></span>
+      <span>KETADATA // GEOMETRIC INFINITE CURRENT</span>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;">
+      <button id="reset" class="btn btnPrimary" type="button">Reset</button>
+      <button id="toggle" class="btn" type="button">Toggle Run</button>
+    </div>
+  </div>
+
+  <div id="stage">
+    <canvas id="c"></canvas>
+    <div id="fx"></div>
+  </div>
+
+  <script>
+    // =========================================================
+    // KETADATA // GEOMETRIC INFINITE CURRENT (B/W + GREYS)
+    //
+    // Controls:
+    // - SPACE tap: start/stop
+    // - SPACE hold: accelerates; release decelerates
+    // - I: invert
+    //
+    // Visual language:
+    // - black/white/grey only
+    // - geometric flow: perspective grid + advected iso-lines
+    // - no mist, no color, no skeumorphic water cues
+    // =========================================================
+
+    const el = (id)=>document.getElementById(id);
+    const canvas = el('c');
+    const ctx = canvas.getContext('2d', { alpha:false });
+
+    const clamp = (n,a,b)=>Math.max(a,Math.min(b,n));
+    const mix = (a,b,t)=>a+(b-a)*t;
+    const smoothstep=(a,b,t)=>{ t=clamp((t-a)/(b-a),0,1); return t*t*(3-2*t); };
+
+    function resize(){
+      const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+      const w = canvas.clientWidth|0;
+      const h = canvas.clientHeight|0;
+      canvas.width = Math.floor(w*dpr);
+      canvas.height = Math.floor(h*dpr);
+      ctx.setTransform(dpr,0,0,dpr,0,0);
+    }
+    window.addEventListener('resize', resize);
+
+    // Pointer for subtle "current steering"
+    const pointer = { x:0.5, y:0.56, vx:0, vy:0 };
+    const target  = { x:0.5, y:0.56 };
+    function updatePointer(dt){
+      const ax = (target.x - pointer.x) * 2.0;
+      const ay = (target.y - pointer.y) * 1.5;
+      pointer.vx = (pointer.vx + ax*dt) * 0.90;
+      pointer.vy = (pointer.vy + ay*dt) * 0.90;
+      pointer.x = clamp(pointer.x + pointer.vx*dt, 0, 1);
+      pointer.y = clamp(pointer.y + pointer.vy*dt, 0, 1);
+    }
+    window.addEventListener('mousemove', (e)=>{
+      const r = canvas.getBoundingClientRect();
+      target.x = clamp((e.clientX - r.left)/r.width, 0, 1);
+      target.y = clamp((e.clientY - r.top)/r.height, 0, 1);
+    }, { passive:true });
+
+    // Noise
+    const seed = Math.random()*1000;
+    function h2(x,y){
+      const s = Math.sin(x*127.1 + y*311.7 + seed*0.01) * 43758.5453123;
+      return s - Math.floor(s);
+    }
+    function vnoise(x,y){
+      const ix=Math.floor(x), iy=Math.floor(y);
+      const fx=x-ix, fy=y-iy;
+      const a=h2(ix,iy), b=h2(ix+1,iy), c=h2(ix,iy+1), d=h2(ix+1,iy+1);
+      const ux=fx*fx*(3-2*fx), uy=fy*fy*(3-2*fy);
+      return mix(mix(a,b,ux), mix(c,d,ux), uy);
+    }
+    function fbm(x,y){
+      let v=0, a=0.5;
+      for(let i=0;i<4;i++){
+        v += a*vnoise(x,y);
+        x*=2.03; y*=2.01; a*=0.5;
+      }
+      return v;
+    }
+
+    // Controls
+    let running = true;
+    let invert = false;
+
+    let spaceDown=false, spaceTapGuard=false;
+    const BASE_SPEED=1.0;
+    const HOLD_SPEED=6.0;
+    let speed=BASE_SPEED, speedTarget=BASE_SPEED;
+
+    let worldT=0, t0=performance.now();
+
+    function isTyping(){
+      const tag = document.activeElement?.tagName?.toLowerCase() || '';
+      return tag === 'input' || tag === 'textarea' || document.activeElement?.isContentEditable;
+    }
+
+    window.addEventListener('keydown', (e)=>{
+      if(isTyping()) return;
+
+      if(e.code==='Space'){
+        e.preventDefault();
+        if(!spaceTapGuard){ running=!running; spaceTapGuard=true; }
+        spaceDown=true;
+      }
+      if(e.key==='i' || e.key==='I'){
+        invert=!invert;
+        document.body.classList.toggle('invert', invert);
+      }
+      if(e.key==='r' || e.key==='R'){
+        reset();
+      }
+    });
+
+    window.addEventListener('keyup', (e)=>{
+      if(e.code==='Space'){
+        e.preventDefault();
+        spaceDown=false;
+        spaceTapGuard=false;
+      }
+    });
+
+    el('toggle').addEventListener('click', ()=> running=!running);
+    el('reset').addEventListener('click', ()=> reset());
+
+    function reset(){
+      worldT=0;
+      speed=BASE_SPEED;
+      speedTarget=BASE_SPEED;
+    }
+
+    function updateSpeed(dt){
+      speedTarget = spaceDown ? HOLD_SPEED : BASE_SPEED;
+      const tau = spaceDown ? 0.12 : 0.28;
+      const a = 1 - Math.exp(-dt/tau);
+      speed += (speedTarget - speed)*a;
+      speed = clamp(speed, 0.0, 12.0);
+    }
+
+    // -------- GEOMETRIC FIELD RENDER --------
+    function draw(t){
+      const w = canvas.clientWidth;
+      const h = canvas.clientHeight;
+
+      const thr = clamp((speed-BASE_SPEED)/(HOLD_SPEED-BASE_SPEED), 0, 1);
+      const rush = thr*thr;
+
+      // Camera: slight zoom + drift, but keep it "architectural"
+      const camZoom = 1.0 + 0.018*rush;
+      const camDx = (pointer.x-0.5) * (18 + 26*rush);
+      const camDy = (pointer.y-0.5) * (12 + 18*rush);
+
+      // Horizon + base gradient (B/W/grey only)
+      const horizon = h * (0.32 + 0.05*(pointer.y-0.5) - 0.010*rush);
+      const waterH = h - horizon;
+
+      // Background: black to grey (sky)
+      const sky = ctx.createLinearGradient(0,0,0,horizon);
+      sky.addColorStop(0.0, "rgb(0,0,0)");
+      sky.addColorStop(0.55, "rgb(10,10,10)");
+      sky.addColorStop(1.0, "rgb(26,26,26)");
+      ctx.fillStyle = sky;
+      ctx.fillRect(0,0,w,horizon);
+
+      // Water plane gradient: grey to black
+      const water = ctx.createLinearGradient(0,horizon,0,h);
+      water.addColorStop(0.0, "rgb(30,30,30)");
+      water.addColorStop(0.35, "rgb(18,18,18)");
+      water.addColorStop(1.0, "rgb(0,0,0)");
+      ctx.fillStyle = water;
+      ctx.fillRect(0,horizon,w,waterH);
+
+      // Hard horizon line (geometric seam)
+      ctx.save();
+      ctx.globalAlpha = 0.70 + 0.18*rush;
+      ctx.fillStyle = "rgba(255,255,255,0.06)";
+      ctx.fillRect(0, horizon-1, w, 2);
+      ctx.restore();
+
+      // === 1) Perspective grid (architectural infinity) ===
+      ctx.save();
+      ctx.globalCompositeOperation = "screen";
+      const gridAlpha = 0.10 + 0.18*rush;
+      ctx.strokeStyle = `rgba(255,255,255,${gridAlpha})`;
+      ctx.lineWidth = 1;
+
+      // Vanishing point w/ subtle pointer influence (still rigid)
+      const vx = w * (0.5 + (pointer.x-0.5)*0.10);
+      const vy = horizon - 2;
+
+      // Radials (like floor rays)
+      const rays = Math.floor(24 + 22*rush);
+      for(let i=0;i<rays;i++){
+        const k = (i/(rays-1))*2 - 1; // -1..1
+        const x2 = vx + k*w*1.25;
+        ctx.beginPath();
+        ctx.moveTo(vx, vy);
+        ctx.lineTo(x2, h);
+        ctx.stroke();
+      }
+
+      // Horizontals (perspective spacing)
+      const rows = Math.floor(26 + 20*rush);
+      for(let i=0;i<rows;i++){
+        const p = i/(rows-1);
+        // exponential spacing (denser at horizon)
+        const y = horizon + (1 - Math.pow(1-p, 2.6)) * waterH;
+        ctx.globalAlpha = (0.05 + 0.22*(1-p)) * (0.50 + 0.70*rush);
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(w, y);
+        ctx.stroke();
+      }
+      ctx.restore();
+
+      // === 2) Advected iso-lines (the "current" but geometric) ===
+      // The field is not "water"; it's a moving contour lattice.
+      ctx.save();
+      ctx.globalCompositeOperation = "screen";
+      const bands = Math.floor(90 + 70*rush);
+      const stepX = 8; // performance knob
+      const amp = 6 + 16*rush;
+      const adv = 0.10 + 0.38*rush;
+      const driftT = t * (1.0 + 2.5*rush);
+
+      for(let i=0;i<bands;i++){
+        const yy0 = horizon + (i/(bands-1))*waterH;
+        const depth = (yy0-horizon)/waterH;
+        const pull = (1-depth);
+
+        // Fade: present through mid-depth; compress toward horizon with speed
+        const fade = smoothstep(0.02, 0.30, depth) * (1 - smoothstep(0.74 - 0.14*rush, 1.0, depth));
+        if(fade < 0.004) continue;
+
+        // monochrome intensity
+        const a = (0.018 + 0.090*fade) * (1.0 + 1.25*rush);
+        ctx.strokeStyle = `rgba(255,255,255,${a})`;
+        ctx.lineWidth = 1;
+
+        ctx.beginPath();
+        for(let x=0;x<=w;x+=stepX){
+          const xCam = (x - camDx)/camZoom;
+          const yCam = (yy0 - camDy)/camZoom;
+
+          const nx = xCam / Math.max(1,w);
+          const ny = (yCam - horizon) / Math.max(1,waterH);
+
+          // flow field: rigid upward pull + slight curl + noise (still geometric)
+          const n = fbm(nx*5.0 + driftT*0.10, ny*6.0 - driftT*0.14);
+          const curl = Math.sin((nx*7.0 + ny*3.1) + driftT*0.40 + (pointer.x-0.5)*0.9) * (0.08 + 0.20*rush);
+
+          const flowX = curl + (n-0.5)*(0.08 + 0.24*rush);
+          const flowY = -(0.32 + 0.95*pull)*(0.50 + 0.85*rush) + (n-0.5)*(0.05 + 0.14*rush);
+
+          const ax = nx + flowX*adv;
+          const ay = ny + flowY*adv;
+
+          // contour phases
+          const p1 = (ax*11.0 + ay*8.0) + driftT*1.25 + i*0.07;
+          const p2 = (ax*6.0  + ay*13.0) + driftT*0.78 + i*0.04;
+
+          let yy =
+            yy0
+            + Math.sin(p1) * amp * (0.10 + 0.55*fade)
+            + Math.sin(p2) * amp * (0.04 + 0.30*fade);
+
+          // project toward horizon (infinite conveyor, but crisp)
+          const proj = (0.70 + 1.35*rush) * (pull*pull) * (0.22 + 0.85*rush);
+          const yyProj = yy - proj * (14 + 52*rush);
+          yy = mix(yy, yyProj, 0.30 + 0.35*rush);
+
+          if(x===0) ctx.moveTo(x, yy);
+          else ctx.lineTo(x, yy);
+        }
+        ctx.stroke();
+      }
+      ctx.restore();
+
+      // === 3) Geometric shimmer: rectangular specular dashes ===
+      ctx.save();
+      ctx.globalCompositeOperation = "screen";
+      ctx.globalAlpha = 0.22 + 0.40*rush;
+      const dashCount = Math.floor(140 + 240*rush);
+      for(let i=0;i<dashCount;i++){
+        const n1 = vnoise(i*0.13 + seed, driftT*0.03);
+        const n2 = vnoise(i*0.17 + seed*0.5, driftT*0.05);
+        const x0 = n1*w;
+        const y0 = horizon + n2*waterH;
+        const d = (y0-horizon)/waterH;
+        const closeness = (1-d);
+
+        const len = (8 + 70*closeness) * (0.9 + 1.4*rush);
+        const thick = (1 + (closeness>0.65 ? 1 : 0));
+
+        const sx = ((x0 - camDx)/camZoom) + Math.sin(driftT*(0.9+1.3*rush) + i)* (1 + 10*closeness);
+        const sy = ((y0 - camDy)/camZoom) + Math.cos(driftT*(0.7+1.1*rush) + i)* (1 + 6*closeness);
+
+        ctx.fillStyle = `rgba(255,255,255,${0.06 + 0.22*closeness + 0.20*rush*closeness})`;
+        // snap to half-pixel for crispness
+        ctx.fillRect((sx|0)+0.5, (sy|0)+0.5, len, thick);
+      }
+      ctx.restore();
+
+      // === 4) Minimal grain (still B/W) ===
+      ctx.save();
+      ctx.globalCompositeOperation = "overlay";
+      ctx.globalAlpha = 0.05 + 0.07*rush;
+      const step = 3;
+      const tt = t * (60 + 150*rush);
+      for(let y=0;y<h;y+=step){
+        for(let x=0;x<w;x+=step){
+          const n = h2(x*0.04 + tt*0.02, y*0.04 + seed);
+          if(n>0.86){
+            ctx.fillStyle = `rgba(255,255,255,${0.03 + 0.05*n})`;
+            ctx.fillRect(x,y,1,1);
+          }
+        }
+      }
+      ctx.restore();
+
+      // Hard lower depth fade
+      ctx.save();
+      const depthV = ctx.createLinearGradient(0, horizon + waterH*0.62, 0, h);
+      depthV.addColorStop(0, "rgba(0,0,0,0.00)");
+      depthV.addColorStop(1, "rgba(0,0,0,0.62)");
+      ctx.fillStyle = depthV;
+      ctx.fillRect(0, horizon + waterH*0.62, w, h-(horizon+waterH*0.62));
+      ctx.restore();
+    }
+
+    function loop(now){
+      const dt = Math.min(0.05, (now - t0)/1000);
+      t0 = now;
+
+      updatePointer(dt);
+      updateSpeed(dt);
+
+      if(running) worldT += dt * speed;
+
+      draw(worldT);
+      requestAnimationFrame(loop);
+    }
+
+    // init
+    resize();
+    document.body.classList.toggle('invert', invert);
+    requestAnimationFrame(loop);
+  </script>
+</body>
+</html>
