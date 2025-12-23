@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>KETADATA — PDF → JPG (Local)</title>
+
+<style>
+body {
+  margin: 0;
+  padding: 24px;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  background: white;
+  color: black;
+}
+h1 {
+  font-size: 14px;
+  letter-spacing: 0.08em;
+  font-weight: 600;
+}
+.controls {
+  margin: 16px 0;
+}
+button {
+  padding: 8px 14px;
+  font-size: 12px;
+  cursor: pointer;
+}
+progress {
+  width: 100%;
+  margin-top: 12px;
+}
+.preview {
+  margin-top: 24px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 8px;
+}
+.preview img {
+  width: 100%;
+  background: black;
+}
+.note {
+  margin-top: 24px;
+  border: 1px solid #ddd;
+  padding: 12px;
+  font-size: 11px;
+}
+</style>
+</head>
+
+<body>
+
+<h1>KETADATA — PDF → JPG (LOCAL, STABLE)</h1>
+
+<div class="controls">
+  <input type="file" id="fileInput" accept="application/pdf" />
+  <br><br>
+  <button id="convertBtn">CONVERT → ZIP</button>
+  <progress id="progress" value="0" max="1"></progress>
+</div>
+
+<div class="preview" id="preview"></div>
+
+<div class="note">
+  SYSTEM NOTE // Inverted output is mandatory. No uploads. No workers. Local only.
+</div>
+
+<!-- PDF.js LEGACY (UMD, STABLE) -->
+<script src="https://unpkg.com/pdfjs-dist@3.4.120/legacy/build/pdf.min.js"></script>
+
+<!-- JSZip -->
+<script src="https://unpkg.com/jszip@3.10.1/dist/jszip.min.js"></script>
+
+<script>
+const fileInput = document.getElementById("fileInput");
+const convertBtn = document.getElementById("convertBtn");
+const preview = document.getElementById("preview");
+const progress = document.getElementById("progress");
+
+pdfjsLib.GlobalWorkerOptions.workerSrc = null;
+
+convertBtn.onclick = async () => {
+  const file = fileInput.files[0];
+  if (!file) return alert("Choose a PDF.");
+
+  preview.innerHTML = "";
+  progress.value = 0;
+
+  const arrayBuffer = await file.arrayBuffer();
+
+  const pdf = await pdfjsLib.getDocument({
+    data: arrayBuffer,
+    disableWorker: true
+  }).promise;
+
+  const zip = new JSZip();
+  const folder = zip.folder(file.name.replace(".pdf", ""));
+
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const page = await pdf.getPage(i);
+    const viewport = page.getViewport({ scale: 2 });
+
+    const canvas = document.createElement("canvas");
+    const ctx = canvas.getContext("2d");
+    canvas.width = viewport.width;
+    canvas.height = viewport.height;
+
+    await page.render({ canvasContext: ctx, viewport }).promise;
+
+    // INVERT
+    const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    for (let p = 0; p < imgData.data.length; p += 4) {
+      imgData.data[p] = 255 - imgData.data[p];
+      imgData.data[p + 1] = 255 - imgData.data[p + 1];
+      imgData.data[p + 2] = 255 - imgData.data[p + 2];
+    }
+    ctx.putImageData(imgData, 0, 0);
+
+    const blob = await new Promise(r => canvas.toBlob(r, "image/jpeg", 0.9));
+    folder.file(`page_${i}.jpg`, blob);
+
+    const img = document.createElement("img");
+    img.src = URL.createObjectURL(blob);
+    preview.appendChild(img);
+
+    progress.value = i / pdf.numPages;
+  }
+
+  const zipBlob = await zip.generateAsync({ type: "blob" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(zipBlob);
+  a.download = "pdf_to_images.zip";
+  a.click();
+};
+</script>
+
+</body>
+</html>
