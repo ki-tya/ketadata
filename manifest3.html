@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>KETADATA // BLACK BOOK MANIFEST (LOCAL)</title>
+
+<!-- ========================= -->
+<!-- AE — AESTHETIC LAYER      -->
+<!-- ========================= -->
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: #000;
+    color: #eaeaea;
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 12px;
+    letter-spacing: 0.04em;
+  }
+
+  header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px;
+    border-bottom: 1px solid #222;
+  }
+
+  button {
+    background: #000;
+    color: #fff;
+    border: 1px solid #444;
+    padding: 6px 10px;
+    cursor: pointer;
+  }
+  button:hover { border-color: #fff; }
+
+  main {
+    display: grid;
+    grid-template-columns: 260px 1fr 360px;
+    height: calc(100vh - 44px);
+  }
+
+  section {
+    border-right: 1px solid #222;
+    padding: 10px;
+    overflow: auto;
+  }
+
+  h2 {
+    font-size: 11px;
+    margin: 0 0 8px 0;
+    opacity: 0.6;
+  }
+
+  textarea, pre, input {
+    width: 100%;
+    background: #000;
+    color: #fff;
+    border: 1px solid #333;
+    padding: 6px;
+    font-size: 11px;
+  }
+
+  pre {
+    min-height: 120px;
+    white-space: pre-wrap;
+  }
+
+  .book {
+    padding: 6px;
+    border-bottom: 1px solid #222;
+    cursor: pointer;
+  }
+
+  .good { color: #8f8; }
+  .bad { color: #f88; }
+
+  footer {
+    border-top: 1px solid #222;
+    padding: 6px;
+    font-size: 10px;
+    opacity: 0.6;
+  }
+</style>
+</head>
+
+<body>
+
+<header>
+  <strong>KETADATA</strong>
+  <span>BLACK BOOK MANIFEST // LOCAL</span>
+
+  <!-- WB — WIRING BRIDGE -->
+  <input type="file" id="folderInput" webkitdirectory multiple hidden />
+  <button onclick="pickFolder()">SELECT BLACKBOOKS FOLDER</button>
+  <button onclick="scan()">SCAN</button>
+  <button onclick="exportJSON()">EXPORT JSON</button>
+</header>
+
+<main>
+
+  <!-- LEFT: INPUT / RULES -->
+  <section>
+    <h2>INPUT / RULES</h2>
+
+    <p>Expected layout:</p>
+    <pre>blackbooks/book_id/pages/page_001.jpg</pre>
+
+    <p>Naming law:</p>
+    <pre>page_###.(jpg|jpeg|png)</pre>
+
+    <p>Detected books:</p>
+    <pre id="bookCount">0</pre>
+  </section>
+
+  <!-- CENTER: BOOKS -->
+  <section>
+    <h2>BOOKS FOUND</h2>
+    <div id="books"></div>
+  </section>
+
+  <!-- RIGHT: OUTPUT -->
+  <section>
+    <h2>OUTPUT</h2>
+
+    <h3>BOOKS[] (JS)</h3>
+    <pre id="booksJS"></pre>
+
+    <h3>MANIFEST JSON</h3>
+    <pre id="manifest"></pre>
+
+    <h3>MISSING / ERRORS</h3>
+    <pre id="errors"></pre>
+  </section>
+
+</main>
+
+<footer>
+SYSTEM LAW: LOCAL ONLY // SINGLE SOURCE OF TRUTH // NO UPLOADS
+</footer>
+
+<!-- ========================= -->
+<!-- EE — ENGINE LAYER         -->
+<!-- ========================= -->
+<script>
+let files = [];
+let books = {};
+
+function pickFolder() {
+  document.getElementById('folderInput').click();
+}
+
+document.getElementById('folderInput').addEventListener('change', e => {
+  files = Array.from(e.target.files);
+});
+
+function scan() {
+  books = {};
+  let errors = [];
+
+  files.forEach(file => {
+    const path = file.webkitRelativePath.split('/');
+    if (path.length < 4) return;
+
+    const [root, bookId, pagesDir, filename] = path;
+
+    if (root !== 'blackbooks' || pagesDir !== 'pages') return;
+
+    if (!books[bookId]) books[bookId] = [];
+    books[bookId].push(filename);
+  });
+
+  const booksDiv = document.getElementById('books');
+  booksDiv.innerHTML = '';
+
+  const booksArr = [];
+
+  Object.entries(books).forEach(([book, pages]) => {
+    pages.sort();
+
+    let ok = true;
+    pages.forEach((p, i) => {
+      const expected = `page_${String(i+1).padStart(3,'0')}`;
+      if (!p.startsWith(expected)) ok = false;
+    });
+
+    const div = document.createElement('div');
+    div.className = 'book ' + (ok ? 'good' : 'bad');
+    div.textContent = `${book} (${pages.length}) ${ok ? 'GOOD' : 'ERROR'}`;
+    booksDiv.appendChild(div);
+
+    if (!ok) errors.push(book);
+
+    booksArr.push({
+      id: book,
+      pages: pages.length
+    });
+  });
+
+  document.getElementById('bookCount').textContent = booksArr.length;
+
+  document.getElementById('booksJS').textContent =
+    'const BOOKS = ' + JSON.stringify(booksArr, null, 2);
+
+  const manifest = {
+    version: 'ketadata-blackbooks-manifest-v1',
+    exportedAt: new Date().toISOString(),
+    root: 'blackbooks',
+    books: booksArr
+  };
+
+  document.getElementById('manifest').textContent =
+    JSON.stringify(manifest, null, 2);
+
+  document.getElementById('errors').textContent =
+    errors.length ? errors.join('\n') : 'NONE';
+}
+
+function exportJSON() {
+  const blob = new Blob(
+    [document.getElementById('manifest').textContent],
+    { type: 'application/json' }
+  );
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'blackbooks_manifest.json';
+  a.click();
+}
+</script>
+
+</body>
+</html>
