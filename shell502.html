@@ -1,0 +1,1172 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>KETADATA_SHELL_KERNEL_v1.1</title>
+
+<!-- =========================================================
+AE :: KETADATA SHELL (BLACK / SHARP / MACHINIC)
+========================================================= -->
+<style>
+:root{
+  --bg:#000; --fg:#fff; --muted:#8a8a8a;
+  --line:#1e1e1e; --line2:#2a2a2a;
+  --top:44px; --bot:34px;
+
+  --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  --sans: Arial, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+
+  --ctl-radius:0px;
+  --ctl-alpha:0.78;
+  --ctl-bg: rgba(0,0,0,var(--ctl-alpha));
+
+  --note-border: rgba(255,255,255,0.62); /* thinner, clean */
+  --note-border2: rgba(255,255,255,0.18);
+}
+
+*{box-sizing:border-box}
+html,body{height:100%; margin:0}
+body{
+  background:var(--bg);
+  color:var(--fg);
+  font-family:var(--sans);
+  overflow:hidden;
+  user-select:none;
+}
+
+#root{ position:fixed; inset:0; background:#000; }
+#root.invert{ filter: invert(1); }
+
+/* Stage (lights) */
+#stage{
+  position:absolute;
+  inset:0;
+  background:#000;
+  filter:none;
+}
+
+/* EE motion surface */
+#motion{
+  position:absolute; inset:0; pointer-events:none;
+  opacity:0;
+  background: repeating-linear-gradient(
+    135deg,
+    rgba(255,255,255,0.05) 0px,
+    rgba(255,255,255,0.05) 1px,
+    rgba(0,0,0,0) 12px,
+    rgba(0,0,0,0) 22px
+  );
+  mix-blend-mode: screen;
+  transform: translate3d(0,0,0);
+}
+#motion.run{
+  opacity:0.12;
+  animation: scanflow 2.2s linear infinite;
+}
+@keyframes scanflow{
+  0%   { transform: translate3d(-80px, 60px, 0); }
+  100% { transform: translate3d(80px, -60px, 0); }
+}
+
+/* =========================================================
+AE :: TOP BAR
+========================================================= */
+.topbar{
+  position:absolute; top:0; left:0; right:0;
+  height:var(--top);
+  display:flex; align-items:center; justify-content:space-between;
+  padding:0 10px;
+  border-bottom:1px solid var(--line);
+  background:linear-gradient(180deg,#070707,#000);
+  z-index:50;
+}
+
+.brand{
+  display:flex; align-items:center; gap:10px;
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:.10em;
+  text-transform:uppercase;
+}
+.brand .sq{ width:10px; height:10px; border:1px solid var(--fg); background:#000; }
+
+.badge{
+  display:flex; gap:8px; align-items:center;
+  font-family:var(--mono);
+  font-size:11px;
+  letter-spacing:.10em;
+  text-transform:uppercase;
+  color:var(--muted);
+  border:1px solid var(--line2);
+  padding:4px 8px;
+}
+
+.actions{
+  display:flex; align-items:center; gap:8px;
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+}
+
+.btn{
+  background:transparent;
+  color:var(--fg);
+  border:1px solid var(--line2);
+  padding:6px 10px;
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  cursor:pointer;
+}
+.btn:hover{ border-color:var(--fg); }
+.btn:active{ transform:translateY(1px); }
+
+.kbd{
+  border:1px solid var(--line2);
+  padding:2px 6px;
+  color:var(--muted);
+  font-size:11px;
+}
+
+/* KETA NOTE icon law:
+- filled white when note collapsed
+- hollow when note open
+*/
+.ketaIcon{
+  width:16px; height:16px;
+  border:2px solid var(--fg);
+  background:var(--fg);
+  cursor:pointer;
+}
+.ketaIcon.open{ background:#000; }
+
+/* =========================================================
+AE :: BOTTOM BAR + SYSTEM DRAWER
+========================================================= */
+.bottombar{
+  position:absolute; left:0; right:0; bottom:0;
+  height:var(--bot);
+  display:flex; align-items:center; justify-content:space-between;
+  padding:0 10px;
+  border-top:1px solid var(--line);
+  background:linear-gradient(0deg,#070707,#000);
+  z-index:50;
+  font-family:var(--mono);
+  font-size:11px;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  color:var(--muted);
+}
+
+.toggle{
+  border:1px solid var(--line2);
+  background:transparent;
+  color:var(--fg);
+  padding:4px 8px;
+  font-family:var(--mono);
+  font-size:11px;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  cursor:pointer;
+}
+.toggle:hover{ border-color:var(--fg); }
+
+.drawer{
+  position:absolute;
+  left:0; right:0;
+  bottom:var(--bot);
+  height:38%;
+  min-height:220px;
+  border-top:1px solid var(--line);
+  background:linear-gradient(180deg,#060606,#000);
+  display:none;
+  z-index:60;
+}
+.drawer.open{ display:flex; flex-direction:column; }
+
+.drawerHead{
+  padding:8px 10px;
+  border-bottom:1px solid var(--line);
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:.10em;
+  text-transform:uppercase;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+}
+
+.drawerBody{
+  padding:10px;
+  min-height:0; flex:1;
+  overflow:auto;
+}
+
+textarea, input{
+  font-family:var(--mono);
+  font-size:12px;
+  line-height:1.35;
+  outline:none;
+}
+textarea{
+  width:100%;
+  border:1px solid var(--line2);
+  background:#050505;
+  color:var(--fg);
+  padding:10px;
+  resize:vertical;
+  min-height:140px;
+}
+
+/* =========================================================
+AE :: KETA_NOTE WINDOW (CLEAN / THIN)
+========================================================= */
+.ketaNote{
+  position:absolute;
+  top:60px; right:16px;
+  width:360px; height:240px;
+  display:none;
+  z-index:80;
+  resize:both;
+  overflow:hidden;
+  border-radius:var(--ctl-radius);
+  background:var(--ctl-bg);
+  border:1px solid var(--note-border);
+  backdrop-filter: blur(6px);
+}
+
+.ketaNote.open{ display:flex; flex-direction:column; }
+
+.ketaHead{
+  padding:8px 10px;
+  border-bottom:1px solid var(--note-border2);
+  font-family:var(--mono);
+  font-size:11px;
+  letter-spacing:.14em;
+  text-transform:uppercase;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  cursor:grab;
+}
+.ketaHead:active{ cursor:grabbing; }
+
+.ketaBody{ padding:10px; min-height:0; flex:1; }
+
+.ketaNote textarea{
+  background:#000;
+  color:#fff;
+  border:1px solid rgba(255,255,255,0.20);
+  width:100%;
+  height:100%;
+  resize:none;
+  padding:10px;
+}
+
+.headBtn{
+  background:transparent;
+  color:var(--fg);
+  border:1px solid rgba(255,255,255,0.18);
+  padding:2px 8px;
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  cursor:pointer;
+}
+.headBtn:hover{ border-color:rgba(255,255,255,0.6); }
+
+/* =========================================================
+AE :: KDTV FLOAT (NO OUTLINE, HOVER REVEAL)
+========================================================= */
+.kdtvWrap{
+  position:absolute;
+  left:120px; top:120px;
+  width:520px; height:320px;
+  display:none;
+  z-index:75;
+  background:rgba(0,0,0,0.0);
+  overflow:hidden;
+}
+.kdtvWrap.open{ display:block; }
+
+.kdtvInner{
+  position:absolute;
+  inset:0;
+  background:rgba(0,0,0,0.0);
+}
+
+.kdtvVideo{
+  position:absolute;
+  inset:0;
+  width:100%;
+  height:100%;
+  object-fit:contain;
+  background:#000;
+  display:none;
+}
+
+.kdtvHoverZone{
+  position:absolute;
+  inset:0;
+}
+
+.kdtvControls{
+  position:absolute;
+  left:10px; right:10px; bottom:10px;
+  display:flex;
+  gap:8px;
+  align-items:center;
+  padding:8px 10px;
+  background:rgba(0,0,0,0.65);
+  border:1px solid rgba(255,255,255,0.14);
+  backdrop-filter: blur(6px);
+  opacity:0;
+  transition: opacity .12s linear;
+}
+
+.kdtvWrap.showControls .kdtvControls{ opacity:1; }
+
+.kdtvUrl{
+  flex:1;
+  background:#000;
+  color:#fff;
+  border:1px solid rgba(255,255,255,0.18);
+  padding:6px 8px;
+  text-transform:none;
+  letter-spacing:0;
+}
+
+.chk{
+  display:flex; gap:6px; align-items:center;
+  font-family:var(--mono);
+  font-size:11px;
+  letter-spacing:.10em;
+  text-transform:uppercase;
+  color:var(--muted);
+  white-space:nowrap;
+}
+.chk input{ accent-color: #fff; }
+
+/* Toast */
+.toast{
+  position:absolute;
+  left:12px;
+  top:calc(var(--top) + 12px);
+  padding:8px 10px;
+  border:1px solid var(--line2);
+  background:rgba(8,8,8,0.82);
+  font-family:var(--mono);
+  font-size:11px;
+  letter-spacing:.06em;
+  text-transform:uppercase;
+  color:var(--fg);
+  display:none;
+  z-index:90;
+}
+
+/* RoomUrl banner */
+#roomJump{
+  position:absolute;
+  left:10px;
+  top:calc(var(--top) + 10px);
+  display:none;
+  align-items:center;
+  gap:10px;
+  padding:8px 10px;
+  border:1px solid var(--line2);
+  background:rgba(0,0,0,0.82);
+  z-index:65;
+  font-family:var(--mono);
+  font-size:11px;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+}
+#roomJump.show{ display:flex; }
+</style>
+</head>
+
+<body>
+<div id="root">
+  <div id="stage" aria-label="KETADATA STAGE"></div>
+  <div id="motion" aria-hidden="true"></div>
+
+  <div id="roomJump">
+    <span id="roomJumpTxt">ROOM LINK DETECTED</span>
+    <button class="btn" id="btnGoRoom">GO</button>
+    <button class="btn" id="btnDismissRoom">DISMISS</button>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <!-- WB :: TOPBAR -->
+  <div class="topbar">
+    <div style="display:flex; gap:10px; align-items:center">
+      <div class="brand">
+        <span class="sq"></span>
+        <span>KETADATA // SHELL // KERNEL</span>
+        <span style="color:var(--muted); letter-spacing:.02em;">V1.1</span>
+      </div>
+      <div class="badge" title="ROOM IN STATE">
+        <span>ROOM</span>
+        <span id="roomName">LOBBY</span>
+      </div>
+      <div class="badge" title="SERIAL">
+        <span id="serialLabel">SERIAL_0001</span>
+      </div>
+    </div>
+
+    <div class="actions">
+      <button class="btn" id="btnImport">IMPORT</button>
+      <button class="btn" id="btnExport">EXPORT</button>
+      <button class="btn" id="btnCopy">COPY</button>
+      <button class="btn" id="btnKDTV">KDTV</button>
+      <span class="kbd" title="INVERT ALL COLORS">SHIFT+I</span>
+      <span class="kbd" title="SELECT LIGHT PRESET">1–6</span>
+      <span class="kbd" title="TOGGLE TRANSPORT">SPACE</span>
+      <div id="ketaIcon" class="ketaIcon" title="KETA_NOTE"></div>
+    </div>
+  </div>
+
+  <!-- WB :: SYSTEM DRAWER -->
+  <div class="drawer" id="drawer">
+    <div class="drawerHead">
+      <div>SYSTEM UNIVERSALS</div>
+      <div style="display:flex; gap:8px; align-items:center">
+        <span id="sig" style="color:var(--muted); font-family:var(--mono); font-size:11px">∅</span>
+        <button class="btn" id="btnCopyUniversals">COPY</button>
+        <button class="btn" id="btnCloseDrawer">CLOSE</button>
+      </div>
+    </div>
+    <div class="drawerBody">
+      <textarea id="universals" placeholder="LAWS / CONSTRAINTS / REFERENCES"></textarea>
+
+      <div style="margin-top:10px; color:var(--muted); font-family:var(--mono); font-size:11px; letter-spacing:.08em; text-transform:uppercase">
+        EE LAW :: KETADATA ⇒ KETA_NOTE ⇒ EXPORTABLE STATE
+      </div>
+
+      <div style="margin-top:10px; display:flex; gap:8px; align-items:center; font-family:var(--mono); font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted)">
+        <span>ROOM</span>
+        <input id="roomInput" style="flex:1; background:#000; color:#fff; border:1px solid var(--line2); padding:6px 8px;" placeholder="E.G. VAULT / LAB / BASEMENT" />
+      </div>
+
+      <div style="margin-top:8px; display:flex; gap:8px; align-items:center; font-family:var(--mono); font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted)">
+        <span>ROOM URL</span>
+        <input id="roomUrlInput" style="flex:1; background:#000; color:#fff; border:1px solid var(--line2); padding:6px 8px;" placeholder="OPTIONAL: KETADATA.COM/KDTV1.HTML" />
+      </div>
+
+      <div style="margin-top:8px; display:flex; gap:8px; align-items:center">
+        <button class="btn" id="btnSaveRoom">SAVE ROOM</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- WB :: BOTTOMBAR -->
+  <div class="bottombar">
+    <div style="display:flex; gap:10px; align-items:center">
+      <button class="toggle" id="toggleDrawer">SYSTEM</button>
+      <span>STATE <span id="sig2">∅</span></span>
+    </div>
+    <div style="display:flex; gap:12px; align-items:center">
+      <span>LIGHT <span id="lightLabel">1</span></span>
+      <span>RUN <span id="runLabel">OFF</span></span>
+      <span>MOTION <span id="motionLabel">OFF</span></span>
+    </div>
+  </div>
+
+  <!-- WB :: KETA NOTE -->
+  <div class="ketaNote" id="ketaNote">
+    <div class="ketaHead" id="ketaHead">
+      <div>KETA_NOTE</div>
+      <button class="headBtn" id="btnHideNote">-</button>
+    </div>
+    <div class="ketaBody">
+      <textarea id="ketaText" placeholder="GLOBAL NOTE"></textarea>
+    </div>
+  </div>
+
+  <!-- WB :: KDTV FLOAT -->
+  <div class="kdtvWrap" id="kdtvWrap">
+    <div class="kdtvInner">
+      <video id="kdtvVideo" class="kdtvVideo" playsinline controls></video>
+      <div class="kdtvHoverZone" id="kdtvHoverZone"></div>
+      <div class="kdtvControls" id="kdtvControls">
+        <input id="kdtvUrl" class="kdtvUrl" placeholder="PASTE VIDEO URL (MP4 / WEBM) OR YOUTUBE LINK (OPENS NEW TAB)" />
+        <button class="btn" id="kdtvLoad">LOAD</button>
+        <label class="chk" title="VIDEO INVERT (RELATIVE)">
+          <input type="checkbox" id="kdtvInvert" />
+          INVERT
+        </label>
+        <button class="btn" id="kdtvClose">X</button>
+      </div>
+    </div>
+  </div>
+
+  <input id="file" type="file" accept="application/json" style="display:none" />
+</div>
+
+<script>
+/* =========================================================
+EE :: ENGINE (STATE / SERIAL / IO / HOTKEYS / LIGHTS / KDTV / DRAG)
+========================================================= */
+
+/* EE :: SERIAL */
+function pad(n, w){ n = String(n); return n.length>=w ? n : "0".repeat(w-n.length)+n; }
+
+const DEFAULT = {
+  version: "KETADATA_SHELL_KERNEL_v1.1",
+  serial: "KETADATA_SHELL_KERNEL_v1.1__SERIAL_0001",
+  updatedAt: new Date().toISOString(),
+
+  room: "LOBBY",
+  roomUrl: "",
+
+  ketaNote: "",
+  universals: "",
+
+  ui: {
+    invert:false,
+    lightPreset: 1,
+    lightRunning: false,
+    motionOn: false
+  },
+
+  payload: {
+    serialRegistry: ["KETADATA_SHELL_KERNEL_v1.1__SERIAL_0001"],
+    ketaWin: { x: null, y: null, w: 360, h: 240, open: true },
+    kdtvWin: { x: 120, y: 120, w: 520, h: 320, open: false },
+    kdtv: { videoInvert: true }
+  }
+};
+
+let STATE = loadLocal() || structuredClone(DEFAULT);
+
+const $ = (id)=>document.getElementById(id);
+const root = $("root");
+const stage = $("stage");
+const motion = $("motion");
+
+function nowISO(){ return new Date().toISOString(); }
+
+/* WB :: tolerant merge */
+function mergeDefault(obj){
+  const out = structuredClone(DEFAULT);
+  Object.assign(out, obj||{});
+  out.ui = Object.assign(structuredClone(DEFAULT.ui), (obj&&obj.ui)||{});
+  out.payload = Object.assign(structuredClone(DEFAULT.payload), (obj&&obj.payload)||{});
+  out.payload.ketaWin = Object.assign(structuredClone(DEFAULT.payload.ketaWin), (obj&&obj.payload&&obj.payload.ketaWin)||{});
+  out.payload.kdtvWin = Object.assign(structuredClone(DEFAULT.payload.kdtvWin), (obj&&obj.payload&&obj.payload.kdtvWin)||{});
+  out.payload.kdtv = Object.assign(structuredClone(DEFAULT.payload.kdtv), (obj&&obj.payload&&obj.payload.kdtv)||{});
+
+  // EE :: guarantee serial registry
+  if(!Array.isArray(out.payload.serialRegistry)) out.payload.serialRegistry = [];
+  if(out.serial && !out.payload.serialRegistry.includes(out.serial)) out.payload.serialRegistry.push(out.serial);
+
+  return out;
+}
+
+function stableSig(){
+  const core = JSON.stringify({
+    v:STATE.version, s:STATE.serial,
+    room:STATE.room, i:STATE.ui.invert,
+    p:STATE.ui.lightPreset, r:STATE.ui.lightRunning,
+    m:STATE.ui.motionOn,
+    k:(STATE.ketaNote||"").length,
+    u:(STATE.universals||"").length
+  });
+  let h=2166136261;
+  for(let i=0;i<core.length;i++){ h^=core.charCodeAt(i); h=Math.imul(h,16777619); }
+  return (h>>>0).toString(16).slice(0,8);
+}
+
+function persist(){
+  STATE.updatedAt = nowISO();
+  try{ localStorage.setItem("ketadata.shell.kernel.v1_1", JSON.stringify(STATE)); }catch(e){}
+  render();
+}
+
+function loadLocal(){
+  try{
+    const raw = localStorage.getItem("ketadata.shell.kernel.v1_1");
+    if(!raw) return null;
+    return mergeDefault(JSON.parse(raw));
+  }catch(e){ return null; }
+}
+
+function exportState(){ return JSON.stringify(STATE, null, 2); }
+
+function importState(text){
+  const parsed = JSON.parse(text);
+  STATE = mergeDefault(parsed);
+  stopLight(true);
+  if(STATE.ui.lightRunning) startLight(STATE.ui.lightPreset);
+  persist();
+}
+
+/* =========================================================
+EE :: INVERT (SHIFT+I) — invert ALL colors
+========================================================= */
+function setInvert(on){ STATE.ui.invert = !!on; persist(); }
+
+/* =========================================================
+EE :: TRANSPORT (SPACE) — toggles light running + motion
+========================================================= */
+function toggleTransport(){
+  if(STATE.ui.lightRunning) stopLight(true);
+  else startLight(STATE.ui.lightPreset);
+
+  STATE.ui.motionOn = !STATE.ui.motionOn;
+  toast(`TRANSPORT ${STATE.ui.lightRunning ? "ON" : "OFF"} / MOTION ${STATE.ui.motionOn ? "ON" : "OFF"}`);
+  persist();
+}
+
+/* =========================================================
+EE :: LIGHTS 1–6 (LOCKED SET)
+========================================================= */
+let lightInterval = null;
+let lightCount = 0, lightAuxA = 0, lightAuxB = 0;
+
+function resetStage(){
+  stage.style.backgroundColor = "#000000";
+  stage.style.filter = "none";
+  lightCount = 0; lightAuxA = 0; lightAuxB = 0;
+}
+
+function stopLight(silent=false){
+  if(lightInterval){ clearInterval(lightInterval); lightInterval = null; }
+  STATE.ui.lightRunning = false;
+  resetStage();
+  if(!silent) persist();
+}
+
+function startLight(preset){
+  stopLight(true);
+  resetStage();
+  STATE.ui.lightPreset = preset;
+  STATE.ui.lightRunning = true;
+
+  if(preset === 1){
+    lightInterval = setInterval(()=>{
+      const curr = stage.style.backgroundColor || "black";
+      stage.style.backgroundColor = (curr === "black" || curr === "rgb(0, 0, 0)") ? "white" : "black";
+      stage.style.filter = "none";
+    }, 50);
+  }
+
+  if(preset === 2){
+    lightInterval = setInterval(()=>{
+      lightAuxA = (lightAuxA + 30) % 360;
+      lightAuxB += 0.5;
+      const lightness = 50 + Math.sin(lightAuxB) * 40;
+      stage.style.backgroundColor = `hsl(${lightAuxA}, 100%, ${lightness}%)`;
+      stage.style.filter = "none";
+    }, 10);
+  }
+
+  if(preset === 3){
+    lightInterval = setInterval(()=>{
+      lightCount++;
+      const beat = lightCount % 16;
+
+      if (beat === 0 || beat === 1) {
+        stage.style.backgroundColor = "#ffffff";
+        stage.style.filter = "invert(1) contrast(3) brightness(2)";
+      } else if (beat === 2) {
+        stage.style.backgroundColor = "#000000";
+        stage.style.filter = "invert(1) contrast(2)";
+      } else if (beat === 3) {
+        stage.style.backgroundColor = "#00ff00";
+        stage.style.filter = "contrast(2) saturate(3)";
+      } else if (beat === 4) {
+        stage.style.backgroundColor = "#ff00ff";
+        stage.style.filter = "invert(1) hue-rotate(90deg)";
+      } else if (beat === 5 || beat === 6) {
+        stage.style.backgroundColor = "#00ffff";
+        stage.style.filter = "invert(0.7) contrast(2)";
+      } else if (beat === 7) {
+        stage.style.backgroundColor = "#ffffff";
+        stage.style.filter = "invert(1) brightness(3)";
+      } else if (beat === 8) {
+        stage.style.backgroundColor = "#000000";
+        stage.style.filter = "invert(1) contrast(3)";
+      } else if (beat === 9 || beat === 10) {
+        stage.style.backgroundColor = "#00ff00";
+        stage.style.filter = "saturate(5) contrast(2)";
+      } else if (beat === 11) {
+        stage.style.backgroundColor = "#ff00ff";
+        stage.style.filter = "invert(1) saturate(3)";
+      } else {
+        stage.style.backgroundColor = "#0088ff";
+        stage.style.filter = "contrast(1.5) brightness(1.2)";
+      }
+    }, 30);
+  }
+
+  if(preset === 4){
+    lightInterval = setInterval(()=>{
+      lightAuxA += 0.08;
+      lightCount++;
+
+      const red = Math.abs(Math.sin(lightAuxA)) * 255;
+      const pulse = Math.abs(Math.sin(lightAuxA * 0.5));
+      const contrast = 2 + pulse * 2;
+      const saturation = 4 + pulse * 2;
+
+      if (lightCount % 8 === 0) {
+        stage.style.backgroundColor = "#000000";
+        stage.style.filter = "brightness(3) contrast(3)";
+      } else if (lightCount % 8 === 1) {
+        stage.style.backgroundColor = `rgb(${red}, 0, 0)`;
+        stage.style.filter = `contrast(${contrast + 1}) saturate(${saturation + 2}) brightness(${1.5 + pulse * 0.5})`;
+      } else {
+        stage.style.backgroundColor = `rgb(${red}, 0, 0)`;
+        stage.style.filter = `contrast(${contrast}) saturate(${saturation}) brightness(${1.2 + pulse * 0.5})`;
+      }
+    }, 20);
+  }
+
+  if(preset === 5){
+    lightInterval = setInterval(()=>{
+      lightAuxA += 15;
+      lightAuxB = (lightAuxB + 2) % 100;
+
+      const hue = 260 + Math.sin(lightAuxA * 0.1) * 40;
+      const saturation = 80 + Math.cos(lightAuxA * 0.05) * 20;
+      const lightness = 30 + Math.sin(lightAuxB * 0.1) * 30;
+
+      const spiralBrightness = 1 + Math.abs(Math.sin(lightAuxA * 0.05)) * 0.8;
+      const spiralContrast = 1.5 + Math.abs(Math.cos(lightAuxA * 0.08)) * 1;
+
+      stage.style.backgroundColor = `hsl(${hue}, ${saturation}%, ${lightness}%)`;
+      stage.style.filter = `contrast(${spiralContrast}) saturate(2) brightness(${spiralBrightness}) hue-rotate(${lightAuxA * 0.5}deg)`;
+    }, 25);
+  }
+
+  if(preset === 6){
+    lightInterval = setInterval(()=>{
+      lightCount++;
+
+      if (lightCount % 50 === 0) {
+        stage.style.backgroundColor = "#ffffff";
+        stage.style.filter = "brightness(5) contrast(5)";
+      } else if (lightCount % 50 === 1) {
+        stage.style.backgroundColor = "#000000";
+        stage.style.filter = "none";
+      } else if (lightCount % 50 === 2) {
+        stage.style.backgroundColor = "#ffffff";
+        stage.style.filter = "brightness(5) contrast(5)";
+      } else {
+        stage.style.backgroundColor = "#000000";
+        stage.style.filter = "none";
+      }
+    }, 30);
+  }
+
+  persist();
+}
+
+function selectPreset(preset){
+  STATE.ui.lightPreset = preset;
+  if(STATE.ui.lightRunning) startLight(preset);
+  else persist();
+}
+
+/* =========================================================
+WB :: UI HELPERS
+========================================================= */
+function setDrawer(open){ $("drawer").classList.toggle("open", !!open); }
+function setKetaNote(open){
+  $("ketaNote").classList.toggle("open", !!open);
+  $("ketaIcon").classList.toggle("open", !!open);
+  STATE.payload.ketaWin.open = !!open;
+  persist();
+}
+
+function setKDTV(open){
+  $("kdtvWrap").classList.toggle("open", !!open);
+  STATE.payload.kdtvWin.open = !!open;
+  persist();
+}
+
+function download(filename, text){
+  const blob = new Blob([text], {type:"application/json"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href), 800);
+}
+
+async function copy(text){
+  try{ await navigator.clipboard.writeText(text); toast("COPIED"); }
+  catch(e){ toast("COPY FAILED"); }
+}
+
+let toastTimer=null;
+function toast(msg){
+  const t = $("toast");
+  t.textContent = msg;
+  t.style.display = "block";
+  if(toastTimer) clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=>{ t.style.display="none"; }, 900);
+}
+
+/* =========================================================
+EE :: KDTV (LOAD + HOVER SHOW/HIDE + VIDEO INVERT XOR GLOBAL)
+========================================================= */
+const kdtvWrap = $("kdtvWrap");
+const kdtvControls = $("kdtvControls");
+const kdtvUrl = $("kdtvUrl");
+const kdtvVideo = $("kdtvVideo");
+const kdtvInvert = $("kdtvInvert");
+
+let kdtvHideTimer = null;
+
+function applyVideoFilter(){
+  // XOR: effectiveInvert = globalInvert XOR videoInvert
+  const global = !!STATE.ui.invert;
+  const vid = !!STATE.payload.kdtv.videoInvert;
+  const effective = (global ? 1 : 0) ^ (vid ? 1 : 0);
+  kdtvVideo.style.filter = effective ? "invert(1)" : "invert(0)";
+}
+
+function showKDTVControls(){
+  kdtvWrap.classList.add("showControls");
+  if(kdtvHideTimer) clearTimeout(kdtvHideTimer);
+}
+function scheduleHideKDTVControls(){
+  if(kdtvHideTimer) clearTimeout(kdtvHideTimer);
+  kdtvHideTimer = setTimeout(()=> kdtvWrap.classList.remove("showControls"), 350);
+}
+
+function isYouTube(url){
+  const u = (url||"").toLowerCase();
+  return u.includes("youtube.com") || u.includes("youtu.be");
+}
+
+function loadKDTV(url){
+  url = (url||"").trim();
+  if(!url){ toast("NO URL"); return; }
+
+  if(isYouTube(url)){
+    // Guerilla: no embeds that break. Open new tab.
+    window.open(url, "_blank", "noopener,noreferrer");
+    toast("YOUTUBE OPENED");
+    return;
+  }
+
+  // Local video link (mp4/webm)
+  kdtvVideo.src = url;
+  kdtvVideo.style.display = "block";
+  kdtvVideo.load();
+  kdtvVideo.play().catch(()=>{});
+  toast("VIDEO LOADED");
+}
+
+/* =========================================================
+WB :: RENDER
+========================================================= */
+function render(){
+  root.classList.toggle("invert", !!STATE.ui.invert);
+  motion.classList.toggle("run", !!STATE.ui.motionOn);
+
+  $("roomName").textContent = (STATE.room || "LOBBY").toUpperCase();
+  $("roomInput").value = STATE.room || "";
+  $("roomUrlInput").value = STATE.roomUrl || "";
+
+  $("ketaText").value = STATE.ketaNote || "";
+  $("universals").value = STATE.universals || "";
+
+  $("serialLabel").textContent = (STATE.serial || "SERIAL").split("__").pop() || "SERIAL";
+  const s = stableSig();
+  $("sig").textContent = s;
+  $("sig2").textContent = s;
+
+  $("lightLabel").textContent = String(STATE.ui.lightPreset);
+  $("runLabel").textContent = STATE.ui.lightRunning ? "ON" : "OFF";
+  $("motionLabel").textContent = STATE.ui.motionOn ? "ON" : "OFF";
+
+  // KETA NOTE visibility
+  setOpenClassNoPersist("ketaNote", !!STATE.payload.ketaWin.open);
+  setOpenClassNoPersist("ketaIcon", !!STATE.payload.ketaWin.open);
+
+  // KDTV visibility + geometry
+  setOpenClassNoPersist("kdtvWrap", !!STATE.payload.kdtvWin.open);
+  applyWinGeometry($("ketaNote"), STATE.payload.ketaWin);
+  applyWinGeometry($("kdtvWrap"), STATE.payload.kdtvWin);
+
+  // KDTV invert toggle
+  kdtvInvert.checked = !!STATE.payload.kdtv.videoInvert;
+  applyVideoFilter();
+
+  // Room URL affordance
+  const hasUrl = !!(STATE.roomUrl && String(STATE.roomUrl).trim());
+  $("roomJump").classList.toggle("show", hasUrl);
+  if(hasUrl) $("roomJumpTxt").textContent = `ROOM LINK: ${(STATE.room||"ROOM").toUpperCase()}`;
+}
+
+function setOpenClassNoPersist(id, open){
+  const el = $(id);
+  if(!el) return;
+  el.classList.toggle("open", !!open);
+}
+
+function applyWinGeometry(el, win){
+  if(!el || !win) return;
+
+  // width/height always (smooth resizing)
+  if(win.w) el.style.width = win.w + "px";
+  if(win.h) el.style.height = win.h + "px";
+
+  // position only if known; else defaults in CSS
+  if(Number.isFinite(win.x) && Number.isFinite(win.y)){
+    el.style.left = win.x + "px";
+    el.style.top = win.y + "px";
+    el.style.right = "auto";
+  }
+}
+
+/* =========================================================
+WB :: EVENTS / IO
+========================================================= */
+$("btnImport").addEventListener("click", ()=> $("file").click());
+$("file").addEventListener("change", async (e)=>{
+  const f = e.target.files && e.target.files[0];
+  if(!f) return;
+  const txt = await f.text();
+  importState(txt);
+  e.target.value = "";
+  toast("STATE IMPORTED");
+});
+
+$("btnExport").addEventListener("click", ()=>{
+  const name = (STATE.serial || "KETADATA_SHELL_KERNEL_v1.1__SERIAL_0001") + "_state.json";
+  download(name, exportState());
+  toast("STATE EXPORTED");
+});
+$("btnCopy").addEventListener("click", ()=> copy(exportState()));
+
+$("toggleDrawer").addEventListener("click", ()=> setDrawer(!$("drawer").classList.contains("open")));
+$("btnCloseDrawer").addEventListener("click", ()=> setDrawer(false));
+$("btnCopyUniversals").addEventListener("click", ()=> copy(STATE.universals || ""));
+
+$("universals").addEventListener("input", ()=>{
+  STATE.universals = $("universals").value;
+  persist();
+});
+
+$("ketaIcon").addEventListener("click", ()=>{
+  const open = !$("ketaNote").classList.contains("open");
+  setKetaNote(open);
+  toast(open ? "KETA_NOTE OPEN" : "KETA_NOTE CLOSED");
+});
+$("btnHideNote").addEventListener("click", ()=> setKetaNote(false));
+$("ketaText").addEventListener("input", ()=>{
+  STATE.ketaNote = $("ketaText").value;
+  persist();
+});
+
+$("btnSaveRoom").addEventListener("click", ()=>{
+  STATE.room = ($("roomInput").value || "LOBBY").trim();
+  STATE.roomUrl = ($("roomUrlInput").value || "").trim();
+  toast("ROOM SAVED");
+  persist();
+});
+
+$("btnGoRoom").addEventListener("click", ()=>{
+  if(!STATE.roomUrl) return;
+  window.location.href = STATE.roomUrl;
+});
+$("btnDismissRoom").addEventListener("click", ()=>{
+  STATE.roomUrl = "";
+  persist();
+});
+
+/* KDTV buttons */
+$("btnKDTV").addEventListener("click", ()=>{
+  const open = !kdtvWrap.classList.contains("open");
+  setKDTV(open);
+  toast(open ? "KDTV OPEN" : "KDTV CLOSED");
+});
+$("kdtvLoad").addEventListener("click", ()=> loadKDTV(kdtvUrl.value));
+$("kdtvClose").addEventListener("click", ()=> setKDTV(false));
+kdtvInvert.addEventListener("change", ()=>{
+  STATE.payload.kdtv.videoInvert = !!kdtvInvert.checked;
+  applyVideoFilter();
+  persist();
+});
+
+/* KDTV hover behavior */
+$("kdtvHoverZone").addEventListener("mouseenter", ()=>{
+  showKDTVControls();
+});
+$("kdtvHoverZone").addEventListener("mouseleave", ()=>{
+  scheduleHideKDTVControls();
+});
+kdtvControls.addEventListener("mouseenter", ()=> showKDTVControls());
+kdtvControls.addEventListener("mouseleave", ()=> scheduleHideKDTVControls());
+
+/* Hotkeys
+- SHIFT+I : invert
+- 1–6 : light preset (only when NOT typing)
+- SPACE : transport (only when NOT typing)
+- ESC : close overlays + stop light + stop motion
+*/
+document.addEventListener("keydown", (e)=>{
+  const tag = (e.target && e.target.tagName) ? e.target.tagName.toLowerCase() : "";
+  const typing = (tag==="textarea" || tag==="input");
+
+  if(e.shiftKey && e.key.toLowerCase()==="i"){
+    e.preventDefault();
+    setInvert(!STATE.ui.invert);
+    applyVideoFilter();
+    toast(STATE.ui.invert ? "INVERT ON" : "INVERT OFF");
+    return;
+  }
+
+  if(!typing && /^[1-6]$/.test(e.key)){
+    e.preventDefault();
+    selectPreset(parseInt(e.key,10));
+    toast(`LIGHT ${STATE.ui.lightPreset}`);
+    return;
+  }
+
+  if(!typing && (e.code==="Space" || e.key===" ")){
+    e.preventDefault();
+    toggleTransport();
+    return;
+  }
+
+  if(e.key==="Escape"){
+    setDrawer(false);
+    setKetaNote(false);
+    setKDTV(false);
+    stopLight(true);
+    STATE.ui.motionOn = false;
+    toast("CLOSED");
+    persist();
+    return;
+  }
+});
+
+/* =========================================================
+EE :: DRAG (POINTER CAPTURE) — FIXED, NO BREAKS
+========================================================= */
+function bindDrag(el, head, key){
+  if(!el || !head) return;
+
+  let dragging=false, ox=0, oy=0;
+
+  head.addEventListener("pointerdown", (e)=>{
+    // ignore buttons
+    if(e.target && e.target.closest("button")) return;
+
+    dragging=true;
+    head.setPointerCapture(e.pointerId);
+
+    const r = el.getBoundingClientRect();
+    ox = e.clientX - r.left;
+    oy = e.clientY - r.top;
+
+    // anchor to left/top so it moves deterministically
+    el.style.left = r.left + "px";
+    el.style.top  = r.top + "px";
+    el.style.right = "auto";
+
+    e.preventDefault();
+  });
+
+  head.addEventListener("pointermove", (e)=>{
+    if(!dragging) return;
+    const x = (e.clientX - ox);
+    const y = (e.clientY - oy);
+
+    el.style.left = x + "px";
+    el.style.top  = y + "px";
+
+    // stage geometry in state (throttled)
+    if(key){
+      STATE.payload[key].x = Math.round(x);
+      STATE.payload[key].y = Math.round(y);
+    }
+  });
+
+  head.addEventListener("pointerup", (e)=>{
+    if(!dragging) return;
+    dragging=false;
+    try{ head.releasePointerCapture(e.pointerId); }catch(_){}
+    persist();
+  });
+
+  head.addEventListener("pointercancel", ()=>{
+    if(!dragging) return;
+    dragging=false;
+    persist();
+  });
+}
+
+bindDrag($("ketaNote"), $("ketaHead"), "ketaWin");
+
+/* =========================================================
+EE :: RESIZE OBSERVER — store sizes (smooth)
+========================================================= */
+function bindResize(el, key){
+  if(!el || !window.ResizeObserver || !key) return;
+  const ro = new ResizeObserver((entries)=>{
+    for(const ent of entries){
+      const r = ent.contentRect;
+      STATE.payload[key].w = Math.round(r.width);
+      STATE.payload[key].h = Math.round(r.height);
+    }
+  });
+  ro.observe(el);
+}
+bindResize($("ketaNote"), "ketaWin");
+bindResize($("kdtvWrap"), "kdtvWin");
+
+/* =========================================================
+EE :: KDTV geometry drag (no outline, but draggable via hover controls)
+========================================================= */
+bindDrag($("kdtvWrap"), $("kdtvControls"), "kdtvWin");
+
+/* =========================================================
+EE :: SERIAL INIT (AUTO INCREMENT IF NEW)
+========================================================= */
+(function ensureSerial(){
+  // if missing or default and registry already has it, keep; else mint a new serial
+  if(!STATE.serial) STATE.serial = DEFAULT.serial;
+
+  if(!Array.isArray(STATE.payload.serialRegistry)) STATE.payload.serialRegistry = [];
+
+  // mint serial if duplicate collision on "new instance" scenario
+  // (local only; stable enough for your debugging)
+  const base = "KETADATA_SHELL_KERNEL_v1.1__SERIAL_";
+  if(STATE.payload.serialRegistry.length === 0){
+    STATE.payload.serialRegistry.push(STATE.serial);
+  }else{
+    if(!STATE.payload.serialRegistry.includes(STATE.serial)){
+      STATE.payload.serialRegistry.push(STATE.serial);
+    }
+    // If serial is placeholder but registry suggests we want next
+    if(STATE.serial === DEFAULT.serial && STATE.payload.serialRegistry.length > 1){
+      const next = base + pad(STATE.payload.serialRegistry.length, 4);
+      STATE.serial = next;
+      if(!STATE.payload.serialRegistry.includes(next)) STATE.payload.serialRegistry.push(next);
+    }
+  }
+})();
+
+/* Boot */
+render();
+
+/* =========================================================
+AE :: black/sharp/machinic
+EE :: state + serial + invert + lights + transport + kdtv + drag + resize
+WB :: wiring + tolerant merge + render bindings + io
+========================================================= */
+</script>
+</body>
+</html>
