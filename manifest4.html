@@ -1,0 +1,250 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>KETADATA // BLACK BOOK MANIFEST (LOCAL)</title>
+
+<!-- AE ▸ AESTHETIC ENGINE ▸ BLACK GLASS / SHARP EDGE -->
+<style>
+:root{
+  --bg:#000;
+  --ink:#fff;
+  --muted:#8a8a8a;
+  --hair:#1a1a1a;
+  --accent:#fff;
+  --mono: ui-monospace, Menlo, Consolas, monospace;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0;
+  background:var(--bg);
+  color:var(--ink);
+  font-family:Arial, system-ui;
+  overflow:hidden;
+}
+header{
+  height:52px;
+  border-bottom:1px solid var(--hair);
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  padding:0 12px;
+}
+.brand{
+  font-weight:700;
+  letter-spacing:.18em;
+  font-size:12px;
+}
+.sub{
+  font-family:var(--mono);
+  font-size:10px;
+  color:var(--muted);
+  letter-spacing:.08em;
+}
+.btn{
+  border:1px solid var(--hair);
+  background:#000;
+  color:#fff;
+  font-family:var(--mono);
+  font-size:11px;
+  padding:7px 10px;
+  cursor:pointer;
+}
+.btn:hover{border-color:#444}
+main{
+  height:calc(100% - 52px);
+  display:grid;
+  grid-template-columns:280px 1fr 340px;
+}
+.panel{
+  border-right:1px solid var(--hair);
+  padding:10px;
+  overflow:auto;
+}
+.panel:last-child{border-right:none}
+h3{
+  font-family:var(--mono);
+  font-size:11px;
+  letter-spacing:.14em;
+  margin:0 0 8px;
+}
+.small{
+  font-family:var(--mono);
+  font-size:10px;
+  color:var(--muted);
+  line-height:1.4;
+}
+.list{
+  margin-top:8px;
+  border:1px solid var(--hair);
+}
+.item{
+  padding:6px 8px;
+  border-bottom:1px solid var(--hair);
+  cursor:pointer;
+}
+.item:hover{background:#111}
+.item.active{outline:1px solid #fff}
+textarea,input{
+  width:100%;
+  background:#000;
+  border:1px solid var(--hair);
+  color:#fff;
+  font-family:var(--mono);
+  font-size:11px;
+  padding:8px;
+}
+textarea{min-height:80px}
+pre{
+  background:#000;
+  border:1px solid var(--hair);
+  padding:10px;
+  font-family:var(--mono);
+  font-size:10px;
+  white-space:pre-wrap;
+}
+</style>
+</head>
+
+<body>
+
+<header>
+  <div>
+    <div class="brand">KETADATA</div>
+    <div class="sub">BLACK BOOK MANIFEST // LOCAL ONLY</div>
+  </div>
+  <div style="display:flex;gap:8px">
+    <button class="btn" id="pick">SELECT BLACKBOOKS FOLDER</button>
+    <button class="btn" id="export">EXPORT JSON</button>
+  </div>
+</header>
+
+<main>
+
+<!-- AE ▸ LEFT PANEL -->
+<div class="panel">
+  <h3>INPUT</h3>
+  <div class="small">
+    Select the root folder that contains all black books.<br>
+    Structure: <br>
+    <code>bookId/pages/page_001.jpg</code>
+  </div>
+
+  <!-- EE ▸ BULK FOLDER PICKER -->
+  <input id="folder" type="file" webkitdirectory multiple style="margin-top:10px">
+
+  <h3 style="margin-top:16px">BOOKS FOUND</h3>
+  <div id="books" class="list"></div>
+</div>
+
+<!-- EE ▸ CENTER -->
+<div class="panel">
+  <h3>INSPECT BOOK</h3>
+  <div class="small">Edit title & tags. Page count auto-derived.</div>
+
+  <label class="small">TITLE</label>
+  <input id="title">
+
+  <label class="small">TAGS (comma)</label>
+  <input id="tags">
+
+  <h3 style="margin-top:16px">VALIDATION</h3>
+  <pre id="report">—</pre>
+</div>
+
+<!-- WB ▸ RIGHT OUTPUT -->
+<div class="panel">
+  <h3>EXPORT</h3>
+  <div class="small">BOOKS[] + manifest.json</div>
+
+  <h3 style="margin-top:12px">BOOKS[]</h3>
+  <pre id="jsout"></pre>
+
+  <h3 style="margin-top:12px">MANIFEST.JSON</h3>
+  <pre id="jsonout"></pre>
+</div>
+
+</main>
+
+<!-- EE ▸ ENGINE -->
+<script>
+const books = {};
+let active = null;
+
+const $ = id => document.getElementById(id);
+
+$("folder").addEventListener("change", e=>{
+  booksClear();
+  for(const f of e.target.files){
+    const parts = f.webkitRelativePath.split("/");
+    if(parts.length < 3) continue;
+    const [root, bookId, sub, file] = parts;
+    if(sub !== "pages") continue;
+    if(!books[bookId]){
+      books[bookId] = {id:bookId, title:bookId, tags:"", pages:[]};
+    }
+    if(file.match(/^page_\d+\.(jpg|jpeg|png)$/i)){
+      books[bookId].pages.push(file);
+    }
+  }
+  renderBooks();
+});
+
+function booksClear(){
+  active=null;
+  $("books").innerHTML="";
+}
+
+function renderBooks(){
+  $("books").innerHTML="";
+  Object.values(books).forEach(b=>{
+    b.pages.sort();
+    const d=document.createElement("div");
+    d.className="item";
+    d.textContent=`${b.id} (${b.pages.length})`;
+    d.onclick=()=>selectBook(b.id,d);
+    $("books").appendChild(d);
+  });
+  updateOutput();
+}
+
+function selectBook(id, el){
+  [...document.querySelectorAll(".item")].forEach(x=>x.classList.remove("active"));
+  el.classList.add("active");
+  active=books[id];
+  $("title").value=active.title;
+  $("tags").value=active.tags;
+  $("report").textContent = active.pages.length
+    ? "OK"
+    : "NO PAGES FOUND";
+}
+
+$("title").oninput=()=>{ if(active){ active.title=$("title").value; updateOutput(); }};
+$("tags").oninput=()=>{ if(active){ active.tags=$("tags").value; updateOutput(); }};
+
+function updateOutput(){
+  const arr = Object.values(books).map(b=>({
+    id:b.id,
+    title:b.title,
+    tags:b.tags,
+    pageCount:b.pages.length,
+    basePath:`blackbooks/${b.id}/pages`,
+    pad:3,
+    ext:"jpg"
+  }));
+  $("jsout").textContent = "const BOOKS = " + JSON.stringify(arr,null,2);
+  $("jsonout").textContent = JSON.stringify({books:arr},null,2);
+}
+
+$("export").onclick=()=>{
+  const blob=new Blob([$("jsonout").textContent],{type:"application/json"});
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(blob);
+  a.download="blackbooks_manifest.json";
+  a.click();
+};
+</script>
+
+</body>
+</html>
