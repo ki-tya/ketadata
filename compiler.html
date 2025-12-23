@@ -1,0 +1,1251 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>KETADATA // AI CHAT COMPILER</title>
+
+  <!-- =========================================================
+       AESTHETIC (SAFE TO EDIT)
+       - Black, sharp edges, KETADATA mono.
+       - Do NOT rename IDs used in JS.
+  ========================================================== -->
+  <style>
+    :root{
+      --bg:#000;
+      --ink:#fff;
+      --muted:#a8a8a8;
+      --hair:#1b1b1b;
+      --hair2:#2a2a2a;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      --sans: Arial, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, sans-serif;
+
+      --topH:52px;
+      --bottomH:170px;
+      --leftW:420px;
+      --rightW:520px;
+      --splitter:8px;
+    }
+
+    *{ box-sizing:border-box; }
+    html,body{ height:100%; }
+    body{
+      margin:0;
+      background:var(--bg);
+      color:var(--ink);
+      font-family:var(--sans);
+      overflow:hidden;
+    }
+
+    header{
+      height:var(--topH);
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      padding:0 12px;
+      border-bottom:1px solid var(--hair);
+      background:#000;
+    }
+    .brand{
+      display:flex; flex-direction:column; line-height:1.05;
+      user-select:none;
+    }
+    .brand .top{
+      font-weight:700;
+      letter-spacing:.14em;
+      font-size:12px;
+    }
+    .brand .sub{
+      font-family:var(--mono);
+      font-size:10px;
+      color:var(--muted);
+      letter-spacing:.08em;
+      margin-top:2px;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      max-width:70vw;
+    }
+
+    .topActions{ display:flex; align-items:center; gap:10px; }
+
+    .btn{
+      border:1px solid var(--hair2);
+      background:#000;
+      color:var(--ink);
+      padding:7px 10px;
+      font-size:11px;
+      font-family:var(--mono);
+      letter-spacing:.06em;
+      cursor:pointer;
+      user-select:none;
+      white-space:nowrap;
+    }
+    .btn:hover{ border-color:#3b3b3b; }
+    .btn:active{ transform:translateY(1px); }
+
+    /* KETA NOTE icon */
+    .noteIconBtn{
+      width:30px; height:30px;
+      border:1px solid var(--hair2);
+      background:#000;
+      display:grid;
+      place-items:center;
+      cursor:pointer;
+      user-select:none;
+    }
+    .noteIconBtn:hover{ border-color:#3b3b3b; }
+    .sqIcon{
+      width:12px; height:12px;
+      border:1px solid #fff;
+      background:#000; /* visible note */
+    }
+    .sqIcon.filled{ background:#fff; } /* collapsed note */
+
+    /* Layout */
+    #viewport{
+      height:calc(100% - var(--topH));
+      display:grid;
+      grid-template-columns: var(--leftW) var(--splitter) 1fr var(--splitter) var(--rightW);
+      grid-template-rows: 1fr var(--splitter) var(--bottomH);
+    }
+
+    .panel{
+      background:#000;
+      border:1px solid var(--hair);
+      overflow:hidden;
+      min-width:240px;
+      min-height:140px;
+    }
+    .panelHeader{
+      height:42px;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      padding:0 10px;
+      border-bottom:1px solid var(--hair);
+      background:#000;
+      user-select:none;
+    }
+    .panelHeader .title{
+      font-family:var(--mono);
+      font-size:11px;
+      letter-spacing:.14em;
+      color:#fff;
+      display:flex;
+      align-items:center;
+      gap:10px;
+    }
+    .panelHeader .meta{
+      font-family:var(--mono);
+      font-size:10px;
+      color:var(--muted);
+      letter-spacing:.08em;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      max-width:55%;
+      text-align:right;
+    }
+    .panelBody{
+      height:calc(100% - 42px);
+      overflow:auto;
+      padding:10px;
+    }
+
+    .splitV, .splitH{
+      background:#000;
+      border-left:1px solid var(--hair);
+      border-right:1px solid var(--hair);
+      position:relative;
+      cursor:col-resize;
+    }
+    .splitH{
+      border-left:none; border-right:none;
+      border-top:1px solid var(--hair);
+      border-bottom:1px solid var(--hair);
+      cursor:row-resize;
+    }
+    .splitV::after{
+      content:"";
+      position:absolute;
+      left:50%; top:8px; bottom:8px;
+      width:2px; transform:translateX(-50%);
+      background:var(--hair2);
+    }
+    .splitH::after{
+      content:"";
+      position:absolute;
+      top:50%; left:8px; right:8px;
+      height:2px; transform:translateY(-50%);
+      background:var(--hair2);
+    }
+
+    /* Inputs */
+    .hint{
+      font-family:var(--mono);
+      font-size:10px;
+      color:var(--muted);
+      letter-spacing:.06em;
+      line-height:1.35;
+      margin-bottom:10px;
+    }
+    textarea, input[type="text"]{
+      width:100%;
+      border:1px solid var(--hair2);
+      background:#000;
+      color:#fff;
+      font-family:var(--mono);
+      font-size:11px;
+      padding:10px;
+      outline:none;
+    }
+    textarea{ resize:vertical; min-height:180px; }
+    .fieldLabel{
+      font-family:var(--mono);
+      font-size:10px;
+      color:var(--muted);
+      letter-spacing:.14em;
+      margin:0 0 6px;
+    }
+    .box{
+      border:1px solid var(--hair);
+      padding:10px;
+      margin-bottom:10px;
+    }
+    .row2{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap:10px;
+      align-items:end;
+    }
+    .small{
+      font-family:var(--mono);
+      font-size:10px;
+      color:var(--muted);
+      line-height:1.35;
+    }
+
+    /* Library list */
+    .search{
+      width:100%;
+      border:1px solid var(--hair2);
+      background:#000;
+      color:#fff;
+      font-family:var(--mono);
+      font-size:11px;
+      padding:10px;
+      outline:none;
+      margin-bottom:10px;
+    }
+    .item{
+      border:1px solid var(--hair);
+      padding:10px;
+      cursor:pointer;
+      user-select:none;
+      display:grid;
+      grid-template-columns: 12px 1fr auto;
+      gap:10px;
+      align-items:center;
+      margin-bottom:8px;
+    }
+    .item:hover{ border-color:#3b3b3b; }
+    .miniSq{ width:10px; height:10px; border:1px solid #fff; background:#000; }
+    .label{
+      font-family:var(--mono);
+      font-size:11px;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      white-space:nowrap;
+    }
+    .tag{
+      font-family:var(--mono);
+      font-size:10px;
+      color:var(--muted);
+      border:1px solid var(--hair2);
+      padding:2px 6px;
+      white-space:nowrap;
+    }
+
+    /* Center compiled view */
+    .chip{
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+      font-family:var(--mono);
+      font-size:10px;
+      letter-spacing:.06em;
+      border:1px solid var(--hair2);
+      padding:4px 8px;
+      color:var(--muted);
+      white-space:nowrap;
+    }
+    .dot{
+      width:8px; height:8px; border:1px solid #fff; background:#000;
+    }
+    .dot.on{ background:#fff; }
+
+    .centerTop{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      padding:10px;
+      border-bottom:1px solid var(--hair);
+    }
+    .centerTop .left{
+      display:flex;
+      flex-direction:column;
+      gap:2px;
+      min-width:0;
+    }
+    .centerTop .t{
+      font-family:var(--mono);
+      font-size:11px;
+      letter-spacing:.14em;
+    }
+    .centerTop .s{
+      font-family:var(--mono);
+      font-size:10px;
+      color:var(--muted);
+      letter-spacing:.08em;
+      overflow:hidden;
+      white-space:nowrap;
+      text-overflow:ellipsis;
+    }
+    .centerTop .right{ display:flex; align-items:center; gap:8px; flex:0 0 auto; }
+
+    .compiled{
+      padding:10px;
+      overflow:auto;
+      height:calc(100% - 52px);
+    }
+
+    .pair{
+      border:1px solid var(--hair);
+      margin-bottom:10px;
+    }
+    .pairHead{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      border-bottom:1px solid var(--hair);
+      padding:8px 10px;
+      user-select:none;
+      cursor:pointer;
+    }
+    .pairHead .lhs{
+      display:flex; gap:10px; align-items:center;
+      font-family:var(--mono);
+      letter-spacing:.12em;
+      font-size:10px;
+    }
+    .pairHead .rhs{
+      display:flex; gap:8px; align-items:center;
+      font-family:var(--mono);
+      font-size:10px;
+      color:var(--muted);
+    }
+    .pill{
+      border:1px solid var(--hair2);
+      padding:2px 6px;
+      color:var(--muted);
+      font-family:var(--mono);
+      font-size:10px;
+      letter-spacing:.06em;
+    }
+    .pairBody{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap:0;
+    }
+    .cell{
+      padding:10px;
+      border-right:1px solid var(--hair);
+      min-height:120px;
+      white-space:pre-wrap;
+      word-break:break-word;
+      font-family:var(--mono);
+      font-size:11px;
+      line-height:1.35;
+    }
+    .cell:last-child{ border-right:none; }
+    .cellTitle{
+      font-family:var(--mono);
+      color:var(--muted);
+      letter-spacing:.14em;
+      font-size:10px;
+      margin-bottom:8px;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+    }
+
+    /* Bottom */
+    .bottomGrid{
+      height:100%;
+      display:grid;
+      grid-template-columns: 1fr var(--splitter) 1fr;
+    }
+    .bottomHint{
+      padding:10px;
+      border-top:1px solid var(--hair);
+      font-family:var(--mono);
+      font-size:10px;
+      color:var(--muted);
+      letter-spacing:.06em;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+    }
+    .kbd{
+      border:1px solid var(--hair2);
+      padding:2px 6px;
+      font-family:var(--mono);
+      color:#fff;
+    }
+
+    /* Floating Keta Note */
+    #floatNote{
+      position:fixed;
+      top:76px;
+      left:24px;
+      width:360px;
+      height:240px;
+      border:1px solid #fff;
+      background:#000;
+      z-index:50;
+      display:flex;
+      flex-direction:column;
+    }
+    #floatNote.hidden{ display:none; }
+    #floatNoteHead{
+      height:38px;
+      border-bottom:1px solid var(--hair);
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      padding:0 10px;
+      cursor:move;
+      user-select:none;
+      font-family:var(--mono);
+      font-size:11px;
+      letter-spacing:.12em;
+    }
+    #floatNoteHead .left{ display:flex; align-items:center; gap:10px; }
+    #floatNoteHead .right{ display:flex; gap:8px; }
+    .iconBtn{
+      width:26px; height:26px;
+      border:1px solid var(--hair2);
+      display:grid;
+      place-items:center;
+      font-family:var(--mono);
+      font-size:12px;
+      cursor:pointer;
+      user-select:none;
+      background:#000;
+      color:#fff;
+    }
+    .iconBtn:hover{ border-color:#3b3b3b; }
+    #floatNoteBody{ padding:10px; height:100%; }
+    #floatNoteText{ height:100%; resize:none; }
+    #floatResizer{
+      position:absolute;
+      right:2px; bottom:2px;
+      width:14px; height:14px;
+      border:1px solid var(--hair2);
+      cursor:nwse-resize;
+    }
+
+    /* Scrollbars */
+    ::-webkit-scrollbar{ width:10px; height:10px; }
+    ::-webkit-scrollbar-thumb{ background:#222; border:2px solid #000; }
+    ::-webkit-scrollbar-track{ background:#000; }
+  </style>
+</head>
+
+<body>
+  <header>
+    <div class="brand">
+      <div class="top">KETADATA</div>
+      <div class="sub">AI CHAT COMPILER // PASTE → SEGMENT → LABEL → EXPORT</div>
+    </div>
+
+    <div class="topActions">
+      <div class="noteIconBtn" id="noteIconBtn" title="Toggle KETA NOTE (N)">
+        <div class="sqIcon" id="noteIconSq"></div>
+      </div>
+
+      <button class="btn" id="newChatBtn">NEW CHAT</button>
+      <button class="btn" id="compileBtn">COMPILE</button>
+      <button class="btn" id="exportBtn">EXPORT JSON</button>
+      <button class="btn" id="clearBtn">CLEAR</button>
+    </div>
+  </header>
+
+  <div id="viewport">
+    <!-- LEFT: chat library -->
+    <section class="panel" id="leftPanel" style="grid-column:1;grid-row:1;">
+      <div class="panelHeader">
+        <div class="title">CHATS</div>
+        <div class="meta" id="libMeta">0 chats</div>
+      </div>
+      <div class="panelBody">
+        <div class="hint">
+          Each compiled paste becomes a CHAT OBJECT. Select a chat to view pairs. Search filters by label / first prompt / first response.
+        </div>
+        <input class="search" id="search" placeholder="search chats..." />
+        <div id="chatList"></div>
+      </div>
+    </section>
+
+    <div class="splitV" id="splitV1" style="grid-column:2;grid-row:1;"></div>
+
+    <!-- CENTER: compiled pairs -->
+    <section class="panel" id="centerPanel" style="grid-column:3;grid-row:1;">
+      <div class="centerTop">
+        <div class="left">
+          <div class="t" id="selTitle">COMPILED</div>
+          <div class="s" id="selSub">— no selection</div>
+        </div>
+        <div class="right">
+          <div class="chip" title="Pairs count">
+            <div class="dot" id="pairsDot"></div>
+            <div id="pairsLabel">0 pairs</div>
+          </div>
+          <button class="btn" id="expandAllBtn">EXPAND ALL</button>
+          <button class="btn" id="collapseAllBtn">COLLAPSE ALL</button>
+        </div>
+      </div>
+      <div class="compiled" id="compiledView">
+        <div class="hint">Paste a chat on the right, then COMPILE.</div>
+      </div>
+    </section>
+
+    <div class="splitV" id="splitV2" style="grid-column:4;grid-row:1;"></div>
+
+    <!-- RIGHT: input + labeling controls -->
+    <aside class="panel" id="rightPanel" style="grid-column:5;grid-row:1;">
+      <div class="panelHeader">
+        <div class="title">INTAKE</div>
+        <div class="meta">PASTE RAW CHAT LOG</div>
+      </div>
+      <div class="panelBody">
+        <div class="box">
+          <div class="fieldLabel">CHAT LABEL</div>
+          <input type="text" id="chatLabel" placeholder="e.g. ketadata_pdf_debug_2025-12-22" />
+          <div style="height:10px"></div>
+
+          <div class="row2">
+            <div>
+              <div class="fieldLabel">SEGMENT MODE</div>
+              <input type="text" id="mode" value="AUTO" readonly />
+              <div class="small">
+                AUTO = detects common delimiters: “User: / Assistant:”, “||||”, “role: user/assistant”, etc.
+              </div>
+            </div>
+            <div>
+              <div class="fieldLabel">NORMALIZE</div>
+              <button class="btn" id="normalizeBtn" style="width:100%;">TRIM + CLEAN</button>
+              <div class="small">Removes excessive blank lines and normalizes separators.</div>
+            </div>
+          </div>
+
+          <div style="height:10px"></div>
+
+          <div class="fieldLabel">RAW CHAT (PASTE)</div>
+          <textarea id="rawInput" placeholder="Paste the entire AI chat here."></textarea>
+
+          <div class="small" style="margin-top:8px;">
+            If your export includes timestamps, system messages, or tool logs, AUTO will attempt to ignore noise and keep user/assistant pairs.
+          </div>
+        </div>
+
+        <div class="box">
+          <div class="fieldLabel">DIAGNOSTICS</div>
+          <div class="small" id="diag">READY.</div>
+        </div>
+      </div>
+    </aside>
+
+    <div class="splitH" id="splitH" style="grid-column:1 / span 5; grid-row:2;"></div>
+
+    <!-- BOTTOM: system rules + references -->
+    <section class="panel" id="bottomPanel" style="grid-column:1 / span 5; grid-row:3;">
+      <div class="panelHeader">
+        <div class="title">SYSTEM RULES</div>
+        <div class="meta">CONSTRAINTS + REFERENCES</div>
+      </div>
+
+      <div class="panelBody" style="padding:0;">
+        <div class="bottomGrid" style="height:calc(100% - 42px);">
+          <div class="panelBody" style="grid-column:1; padding:10px;">
+            <div class="fieldLabel">SYSTEM-WIDE LAWS / OUTPUT FORMAT</div>
+            <textarea id="systemRules" placeholder="Rules for how compiled chats should be labeled, indexed, and exported."></textarea>
+          </div>
+
+          <div class="splitV" id="splitV3" style="grid-column:2;"></div>
+
+          <div class="panelBody" style="grid-column:3; padding:10px;">
+            <div class="fieldLabel">REFERENCES / PRECEDENTS</div>
+            <textarea id="references" placeholder="Reference formatting, canonical separators, examples."></textarea>
+          </div>
+        </div>
+
+        <div class="bottomHint">
+          <div>
+            Keys: <span class="kbd">N</span> toggle KETA NOTE · <span class="kbd">Ctrl/⌘ + Enter</span> compile · <span class="kbd">↑/↓</span> select chat · <span class="kbd">E</span> export JSON
+          </div>
+          <div id="status">READY.</div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- Floating Keta Note -->
+  <div id="floatNote">
+    <div id="floatNoteHead">
+      <div class="left">
+        <div class="miniSq" aria-hidden="true"></div>
+        <div>KETA NOTE</div>
+      </div>
+      <div class="right">
+        <div class="iconBtn" id="noteMinBtn" title="collapse">–</div>
+        <div class="iconBtn" id="noteCloseBtn" title="hide">×</div>
+      </div>
+    </div>
+    <div id="floatNoteBody">
+      <textarea id="floatNoteText" placeholder="SYSTEM NOTE // decisions, constraints, next actions"></textarea>
+    </div>
+    <div id="floatResizer" title="resize"></div>
+  </div>
+
+  <!-- =========================================================
+       ENGINE (FUNCTIONAL LOGIC)
+       - Multi chat objects
+       - Auto segmentation into pairs (prompt/response)
+       - Labeled outputs
+       - Expand/collapse pairs
+       - Export JSON (full state)
+       - Panels adjustable
+       - Keta note icon + floating note move/resize
+  ========================================================== -->
+  <script>
+    /* =========================
+       WIRING
+    ========================== */
+    const $ = (id) => document.getElementById(id);
+    const els = {
+      // top
+      noteIconBtn: $("noteIconBtn"),
+      noteIconSq: $("noteIconSq"),
+      newChatBtn: $("newChatBtn"),
+      compileBtn: $("compileBtn"),
+      exportBtn: $("exportBtn"),
+      clearBtn: $("clearBtn"),
+
+      // left
+      search: $("search"),
+      chatList: $("chatList"),
+      libMeta: $("libMeta"),
+
+      // center
+      selTitle: $("selTitle"),
+      selSub: $("selSub"),
+      pairsDot: $("pairsDot"),
+      pairsLabel: $("pairsLabel"),
+      compiledView: $("compiledView"),
+      expandAllBtn: $("expandAllBtn"),
+      collapseAllBtn: $("collapseAllBtn"),
+
+      // right
+      chatLabel: $("chatLabel"),
+      mode: $("mode"),
+      normalizeBtn: $("normalizeBtn"),
+      rawInput: $("rawInput"),
+      diag: $("diag"),
+
+      // bottom
+      systemRules: $("systemRules"),
+      references: $("references"),
+      status: $("status"),
+
+      // floating note
+      floatNote: $("floatNote"),
+      floatNoteHead: $("floatNoteHead"),
+      floatNoteText: $("floatNoteText"),
+      noteMinBtn: $("noteMinBtn"),
+      noteCloseBtn: $("noteCloseBtn"),
+      floatResizer: $("floatResizer"),
+
+      // splitters
+      splitV1: $("splitV1"),
+      splitV2: $("splitV2"),
+      splitV3: $("splitV3"),
+      splitH: $("splitH"),
+    };
+    function assertWiring(){
+      const missing = Object.entries(els).filter(([k,v]) => !v).map(([k])=>k);
+      if(missing.length){
+        document.body.innerHTML =
+          "<pre style='padding:16px;font-family:monospace;color:#fff;background:#000'>WIRING ERROR: Missing IDs:\\n" +
+          missing.join("\\n") + "</pre>";
+        throw new Error("Missing IDs: " + missing.join(", "));
+      }
+    }
+    assertWiring();
+
+    function diag(msg){ els.diag.textContent = msg || "—"; }
+    function status(msg){ els.status.textContent = msg || "—"; }
+
+    /* =========================
+       STATE
+    ========================== */
+    const uid = () => Math.random().toString(16).slice(2) + "-" + Date.now().toString(16);
+
+    const STATE = {
+      version: "ketadata-ai-chat-compiler-v1",
+      createdAt: new Date().toISOString(),
+      systemRules: "",
+      references: "",
+      ketaNote: "",
+      chats: [], // {id,label,raw,normalized,segments:[{i,user,assistant,meta}], createdAt}
+      selectionId: null
+    };
+
+    function getSel(){
+      return STATE.chats.find(c => c.id === STATE.selectionId) || null;
+    }
+
+    /* =========================
+       NORMALIZE
+    ========================== */
+    function normalizeText(s){
+      s = (s || "").replace(/\r\n/g, "\n");
+
+      // collapse crazy whitespace but keep paragraph intent
+      s = s.replace(/\n{4,}/g, "\n\n\n");
+
+      // normalize the "||||" style separators into line breaks
+      s = s.replace(/\|\|\|\|/g, "\n");
+
+      // normalize common "role:" exports
+      s = s.replace(/^\s*role\s*:\s*user\s*$/gmi, "User:");
+      s = s.replace(/^\s*role\s*:\s*assistant\s*$/gmi, "Assistant:");
+
+      // common ChatGPT exports: "User" / "Assistant" headers without colon
+      s = s.replace(/^\s*User\s*$/gm, "User:");
+      s = s.replace(/^\s*Assistant\s*$/gm, "Assistant:");
+
+      return s.trim();
+    }
+
+    /* =========================
+       SEGMENTATION ENGINE (AUTO)
+       Goal: produce [{user,assistant}] pairs.
+       Supported patterns:
+       1) "User:" and "Assistant:" blocks
+       2) Chat logs with leading markers like "||||" (handled by normalize)
+       3) Mixed: timestamps etc (best-effort ignore)
+    ========================== */
+
+    function splitByRoleMarkers(text){
+      // returns array of {role, content}
+      const lines = text.split("\n");
+      const blocks = [];
+      let curRole = null;
+      let buf = [];
+
+      function flush(){
+        if(curRole && buf.length){
+          blocks.push({ role: curRole, content: buf.join("\n").trim() });
+        }
+        buf = [];
+      }
+
+      for(const line of lines){
+        const m = line.match(/^\s*(User|Assistant)\s*:\s*(.*)$/i);
+        if(m){
+          flush();
+          curRole = m[1].toLowerCase();
+          const rest = m[2];
+          if(rest && rest.trim().length) buf.push(rest);
+          continue;
+        }
+
+        // ignore obvious system-like noise headers if we're not inside a role yet
+        if(!curRole){
+          const noisy = /^\s*(system|developer|tool|model set context|recent conversation content|user interaction metadata)\b/i.test(line);
+          if(noisy) continue;
+          // if line looks like a timestamp-only header, ignore
+          if(/^\s*\d{4}-\d{2}-\d{2}T/.test(line)) continue;
+        }
+
+        // accumulate
+        if(curRole) buf.push(line);
+      }
+      flush();
+      return blocks;
+    }
+
+    function pairBlocks(blocks){
+      const pairs = [];
+      let pendingUser = null;
+
+      for(const b of blocks){
+        if(b.role === "user"){
+          // if we had a pending user without assistant, keep it as orphan (assistant empty)
+          if(pendingUser){
+            pairs.push({ user: pendingUser, assistant: "" });
+          }
+          pendingUser = b.content;
+        } else if(b.role === "assistant"){
+          if(pendingUser){
+            pairs.push({ user: pendingUser, assistant: b.content });
+            pendingUser = null;
+          } else {
+            // assistant without user: attach as orphan
+            pairs.push({ user: "", assistant: b.content });
+          }
+        }
+      }
+      if(pendingUser) pairs.push({ user: pendingUser, assistant: "" });
+      return pairs;
+    }
+
+    function autoSegment(text){
+      const blocks = splitByRoleMarkers(text);
+
+      // If no blocks found, fallback: treat as alternating paragraphs split by blank lines
+      if(!blocks.length){
+        const parts = text.split(/\n{2,}/).map(s => s.trim()).filter(Boolean);
+        const pairs = [];
+        for(let i=0;i<parts.length;i+=2){
+          pairs.push({ user: parts[i] || "", assistant: parts[i+1] || "" });
+        }
+        return { method:"FALLBACK_PARAGRAPH", pairs };
+      }
+
+      const pairs = pairBlocks(blocks);
+      return { method:"ROLE_MARKERS", pairs };
+    }
+
+    /* =========================
+       CHAT OBJECT
+    ========================== */
+    function ensureLabel(){
+      let label = (els.chatLabel.value || "").trim();
+      if(!label) label = "chat_" + new Date().toISOString().replace(/[:.]/g,"-");
+      els.chatLabel.value = label;
+      return label;
+    }
+
+    function compileCurrentInput(){
+      const raw = els.rawInput.value || "";
+      if(!raw.trim()){
+        diag("No input.");
+        return;
+      }
+      const label = ensureLabel();
+      const normalized = normalizeText(raw);
+
+      const seg = autoSegment(normalized);
+      const pairs = seg.pairs.map((p,i)=>({
+        i: i+1,
+        user: p.user,
+        assistant: p.assistant,
+        meta: { method: seg.method }
+      }));
+
+      const chat = {
+        id: uid(),
+        label,
+        raw,
+        normalized,
+        segments: pairs,
+        createdAt: new Date().toISOString(),
+        method: seg.method
+      };
+
+      STATE.chats.unshift(chat);
+      STATE.selectionId = chat.id;
+
+      renderLibrary();
+      renderSelection();
+      status(`COMPILED: ${pairs.length} pairs`);
+      diag(`Segmented via ${seg.method}.`);
+    }
+
+    /* =========================
+       RENDER LIBRARY
+    ========================== */
+    function esc(s){
+      return (s||"").replace(/[&<>"']/g, c => ({
+        "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
+      }[c]));
+    }
+
+    function renderLibrary(){
+      const q = (els.search.value || "").toLowerCase().trim();
+      els.chatList.innerHTML = "";
+
+      const list = STATE.chats.filter(c => {
+        if(!q) return true;
+        const firstU = c.segments?.[0]?.user || "";
+        const firstA = c.segments?.[0]?.assistant || "";
+        const hay = [c.label, c.method, firstU, firstA].join(" ").toLowerCase();
+        return hay.includes(q);
+      });
+
+      for(const c of list){
+        const firstU = (c.segments?.[0]?.user || "").slice(0,80).replace(/\s+/g," ").trim();
+        const el = document.createElement("div");
+        el.className = "item";
+        const selected = c.id === STATE.selectionId;
+        el.innerHTML = `
+          <div class="miniSq" style="${selected ? "background:#fff;" : ""}"></div>
+          <div class="label" title="${esc(c.label)}">${esc(c.label)} — ${esc(firstU || "—")}</div>
+          <div class="tag">${c.segments.length} pairs</div>
+        `;
+        el.addEventListener("click", ()=>{
+          STATE.selectionId = c.id;
+          renderSelection();
+          renderLibrary();
+        });
+        els.chatList.appendChild(el);
+      }
+
+      els.libMeta.textContent = `${STATE.chats.length} chats`;
+    }
+
+    /* =========================
+       RENDER SELECTION (CENTER)
+    ========================== */
+    function renderSelection(){
+      const c = getSel();
+      if(!c){
+        els.selSub.textContent = "— no selection";
+        els.compiledView.innerHTML = `<div class="hint">Paste a chat on the right, then COMPILE.</div>`;
+        els.pairsDot.classList.remove("on");
+        els.pairsLabel.textContent = "0 pairs";
+        return;
+      }
+
+      els.selSub.textContent = `${c.label} // ${c.method}`;
+      const n = c.segments.length;
+      els.pairsLabel.textContent = `${n} pairs`;
+      if(n>0) els.pairsDot.classList.add("on"); else els.pairsDot.classList.remove("on");
+
+      els.compiledView.innerHTML = "";
+      for(const seg of c.segments){
+        const wrapper = document.createElement("div");
+        wrapper.className = "pair";
+        wrapper.dataset.i = seg.i;
+        wrapper.dataset.open = "1";
+
+        const head = document.createElement("div");
+        head.className = "pairHead";
+        head.innerHTML = `
+          <div class="lhs">
+            <span class="pill">PAIR ${seg.i.toString().padStart(3,"0")}</span>
+            <span class="pill">${c.label}</span>
+          </div>
+          <div class="rhs">
+            <span class="pill">toggle</span>
+          </div>
+        `;
+
+        const body = document.createElement("div");
+        body.className = "pairBody";
+        body.innerHTML = `
+          <div class="cell">
+            <div class="cellTitle">
+              <span>USER</span>
+              <button class="btn" data-copy="user" data-i="${seg.i}" style="padding:4px 8px;font-size:10px;">COPY</button>
+            </div>
+            <div>${esc(seg.user)}</div>
+          </div>
+          <div class="cell">
+            <div class="cellTitle">
+              <span>ASSISTANT</span>
+              <button class="btn" data-copy="assistant" data-i="${seg.i}" style="padding:4px 8px;font-size:10px;">COPY</button>
+            </div>
+            <div>${esc(seg.assistant)}</div>
+          </div>
+        `;
+
+        head.addEventListener("click", ()=>{
+          const open = wrapper.dataset.open === "1";
+          wrapper.dataset.open = open ? "0" : "1";
+          body.style.display = open ? "none" : "grid";
+        });
+
+        wrapper.appendChild(head);
+        wrapper.appendChild(body);
+        els.compiledView.appendChild(wrapper);
+      }
+
+      // copy handlers
+      els.compiledView.querySelectorAll("button[data-copy]").forEach(btn=>{
+        btn.addEventListener("click", async (e)=>{
+          e.stopPropagation();
+          const which = btn.dataset.copy;
+          const i = parseInt(btn.dataset.i, 10);
+          const seg = c.segments.find(x => x.i === i);
+          const text = which === "user" ? (seg?.user || "") : (seg?.assistant || "");
+          try{
+            await navigator.clipboard.writeText(text);
+            status(`COPIED ${which.toUpperCase()} ${String(i).padStart(3,"0")}`);
+          }catch(err){
+            status("COPY FAILED (clipboard blocked).");
+          }
+        });
+      });
+    }
+
+    function expandCollapseAll(open){
+      els.compiledView.querySelectorAll(".pair").forEach(p=>{
+        const body = p.querySelector(".pairBody");
+        p.dataset.open = open ? "1" : "0";
+        body.style.display = open ? "grid" : "none";
+      });
+    }
+
+    els.expandAllBtn.addEventListener("click", ()=> expandCollapseAll(true));
+    els.collapseAllBtn.addEventListener("click", ()=> expandCollapseAll(false));
+
+    /* =========================
+       TOP ACTIONS
+    ========================== */
+    els.newChatBtn.addEventListener("click", ()=>{
+      els.chatLabel.value = "";
+      els.rawInput.value = "";
+      diag("READY. Paste chat.");
+      status("NEW CHAT.");
+    });
+
+    els.normalizeBtn.addEventListener("click", ()=>{
+      const raw = els.rawInput.value || "";
+      if(!raw.trim()){
+        diag("No input.");
+        return;
+      }
+      els.rawInput.value = normalizeText(raw);
+      diag("Normalized.");
+      status("NORMALIZED.");
+    });
+
+    els.compileBtn.addEventListener("click", compileCurrentInput);
+
+    els.clearBtn.addEventListener("click", ()=>{
+      STATE.chats = [];
+      STATE.selectionId = null;
+      els.search.value = "";
+      els.chatLabel.value = "";
+      els.rawInput.value = "";
+      els.compiledView.innerHTML = `<div class="hint">Paste a chat on the right, then COMPILE.</div>`;
+      renderLibrary();
+      renderSelection();
+      diag("READY.");
+      status("CLEARED.");
+    });
+
+    /* =========================
+       EXPORT JSON (state only)
+    ========================== */
+    function exportJSON(){
+      STATE.systemRules = els.systemRules.value || "";
+      STATE.references = els.references.value || "";
+      STATE.ketaNote = els.floatNoteText.value || "";
+      const out = JSON.parse(JSON.stringify(STATE));
+      out.exportedAt = new Date().toISOString();
+
+      const blob = new Blob([JSON.stringify(out, null, 2)], { type:"application/json" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = `ketadata_chat_compiler_${new Date().toISOString().replace(/[:.]/g,"-")}.json`;
+      a.click();
+      setTimeout(()=>URL.revokeObjectURL(a.href), 2000);
+      status("EXPORTED JSON.");
+    }
+    els.exportBtn.addEventListener("click", exportJSON);
+
+    /* =========================
+       KETA NOTE: icon state + floating note move/resize
+    ========================== */
+    let noteVisible = true;
+    function setNoteIconState(){ els.noteIconSq.classList.toggle("filled", !noteVisible); }
+    function showNote(){ noteVisible=true; els.floatNote.classList.remove("hidden"); setNoteIconState(); status("KETA NOTE ON."); }
+    function hideNote(){ noteVisible=false; els.floatNote.classList.add("hidden"); setNoteIconState(); status("KETA NOTE COLLAPSED."); }
+    function toggleNote(){ noteVisible ? hideNote() : showNote(); }
+
+    els.noteIconBtn.addEventListener("click", toggleNote);
+    els.noteCloseBtn.addEventListener("click", hideNote);
+    els.noteMinBtn.addEventListener("click", hideNote);
+
+    // Drag move
+    (function(){
+      let dragging=false, startX=0, startY=0, startLeft=0, startTop=0;
+      els.floatNoteHead.addEventListener("mousedown", (e)=>{
+        if(e.target === els.noteCloseBtn || e.target === els.noteMinBtn) return;
+        dragging=true;
+        const r=els.floatNote.getBoundingClientRect();
+        startLeft=r.left; startTop=r.top;
+        startX=e.clientX; startY=e.clientY;
+        document.addEventListener("mousemove", onMove);
+        document.addEventListener("mouseup", onUp);
+        e.preventDefault();
+      });
+      function onMove(e){
+        if(!dragging) return;
+        els.floatNote.style.left = (startLeft + (e.clientX-startX)) + "px";
+        els.floatNote.style.top  = (startTop  + (e.clientY-startY)) + "px";
+      }
+      function onUp(){
+        dragging=false;
+        document.removeEventListener("mousemove", onMove);
+        document.removeEventListener("mouseup", onUp);
+      }
+    })();
+
+    // Resize
+    (function(){
+      let resizing=false, startX=0, startY=0, startW=0, startH=0;
+      els.floatResizer.addEventListener("mousedown", (e)=>{
+        e.preventDefault();
+        resizing=true;
+        const r=els.floatNote.getBoundingClientRect();
+        startW=r.width; startH=r.height;
+        startX=e.clientX; startY=e.clientY;
+        document.addEventListener("mousemove", onResize);
+        document.addEventListener("mouseup", onUp);
+      });
+      function onResize(e){
+        if(!resizing) return;
+        els.floatNote.style.width = Math.max(240, startW + (e.clientX-startX)) + "px";
+        els.floatNote.style.height= Math.max(160, startH + (e.clientY-startY)) + "px";
+      }
+      function onUp(){
+        resizing=false;
+        document.removeEventListener("mousemove", onResize);
+        document.removeEventListener("mouseup", onUp);
+      }
+    })();
+
+    /* =========================
+       SPLITTERS
+    ========================== */
+    function setCSSVar(name, px){ document.documentElement.style.setProperty(name, px + "px"); }
+    function clamp(n,a,b){ return Math.max(a, Math.min(b,n)); }
+
+    (function wireSplitters(){
+      wireV(els.splitV1, (dx, start)=> setCSSVar("--leftW", clamp(start + dx, 280, 720)),
+            ()=> parseInt(getComputedStyle(document.documentElement).getPropertyValue("--leftW")));
+
+      wireV(els.splitV2, (dx, start)=> setCSSVar("--rightW", clamp(start - dx, 320, 780)),
+            ()=> parseInt(getComputedStyle(document.documentElement).getPropertyValue("--rightW")));
+
+      wireH(els.splitH, (dy, start)=> setCSSVar("--bottomH", clamp(start - dy, 120, 380)),
+            ()=> parseInt(getComputedStyle(document.documentElement).getPropertyValue("--bottomH")));
+
+      const bottomGrid = document.querySelector(".bottomGrid");
+      wireV(els.splitV3, (dx, start)=>{
+        const total = bottomGrid.getBoundingClientRect().width - parseInt(getComputedStyle(document.documentElement).getPropertyValue("--splitter"));
+        const nextLeftPx = clamp(start + dx, 240, total - 240);
+        bottomGrid.style.gridTemplateColumns = `${nextLeftPx}px var(--splitter) 1fr`;
+      }, ()=>{
+        const leftPane = bottomGrid.children[0];
+        return leftPane.getBoundingClientRect().width;
+      });
+
+      function wireV(el, onDelta, getStart){
+        let dragging=false, startX=0, startVal=0;
+        el.addEventListener("mousedown", (e)=>{
+          dragging=true;
+          startX=e.clientX;
+          startVal=getStart();
+          document.addEventListener("mousemove", onMove);
+          document.addEventListener("mouseup", onUp);
+          e.preventDefault();
+        });
+        function onMove(e){ if(!dragging) return; onDelta(e.clientX-startX, startVal); }
+        function onUp(){
+          dragging=false;
+          document.removeEventListener("mousemove", onMove);
+          document.removeEventListener("mouseup", onUp);
+        }
+      }
+      function wireH(el, onDelta, getStart){
+        let dragging=false, startY=0, startVal=0;
+        el.addEventListener("mousedown", (e)=>{
+          dragging=true;
+          startY=e.clientY;
+          startVal=getStart();
+          document.addEventListener("mousemove", onMove);
+          document.addEventListener("mouseup", onUp);
+          e.preventDefault();
+        });
+        function onMove(e){ if(!dragging) return; onDelta(e.clientY-startY, startVal); }
+        function onUp(){
+          dragging=false;
+          document.removeEventListener("mousemove", onMove);
+          document.removeEventListener("mouseup", onUp);
+        }
+      }
+    })();
+
+    /* =========================
+       KEYBOARD
+    ========================== */
+    document.addEventListener("keydown", (e)=>{
+      if(e.key.toLowerCase() === "n") toggleNote();
+
+      // Ctrl/Cmd+Enter => compile
+      if((e.ctrlKey || e.metaKey) && e.key === "Enter"){
+        e.preventDefault();
+        compileCurrentInput();
+      }
+
+      // E => export
+      if(e.key.toLowerCase() === "e" && !e.ctrlKey && !e.metaKey){
+        // avoid typing into textarea triggering export
+        const tag = (document.activeElement?.tagName || "").toLowerCase();
+        if(tag === "textarea" || tag === "input") return;
+        exportJSON();
+      }
+
+      // Up/down select chat
+      if(e.key === "ArrowDown" || e.key === "ArrowUp"){
+        if(!STATE.chats.length) return;
+        const tag = (document.activeElement?.tagName || "").toLowerCase();
+        if(tag === "textarea" || tag === "input") return;
+        e.preventDefault();
+        const idx = STATE.chats.findIndex(x => x.id === STATE.selectionId);
+        const next = (e.key === "ArrowDown") ? Math.min(STATE.chats.length-1, (idx < 0 ? 0 : idx+1))
+                                             : Math.max(0, (idx < 0 ? 0 : idx-1));
+        STATE.selectionId = STATE.chats[next].id;
+        renderSelection();
+        renderLibrary();
+      }
+    });
+
+    /* =========================
+       SEARCH
+    ========================== */
+    els.search.addEventListener("input", renderLibrary);
+
+    /* =========================
+       BOOT
+    ========================== */
+    (function boot(){
+      setNoteIconState();
+      renderLibrary();
+      renderSelection();
+      status("READY.");
+      diag("READY. Paste a chat, then COMPILE.");
+    })();
+  </script>
+</body>
+</html>
