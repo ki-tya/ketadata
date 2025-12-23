@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>KETADATA // BLACK BOOK CORPUS (LOCAL)</title>
+
+<style>
+/* =========================
+   AE — AESTHETIC LAYER
+   ========================= */
+
+:root {
+  --bg: #000;
+  --fg: #fff;
+  --muted: #666;
+  --panel: #0a0a0a;
+  --line: #1a1a1a;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: Arial, Helvetica, sans-serif;
+  height: 100vh;
+  display: grid;
+  grid-template-columns: 260px 1fr 320px;
+  grid-template-rows: 48px 1fr 160px;
+}
+
+/* top bar */
+header {
+  grid-column: 1 / -1;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  gap: 12px;
+}
+
+/* panels */
+aside, section, footer {
+  border-right: 1px solid var(--line);
+}
+
+aside {
+  padding: 8px;
+  overflow-y: auto;
+}
+
+section {
+  padding: 12px;
+  overflow: hidden;
+}
+
+footer {
+  grid-column: 1 / -1;
+  border-top: 1px solid var(--line);
+  padding: 8px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* buttons */
+button {
+  background: transparent;
+  color: var(--fg);
+  border: 1px solid var(--line);
+  padding: 6px 10px;
+  cursor: pointer;
+}
+
+button:hover {
+  background: #111;
+}
+
+/* gallery */
+#viewer {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+#mainPage {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line);
+  margin-bottom: 8px;
+}
+
+#mainPage img {
+  max-height: 100%;
+  max-width: 100%;
+  filter: invert(var(--invert, 1)) contrast(var(--contrast,1)) saturate(var(--sat,1));
+}
+
+#strip {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+}
+
+#strip img {
+  height: 96px;
+  cursor: pointer;
+  border: 1px solid var(--line);
+}
+
+/* keta note */
+#ketaNote {
+  position: absolute;
+  top: 64px;
+  right: 24px;
+  width: 260px;
+  height: 200px;
+  background: #fff;
+  color: #000;
+  display: none;
+  padding: 6px;
+}
+
+#ketaNote textarea {
+  width: 100%;
+  height: 100%;
+  border: none;
+  resize: none;
+}
+
+#ketaIcon {
+  width: 16px;
+  height: 16px;
+  border: 2px solid #fff;
+  cursor: pointer;
+}
+
+#ketaIcon.filled {
+  background: #fff;
+}
+</style>
+</head>
+
+<body>
+
+<!-- =========================
+     AE — TOP BAR
+     ========================= -->
+<header>
+  <strong>KETADATA</strong>
+  <span class="muted">// BLACK BOOK CORPUS // LOCAL</span>
+
+  <button id="pick">SELECT BLACKBOOKS FOLDER</button>
+
+  <label>Invert <input type="checkbox" id="invert" checked></label>
+  <label>Contrast <input type="range" id="contrast" min="0.5" max="2" step="0.1" value="1"></label>
+  <label>Saturation <input type="range" id="sat" min="0" max="2" step="0.1" value="1"></label>
+
+  <div id="ketaIcon" class="filled" title="KETA NOTE"></div>
+</header>
+
+<!-- =========================
+     AE — LEFT / BOOK LIST
+     ========================= -->
+<aside id="books"></aside>
+
+<!-- =========================
+     AE — CENTER / VIEWER
+     ========================= -->
+<section>
+  <div id="viewer">
+    <div id="mainPage">NO PAGE</div>
+    <div id="strip"></div>
+  </div>
+</section>
+
+<!-- =========================
+     AE — RIGHT / INSPECT
+     ========================= -->
+<aside>
+  <strong>INSPECT</strong>
+  <pre id="inspect"></pre>
+</aside>
+
+<!-- =========================
+     AE — SYSTEM FOOTER
+     ========================= -->
+<footer>
+SYSTEM RULES // LOCAL ONLY // SINGLE SOURCE OF TRUTH
+</footer>
+
+<!-- =========================
+     AE — FLOATING NOTE
+     ========================= -->
+<div id="ketaNote">
+  <textarea placeholder="GLOBAL NOTE // decisions, constraints, next actions"></textarea>
+</div>
+
+<script>
+/* =========================
+   EE — ENGINE
+   ========================= */
+
+let BOOKS = [];
+let CURRENT = { book: null, page: null };
+
+function clearUI() {
+  document.getElementById('books').innerHTML = '';
+  document.getElementById('strip').innerHTML = '';
+  document.getElementById('mainPage').innerHTML = 'NO PAGE';
+}
+
+/* =========================
+   EE — FILE SYSTEM INGEST
+   ========================= */
+
+async function pickFolder() {
+  clearUI();
+  BOOKS = [];
+
+  const dir = await window.showDirectoryPicker();
+  for await (const [name, handle] of dir.entries()) {
+    if (handle.kind === 'directory') {
+      BOOKS.push({ name, handle, pages: [] });
+    }
+  }
+
+  for (const book of BOOKS) {
+    for await (const [fname, fhandle] of book.handle.entries()) {
+      if (fhandle.kind === 'file') {
+        if (fname.match(/\.(jpg|jpeg|png)$/i)) {
+          book.pages.push(fhandle);
+        }
+      }
+    }
+    book.pages.sort((a,b)=>a.name.localeCompare(b.name));
+  }
+
+  renderBooks();
+}
+
+/* =========================
+   WB — UI RENDER
+   ========================= */
+
+function renderBooks() {
+  const el = document.getElementById('books');
+  BOOKS.forEach((b,i)=>{
+    const btn = document.createElement('button');
+    btn.textContent = `${b.name} (${b.pages.length})`;
+    btn.onclick = ()=>openBook(i);
+    el.appendChild(btn);
+  });
+}
+
+async function openBook(i) {
+  CURRENT.book = BOOKS[i];
+  const strip = document.getElementById('strip');
+  strip.innerHTML = '';
+
+  for (let p=0; p<CURRENT.book.pages.length; p++) {
+    const file = await CURRENT.book.pages[p].getFile();
+    const img = document.createElement('img');
+    img.src = URL.createObjectURL(file);
+    img.onclick = ()=>openPage(p);
+    strip.appendChild(img);
+  }
+
+  openPage(0);
+}
+
+async function openPage(p) {
+  CURRENT.page = p;
+  const file = await CURRENT.book.pages[p].getFile();
+  const img = document.createElement('img');
+  img.src = URL.createObjectURL(file);
+
+  const main = document.getElementById('mainPage');
+  main.innerHTML = '';
+  main.appendChild(img);
+
+  document.getElementById('inspect').textContent =
+    JSON.stringify({
+      book: CURRENT.book.name,
+      page: p+1,
+      file: file.name
+    }, null, 2);
+}
+
+/* =========================
+   WB — CONTROLS
+   ========================= */
+
+document.getElementById('pick').onclick = pickFolder;
+
+document.getElementById('invert').onchange = e=>{
+  document.documentElement.style.setProperty('--invert', e.target.checked?1:0);
+};
+
+document.getElementById('contrast').oninput = e=>{
+  document.documentElement.style.setProperty('--contrast', e.target.value);
+};
+
+document.getElementById('sat').oninput = e=>{
+  document.documentElement.style.setProperty('--sat', e.target.value);
+};
+
+/* =========================
+   WB — KETA NOTE
+   ========================= */
+
+const icon = document.getElementById('ketaIcon');
+const note = document.getElementById('ketaNote');
+
+icon.onclick = ()=>{
+  const open = note.style.display === 'block';
+  note.style.display = open ? 'none' : 'block';
+  icon.classList.toggle('filled', open);
+};
+</script>
+
+</body>
+</html>
