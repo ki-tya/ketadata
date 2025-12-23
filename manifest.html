@@ -1,0 +1,1126 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>KETADATA // MANIFEST + VALIDATOR</title>
+
+  <!-- =========================================================
+       AESTHETIC (SAFE TO EDIT)
+       - Black, sharp edges, KETADATA panels.
+       - Do NOT rename IDs used by the ENGINE.
+  ========================================================== -->
+  <style>
+    :root{
+      --bg:#000;
+      --ink:#fff;
+      --muted:#9a9a9a;
+      --hair:#1b1b1b;
+      --hair2:#2a2a2a;
+
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace;
+      --sans: Arial, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, sans-serif;
+
+      --topH:56px;
+      --leftW:420px;
+      --rightW:520px;
+      --bottomH:200px;
+      --split:8px;
+    }
+
+    *{ box-sizing:border-box; }
+    html,body{ height:100%; }
+    body{
+      margin:0;
+      background:var(--bg);
+      color:var(--ink);
+      font-family:var(--sans);
+      overflow:hidden;
+    }
+
+    header{
+      height:var(--topH);
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      padding:0 12px;
+      border-bottom:1px solid var(--hair);
+      background:#000;
+    }
+    .brand{ display:flex; flex-direction:column; line-height:1.05; user-select:none; }
+    .brand .top{ font-weight:700; letter-spacing:.14em; font-size:12px; }
+    .brand .sub{
+      font-family:var(--mono);
+      font-size:10px;
+      color:var(--muted);
+      letter-spacing:.08em;
+      margin-top:2px;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      max-width:68vw;
+    }
+    .topActions{ display:flex; gap:10px; align-items:center; }
+
+    .btn{
+      border:1px solid var(--hair2);
+      background:#000;
+      color:var(--ink);
+      padding:7px 10px;
+      font-size:11px;
+      font-family:var(--mono);
+      letter-spacing:.06em;
+      cursor:pointer;
+      user-select:none;
+      white-space:nowrap;
+    }
+    .btn:hover{ border-color:#3b3b3b; }
+    .btn:active{ transform:translateY(1px); }
+
+    /* KETA NOTE icon */
+    .noteIconBtn{
+      width:30px; height:30px;
+      border:1px solid var(--hair2);
+      background:#000;
+      display:grid;
+      place-items:center;
+      cursor:pointer;
+      user-select:none;
+    }
+    .noteIconBtn:hover{ border-color:#3b3b3b; }
+    .sqIcon{
+      width:12px; height:12px;
+      border:1px solid #fff;
+      background:#000; /* visible note = hollow */
+    }
+    .sqIcon.filled{ background:#fff; } /* collapsed = filled */
+
+    #viewport{
+      height:calc(100% - var(--topH));
+      display:grid;
+      grid-template-columns: var(--leftW) var(--split) 1fr var(--split) var(--rightW);
+      grid-template-rows: 1fr var(--split) var(--bottomH);
+    }
+
+    .panel{
+      background:#000;
+      border:1px solid var(--hair);
+      overflow:hidden;
+      min-width:260px;
+      min-height:140px;
+    }
+    .panelHeader{
+      height:44px;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      padding:0 10px;
+      border-bottom:1px solid var(--hair);
+      user-select:none;
+    }
+    .panelHeader .title{
+      font-family:var(--mono);
+      font-size:11px;
+      letter-spacing:.14em;
+    }
+    .panelHeader .meta{
+      font-family:var(--mono);
+      font-size:10px;
+      color:var(--muted);
+      letter-spacing:.08em;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      max-width:60%;
+      text-align:right;
+    }
+    .panelBody{
+      height:calc(100% - 44px);
+      overflow:auto;
+      padding:10px;
+    }
+
+    .splitV, .splitH{
+      background:#000;
+      position:relative;
+      cursor:col-resize;
+      border-left:1px solid var(--hair);
+      border-right:1px solid var(--hair);
+    }
+    .splitH{
+      cursor:row-resize;
+      border-left:none; border-right:none;
+      border-top:1px solid var(--hair);
+      border-bottom:1px solid var(--hair);
+      grid-column:1 / span 5;
+    }
+    .splitV::after{
+      content:"";
+      position:absolute;
+      left:50%; top:8px; bottom:8px;
+      width:2px; transform:translateX(-50%);
+      background:var(--hair2);
+    }
+    .splitH::after{
+      content:"";
+      position:absolute;
+      top:50%; left:8px; right:8px;
+      height:2px; transform:translateY(-50%);
+      background:var(--hair2);
+    }
+
+    .hint{
+      font-family:var(--mono);
+      font-size:10px;
+      color:var(--muted);
+      letter-spacing:.06em;
+      line-height:1.35;
+      margin-bottom:10px;
+    }
+    .box{
+      border:1px solid var(--hair);
+      padding:10px;
+      margin-bottom:10px;
+    }
+    .label{
+      font-family:var(--mono);
+      font-size:10px;
+      color:var(--muted);
+      letter-spacing:.14em;
+      margin-bottom:6px;
+    }
+    input[type="text"], textarea, select{
+      width:100%;
+      border:1px solid var(--hair2);
+      background:#000;
+      color:#fff;
+      font-family:var(--mono);
+      font-size:11px;
+      padding:10px;
+      outline:none;
+    }
+    textarea{ min-height:140px; resize:vertical; }
+
+    .row2{ display:grid; grid-template-columns:1fr 1fr; gap:10px; align-items:end; }
+    .row3{ display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; align-items:end; }
+
+    .item{
+      border:1px solid var(--hair);
+      padding:10px;
+      margin-bottom:8px;
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap:10px;
+      cursor:pointer;
+      user-select:none;
+    }
+    .item:hover{ border-color:#3b3b3b; }
+    .item.on{ border-color:#fff; }
+    .item .name{
+      font-family:var(--mono);
+      font-size:11px;
+      letter-spacing:.10em;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      white-space:nowrap;
+      flex:1 1 auto;
+    }
+    .pill{
+      border:1px solid var(--hair2);
+      padding:2px 6px;
+      font-family:var(--mono);
+      font-size:10px;
+      color:var(--muted);
+      white-space:nowrap;
+      flex:0 0 auto;
+    }
+    .pill.bad{ color:#ffb3b3; border-color:#5a2a2a; }
+    .pill.good{ color:#bfffbf; border-color:#2a5a2a; }
+
+    .grid{
+      display:grid;
+      grid-template-columns:1fr;
+      gap:8px;
+    }
+
+    /* Bottom */
+    .bottomGrid{
+      height:100%;
+      display:grid;
+      grid-template-columns: 1fr var(--split) 1fr;
+    }
+    .bottomBar{
+      height:44px;
+      border-top:1px solid var(--hair);
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      padding:0 10px;
+      font-family:var(--mono);
+      font-size:10px;
+      color:var(--muted);
+      letter-spacing:.06em;
+    }
+    .kbd{ border:1px solid var(--hair2); padding:2px 6px; color:#fff; }
+
+    /* Floating Keta Note */
+    #floatNote{
+      position:fixed;
+      top:calc(var(--topH) + 14px);
+      left:14px;
+      width:360px;
+      height:240px;
+      border:1px solid #fff;
+      background:#000;
+      z-index:50;
+      display:flex;
+      flex-direction:column;
+    }
+    #floatNote.hidden{ display:none; }
+    #floatNoteHead{
+      height:38px;
+      border-bottom:1px solid var(--hair);
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      padding:0 10px;
+      cursor:move;
+      user-select:none;
+      font-family:var(--mono);
+      font-size:11px;
+      letter-spacing:.12em;
+    }
+    #floatNoteBody{ padding:10px; height:100%; }
+    #floatNoteText{
+      height:100%;
+      width:100%;
+      resize:none;
+      border:1px solid var(--hair2);
+      background:#000;
+      color:#fff;
+      font-family:var(--mono);
+      font-size:11px;
+      padding:8px;
+      outline:none;
+    }
+    .iconBtn{
+      width:26px; height:26px;
+      border:1px solid var(--hair2);
+      display:grid; place-items:center;
+      font-family:var(--mono);
+      cursor:pointer;
+      user-select:none;
+      color:#fff;
+    }
+    .iconBtn:hover{ border-color:#3b3b3b; }
+    #floatResizer{
+      position:absolute;
+      right:2px; bottom:2px;
+      width:14px; height:14px;
+      border:1px solid var(--hair2);
+      cursor:nwse-resize;
+    }
+
+    ::-webkit-scrollbar{ width:10px; height:10px; }
+    ::-webkit-scrollbar-thumb{ background:#222; border:2px solid #000; }
+    ::-webkit-scrollbar-track{ background:#000; }
+  </style>
+</head>
+
+<body>
+  <header>
+    <div class="brand">
+      <div class="top">KETADATA</div>
+      <div class="sub">MANIFEST GENERATOR // VALIDATOR // TAG INDEX (BLACK BOOKS)</div>
+    </div>
+    <div class="topActions">
+      <div class="noteIconBtn" id="noteIconBtn" title="Toggle KETA NOTE (N)">
+        <div class="sqIcon" id="noteIconSq"></div>
+      </div>
+
+      <button class="btn" id="pickFolderBtn">PICK BLACKBOOKS FOLDER</button>
+      <button class="btn" id="scanBtn">SCAN</button>
+      <button class="btn" id="exportJsonBtn">EXPORT JSON</button>
+      <button class="btn" id="exportJsBtn">COPY BOOKS[]</button>
+      <button class="btn" id="clearBtn">CLEAR</button>
+    </div>
+  </header>
+
+  <div id="viewport">
+    <!-- LEFT -->
+    <section class="panel" style="grid-column:1;grid-row:1;">
+      <div class="panelHeader">
+        <div class="title">INPUT</div>
+        <div class="meta" id="inputMeta">no folder</div>
+      </div>
+      <div class="panelBody">
+        <div class="hint">
+          Goal: generate a correct BOOKS manifest for the corpus viewer and verify naming.
+          Expected layout:
+          <span style="color:#fff;">blackbooks/bb01/pages/page_001.jpg</span> ...
+        </div>
+
+        <div class="box">
+          <div class="label">FOLDER PICK METHOD</div>
+          <div class="hint" style="margin:0;">
+            Use <span class="kbd">PICK BLACKBOOKS FOLDER</span> (Chrome/Edge). If unavailable, use the fallback picker below.
+          </div>
+          <div style="height:10px"></div>
+          <div class="row2">
+            <div>
+              <div class="label">FALLBACK</div>
+              <input id="fallbackInput" type="file" webkitdirectory multiple />
+              <div class="hint" style="margin-top:8px;">This works locally. On some hosted pages it may be blocked by browser settings.</div>
+            </div>
+            <div>
+              <div class="label">RELATIVE ROOT</div>
+              <input id="relRoot" type="text" value="blackbooks" />
+              <div class="hint" style="margin-top:8px;">Used for output paths. Keep it as <span style="color:#fff;">blackbooks</span>.</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="box">
+          <div class="label">NAMING LAW</div>
+          <div class="hint" style="margin:0;">
+            Allowed page filename:
+            <span style="color:#fff;">page_001.jpg</span> (or png/jpeg)
+            with consistent padding per book.
+          </div>
+        </div>
+
+        <div class="box">
+          <div class="label">SYSTEM NOTE</div>
+          <div class="hint" style="margin:0;">
+            This tool outputs: (1) manifest JSON (2) BOOKS[] array snippet (3) missing pages report.
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <div class="splitV" id="splitV1" style="grid-column:2;grid-row:1;"></div>
+
+    <!-- CENTER -->
+    <section class="panel" style="grid-column:3;grid-row:1;">
+      <div class="panelHeader">
+        <div class="title">BOOKS FOUND</div>
+        <div class="meta" id="booksMeta">0</div>
+      </div>
+      <div class="panelBody">
+        <div class="hint">
+          Click a book to inspect validation and edit tags. “GOOD” means no missing pages and naming is consistent.
+        </div>
+        <div id="booksList" class="grid"></div>
+      </div>
+    </section>
+
+    <div class="splitV" id="splitV2" style="grid-column:4;grid-row:1;"></div>
+
+    <!-- RIGHT -->
+    <section class="panel" style="grid-column:5;grid-row:1;">
+      <div class="panelHeader">
+        <div class="title">INSPECT / TAG</div>
+        <div class="meta" id="inspectMeta">—</div>
+      </div>
+      <div class="panelBody">
+        <div class="box">
+          <div class="label">SELECTED BOOK</div>
+          <input id="selBookId" type="text" placeholder="—" readonly />
+          <div style="height:8px"></div>
+          <input id="selBookTitle" type="text" placeholder="Title (editable)" />
+          <div class="hint" style="margin-top:8px;">Title edits affect exported BOOKS[] array.</div>
+        </div>
+
+        <div class="box">
+          <div class="label">BOOK TAGS</div>
+          <input id="bookTags" type="text" placeholder="comma separated tags" />
+          <div class="hint" style="margin-top:8px;">Example: canon, acid-era, motifs:sea, tone:violent</div>
+        </div>
+
+        <div class="box">
+          <div class="label">PAGE TAGS (SINGLE PAGE)</div>
+          <div class="row2">
+            <div>
+              <div class="label">PAGE #</div>
+              <input id="pageNum" type="text" placeholder="e.g. 1" />
+            </div>
+            <div>
+              <div class="label">TAGS</div>
+              <input id="pageTags" type="text" placeholder="comma separated tags" />
+            </div>
+          </div>
+          <div style="height:10px"></div>
+          <button class="btn" id="savePageTagsBtn" style="width:100%;">SAVE PAGE TAGS</button>
+          <div class="hint" style="margin-top:8px;">Stored in manifest JSON. Viewer can consume later.</div>
+        </div>
+
+        <div class="box">
+          <div class="label">VALIDATION REPORT</div>
+          <textarea id="report" readonly></textarea>
+        </div>
+      </div>
+    </section>
+
+    <div class="splitH" id="splitH" style="grid-row:2;"></div>
+
+    <!-- BOTTOM -->
+    <section class="panel" style="grid-column:1 / span 5;grid-row:3;">
+      <div class="panelHeader">
+        <div class="title">OUTPUT</div>
+        <div class="meta" id="outMeta">—</div>
+      </div>
+      <div class="panelBody">
+        <div class="row2">
+          <div class="box" style="margin:0;">
+            <div class="label">BOOKS[] (JS SNIPPET)</div>
+            <textarea id="booksJs" readonly></textarea>
+          </div>
+          <div class="box" style="margin:0;">
+            <div class="label">MANIFEST JSON</div>
+            <textarea id="manifestJson" readonly></textarea>
+          </div>
+        </div>
+      </div>
+      <div class="bottomBar">
+        <div>
+          Keys: <span class="kbd">N</span> note · <span class="kbd">S</span> scan · <span class="kbd">E</span> export json · <span class="kbd">B</span> copy BOOKS[]
+        </div>
+        <div id="status">READY.</div>
+      </div>
+    </section>
+  </div>
+
+  <!-- Floating Keta Note -->
+  <div id="floatNote">
+    <div id="floatNoteHead">
+      <div style="display:flex;gap:10px;align-items:center;">
+        <div style="width:10px;height:10px;border:1px solid #fff;background:#000;"></div>
+        <div>KETA NOTE</div>
+      </div>
+      <div style="display:flex;gap:8px;">
+        <div class="iconBtn" id="noteMinBtn" title="collapse">–</div>
+        <div class="iconBtn" id="noteCloseBtn" title="hide">×</div>
+      </div>
+    </div>
+    <div id="floatNoteBody">
+      <textarea id="floatNoteText" placeholder="GLOBAL NOTE // indexing laws, naming, next actions"></textarea>
+    </div>
+    <div id="floatResizer"></div>
+  </div>
+
+  <!-- =========================================================
+       ENGINE (FUNCTIONAL LOGIC)
+       - Folder scan (FS Access API + fallback webkitdirectory)
+       - Group into books
+       - Validate page naming, compute missing pages
+       - Tags (book + page)
+       - Export JSON + BOOKS[] snippet
+       - Keta note persistence + resizable panels
+  ========================================================== -->
+  <script>
+    const $ = (id)=>document.getElementById(id);
+    const els = {
+      noteIconBtn:$("noteIconBtn"), noteIconSq:$("noteIconSq"),
+      pickFolderBtn:$("pickFolderBtn"), scanBtn:$("scanBtn"),
+      exportJsonBtn:$("exportJsonBtn"), exportJsBtn:$("exportJsBtn"),
+      clearBtn:$("clearBtn"),
+      fallbackInput:$("fallbackInput"),
+      relRoot:$("relRoot"),
+      inputMeta:$("inputMeta"),
+      booksList:$("booksList"), booksMeta:$("booksMeta"),
+      inspectMeta:$("inspectMeta"),
+      selBookId:$("selBookId"), selBookTitle:$("selBookTitle"),
+      bookTags:$("bookTags"),
+      pageNum:$("pageNum"), pageTags:$("pageTags"), savePageTagsBtn:$("savePageTagsBtn"),
+      report:$("report"),
+      booksJs:$("booksJs"),
+      manifestJson:$("manifestJson"),
+      outMeta:$("outMeta"),
+      status:$("status"),
+      splitV1:$("splitV1"), splitV2:$("splitV2"), splitH:$("splitH"),
+      floatNote:$("floatNote"), floatNoteHead:$("floatNoteHead"), floatNoteText:$("floatNoteText"),
+      noteMinBtn:$("noteMinBtn"), noteCloseBtn:$("noteCloseBtn"), floatResizer:$("floatResizer"),
+    };
+    (function assert(){
+      const miss = Object.entries(els).filter(([k,v])=>!v).map(([k])=>k);
+      if(miss.length){
+        document.body.innerHTML = `<pre style="padding:16px;background:#000;color:#fff;font-family:monospace;">WIRING ERROR:\n${miss.join("\n")}</pre>`;
+        throw new Error(miss.join(","));
+      }
+    })();
+
+    const STORAGE_KEY = "ketadata_manifest_tool_v1";
+
+    const STATE = {
+      version:"ketadata-manifest-tool-v1",
+      rootRel:"blackbooks",
+      pickedMode:null, // "FS" | "FALLBACK"
+      // files: normalized entries
+      files: [], // {relPath, name, ext, size}
+      // books: computed
+      books: [], // {id, title, basePath, pagesPath, pad, ext, pageNums[], missing[], issues[], tags[], pageTags{[n]:[]}}
+      selectedBookId:null,
+      globalNote:"",
+      layout:{ leftW:420, rightW:520, bottomH:200 }
+    };
+
+    function status(msg){ els.status.textContent = msg; }
+    function save(){ try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(STATE)); }catch{} }
+    function load(){
+      try{
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if(!raw) return;
+        const s = JSON.parse(raw);
+        if(s && s.version === STATE.version){
+          Object.assign(STATE, s);
+        }
+      }catch{}
+    }
+
+    function esc(s){
+      return (s||"").replace(/[&<>"']/g, c => ({
+        "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
+      }[c]));
+    }
+
+    function padFromFilenames(names){
+      // find the most common digit run in page_###.
+      const pads = [];
+      for(const n of names){
+        const m = n.match(/^page_(\d+)\./i);
+        if(m) pads.push(m[1].length);
+      }
+      if(!pads.length) return 3;
+      const freq = new Map();
+      pads.forEach(p=>freq.set(p,(freq.get(p)||0)+1));
+      return [...freq.entries()].sort((a,b)=>b[1]-a[1])[0][0];
+    }
+
+    function parsePageNum(name){
+      const m = name.match(/^page_(\d+)\.(jpg|jpeg|png)$/i);
+      if(!m) return null;
+      return parseInt(m[1],10);
+    }
+
+    function normalizeRel(p){
+      return (p||"").replace(/\\/g,"/").replace(/^\/+/,"");
+    }
+
+    // ---------- Folder acquisition ----------
+    let fsRootHandle = null;
+
+    async function pickFolderFS(){
+      if(!window.showDirectoryPicker){
+        alert("Folder picker not available. Use the fallback folder input.");
+        return;
+      }
+      try{
+        fsRootHandle = await window.showDirectoryPicker();
+        STATE.pickedMode = "FS";
+        els.inputMeta.textContent = "picked (FS)";
+        status("FOLDER PICKED.");
+        save();
+      }catch{
+        status("PICK CANCELLED.");
+      }
+    }
+
+    async function scanFS(){
+      if(!fsRootHandle) return [];
+      const out = [];
+      async function walk(dirHandle, prefix){
+        for await (const [name, handle] of dirHandle.entries()){
+          if(handle.kind === "directory"){
+            await walk(handle, prefix ? `${prefix}/${name}` : name);
+          } else if(handle.kind === "file"){
+            const ext = name.split(".").pop().toLowerCase();
+            if(["jpg","jpeg","png"].includes(ext)){
+              const file = await handle.getFile();
+              out.push({
+                relPath: normalizeRel(prefix ? `${prefix}/${name}` : name),
+                name,
+                ext,
+                size: file.size
+              });
+            }
+          }
+        }
+      }
+      await walk(fsRootHandle, "");
+      return out;
+    }
+
+    function scanFallback(inputFiles){
+      const out = [];
+      for(const f of inputFiles){
+        const p = normalizeRel(f.webkitRelativePath || f.name);
+        const name = f.name;
+        const ext = name.split(".").pop().toLowerCase();
+        if(["jpg","jpeg","png"].includes(ext)){
+          out.push({ relPath:p, name, ext, size:f.size });
+        }
+      }
+      return out;
+    }
+
+    // ---------- Book grouping ----------
+    function buildBooks(files){
+      const root = (els.relRoot.value || "blackbooks").trim().replace(/\/+$/,"");
+      STATE.rootRel = root;
+
+      // We only consider paths under root
+      const under = files.filter(f => normalizeRel(f.relPath).startsWith(root + "/"));
+      // Expected: root/bb01/pages/page_001.jpg
+      const byBook = new Map();
+
+      for(const f of under){
+        const rel = normalizeRel(f.relPath);
+        const parts = rel.split("/");
+        // root + bookId + pages + filename
+        if(parts.length < 4) continue;
+        const bookId = parts[1];
+        const maybePages = parts[2].toLowerCase();
+        const filename = parts[parts.length-1];
+        if(maybePages !== "pages") continue;
+        if(!byBook.has(bookId)) byBook.set(bookId, []);
+        byBook.get(bookId).push({ ...f, filename, bookId, pagesPath: parts.slice(0,3).join("/") });
+      }
+
+      const books = [];
+      for(const [bookId, arr] of byBook.entries()){
+        const names = arr.map(x=>x.filename);
+        const pad = padFromFilenames(names);
+
+        const pageNums = [];
+        const badNames = [];
+        const exts = new Map();
+        for(const x of arr){
+          const n = parsePageNum(x.filename);
+          if(n == null) badNames.push(x.filename);
+          else pageNums.push(n);
+          exts.set(x.ext, (exts.get(x.ext)||0)+1);
+        }
+        const ext = [...exts.entries()].sort((a,b)=>b[1]-a[1])[0]?.[0] || "jpg";
+
+        pageNums.sort((a,b)=>a-b);
+        const max = pageNums.length ? pageNums[pageNums.length-1] : 0;
+        const missing = [];
+        const present = new Set(pageNums);
+        for(let i=1;i<=max;i++){
+          if(!present.has(i)) missing.push(i);
+        }
+
+        const issues = [];
+        if(!pageNums.length) issues.push("NO_PAGES_FOUND");
+        if(badNames.length) issues.push(`BAD_FILENAMES(${badNames.length})`);
+        if(missing.length) issues.push(`MISSING_PAGES(${missing.length})`);
+
+        const titleDefault = bookId.toUpperCase().startsWith("BB") ? `BLACK BOOK ${bookId.toUpperCase().replace("BB","")}` : bookId.toUpperCase();
+
+        // preserve tags if already present in STATE
+        const prior = STATE.books.find(b=>b.id===bookId);
+        const tags = prior?.tags || [];
+        const pageTags = prior?.pageTags || {};
+
+        books.push({
+          id: bookId,
+          title: prior?.title || titleDefault,
+          basePath: `${root}/${bookId}`,
+          pagesPath: `${root}/${bookId}/pages`,
+          pad,
+          ext,
+          pageNums,
+          maxPage: max,
+          missing,
+          badNames,
+          issues,
+          tags,
+          pageTags
+        });
+      }
+
+      // stable sort: bb01..bb08 then alpha
+      books.sort((a,b)=>{
+        const ax = a.id.match(/\d+/)?.[0];
+        const bx = b.id.match(/\d+/)?.[0];
+        if(ax && bx) return parseInt(ax,10) - parseInt(bx,10);
+        return a.id.localeCompare(b.id);
+      });
+
+      return books;
+    }
+
+    function makeBooksArraySnippet(books){
+      // corpus viewer expects: { id, title, basePath:"blackbooks/bb01/pages", pageCount, pad, ext }
+      const lines = books.map(b => {
+        const pageCount = b.maxPage || b.pageNums.length || 0;
+        return `  { id:${JSON.stringify(b.id)}, title:${JSON.stringify(b.title)}, basePath:${JSON.stringify(b.pagesPath)}, pageCount:${pageCount}, pad:${b.pad}, ext:${JSON.stringify(b.ext)} }`;
+      });
+      return `const BOOKS = [\n${lines.join(",\n")}\n];`;
+    }
+
+    function makeManifestJSON(){
+      const out = {
+        version: STATE.version,
+        exportedAt: new Date().toISOString(),
+        rootRel: STATE.rootRel,
+        books: STATE.books.map(b => ({
+          id:b.id,
+          title:b.title,
+          pagesPath:b.pagesPath,
+          pad:b.pad,
+          ext:b.ext,
+          maxPage:b.maxPage,
+          missing:b.missing,
+          badNames:b.badNames,
+          issues:b.issues,
+          tags:b.tags,
+          pageTags:b.pageTags
+        })),
+        globalNote: STATE.globalNote
+      };
+      return JSON.stringify(out, null, 2);
+    }
+
+    // ---------- Render ----------
+    function renderBooks(){
+      els.booksList.innerHTML = "";
+      els.booksMeta.textContent = String(STATE.books.length);
+      for(const b of STATE.books){
+        const div = document.createElement("div");
+        div.className = "item" + (STATE.selectedBookId === b.id ? " on" : "");
+        const good = b.issues.length === 0;
+        const label = good ? "GOOD" : "CHECK";
+        const pillClass = good ? "pill good" : "pill bad";
+        div.innerHTML = `
+          <div class="name">${esc(b.id)} // ${esc(b.title)}</div>
+          <div class="pill">${b.maxPage || 0} pages</div>
+          <div class="${pillClass}">${label}</div>
+        `;
+        div.addEventListener("click", ()=>{
+          STATE.selectedBookId = b.id;
+          save();
+          renderBooks();
+          renderInspect();
+        });
+        els.booksList.appendChild(div);
+      }
+      renderOutput();
+    }
+
+    function renderInspect(){
+      const b = STATE.books.find(x=>x.id===STATE.selectedBookId);
+      if(!b){
+        els.inspectMeta.textContent = "—";
+        els.selBookId.value = "";
+        els.selBookTitle.value = "";
+        els.bookTags.value = "";
+        els.report.value = "";
+        return;
+      }
+      els.inspectMeta.textContent = b.id;
+      els.selBookId.value = b.id;
+      els.selBookTitle.value = b.title;
+      els.bookTags.value = (b.tags || []).join(", ");
+
+      const report = [];
+      report.push(`BOOK: ${b.id}`);
+      report.push(`PAGES PATH: ${b.pagesPath}`);
+      report.push(`PAD: ${b.pad}`);
+      report.push(`EXT: ${b.ext}`);
+      report.push(`MAX PAGE: ${b.maxPage}`);
+      report.push(`MISSING COUNT: ${b.missing.length}`);
+      if(b.missing.length) report.push(`MISSING: ${b.missing.slice(0,200).join(", ")}${b.missing.length>200 ? " …" : ""}`);
+      report.push(`BAD FILENAMES: ${b.badNames.length}`);
+      if(b.badNames.length) report.push(`BAD: ${b.badNames.slice(0,50).join("\n")}${b.badNames.length>50 ? "\n…" : ""}`);
+      report.push(`ISSUES: ${b.issues.length ? b.issues.join(" | ") : "NONE"}`);
+
+      els.report.value = report.join("\n");
+    }
+
+    function renderOutput(){
+      els.booksJs.value = makeBooksArraySnippet(STATE.books);
+      els.manifestJson.value = makeManifestJSON();
+      const bad = STATE.books.filter(b=>b.issues.length).length;
+      els.outMeta.textContent = `${STATE.books.length} books // ${bad} need fixes`;
+    }
+
+    // ---------- Actions ----------
+    async function scanAll(){
+      status("SCANNING…");
+      const root = (els.relRoot.value || "blackbooks").trim();
+      let files = [];
+
+      // FS mode if available and picked
+      if(STATE.pickedMode === "FS" && fsRootHandle){
+        files = await scanFS();
+      } else {
+        // fallback input
+        const f = els.fallbackInput.files;
+        if(!f || !f.length){
+          status("NO FILES.");
+          alert("Pick a folder (FS) or select a folder using the fallback input.");
+          return;
+        }
+        STATE.pickedMode = "FALLBACK";
+        files = scanFallback(f);
+      }
+
+      // store
+      STATE.files = files;
+      STATE.books = buildBooks(files);
+
+      // auto-select first book if none
+      if(!STATE.selectedBookId && STATE.books.length){
+        STATE.selectedBookId = STATE.books[0].id;
+      }
+      save();
+      els.inputMeta.textContent = `${STATE.pickedMode || "—"} // ${root} // ${files.length} images`;
+      renderBooks();
+      renderInspect();
+      status("SCAN COMPLETE.");
+    }
+
+    function clearAll(){
+      STATE.files = [];
+      STATE.books = [];
+      STATE.selectedBookId = null;
+      save();
+      renderBooks();
+      renderInspect();
+      status("CLEARED.");
+    }
+
+    async function exportJSON(){
+      const json = makeManifestJSON();
+      const blob = new Blob([json], {type:"application/json"});
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = `ketadata_blackbooks_manifest_${new Date().toISOString().replace(/[:.]/g,"-")}.json`;
+      a.click();
+      setTimeout(()=>URL.revokeObjectURL(a.href), 1500);
+      status("EXPORTED JSON.");
+    }
+
+    async function copyBooksArray(){
+      const txt = els.booksJs.value;
+      try{
+        await navigator.clipboard.writeText(txt);
+        status("COPIED BOOKS[].");
+      }catch{
+        status("COPY FAILED.");
+        alert("Clipboard blocked. Select the BOOKS[] textarea and copy manually.");
+      }
+    }
+
+    // ---------- Tags editing ----------
+    function updateSelectedTitleAndTags(){
+      const b = STATE.books.find(x=>x.id===STATE.selectedBookId);
+      if(!b) return;
+      b.title = els.selBookTitle.value || b.title;
+      b.tags = (els.bookTags.value || "")
+        .split(",")
+        .map(s=>s.trim())
+        .filter(Boolean);
+      save();
+      renderBooks();
+      renderInspect();
+      status("BOOK UPDATED.");
+    }
+
+    function savePageTags(){
+      const b = STATE.books.find(x=>x.id===STATE.selectedBookId);
+      if(!b) return;
+
+      const n = parseInt((els.pageNum.value || "").trim(), 10);
+      if(!n || n < 1 || (b.maxPage && n > b.maxPage)){
+        alert("Invalid page number for this book.");
+        return;
+      }
+      const tags = (els.pageTags.value || "")
+        .split(",")
+        .map(s=>s.trim())
+        .filter(Boolean);
+
+      b.pageTags = b.pageTags || {};
+      b.pageTags[String(n)] = tags;
+
+      save();
+      renderInspect();
+      renderOutput();
+      status("PAGE TAGS SAVED.");
+    }
+
+    // ---------- Keta note ----------
+    let noteVisible = true;
+    function setNoteIconState(){ els.noteIconSq.classList.toggle("filled", !noteVisible); }
+    function showNote(){ noteVisible=true; els.floatNote.classList.remove("hidden"); setNoteIconState(); status("NOTE ON."); }
+    function hideNote(){ noteVisible=false; els.floatNote.classList.add("hidden"); setNoteIconState(); status("NOTE COLLAPSED."); }
+    function toggleNote(){ noteVisible ? hideNote() : showNote(); }
+
+    // draggable + resizable note
+    (function noteMove(){
+      let dragging=false, sx=0, sy=0, sl=0, st=0;
+      els.floatNoteHead.addEventListener("mousedown", (e)=>{
+        if(e.target === els.noteMinBtn || e.target === els.noteCloseBtn) return;
+        dragging=true;
+        const r = els.floatNote.getBoundingClientRect();
+        sl=r.left; st=r.top; sx=e.clientX; sy=e.clientY;
+        document.addEventListener("mousemove", mv);
+        document.addEventListener("mouseup", up);
+        e.preventDefault();
+      });
+      function mv(e){
+        if(!dragging) return;
+        els.floatNote.style.left = (sl + (e.clientX - sx)) + "px";
+        els.floatNote.style.top  = (st + (e.clientY - sy)) + "px";
+      }
+      function up(){
+        dragging=false;
+        document.removeEventListener("mousemove", mv);
+        document.removeEventListener("mouseup", up);
+      }
+    })();
+
+    (function noteResize(){
+      let resizing=false, sx=0, sy=0, sw=0, sh=0;
+      els.floatResizer.addEventListener("mousedown", (e)=>{
+        e.preventDefault();
+        resizing=true;
+        const r = els.floatNote.getBoundingClientRect();
+        sw=r.width; sh=r.height; sx=e.clientX; sy=e.clientY;
+        document.addEventListener("mousemove", mv);
+        document.addEventListener("mouseup", up);
+      });
+      function mv(e){
+        if(!resizing) return;
+        els.floatNote.style.width  = Math.max(260, sw + (e.clientX - sx)) + "px";
+        els.floatNote.style.height = Math.max(160, sh + (e.clientY - sy)) + "px";
+      }
+      function up(){
+        resizing=false;
+        document.removeEventListener("mousemove", mv);
+        document.removeEventListener("mouseup", up);
+      }
+    })();
+
+    // ---------- Resizable panels ----------
+    function setCSSVar(name, px){ document.documentElement.style.setProperty(name, px + "px"); }
+    function clamp(n,a,b){ return Math.max(a, Math.min(b, n)); }
+
+    function wireSplitters(){
+      // left width
+      let dv=false, sx=0, start=0;
+      els.splitV1.addEventListener("mousedown",(e)=>{
+        dv=true; sx=e.clientX;
+        start = parseInt(getComputedStyle(document.documentElement).getPropertyValue("--leftW")) || 420;
+        document.addEventListener("mousemove", mv);
+        document.addEventListener("mouseup", up);
+        e.preventDefault();
+      });
+      function mv(e){
+        if(!dv) return;
+        const next = clamp(start + (e.clientX - sx), 300, 720);
+        setCSSVar("--leftW", next);
+        STATE.layout.leftW = next;
+      }
+      function up(){
+        dv=false;
+        document.removeEventListener("mousemove", mv);
+        document.removeEventListener("mouseup", up);
+        save();
+      }
+
+      // right width
+      let dv2=false, sx2=0, start2=0;
+      els.splitV2.addEventListener("mousedown",(e)=>{
+        dv2=true; sx2=e.clientX;
+        start2 = parseInt(getComputedStyle(document.documentElement).getPropertyValue("--rightW")) || 520;
+        document.addEventListener("mousemove", mv2);
+        document.addEventListener("mouseup", up2);
+        e.preventDefault();
+      });
+      function mv2(e){
+        if(!dv2) return;
+        const next = clamp(start2 - (e.clientX - sx2), 340, 900);
+        setCSSVar("--rightW", next);
+        STATE.layout.rightW = next;
+      }
+      function up2(){
+        dv2=false;
+        document.removeEventListener("mousemove", mv2);
+        document.removeEventListener("mouseup", up2);
+        save();
+      }
+
+      // bottom height
+      let dh=false, sy=0, startH=0;
+      els.splitH.addEventListener("mousedown",(e)=>{
+        dh=true; sy=e.clientY;
+        startH = parseInt(getComputedStyle(document.documentElement).getPropertyValue("--bottomH")) || 200;
+        document.addEventListener("mousemove", mh);
+        document.addEventListener("mouseup", uh);
+        e.preventDefault();
+      });
+      function mh(e){
+        if(!dh) return;
+        const next = clamp(startH - (e.clientY - sy), 140, 420);
+        setCSSVar("--bottomH", next);
+        STATE.layout.bottomH = next;
+      }
+      function uh(){
+        dh=false;
+        document.removeEventListener("mousemove", mh);
+        document.removeEventListener("mouseup", uh);
+        save();
+      }
+    }
+
+    // ---------- Wiring events ----------
+    els.pickFolderBtn.addEventListener("click", pickFolderFS);
+    els.scanBtn.addEventListener("click", scanAll);
+    els.exportJsonBtn.addEventListener("click", exportJSON);
+    els.exportJsBtn.addEventListener("click", copyBooksArray);
+    els.clearBtn.addEventListener("click", clearAll);
+
+    els.selBookTitle.addEventListener("input", updateSelectedTitleAndTags);
+    els.bookTags.addEventListener("input", updateSelectedTitleAndTags);
+    els.savePageTagsBtn.addEventListener("click", savePageTags);
+
+    els.noteIconBtn.addEventListener("click", toggleNote);
+    els.noteMinBtn.addEventListener("click", hideNote);
+    els.noteCloseBtn.addEventListener("click", hideNote);
+
+    els.floatNoteText.addEventListener("input", ()=>{
+      STATE.globalNote = els.floatNoteText.value || "";
+      save();
+    });
+
+    document.addEventListener("keydown",(e)=>{
+      const tag = (document.activeElement?.tagName || "").toLowerCase();
+      const typing = tag === "input" || tag === "textarea" || tag === "select";
+      if(e.key.toLowerCase()==="n") toggleNote();
+      if(!typing && e.key.toLowerCase()==="s") scanAll();
+      if(!typing && e.key.toLowerCase()==="e") exportJSON();
+      if(!typing && e.key.toLowerCase()==="b") copyBooksArray();
+    });
+
+    // ---------- Boot ----------
+    (function boot(){
+      load();
+      els.relRoot.value = STATE.rootRel || "blackbooks";
+      els.floatNoteText.value = STATE.globalNote || "";
+      if(STATE.layout?.leftW) setCSSVar("--leftW", STATE.layout.leftW);
+      if(STATE.layout?.rightW) setCSSVar("--rightW", STATE.layout.rightW);
+      if(STATE.layout?.bottomH) setCSSVar("--bottomH", STATE.layout.bottomH);
+      setNoteIconState();
+      wireSplitters();
+      renderBooks();
+      renderInspect();
+      renderOutput();
+      status("READY.");
+    })();
+  </script>
+</body>
+</html>
