@@ -1,0 +1,1471 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>KETADATA // AI CONTEXTIFIER</title>
+
+  <!-- =========================================================
+       AESTHETIC (SAFE TO EDIT)
+       - Black, sharp edges, mono labels.
+       - Do NOT rename IDs used by the ENGINE.
+  ========================================================== -->
+  <style>
+    :root{
+      --bg:#000;
+      --ink:#fff;
+      --muted:#a8a8a8;
+      --hair:#1b1b1b;
+      --hair2:#2a2a2a;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      --sans: Arial, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, sans-serif;
+
+      --topH:52px;
+      --bottomH:170px;
+      --leftW:430px;
+      --rightW:520px;
+      --splitter:8px;
+    }
+
+    *{ box-sizing:border-box; }
+    html,body{ height:100%; }
+    body{
+      margin:0;
+      background:var(--bg);
+      color:var(--ink);
+      font-family:var(--sans);
+      overflow:hidden;
+    }
+
+    header{
+      height:var(--topH);
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      padding:0 12px;
+      border-bottom:1px solid var(--hair);
+      background:#000;
+    }
+    .brand{
+      display:flex; flex-direction:column; line-height:1.05; user-select:none;
+    }
+    .brand .top{
+      font-weight:700;
+      letter-spacing:.14em;
+      font-size:12px;
+    }
+    .brand .sub{
+      font-family:var(--mono);
+      font-size:10px;
+      color:var(--muted);
+      letter-spacing:.08em;
+      margin-top:2px;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      max-width:70vw;
+    }
+    .topActions{ display:flex; align-items:center; gap:10px; }
+    .btn{
+      border:1px solid var(--hair2);
+      background:#000;
+      color:var(--ink);
+      padding:7px 10px;
+      font-size:11px;
+      font-family:var(--mono);
+      letter-spacing:.06em;
+      cursor:pointer;
+      user-select:none;
+      white-space:nowrap;
+    }
+    .btn:hover{ border-color:#3b3b3b; }
+    .btn:active{ transform:translateY(1px); }
+
+    /* KETA NOTE icon */
+    .noteIconBtn{
+      width:30px; height:30px;
+      border:1px solid var(--hair2);
+      background:#000;
+      display:grid;
+      place-items:center;
+      cursor:pointer;
+      user-select:none;
+    }
+    .noteIconBtn:hover{ border-color:#3b3b3b; }
+    .sqIcon{
+      width:12px; height:12px;
+      border:1px solid #fff;
+      background:#000; /* note visible */
+    }
+    .sqIcon.filled{ background:#fff; } /* collapsed */
+
+    /* Layout grid */
+    #viewport{
+      height:calc(100% - var(--topH));
+      display:grid;
+      grid-template-columns: var(--leftW) var(--splitter) 1fr var(--splitter) var(--rightW);
+      grid-template-rows: 1fr var(--splitter) var(--bottomH);
+    }
+
+    .panel{
+      background:#000;
+      border:1px solid var(--hair);
+      overflow:hidden;
+      min-width:260px;
+      min-height:140px;
+    }
+    .panelHeader{
+      height:42px;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      padding:0 10px;
+      border-bottom:1px solid var(--hair);
+      background:#000;
+      user-select:none;
+    }
+    .panelHeader .title{
+      font-family:var(--mono);
+      font-size:11px;
+      letter-spacing:.14em;
+      color:#fff;
+      display:flex;
+      gap:10px;
+      align-items:center;
+    }
+    .panelHeader .meta{
+      font-family:var(--mono);
+      font-size:10px;
+      color:var(--muted);
+      letter-spacing:.08em;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      max-width:60%;
+      text-align:right;
+    }
+    .panelBody{
+      height:calc(100% - 42px);
+      overflow:auto;
+      padding:10px;
+    }
+
+    .splitV, .splitH{
+      background:#000;
+      border-left:1px solid var(--hair);
+      border-right:1px solid var(--hair);
+      position:relative;
+      cursor:col-resize;
+    }
+    .splitH{
+      border-left:none; border-right:none;
+      border-top:1px solid var(--hair);
+      border-bottom:1px solid var(--hair);
+      cursor:row-resize;
+    }
+    .splitV::after{
+      content:"";
+      position:absolute;
+      left:50%; top:8px; bottom:8px;
+      width:2px; transform:translateX(-50%);
+      background:var(--hair2);
+    }
+    .splitH::after{
+      content:"";
+      position:absolute;
+      top:50%; left:8px; right:8px;
+      height:2px; transform:translateY(-50%);
+      background:var(--hair2);
+    }
+
+    .hint{
+      font-family:var(--mono);
+      font-size:10px;
+      color:var(--muted);
+      letter-spacing:.06em;
+      line-height:1.35;
+      margin-bottom:10px;
+    }
+    textarea, input[type="text"]{
+      width:100%;
+      border:1px solid var(--hair2);
+      background:#000;
+      color:#fff;
+      font-family:var(--mono);
+      font-size:11px;
+      padding:10px;
+      outline:none;
+    }
+    textarea{ resize:vertical; min-height:140px; }
+    .fieldLabel{
+      font-family:var(--mono);
+      font-size:10px;
+      color:var(--muted);
+      letter-spacing:.14em;
+      margin:0 0 6px;
+    }
+    .box{
+      border:1px solid var(--hair);
+      padding:10px;
+      margin-bottom:10px;
+    }
+    .row2{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap:10px;
+      align-items:end;
+    }
+    .small{
+      font-family:var(--mono);
+      font-size:10px;
+      color:var(--muted);
+      line-height:1.35;
+    }
+
+    /* Sources list */
+    .source{
+      border:1px solid var(--hair);
+      padding:10px;
+      margin-bottom:8px;
+      display:grid;
+      grid-template-columns: 12px 1fr auto;
+      gap:10px;
+      align-items:center;
+      cursor:pointer;
+      user-select:none;
+    }
+    .source:hover{ border-color:#3b3b3b; }
+    .miniSq{ width:10px; height:10px; border:1px solid #fff; background:#000; }
+    .miniSq.on{ background:#fff; }
+    .srcName{
+      font-family:var(--mono);
+      font-size:11px;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      white-space:nowrap;
+    }
+    .tag{
+      font-family:var(--mono);
+      font-size:10px;
+      color:var(--muted);
+      border:1px solid var(--hair2);
+      padding:2px 6px;
+      white-space:nowrap;
+    }
+
+    /* Center: output */
+    .centerTop{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      padding:10px;
+      border-bottom:1px solid var(--hair);
+    }
+    .centerTop .left{
+      display:flex;
+      flex-direction:column;
+      gap:2px;
+      min-width:0;
+    }
+    .centerTop .t{
+      font-family:var(--mono);
+      font-size:11px;
+      letter-spacing:.14em;
+    }
+    .centerTop .s{
+      font-family:var(--mono);
+      font-size:10px;
+      color:var(--muted);
+      letter-spacing:.08em;
+      overflow:hidden;
+      white-space:nowrap;
+      text-overflow:ellipsis;
+    }
+    .centerTop .right{ display:flex; align-items:center; gap:8px; flex:0 0 auto; }
+
+    .chip{
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+      font-family:var(--mono);
+      font-size:10px;
+      letter-spacing:.06em;
+      border:1px solid var(--hair2);
+      padding:4px 8px;
+      color:var(--muted);
+      white-space:nowrap;
+    }
+    .dot{ width:8px; height:8px; border:1px solid #fff; background:#000; }
+    .dot.on{ background:#fff; }
+
+    .tabs{
+      display:flex;
+      gap:8px;
+      padding:10px;
+      border-bottom:1px solid var(--hair);
+    }
+    .tab{
+      border:1px solid var(--hair2);
+      padding:6px 10px;
+      font-family:var(--mono);
+      font-size:10px;
+      letter-spacing:.12em;
+      color:var(--muted);
+      cursor:pointer;
+      user-select:none;
+      background:#000;
+    }
+    .tab.on{
+      color:#fff;
+      border-color:#3b3b3b;
+    }
+    .outBody{
+      height:calc(100% - 52px - 41px);
+      overflow:auto;
+      padding:10px;
+    }
+
+    .frag{
+      border:1px solid var(--hair);
+      margin-bottom:10px;
+    }
+    .fragHead{
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      padding:8px 10px;
+      border-bottom:1px solid var(--hair);
+      cursor:pointer;
+      user-select:none;
+    }
+    .fragHead .lhs{
+      display:flex;
+      gap:8px;
+      align-items:center;
+      font-family:var(--mono);
+      font-size:10px;
+      letter-spacing:.12em;
+    }
+    .pill{
+      border:1px solid var(--hair2);
+      padding:2px 6px;
+      color:var(--muted);
+      font-family:var(--mono);
+      font-size:10px;
+      letter-spacing:.06em;
+    }
+    .fragBody{ display:grid; grid-template-columns: 1fr; }
+    .fragText{
+      padding:10px;
+      font-family:var(--mono);
+      font-size:11px;
+      line-height:1.35;
+      white-space:pre-wrap;
+      word-break:break-word;
+    }
+
+    /* Bottom: rules + refs */
+    .bottomGrid{
+      height:100%;
+      display:grid;
+      grid-template-columns: 1fr var(--splitter) 1fr;
+    }
+    .bottomHint{
+      padding:10px;
+      border-top:1px solid var(--hair);
+      font-family:var(--mono);
+      font-size:10px;
+      color:var(--muted);
+      letter-spacing:.06em;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+    }
+    .kbd{
+      border:1px solid var(--hair2);
+      padding:2px 6px;
+      font-family:var(--mono);
+      color:#fff;
+    }
+
+    /* Floating Keta Note */
+    #floatNote{
+      position:fixed;
+      top:76px;
+      left:24px;
+      width:360px;
+      height:240px;
+      border:1px solid #fff;
+      background:#000;
+      z-index:50;
+      display:flex;
+      flex-direction:column;
+    }
+    #floatNote.hidden{ display:none; }
+    #floatNoteHead{
+      height:38px;
+      border-bottom:1px solid var(--hair);
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      padding:0 10px;
+      cursor:move;
+      user-select:none;
+      font-family:var(--mono);
+      font-size:11px;
+      letter-spacing:.12em;
+    }
+    #floatNoteHead .left{ display:flex; align-items:center; gap:10px; }
+    #floatNoteHead .right{ display:flex; gap:8px; }
+    .iconBtn{
+      width:26px; height:26px;
+      border:1px solid var(--hair2);
+      display:grid;
+      place-items:center;
+      font-family:var(--mono);
+      font-size:12px;
+      cursor:pointer;
+      user-select:none;
+      background:#000;
+      color:#fff;
+    }
+    .iconBtn:hover{ border-color:#3b3b3b; }
+    #floatNoteBody{ padding:10px; height:100%; }
+    #floatNoteText{ height:100%; resize:none; }
+    #floatResizer{
+      position:absolute;
+      right:2px; bottom:2px;
+      width:14px; height:14px;
+      border:1px solid var(--hair2);
+      cursor:nwse-resize;
+    }
+
+    /* Scrollbars */
+    ::-webkit-scrollbar{ width:10px; height:10px; }
+    ::-webkit-scrollbar-thumb{ background:#222; border:2px solid #000; }
+    ::-webkit-scrollbar-track{ background:#000; }
+  </style>
+</head>
+
+<body>
+  <header>
+    <div class="brand">
+      <div class="top">KETADATA</div>
+      <div class="sub">AI CONTEXTIFIER // MULTI-ANSWER INPUT → FRAGMENTS → FRANKENSTEIN OUTPUT</div>
+    </div>
+
+    <div class="topActions">
+      <div class="noteIconBtn" id="noteIconBtn" title="Toggle KETA NOTE (N)">
+        <div class="sqIcon" id="noteIconSq"></div>
+      </div>
+
+      <button class="btn" id="addSourceBtn">ADD SOURCE</button>
+      <button class="btn" id="parseBtn">PARSE FRAGMENTS</button>
+      <button class="btn" id="buildBtn">BUILD OUTPUT</button>
+      <button class="btn" id="exportBtn">EXPORT JSON</button>
+      <button class="btn" id="clearBtn">CLEAR</button>
+    </div>
+  </header>
+
+  <div id="viewport">
+    <!-- LEFT: Sources + input -->
+    <section class="panel" id="leftPanel" style="grid-column:1;grid-row:1;">
+      <div class="panelHeader">
+        <div class="title">SOURCES</div>
+        <div class="meta" id="srcMeta">0 sources</div>
+      </div>
+      <div class="panelBody">
+        <div class="hint">
+          Add multiple AI responses to the same prompt. Name each source (model / run / link). Parse into fragments, then assemble.
+        </div>
+
+        <div class="box">
+          <div class="fieldLabel">PROMPT (REFERENCE)</div>
+          <textarea id="promptInput" placeholder="Paste the prompt here (optional but recommended)."></textarea>
+        </div>
+
+        <div class="box">
+          <div class="row2">
+            <div>
+              <div class="fieldLabel">SOURCE NAME</div>
+              <input type="text" id="sourceName" placeholder="e.g. gpt5_runA / claude_runB / gemini_runC" />
+            </div>
+            <div>
+              <div class="fieldLabel">TAG</div>
+              <input type="text" id="sourceTag" placeholder="optional: model/version/date" />
+            </div>
+          </div>
+          <div style="height:10px"></div>
+          <div class="fieldLabel">SOURCE TEXT</div>
+          <textarea id="sourceText" placeholder="Paste one AI response here."></textarea>
+          <div style="height:10px"></div>
+          <button class="btn" id="saveSourceBtn" style="width:100%;">SAVE SOURCE</button>
+          <div class="small" style="margin-top:8px;">
+            Parsing uses conservative rules: headings, bullets, numbered items, and paragraph blocks become fragments.
+          </div>
+        </div>
+
+        <div class="fieldLabel">SOURCE LIST</div>
+        <div id="sourcesList"></div>
+      </div>
+    </section>
+
+    <div class="splitV" id="splitV1" style="grid-column:2;grid-row:1;"></div>
+
+    <!-- CENTER: Output (assembled) -->
+    <section class="panel" id="centerPanel" style="grid-column:3;grid-row:1;">
+      <div class="centerTop">
+        <div class="left">
+          <div class="t" id="outTitle">OUTPUT</div>
+          <div class="s" id="outSub">— build from selected fragments</div>
+        </div>
+        <div class="right">
+          <div class="chip" title="Fragments in assembly">
+            <div class="dot" id="asmDot"></div>
+            <div id="asmLabel">0 fragments</div>
+          </div>
+          <button class="btn" id="copyOutBtn">COPY</button>
+          <button class="btn" id="downloadOutBtn">DOWNLOAD .TXT</button>
+        </div>
+      </div>
+
+      <div class="tabs">
+        <div class="tab on" id="tabAssembled">ASSEMBLED</div>
+        <div class="tab" id="tabAllFrags">ALL FRAGMENTS</div>
+        <div class="tab" id="tabCompare">COMPARE</div>
+      </div>
+
+      <div class="outBody" id="outBody">
+        <div class="hint">Parse sources, then click fragments to add to the assembly. Order matters.</div>
+      </div>
+    </section>
+
+    <div class="splitV" id="splitV2" style="grid-column:4;grid-row:1;"></div>
+
+    <!-- RIGHT: Assembly controls + compare -->
+    <aside class="panel" id="rightPanel" style="grid-column:5;grid-row:1;">
+      <div class="panelHeader">
+        <div class="title">ASSEMBLY</div>
+        <div class="meta" id="asmMeta">0 selected</div>
+      </div>
+      <div class="panelBody">
+        <div class="box">
+          <div class="fieldLabel">ASSEMBLY RULE</div>
+          <input type="text" id="joinRule" value="DOUBLE_NEWLINE" readonly />
+          <div class="small">Fragments are concatenated with a blank line separator.</div>
+        </div>
+
+        <div class="box">
+          <div class="fieldLabel">SELECTED FRAGMENTS</div>
+          <div class="small" style="margin-bottom:8px;">Click a fragment (center) to add. Click here to remove. Drag to reorder.</div>
+          <div id="assemblyList"></div>
+          <div style="height:10px"></div>
+          <button class="btn" id="clearAsmBtn" style="width:100%;">CLEAR ASSEMBLY</button>
+        </div>
+
+        <div class="box">
+          <div class="fieldLabel">DIAGNOSTICS</div>
+          <div class="small" id="diag">READY.</div>
+        </div>
+      </div>
+    </aside>
+
+    <div class="splitH" id="splitH" style="grid-column:1 / span 5; grid-row:2;"></div>
+
+    <!-- BOTTOM: system rules + references -->
+    <section class="panel" id="bottomPanel" style="grid-column:1 / span 5; grid-row:3;">
+      <div class="panelHeader">
+        <div class="title">SYSTEM RULES</div>
+        <div class="meta">CONSTRAINTS + REFERENCES</div>
+      </div>
+
+      <div class="panelBody" style="padding:0;">
+        <div class="bottomGrid" style="height:calc(100% - 42px);">
+          <div class="panelBody" style="grid-column:1; padding:10px;">
+            <div class="fieldLabel">SYSTEM-WIDE LAWS / CONTEXT RULES</div>
+            <textarea id="systemRules" placeholder="Rules for what the output must obey (tone, structure, forbidden content, formatting)."></textarea>
+          </div>
+
+          <div class="splitV" id="splitV3" style="grid-column:2;"></div>
+
+          <div class="panelBody" style="grid-column:3; padding:10px;">
+            <div class="fieldLabel">REFERENCES / PRECEDENTS</div>
+            <textarea id="references" placeholder="Reference examples, canonical outlines, previous best outputs."></textarea>
+          </div>
+        </div>
+
+        <div class="bottomHint">
+          <div>
+            Keys: <span class="kbd">N</span> toggle KETA NOTE · <span class="kbd">P</span> parse · <span class="kbd">B</span> build · <span class="kbd">E</span> export · <span class="kbd">Esc</span> clear selection
+          </div>
+          <div id="status">READY.</div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- Floating Keta Note -->
+  <div id="floatNote">
+    <div id="floatNoteHead">
+      <div class="left">
+        <div class="miniSq" aria-hidden="true"></div>
+        <div>KETA NOTE</div>
+      </div>
+      <div class="right">
+        <div class="iconBtn" id="noteMinBtn" title="collapse">–</div>
+        <div class="iconBtn" id="noteCloseBtn" title="hide">×</div>
+      </div>
+    </div>
+    <div id="floatNoteBody">
+      <textarea id="floatNoteText" placeholder="SYSTEM NOTE // decisions, constraints, next actions"></textarea>
+    </div>
+    <div id="floatResizer" title="resize"></div>
+  </div>
+
+  <!-- =========================================================
+       ENGINE (FUNCTIONAL LOGIC)
+       - Source registry
+       - Parsing into fragments
+       - Assembly (select/remove/reorder)
+       - Views: assembled / all fragments / compare
+       - Export JSON (full state)
+       - Panels adjustable
+       - Keta note icon + floating note move/resize
+  ========================================================== -->
+  <script>
+    /* =========================
+       WIRING
+    ========================== */
+    const $ = (id) => document.getElementById(id);
+    const els = {
+      // top
+      noteIconBtn: $("noteIconBtn"),
+      noteIconSq: $("noteIconSq"),
+      addSourceBtn: $("addSourceBtn"),
+      parseBtn: $("parseBtn"),
+      buildBtn: $("buildBtn"),
+      exportBtn: $("exportBtn"),
+      clearBtn: $("clearBtn"),
+
+      // left
+      promptInput: $("promptInput"),
+      sourceName: $("sourceName"),
+      sourceTag: $("sourceTag"),
+      sourceText: $("sourceText"),
+      saveSourceBtn: $("saveSourceBtn"),
+      sourcesList: $("sourcesList"),
+      srcMeta: $("srcMeta"),
+
+      // center
+      outTitle: $("outTitle"),
+      outSub: $("outSub"),
+      asmDot: $("asmDot"),
+      asmLabel: $("asmLabel"),
+      copyOutBtn: $("copyOutBtn"),
+      downloadOutBtn: $("downloadOutBtn"),
+      tabAssembled: $("tabAssembled"),
+      tabAllFrags: $("tabAllFrags"),
+      tabCompare: $("tabCompare"),
+      outBody: $("outBody"),
+
+      // right
+      asmMeta: $("asmMeta"),
+      joinRule: $("joinRule"),
+      assemblyList: $("assemblyList"),
+      clearAsmBtn: $("clearAsmBtn"),
+      diag: $("diag"),
+
+      // bottom
+      systemRules: $("systemRules"),
+      references: $("references"),
+      status: $("status"),
+
+      // note
+      floatNote: $("floatNote"),
+      floatNoteHead: $("floatNoteHead"),
+      floatNoteText: $("floatNoteText"),
+      noteMinBtn: $("noteMinBtn"),
+      noteCloseBtn: $("noteCloseBtn"),
+      floatResizer: $("floatResizer"),
+
+      // splitters
+      splitV1: $("splitV1"),
+      splitV2: $("splitV2"),
+      splitV3: $("splitV3"),
+      splitH: $("splitH"),
+    };
+    (function assertWiring(){
+      const missing = Object.entries(els).filter(([k,v]) => !v).map(([k])=>k);
+      if(missing.length){
+        document.body.innerHTML =
+          "<pre style='padding:16px;font-family:monospace;color:#fff;background:#000'>WIRING ERROR: Missing IDs:\\n" +
+          missing.join("\\n") + "</pre>";
+        throw new Error("Missing IDs: " + missing.join(", "));
+      }
+    })();
+
+    function diag(msg){ els.diag.textContent = msg || "—"; }
+    function status(msg){ els.status.textContent = msg || "—"; }
+
+    /* =========================
+       STATE
+    ========================== */
+    const uid = () => Math.random().toString(16).slice(2) + "-" + Date.now().toString(16);
+
+    const STATE = {
+      version: "ketadata-ai-contextifier-v1",
+      createdAt: new Date().toISOString(),
+      prompt: "",
+      systemRules: "",
+      references: "",
+      ketaNote: "",
+      sources: [],   // {id,name,tag,text,createdAt, fragments:[fragId]}
+      fragments: [], // {id, sourceId, kind, title, text, createdAt}
+      assembly: [],  // array of fragment ids in order
+      view: "ASSEMBLED", // ASSEMBLED | ALL | COMPARE
+      compare: { aSourceId:null, bSourceId:null }
+    };
+
+    function esc(s){
+      return (s||"").replace(/[&<>"']/g, c => ({
+        "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
+      }[c]));
+    }
+
+    /* =========================
+       PARSER (conservative, deterministic)
+       - Splits into fragments by:
+         * Markdown headings
+         * Numbered list items
+         * Bullet list items
+         * Paragraph blocks
+       - "kind" tags: heading | bullet | numbered | paragraph
+    ========================== */
+    function normalizeText(s){
+      s = (s||"").replace(/\r\n/g,"\n").trim();
+      s = s.replace(/\n{4,}/g,"\n\n\n");
+      return s;
+    }
+
+    function parseFragments(sourceId, text){
+      const t = normalizeText(text);
+      const lines = t.split("\n");
+
+      const frags = [];
+      let buf = [];
+      let bufKind = "paragraph";
+      let bufTitle = "";
+
+      function flush(){
+        const body = buf.join("\n").trim();
+        if(!body) { buf=[]; return; }
+        frags.push({
+          id: uid(),
+          sourceId,
+          kind: bufKind,
+          title: bufTitle || inferTitle(body, bufKind),
+          text: body,
+          createdAt: new Date().toISOString()
+        });
+        buf = [];
+        bufKind = "paragraph";
+        bufTitle = "";
+      }
+
+      function inferTitle(body, kind){
+        const one = body.split("\n").find(Boolean) || "fragment";
+        const s = one.replace(/^[-*•]\s+/,"").replace(/^\d+\.\s+/,"").trim();
+        const short = s.length > 48 ? s.slice(0,48) + "…" : s;
+        return `${kind.toUpperCase()}: ${short || "fragment"}`;
+      }
+
+      for(const line of lines){
+        const heading = line.match(/^\s{0,3}(#{1,6})\s+(.+)\s*$/);
+        const numbered = line.match(/^\s*(\d+)\.\s+(.+)\s*$/);
+        const bullet = line.match(/^\s*([-*•])\s+(.+)\s*$/);
+
+        // blank line => paragraph boundary
+        if(!line.trim()){
+          // if we were in list mode, keep blank as boundary
+          flush();
+          continue;
+        }
+
+        // heading starts a new fragment
+        if(heading){
+          flush();
+          bufKind = "heading";
+          bufTitle = heading[2].trim();
+          buf.push(heading[2].trim());
+          flush();
+          continue;
+        }
+
+        // numbered list item => own fragment (tight)
+        if(numbered){
+          flush();
+          bufKind = "numbered";
+          bufTitle = `#${numbered[1]} ${numbered[2].trim()}`;
+          buf.push(numbered[2].trim());
+          flush();
+          continue;
+        }
+
+        // bullet list item => own fragment (tight)
+        if(bullet){
+          flush();
+          bufKind = "bullet";
+          bufTitle = bullet[2].trim();
+          buf.push(bullet[2].trim());
+          flush();
+          continue;
+        }
+
+        // default: paragraph accumulate
+        if(bufKind !== "paragraph"){
+          flush();
+          bufKind = "paragraph";
+        }
+        // treat single-line soft wraps as same paragraph until blank line
+        buf.push(line);
+      }
+      flush();
+      return frags;
+    }
+
+    /* =========================
+       SOURCES CRUD
+    ========================== */
+    function addSourceFromInputs(){
+      const name = (els.sourceName.value || "").trim() || `source_${STATE.sources.length+1}`;
+      const tag  = (els.sourceTag.value || "").trim();
+      const text = (els.sourceText.value || "").trim();
+      if(!text){
+        diag("No source text.");
+        return;
+      }
+      const s = {
+        id: uid(),
+        name,
+        tag,
+        text,
+        createdAt: new Date().toISOString(),
+        fragments: []
+      };
+      STATE.sources.unshift(s);
+
+      els.sourceName.value = "";
+      els.sourceTag.value = "";
+      els.sourceText.value = "";
+
+      renderSources();
+      diag("Source saved.");
+      status(`SAVED SOURCE: ${name}`);
+    }
+
+    function removeSource(sourceId){
+      // remove fragments belonging to source
+      const fragIds = STATE.fragments.filter(f => f.sourceId === sourceId).map(f=>f.id);
+      STATE.fragments = STATE.fragments.filter(f => f.sourceId !== sourceId);
+
+      // remove from assembly
+      STATE.assembly = STATE.assembly.filter(id => !fragIds.includes(id));
+
+      // remove source
+      STATE.sources = STATE.sources.filter(s => s.id !== sourceId);
+
+      // clear compare picks if needed
+      if(STATE.compare.aSourceId === sourceId) STATE.compare.aSourceId = null;
+      if(STATE.compare.bSourceId === sourceId) STATE.compare.bSourceId = null;
+
+      renderAll();
+      diag("Source removed.");
+      status("REMOVED SOURCE.");
+    }
+
+    /* =========================
+       PARSE ALL
+    ========================== */
+    function parseAll(){
+      if(!STATE.sources.length){
+        diag("No sources.");
+        return;
+      }
+
+      // clear prior fragments but keep assembly ids that still exist? (we'll clear assembly for safety)
+      STATE.fragments = [];
+      STATE.assembly = [];
+
+      for(const s of STATE.sources){
+        const frags = parseFragments(s.id, s.text);
+        s.fragments = frags.map(f=>f.id);
+        STATE.fragments.push(...frags);
+      }
+
+      STATE.view = "ALL";
+      renderAll();
+      diag(`Parsed ${STATE.fragments.length} fragments from ${STATE.sources.length} sources.`);
+      status("PARSED.");
+    }
+
+    /* =========================
+       ASSEMBLY
+    ========================== */
+    function addToAssembly(fragId){
+      if(!STATE.fragments.find(f=>f.id===fragId)) return;
+      STATE.assembly.push(fragId);
+      renderAssembly();
+      renderOutput();
+      status(`ADDED FRAGMENT (${STATE.assembly.length})`);
+    }
+
+    function removeFromAssembly(idx){
+      STATE.assembly.splice(idx,1);
+      renderAssembly();
+      renderOutput();
+      status("REMOVED.");
+    }
+
+    // drag reorder (simple HTML5)
+    function enableAssemblyDnD(){
+      const items = els.assemblyList.querySelectorAll("[data-idx]");
+      items.forEach(el=>{
+        el.draggable = true;
+        el.addEventListener("dragstart", (e)=>{
+          e.dataTransfer.setData("text/plain", el.dataset.idx);
+        });
+        el.addEventListener("dragover", (e)=> e.preventDefault());
+        el.addEventListener("drop", (e)=>{
+          e.preventDefault();
+          const from = parseInt(e.dataTransfer.getData("text/plain"),10);
+          const to = parseInt(el.dataset.idx,10);
+          if(isNaN(from)||isNaN(to)||from===to) return;
+          const [moved] = STATE.assembly.splice(from,1);
+          STATE.assembly.splice(to,0,moved);
+          renderAssembly();
+          renderOutput();
+          status("REORDERED.");
+        });
+      });
+    }
+
+    function clearAssembly(){
+      STATE.assembly = [];
+      renderAssembly();
+      renderOutput();
+      status("ASSEMBLY CLEARED.");
+    }
+
+    /* =========================
+       BUILD OUTPUT (deterministic join)
+    ========================== */
+    function buildOutputText(){
+      const parts = [];
+      for(const id of STATE.assembly){
+        const f = STATE.fragments.find(x=>x.id===id);
+        if(!f) continue;
+        parts.push(f.text.trim());
+      }
+      const out = parts.filter(Boolean).join("\n\n");
+      return out.trim();
+    }
+
+    /* =========================
+       VIEWS
+    ========================== */
+    function setView(v){
+      STATE.view = v;
+      els.tabAssembled.classList.toggle("on", v==="ASSEMBLED");
+      els.tabAllFrags.classList.toggle("on", v==="ALL");
+      els.tabCompare.classList.toggle("on", v==="COMPARE");
+      renderOutput();
+    }
+
+    function renderOutput(){
+      const asmCount = STATE.assembly.length;
+      els.asmLabel.textContent = `${asmCount} fragments`;
+      els.asmDot.classList.toggle("on", asmCount>0);
+      els.asmMeta.textContent = `${asmCount} selected`;
+
+      const out = buildOutputText();
+      els.outSub.textContent = out ? "— assembled output ready" : "— build from selected fragments";
+
+      if(STATE.view === "ASSEMBLED"){
+        els.outBody.innerHTML = `
+          <div class="hint">Assembled output (copy / download). This view is the final composite.</div>
+          <div class="frag">
+            <div class="fragHead" style="cursor:default;">
+              <div class="lhs">
+                <span class="pill">OUTPUT</span>
+                <span class="pill">${asmCount} FRAGS</span>
+              </div>
+              <div class="pill">${out.length} CHARS</div>
+            </div>
+            <div class="fragBody">
+              <div class="fragText">${esc(out || "—")}</div>
+            </div>
+          </div>
+        `;
+        return;
+      }
+
+      if(STATE.view === "ALL"){
+        if(!STATE.fragments.length){
+          els.outBody.innerHTML = `<div class="hint">No fragments. Click PARSE FRAGMENTS.</div>`;
+          return;
+        }
+
+        // group by source
+        const bySource = new Map();
+        for(const f of STATE.fragments){
+          if(!bySource.has(f.sourceId)) bySource.set(f.sourceId, []);
+          bySource.get(f.sourceId).push(f);
+        }
+
+        let html = `<div class="hint">Click any fragment to add it to the assembly. (Order matters.)</div>`;
+        for(const s of STATE.sources){
+          const frs = bySource.get(s.id) || [];
+          html += `
+            <div class="frag">
+              <div class="fragHead" data-open="1">
+                <div class="lhs">
+                  <span class="pill">${esc(s.name)}</span>
+                  <span class="pill">${esc(s.tag || "—")}</span>
+                  <span class="pill">${frs.length} FRAGS</span>
+                </div>
+                <div class="pill">toggle</div>
+              </div>
+              <div class="fragBody">
+          `;
+          for(const f of frs){
+            html += `
+              <div class="frag" style="margin:0; border-left:none;border-right:none;border-bottom:1px solid var(--hair);">
+                <div class="fragHead" data-frag="${esc(f.id)}" style="border-bottom:none;">
+                  <div class="lhs">
+                    <span class="pill">${esc(f.kind.toUpperCase())}</span>
+                    <span class="pill">${esc(f.title)}</span>
+                  </div>
+                  <div class="pill">ADD</div>
+                </div>
+              </div>
+            `;
+          }
+          html += `</div></div>`;
+        }
+        els.outBody.innerHTML = html;
+
+        // wire toggles + add handlers
+        els.outBody.querySelectorAll(".frag > .fragHead").forEach(head=>{
+          // only source headers have data-open and are direct children
+          if(!head.closest(".frag") || head.dataset.frag) return;
+          head.addEventListener("click", ()=>{
+            const parent = head.parentElement;
+            const body = parent.querySelector(".fragBody");
+            const open = head.dataset.open === "1";
+            head.dataset.open = open ? "0" : "1";
+            body.style.display = open ? "none" : "block";
+          });
+        });
+
+        els.outBody.querySelectorAll("[data-frag]").forEach(h=>{
+          h.addEventListener("click", ()=>{
+            addToAssembly(h.dataset.frag);
+          });
+        });
+
+        return;
+      }
+
+      if(STATE.view === "COMPARE"){
+        if(STATE.sources.length < 2){
+          els.outBody.innerHTML = `<div class="hint">Need at least 2 sources to compare.</div>`;
+          return;
+        }
+
+        // pick defaults if none
+        if(!STATE.compare.aSourceId) STATE.compare.aSourceId = STATE.sources[0].id;
+        if(!STATE.compare.bSourceId) STATE.compare.bSourceId = (STATE.sources[1] || STATE.sources[0]).id;
+
+        const a = STATE.sources.find(s=>s.id===STATE.compare.aSourceId) || STATE.sources[0];
+        const b = STATE.sources.find(s=>s.id===STATE.compare.bSourceId) || STATE.sources[1] || STATE.sources[0];
+
+        const aText = normalizeText(a.text).slice(0, 4000);
+        const bText = normalizeText(b.text).slice(0, 4000);
+
+        const opts = (selId) => STATE.sources.map(s => `<option value="${esc(s.id)}" ${s.id===selId?"selected":""}>${esc(s.name)}${s.tag?(" // "+esc(s.tag)):""}</option>`).join("");
+
+        els.outBody.innerHTML = `
+          <div class="hint">Compare sources side-by-side. (Showing first ~4000 chars each.)</div>
+          <div class="box">
+            <div class="row2">
+              <div>
+                <div class="fieldLabel">A</div>
+                <select id="cmpA" style="width:100%;border:1px solid var(--hair2);background:#000;color:#fff;font-family:var(--mono);padding:10px;font-size:11px;">
+                  ${opts(a.id)}
+                </select>
+              </div>
+              <div>
+                <div class="fieldLabel">B</div>
+                <select id="cmpB" style="width:100%;border:1px solid var(--hair2);background:#000;color:#fff;font-family:var(--mono);padding:10px;font-size:11px;">
+                  ${opts(b.id)}
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <div class="frag">
+            <div class="fragHead" style="cursor:default;">
+              <div class="lhs">
+                <span class="pill">COMPARE</span>
+                <span class="pill">${esc(a.name)} vs ${esc(b.name)}</span>
+              </div>
+              <div class="pill">read</div>
+            </div>
+            <div class="fragBody" style="display:grid;grid-template-columns:1fr 1fr;">
+              <div class="fragText" style="border-right:1px solid var(--hair);">${esc(aText)}</div>
+              <div class="fragText">${esc(bText)}</div>
+            </div>
+          </div>
+        `;
+
+        $("cmpA").addEventListener("change", (e)=>{
+          STATE.compare.aSourceId = e.target.value;
+          renderOutput();
+        });
+        $("cmpB").addEventListener("change", (e)=>{
+          STATE.compare.bSourceId = e.target.value;
+          renderOutput();
+        });
+
+        return;
+      }
+    }
+
+    /* =========================
+       RENDER: sources list
+    ========================== */
+    function renderSources(){
+      els.sourcesList.innerHTML = "";
+      for(const s of STATE.sources){
+        const el = document.createElement("div");
+        el.className = "source";
+        const hasFrags = (s.fragments && s.fragments.length) ? "on" : "";
+        el.innerHTML = `
+          <div class="miniSq ${hasFrags}"></div>
+          <div class="srcName" title="${esc(s.name)}">${esc(s.name)}${s.tag ? " // " + esc(s.tag) : ""}</div>
+          <div class="tag">
+            <span style="cursor:pointer;" data-act="del">DEL</span>
+          </div>
+        `;
+        el.querySelector('[data-act="del"]').addEventListener("click", (e)=>{
+          e.stopPropagation();
+          removeSource(s.id);
+        });
+        // click selects for compare quick picks (A then B)
+        el.addEventListener("click", ()=>{
+          if(STATE.view !== "COMPARE") setView("COMPARE");
+          if(!STATE.compare.aSourceId || STATE.compare.aSourceId === s.id){
+            STATE.compare.aSourceId = s.id;
+            diag(`COMPARE A = ${s.name}`);
+          } else {
+            STATE.compare.bSourceId = s.id;
+            diag(`COMPARE B = ${s.name}`);
+          }
+          renderOutput();
+        });
+
+        els.sourcesList.appendChild(el);
+      }
+      els.srcMeta.textContent = `${STATE.sources.length} sources`;
+    }
+
+    /* =========================
+       RENDER: assembly list
+    ========================== */
+    function renderAssembly(){
+      els.assemblyList.innerHTML = "";
+      const items = STATE.assembly.map((id, idx)=>{
+        const f = STATE.fragments.find(x=>x.id===id);
+        if(!f) return null;
+        const s = STATE.sources.find(x=>x.id===f.sourceId);
+        const name = s ? s.name : "source";
+        const el = document.createElement("div");
+        el.className = "source";
+        el.dataset.idx = String(idx);
+        el.innerHTML = `
+          <div class="miniSq on"></div>
+          <div class="srcName" title="${esc(f.title)}">${esc(name)} :: ${esc(f.kind)} :: ${esc(f.title)}</div>
+          <div class="tag"><span data-act="rm" style="cursor:pointer;">RM</span></div>
+        `;
+        el.querySelector('[data-act="rm"]').addEventListener("click", (e)=>{
+          e.stopPropagation();
+          removeFromAssembly(idx);
+        });
+        return el;
+      }).filter(Boolean);
+
+      for(const el of items) els.assemblyList.appendChild(el);
+      enableAssemblyDnD();
+
+      els.asmMeta.textContent = `${STATE.assembly.length} selected`;
+    }
+
+    function renderAll(){
+      renderSources();
+      renderAssembly();
+      renderOutput();
+    }
+
+    /* =========================
+       TOP ACTIONS
+    ========================== */
+    els.saveSourceBtn.addEventListener("click", addSourceFromInputs);
+
+    els.addSourceBtn.addEventListener("click", ()=>{
+      els.sourceName.focus();
+      diag("Add a source: name + paste response + save.");
+      status("ADD SOURCE.");
+    });
+
+    els.parseBtn.addEventListener("click", parseAll);
+
+    els.buildBtn.addEventListener("click", ()=>{
+      setView("ASSEMBLED");
+      renderOutput();
+      diag("Built output from assembly.");
+      status("BUILT.");
+    });
+
+    els.clearAsmBtn.addEventListener("click", clearAssembly);
+
+    els.clearBtn.addEventListener("click", ()=>{
+      STATE.prompt = "";
+      STATE.sources = [];
+      STATE.fragments = [];
+      STATE.assembly = [];
+      STATE.view = "ASSEMBLED";
+      STATE.compare = { aSourceId:null, bSourceId:null };
+
+      els.promptInput.value = "";
+      els.sourceName.value = "";
+      els.sourceTag.value = "";
+      els.sourceText.value = "";
+      els.systemRules.value = "";
+      els.references.value = "";
+
+      renderAll();
+      diag("READY.");
+      status("CLEARED.");
+    });
+
+    /* =========================
+       COPY / DOWNLOAD OUTPUT
+    ========================== */
+    async function copyOutput(){
+      const out = buildOutputText();
+      try{
+        await navigator.clipboard.writeText(out);
+        status("COPIED OUTPUT.");
+      }catch{
+        status("COPY FAILED (clipboard blocked).");
+      }
+    }
+    els.copyOutBtn.addEventListener("click", copyOutput);
+
+    function downloadOutput(){
+      const out = buildOutputText();
+      const blob = new Blob([out], {type:"text/plain"});
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = `ketadata_contextified_${new Date().toISOString().replace(/[:.]/g,"-")}.txt`;
+      a.click();
+      setTimeout(()=>URL.revokeObjectURL(a.href), 2000);
+      status("DOWNLOADED .TXT");
+    }
+    els.downloadOutBtn.addEventListener("click", downloadOutput);
+
+    /* =========================
+       EXPORT JSON (full state)
+    ========================== */
+    function exportJSON(){
+      STATE.prompt = els.promptInput.value || "";
+      STATE.systemRules = els.systemRules.value || "";
+      STATE.references = els.references.value || "";
+      STATE.ketaNote = els.floatNoteText.value || "";
+
+      const out = JSON.parse(JSON.stringify(STATE));
+      out.exportedAt = new Date().toISOString();
+      out.outputText = buildOutputText();
+
+      const blob = new Blob([JSON.stringify(out, null, 2)], {type:"application/json"});
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = `ketadata_contextifier_${new Date().toISOString().replace(/[:.]/g,"-")}.json`;
+      a.click();
+      setTimeout(()=>URL.revokeObjectURL(a.href), 2000);
+      status("EXPORTED JSON.");
+    }
+    els.exportBtn.addEventListener("click", exportJSON);
+
+    /* =========================
+       TABS
+    ========================== */
+    els.tabAssembled.addEventListener("click", ()=> setView("ASSEMBLED"));
+    els.tabAllFrags.addEventListener("click", ()=> setView("ALL"));
+    els.tabCompare.addEventListener("click", ()=> setView("COMPARE"));
+
+    /* =========================
+       KETA NOTE: icon state + floating note move/resize
+    ========================== */
+    let noteVisible = true;
+    function setNoteIconState(){ els.noteIconSq.classList.toggle("filled", !noteVisible); }
+    function showNote(){ noteVisible=true; els.floatNote.classList.remove("hidden"); setNoteIconState(); status("KETA NOTE ON."); }
+    function hideNote(){ noteVisible=false; els.floatNote.classList.add("hidden"); setNoteIconState(); status("KETA NOTE COLLAPSED."); }
+    function toggleNote(){ noteVisible ? hideNote() : showNote(); }
+
+    els.noteIconBtn.addEventListener("click", toggleNote);
+    els.noteCloseBtn.addEventListener("click", hideNote);
+    els.noteMinBtn.addEventListener("click", hideNote);
+
+    // Drag move
+    (function(){
+      let dragging=false, startX=0, startY=0, startLeft=0, startTop=0;
+      els.floatNoteHead.addEventListener("mousedown", (e)=>{
+        if(e.target === els.noteCloseBtn || e.target === els.noteMinBtn) return;
+        dragging=true;
+        const r=els.floatNote.getBoundingClientRect();
+        startLeft=r.left; startTop=r.top;
+        startX=e.clientX; startY=e.clientY;
+        document.addEventListener("mousemove", onMove);
+        document.addEventListener("mouseup", onUp);
+        e.preventDefault();
+      });
+      function onMove(e){
+        if(!dragging) return;
+        els.floatNote.style.left = (startLeft + (e.clientX-startX)) + "px";
+        els.floatNote.style.top  = (startTop  + (e.clientY-startY)) + "px";
+      }
+      function onUp(){
+        dragging=false;
+        document.removeEventListener("mousemove", onMove);
+        document.removeEventListener("mouseup", onUp);
+      }
+    })();
+
+    // Resize
+    (function(){
+      let resizing=false, startX=0, startY=0, startW=0, startH=0;
+      els.floatResizer.addEventListener("mousedown", (e)=>{
+        e.preventDefault();
+        resizing=true;
+        const r=els.floatNote.getBoundingClientRect();
+        startW=r.width; startH=r.height;
+        startX=e.clientX; startY=e.clientY;
+        document.addEventListener("mousemove", onResize);
+        document.addEventListener("mouseup", onUp);
+      });
+      function onResize(e){
+        if(!resizing) return;
+        els.floatNote.style.width = Math.max(240, startW + (e.clientX-startX)) + "px";
+        els.floatNote.style.height= Math.max(160, startH + (e.clientY-startY)) + "px";
+      }
+      function onUp(){
+        resizing=false;
+        document.removeEventListener("mousemove", onResize);
+        document.removeEventListener("mouseup", onUp);
+      }
+    })();
+
+    /* =========================
+       SPLITTERS
+    ========================== */
+    function setCSSVar(name, px){ document.documentElement.style.setProperty(name, px + "px"); }
+    function clamp(n,a,b){ return Math.max(a, Math.min(b,n)); }
+
+    (function wireSplitters(){
+      wireV(els.splitV1, (dx, start)=> setCSSVar("--leftW", clamp(start + dx, 300, 760)),
+            ()=> parseInt(getComputedStyle(document.documentElement).getPropertyValue("--leftW")));
+
+      wireV(els.splitV2, (dx, start)=> setCSSVar("--rightW", clamp(start - dx, 320, 820)),
+            ()=> parseInt(getComputedStyle(document.documentElement).getPropertyValue("--rightW")));
+
+      wireH(els.splitH, (dy, start)=> setCSSVar("--bottomH", clamp(start - dy, 120, 420)),
+            ()=> parseInt(getComputedStyle(document.documentElement).getPropertyValue("--bottomH")));
+
+      const bottomGrid = document.querySelector(".bottomGrid");
+      wireV(els.splitV3, (dx, start)=>{
+        const total = bottomGrid.getBoundingClientRect().width - parseInt(getComputedStyle(document.documentElement).getPropertyValue("--splitter"));
+        const nextLeftPx = clamp(start + dx, 240, total - 240);
+        bottomGrid.style.gridTemplateColumns = `${nextLeftPx}px var(--splitter) 1fr`;
+      }, ()=>{
+        const leftPane = bottomGrid.children[0];
+        return leftPane.getBoundingClientRect().width;
+      });
+
+      function wireV(el, onDelta, getStart){
+        let dragging=false, startX=0, startVal=0;
+        el.addEventListener("mousedown", (e)=>{
+          dragging=true;
+          startX=e.clientX;
+          startVal=getStart();
+          document.addEventListener("mousemove", onMove);
+          document.addEventListener("mouseup", onUp);
+          e.preventDefault();
+        });
+        function onMove(e){ if(!dragging) return; onDelta(e.clientX-startX, startVal); }
+        function onUp(){
+          dragging=false;
+          document.removeEventListener("mousemove", onMove);
+          document.removeEventListener("mouseup", onUp);
+        }
+      }
+      function wireH(el, onDelta, getStart){
+        let dragging=false, startY=0, startVal=0;
+        el.addEventListener("mousedown", (e)=>{
+          dragging=true;
+          startY=e.clientY;
+          startVal=getStart();
+          document.addEventListener("mousemove", onMove);
+          document.addEventListener("mouseup", onUp);
+          e.preventDefault();
+        });
+        function onMove(e){ if(!dragging) return; onDelta(e.clientY-startY, startVal); }
+        function onUp(){
+          dragging=false;
+          document.removeEventListener("mousemove", onMove);
+          document.removeEventListener("mouseup", onUp);
+        }
+      }
+    })();
+
+    /* =========================
+       KEYBOARD
+    ========================== */
+    document.addEventListener("keydown", (e)=>{
+      const tag = (document.activeElement?.tagName || "").toLowerCase();
+      const typing = (tag === "textarea" || tag === "input" || tag === "select");
+
+      if(e.key.toLowerCase() === "n") toggleNote();
+      if(e.key.toLowerCase() === "p" && !typing){ parseAll(); }
+      if(e.key.toLowerCase() === "b" && !typing){ els.buildBtn.click(); }
+      if(e.key.toLowerCase() === "e" && !typing){ exportJSON(); }
+      if(e.key === "Escape" && !typing){ /* soft clear selection (assembly untouched) */
+        status("READY.");
+      }
+    });
+
+    /* =========================
+       BOOT
+    ========================== */
+    (function boot(){
+      setNoteIconState();
+      renderAll();
+      setView("ASSEMBLED");
+      diag("READY. Add sources, then PARSE.");
+      status("READY.");
+    })();
+  </script>
+</body>
+</html>
