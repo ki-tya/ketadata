@@ -1,0 +1,1557 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>KETADATA // NAME UNIFIER + HTML EDITOR</title>
+
+  <!-- =========================================================
+       AESTHETIC (SAFE TO EDIT)
+       - Black, sharp edges, no rounding.
+       - Do NOT rename IDs used in JS.
+  ========================================================== -->
+  <style>
+    :root{
+      --bg:#000;
+      --ink:#fff;
+      --muted:#a8a8a8;
+      --hair:#1b1b1b;
+      --hair2:#2a2a2a;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      --sans: Arial, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, sans-serif;
+
+      --topH:52px;
+      --bottomH:160px;
+      --leftW:420px;
+      --rightW:520px;
+      --splitter:8px;
+    }
+
+    *{ box-sizing:border-box; }
+    html,body{ height:100%; }
+    body{
+      margin:0;
+      background:var(--bg);
+      color:var(--ink);
+      font-family:var(--sans);
+      overflow:hidden;
+    }
+
+    header{
+      height:var(--topH);
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      padding:0 12px;
+      border-bottom:1px solid var(--hair);
+      background:#000;
+    }
+    .brand{
+      display:flex; flex-direction:column; line-height:1.05;
+      user-select:none;
+    }
+    .brand .top{
+      font-weight:700;
+      letter-spacing:.14em;
+      font-size:12px;
+    }
+    .brand .sub{
+      font-family:var(--mono);
+      font-size:10px;
+      color:var(--muted);
+      letter-spacing:.08em;
+      margin-top:2px;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      max-width:70vw;
+    }
+
+    .topActions{ display:flex; align-items:center; gap:10px; }
+
+    .btn{
+      border:1px solid var(--hair2);
+      background:#000;
+      color:var(--ink);
+      padding:7px 10px;
+      font-size:11px;
+      font-family:var(--mono);
+      letter-spacing:.06em;
+      cursor:pointer;
+      user-select:none;
+      white-space:nowrap;
+    }
+    .btn:hover{ border-color:#3b3b3b; }
+    .btn:active{ transform:translateY(1px); }
+
+    /* KETA NOTE icon */
+    .noteIconBtn{
+      width:30px; height:30px;
+      border:1px solid var(--hair2);
+      background:#000;
+      display:grid;
+      place-items:center;
+      cursor:pointer;
+      user-select:none;
+    }
+    .noteIconBtn:hover{ border-color:#3b3b3b; }
+    .sqIcon{
+      width:12px; height:12px;
+      border:1px solid #fff;
+      background:#000; /* visible note */
+    }
+    .sqIcon.filled{ background:#fff; } /* collapsed note */
+
+    /* Viewport */
+    #viewport{
+      height:calc(100% - var(--topH));
+      display:grid;
+      grid-template-columns: var(--leftW) var(--splitter) 1fr var(--splitter) var(--rightW);
+      grid-template-rows: 1fr var(--splitter) var(--bottomH);
+    }
+
+    .panel{
+      background:#000;
+      border:1px solid var(--hair);
+      overflow:hidden;
+      min-width:240px;
+      min-height:140px;
+    }
+    .panelHeader{
+      height:42px;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      padding:0 10px;
+      border-bottom:1px solid var(--hair);
+      background:#000;
+      user-select:none;
+    }
+    .panelHeader .title{
+      font-family:var(--mono);
+      font-size:11px;
+      letter-spacing:.14em;
+      color:#fff;
+      display:flex;
+      align-items:center;
+      gap:10px;
+    }
+    .panelHeader .meta{
+      font-family:var(--mono);
+      font-size:10px;
+      color:var(--muted);
+      letter-spacing:.08em;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      max-width:45%;
+      text-align:right;
+    }
+    .panelBody{
+      height:calc(100% - 42px);
+      overflow:auto;
+      padding:10px;
+    }
+
+    /* Splitters */
+    .splitV, .splitH{
+      background:#000;
+      border-left:1px solid var(--hair);
+      border-right:1px solid var(--hair);
+      position:relative;
+      cursor:col-resize;
+    }
+    .splitH{
+      border-left:none; border-right:none;
+      border-top:1px solid var(--hair);
+      border-bottom:1px solid var(--hair);
+      cursor:row-resize;
+    }
+    .splitV::after{
+      content:"";
+      position:absolute;
+      left:50%; top:8px; bottom:8px;
+      width:2px; transform:translateX(-50%);
+      background:var(--hair2);
+    }
+    .splitH::after{
+      content:"";
+      position:absolute;
+      top:50%; left:8px; right:8px;
+      height:2px; transform:translateY(-50%);
+      background:var(--hair2);
+    }
+
+    /* Library list */
+    .hint{
+      font-family:var(--mono);
+      font-size:10px;
+      color:var(--muted);
+      letter-spacing:.06em;
+      line-height:1.35;
+      margin-bottom:10px;
+    }
+    .row{
+      display:grid;
+      grid-template-columns: 12px 1fr auto;
+      gap:10px;
+      align-items:center;
+      padding:8px 8px;
+      border:1px solid var(--hair);
+      cursor:pointer;
+      user-select:none;
+    }
+    .row:hover{ border-color:#3b3b3b; }
+    .miniSq{ width:10px; height:10px; border:1px solid #fff; background:#000; }
+    .label{
+      font-family:var(--mono);
+      font-size:11px;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      white-space:nowrap;
+    }
+    .tag{
+      font-family:var(--mono);
+      font-size:10px;
+      color:var(--muted);
+      border:1px solid var(--hair2);
+      padding:2px 6px;
+      white-space:nowrap;
+    }
+    .search{
+      width:100%;
+      border:1px solid var(--hair2);
+      background:#000;
+      color:#fff;
+      font-family:var(--mono);
+      font-size:11px;
+      padding:10px;
+      outline:none;
+      margin-bottom:10px;
+    }
+    .fileDrop{
+      border:1px dashed var(--hair2);
+      padding:10px;
+      min-height:64px;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      text-align:center;
+      font-family:var(--mono);
+      font-size:10px;
+      color:var(--muted);
+      letter-spacing:.08em;
+      margin-bottom:10px;
+    }
+    .fileDrop.dragover{
+      border-style:solid;
+      color:#fff;
+    }
+
+    /* Center preview */
+    .seg{
+      font-family:var(--mono);
+      font-size:10px;
+      border:1px solid var(--hair2);
+      padding:4px 8px;
+      color:var(--muted);
+      letter-spacing:.06em;
+      max-width:320px;
+      overflow:hidden;
+      white-space:nowrap;
+      text-overflow:ellipsis;
+    }
+    .centerTop{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      padding:10px;
+      border-bottom:1px solid var(--hair);
+    }
+    .centerTop .left{
+      display:flex;
+      flex-direction:column;
+      gap:2px;
+      min-width:0;
+    }
+    .centerTop .t{
+      font-family:var(--mono);
+      font-size:11px;
+      letter-spacing:.14em;
+    }
+    .centerTop .s{
+      font-family:var(--mono);
+      font-size:10px;
+      color:var(--muted);
+      letter-spacing:.08em;
+      overflow:hidden;
+      white-space:nowrap;
+      text-overflow:ellipsis;
+    }
+    .centerTop .right{ display:flex; align-items:center; gap:8px; flex:0 0 auto; }
+    .previewWrap{
+      height:calc(100% - 52px);
+      padding:12px;
+      overflow:auto;
+    }
+    .iframeBox{
+      border:1px solid var(--hair);
+      height:100%;
+      min-height:520px;
+      background:#000;
+    }
+    #previewFrame{
+      width:100%;
+      height:100%;
+      border:0;
+      background:#000;
+    }
+
+    /* Right editor */
+    .fieldLabel{
+      font-family:var(--mono);
+      font-size:10px;
+      color:var(--muted);
+      letter-spacing:.14em;
+      margin:0 0 6px;
+    }
+    textarea, input[type="text"]{
+      width:100%;
+      border:1px solid var(--hair2);
+      background:#000;
+      color:#fff;
+      font-family:var(--mono);
+      font-size:11px;
+      padding:10px;
+      outline:none;
+    }
+    textarea{ resize:vertical; min-height:120px; }
+    .box{
+      border:1px solid var(--hair);
+      padding:10px;
+      margin-bottom:10px;
+    }
+    .grid2{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap:10px;
+    }
+    .small{
+      font-family:var(--mono);
+      font-size:10px;
+      color:var(--muted);
+      line-height:1.35;
+    }
+
+    /* Diff/Stage indicators */
+    .chip{
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+      font-family:var(--mono);
+      font-size:10px;
+      letter-spacing:.06em;
+      border:1px solid var(--hair2);
+      padding:4px 8px;
+      color:var(--muted);
+      white-space:nowrap;
+    }
+    .dot{
+      width:8px; height:8px; border:1px solid #fff; background:#000;
+    }
+    .dot.on{ background:#fff; } /* staged changes exist */
+
+    /* Bottom */
+    .bottomGrid{
+      height:100%;
+      display:grid;
+      grid-template-columns: 1fr var(--splitter) 1fr;
+    }
+    .bottomHint{
+      padding:10px;
+      border-top:1px solid var(--hair);
+      font-family:var(--mono);
+      font-size:10px;
+      color:var(--muted);
+      letter-spacing:.06em;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+    }
+    .kbd{
+      border:1px solid var(--hair2);
+      padding:2px 6px;
+      font-family:var(--mono);
+      color:#fff;
+    }
+
+    /* Floating Keta Note */
+    #floatNote{
+      position:fixed;
+      top:76px;
+      left:24px;
+      width:360px;
+      height:240px;
+      border:1px solid #fff;
+      background:#000;
+      z-index:50;
+      display:flex;
+      flex-direction:column;
+    }
+    #floatNote.hidden{ display:none; }
+    #floatNoteHead{
+      height:38px;
+      border-bottom:1px solid var(--hair);
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      padding:0 10px;
+      cursor:move;
+      user-select:none;
+      font-family:var(--mono);
+      font-size:11px;
+      letter-spacing:.12em;
+    }
+    #floatNoteHead .left{ display:flex; align-items:center; gap:10px; }
+    #floatNoteHead .right{ display:flex; gap:8px; }
+    .iconBtn{
+      width:26px; height:26px;
+      border:1px solid var(--hair2);
+      display:grid;
+      place-items:center;
+      font-family:var(--mono);
+      font-size:12px;
+      cursor:pointer;
+      user-select:none;
+      background:#000;
+      color:#fff;
+    }
+    .iconBtn:hover{ border-color:#3b3b3b; }
+    #floatNoteBody{ padding:10px; height:100%; }
+    #floatNoteText{ height:100%; resize:none; }
+    #floatResizer{
+      position:absolute;
+      right:2px; bottom:2px;
+      width:14px; height:14px;
+      border:1px solid var(--hair2);
+      cursor:nwse-resize;
+    }
+
+    /* Scrollbars */
+    ::-webkit-scrollbar{ width:10px; height:10px; }
+    ::-webkit-scrollbar-thumb{ background:#222; border:2px solid #000; }
+    ::-webkit-scrollbar-track{ background:#000; }
+  </style>
+</head>
+
+<body>
+  <!-- =========================================================
+       WIRING (DO NOT RENAME IDs)
+       TOP BAR: includes KETA NOTE icon
+  ========================================================== -->
+  <header>
+    <div class="brand">
+      <div class="top">KETADATA</div>
+      <div class="sub">NAME UNIFIER + HTML EDITOR // STAGE → APPLY // EXPORT HTML TO GIT</div>
+    </div>
+
+    <div class="topActions">
+      <div class="noteIconBtn" id="noteIconBtn" title="Toggle KETA NOTE (N)">
+        <div class="sqIcon" id="noteIconSq"></div>
+      </div>
+
+      <label class="btn" style="cursor:pointer;">
+        <input id="multiInput" type="file" accept=".html,.htm,text/html" multiple style="display:none;">
+        IMPORT HTML
+      </label>
+
+      <button class="btn" id="applyBtn">APPLY STAGED</button>
+      <button class="btn" id="exportBtn">EXPORT (JSON + HTML ZIP)</button>
+      <button class="btn" id="clearBtn">CLEAR</button>
+    </div>
+  </header>
+
+  <div id="viewport">
+    <!-- LEFT: library -->
+    <section class="panel" id="leftPanel" style="grid-column:1;grid-row:1;">
+      <div class="panelHeader">
+        <div class="title">PAGES</div>
+        <div class="meta" id="libMeta">0 loaded</div>
+      </div>
+      <div class="panelBody">
+        <div class="hint">
+          Import many HTML files. Select a page to inspect extracted UI text candidates and stage edits.
+          Staged edits do not touch the HTML until APPLY.
+        </div>
+
+        <div class="fileDrop" id="dropZone">DROP HTML FILES HERE</div>
+        <input class="search" id="search" placeholder="search by filename / title / h1 ..." />
+
+        <div id="pageList"></div>
+      </div>
+    </section>
+
+    <div class="splitV" id="splitV1" style="grid-column:2;grid-row:1;"></div>
+
+    <!-- CENTER: preview -->
+    <section class="panel" id="centerPanel" style="grid-column:3;grid-row:1;">
+      <div class="centerTop">
+        <div class="left">
+          <div class="t" id="selTitle">PREVIEW</div>
+          <div class="s" id="selSub">— no selection</div>
+        </div>
+        <div class="right">
+          <div class="chip" title="Staged edits indicator">
+            <div class="dot" id="stageDot"></div>
+            <div id="stageLabel">no staged edits</div>
+          </div>
+          <div class="seg" id="selMeta">—</div>
+          <button class="btn" id="refreshPreviewBtn">REFRESH PREVIEW</button>
+        </div>
+      </div>
+      <div class="previewWrap">
+        <div class="iframeBox">
+          <iframe id="previewFrame" sandbox="allow-same-origin allow-forms allow-scripts"></iframe>
+        </div>
+      </div>
+    </section>
+
+    <div class="splitV" id="splitV2" style="grid-column:4;grid-row:1;"></div>
+
+    <!-- RIGHT: editor -->
+    <aside class="panel" id="rightPanel" style="grid-column:5;grid-row:1;">
+      <div class="panelHeader">
+        <div class="title">EDITOR</div>
+        <div class="meta">EXTRACT → STAGE → APPLY</div>
+      </div>
+      <div class="panelBody">
+        <div class="box">
+          <div class="fieldLabel">EXTRACTED FIELDS (STAGE EDITS)</div>
+          <div class="grid2">
+            <div>
+              <div class="fieldLabel">TITLE (document.title)</div>
+              <input type="text" id="fTitle" placeholder="—" />
+            </div>
+            <div>
+              <div class="fieldLabel">META DESCRIPTION</div>
+              <input type="text" id="fDesc" placeholder="optional" />
+            </div>
+          </div>
+
+          <div style="height:10px"></div>
+
+          <div class="grid2">
+            <div>
+              <div class="fieldLabel">H1 (first)</div>
+              <input type="text" id="fH1" placeholder="—" />
+            </div>
+            <div>
+              <div class="fieldLabel">SUB-HEADING (best guess)</div>
+              <input type="text" id="fSub" placeholder="—" />
+            </div>
+          </div>
+
+          <div style="height:10px"></div>
+
+          <div class="fieldLabel">OTHER UI TEXT (CANDIDATES)</div>
+          <textarea id="fOther" placeholder="Auto-populated list. Edit if you want to override (optional)."></textarea>
+
+          <div class="small" style="margin-top:8px;">
+            Apply rules: Title updates &lt;title&gt;. H1/sub updates the matched elements (tracked as selectors). “Other UI” is advisory by default (not auto-applied).
+          </div>
+        </div>
+
+        <div class="box">
+          <div class="fieldLabel">STAGED PATCH (READONLY)</div>
+          <textarea id="patchView" readonly></textarea>
+        </div>
+
+        <div class="box">
+          <div class="fieldLabel">DIAGNOSTICS</div>
+          <div class="small" id="diag">READY.</div>
+        </div>
+      </div>
+    </aside>
+
+    <div class="splitH" id="splitH" style="grid-column:1 / span 5; grid-row:2;"></div>
+
+    <!-- BOTTOM: system rules + references -->
+    <section class="panel" id="bottomPanel" style="grid-column:1 / span 5; grid-row:3;">
+      <div class="panelHeader">
+        <div class="title">SYSTEM RULES</div>
+        <div class="meta">GLOBAL LAWS + REFERENCES</div>
+      </div>
+
+      <div class="panelBody" style="padding:0;">
+        <div class="bottomGrid" style="height:calc(100% - 42px);">
+          <div class="panelBody" style="grid-column:1; padding:10px;">
+            <div class="fieldLabel">SYSTEM-WIDE LAWS / NAMING CONVENTIONS</div>
+            <textarea id="systemRules" placeholder="Rules for titles/headers/subheads. Example: KETADATA — {ROOM} // {FUNCTION} // {MODE}. NO EMOJIS. ALL CAPS optional."></textarea>
+          </div>
+
+          <div class="splitV" id="splitV3" style="grid-column:2;"></div>
+
+          <div class="panelBody" style="grid-column:3; padding:10px;">
+            <div class="fieldLabel">REFERENCES / STYLE PRECEDENTS</div>
+            <textarea id="references" placeholder="Reference pages, canonical copy blocks, precedent titles, and constraints."></textarea>
+          </div>
+        </div>
+
+        <div class="bottomHint">
+          <div>
+            Keys: <span class="kbd">N</span> toggle KETA NOTE · <span class="kbd">↑/↓</span> select page · <span class="kbd">Ctrl/⌘ + S</span> stage patch · <span class="kbd">Ctrl/⌘ + Enter</span> apply patch
+          </div>
+          <div id="status">READY.</div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- Floating Keta Note -->
+  <div id="floatNote">
+    <div id="floatNoteHead">
+      <div class="left">
+        <div class="miniSq" aria-hidden="true"></div>
+        <div>KETA NOTE</div>
+      </div>
+      <div class="right">
+        <div class="iconBtn" id="noteMinBtn" title="collapse">–</div>
+        <div class="iconBtn" id="noteCloseBtn" title="hide">×</div>
+      </div>
+    </div>
+    <div id="floatNoteBody">
+      <textarea id="floatNoteText" placeholder="SYSTEM NOTE // decisions, constraints, next actions"></textarea>
+    </div>
+    <div id="floatResizer" title="resize"></div>
+  </div>
+
+  <!-- =========================================================
+       ENGINE (FUNCTIONAL LOGIC)
+       - Multi-import HTML
+       - Extract title/h1/sub/meta + UI text candidates
+       - Stage patches (selectors + before/after)
+       - Apply patches to HTML (in-memory)
+       - Export JSON + HTML ZIP (ready for git)
+       - Preview via iframe srcdoc
+       - Keta note icon + floating note move/resize
+       - Adjustable panels
+  ========================================================== -->
+  <script>
+    /* =========================
+       WIRING
+    ========================== */
+    const $ = (id) => document.getElementById(id);
+    const els = {
+      // top
+      noteIconBtn: $("noteIconBtn"),
+      noteIconSq: $("noteIconSq"),
+      multiInput: $("multiInput"),
+      applyBtn: $("applyBtn"),
+      exportBtn: $("exportBtn"),
+      clearBtn: $("clearBtn"),
+
+      // left
+      dropZone: $("dropZone"),
+      search: $("search"),
+      pageList: $("pageList"),
+      libMeta: $("libMeta"),
+
+      // center
+      selTitle: $("selTitle"),
+      selSub: $("selSub"),
+      selMeta: $("selMeta"),
+      previewFrame: $("previewFrame"),
+      refreshPreviewBtn: $("refreshPreviewBtn"),
+      stageDot: $("stageDot"),
+      stageLabel: $("stageLabel"),
+
+      // right
+      fTitle: $("fTitle"),
+      fDesc: $("fDesc"),
+      fH1: $("fH1"),
+      fSub: $("fSub"),
+      fOther: $("fOther"),
+      patchView: $("patchView"),
+      diag: $("diag"),
+
+      // bottom
+      systemRules: $("systemRules"),
+      references: $("references"),
+      status: $("status"),
+
+      // floating note
+      floatNote: $("floatNote"),
+      floatNoteHead: $("floatNoteHead"),
+      floatNoteText: $("floatNoteText"),
+      noteMinBtn: $("noteMinBtn"),
+      noteCloseBtn: $("noteCloseBtn"),
+      floatResizer: $("floatResizer"),
+
+      // splitters
+      splitV1: $("splitV1"),
+      splitV2: $("splitV2"),
+      splitV3: $("splitV3"),
+      splitH: $("splitH"),
+    };
+    function assertWiring(){
+      const missing = Object.entries(els).filter(([k,v]) => !v).map(([k])=>k);
+      if(missing.length){
+        document.body.innerHTML =
+          "<pre style='padding:16px;font-family:monospace;color:#fff;background:#000'>WIRING ERROR: Missing IDs:\\n" +
+          missing.join("\\n") + "</pre>";
+        throw new Error("Missing IDs: " + missing.join(", "));
+      }
+    }
+    assertWiring();
+
+    function diag(msg){ els.diag.textContent = msg || "—"; }
+    function status(msg){ els.status.textContent = msg || "—"; }
+
+    /* =========================
+       STATE
+    ========================== */
+    const uid = () => Math.random().toString(16).slice(2) + "-" + Date.now().toString(16);
+
+    const STATE = {
+      version: "ketadata-name-unifier-v1",
+      createdAt: new Date().toISOString(),
+      systemRules: "",
+      references: "",
+      ketaNote: "",
+      pages: [], // {id, filename, originalHtml, html, extracted, patch, appliedAt?}
+      selectionId: null
+    };
+
+    function getSel(){
+      return STATE.pages.find(p => p.id === STATE.selectionId) || null;
+    }
+
+    /* =========================
+       EXTRACTION ENGINE
+       - Parses HTML into DOM
+       - Picks: title, meta description, first h1, subheading guess
+       - Collects UI text candidates: nav/button/label headings etc (short strings)
+       - Produces selectors to patch reliably
+    ========================== */
+
+    function parseHTML(html){
+      const parser = new DOMParser();
+      return parser.parseFromString(html, "text/html");
+    }
+
+    function cssPath(el){
+      // stable-ish selector: prefer id, else tag + nth-of-type chain up to body
+      if(!el || !el.tagName) return null;
+      if(el.id) return `#${CSS.escape(el.id)}`;
+
+      const parts = [];
+      let node = el;
+      while(node && node.nodeType === 1 && node.tagName.toLowerCase() !== "html"){
+        const tag = node.tagName.toLowerCase();
+        if(node.id){
+          parts.unshift(`#${CSS.escape(node.id)}`);
+          break;
+        }
+        const parent = node.parentElement;
+        if(!parent) { parts.unshift(tag); break; }
+        const siblings = Array.from(parent.children).filter(c => c.tagName === node.tagName);
+        if(siblings.length > 1){
+          const idx = siblings.indexOf(node) + 1;
+          parts.unshift(`${tag}:nth-of-type(${idx})`);
+        } else {
+          parts.unshift(tag);
+        }
+        if(tag === "body") break;
+        node = parent;
+      }
+      return parts.join(" > ");
+    }
+
+    function textNorm(s){
+      return (s||"").replace(/\s+/g," ").trim();
+    }
+
+    function isVisibleUIElement(el){
+      // heuristic: ignore script/style/meta/link/svg and hidden inputs
+      const tag = el.tagName?.toLowerCase();
+      if(!tag) return false;
+      if(["script","style","meta","link","noscript"].includes(tag)) return false;
+      if(tag === "input" && (el.type || "").toLowerCase() === "hidden") return false;
+      return true;
+    }
+
+    function getSubheadingCandidate(doc, h1El){
+      // Priority:
+      // 1) next heading (h2) near first h1
+      // 2) element with class containing sub/desc/tagline
+      // 3) first paragraph near top
+      if(h1El){
+        // nearest following h2
+        let n = h1El.nextElementSibling;
+        while(n && textNorm(n.textContent).length === 0) n = n.nextElementSibling;
+        if(n && ["h2","p"].includes(n.tagName.toLowerCase())){
+          const t = textNorm(n.textContent);
+          if(t && t.length <= 120) return { el:n, text:t };
+        }
+        // any h2 in same section
+        const h2 = h1El.parentElement?.querySelector?.("h2");
+        if(h2){
+          const t = textNorm(h2.textContent);
+          if(t && t.length <= 120) return { el:h2, text:t };
+        }
+      }
+
+      const tagged = doc.querySelector("[class*='sub'],[class*='tagline'],[class*='subtitle'],[id*='sub'],[id*='tagline']");
+      if(tagged){
+        const t = textNorm(tagged.textContent);
+        if(t && t.length <= 140) return { el:tagged, text:t };
+      }
+
+      const p = doc.querySelector("main p, .content p, body p");
+      if(p){
+        const t = textNorm(p.textContent);
+        if(t && t.length <= 140) return { el:p, text:t };
+      }
+      return { el:null, text:"" };
+    }
+
+    function extractFields(html){
+      const doc = parseHTML(html);
+
+      const title = textNorm(doc.title || "");
+      const metaDescEl = doc.querySelector("meta[name='description'],meta[property='og:description']");
+      const metaDesc = textNorm(metaDescEl?.getAttribute("content") || "");
+
+      const h1El = doc.querySelector("h1");
+      const h1 = textNorm(h1El?.textContent || "");
+
+      const sub = getSubheadingCandidate(doc, h1El);
+      const subText = sub.text || "";
+
+      // UI text candidates: headings/buttons/labels/nav items
+      const candidates = [];
+      const seen = new Set();
+
+      const nodes = Array.from(doc.querySelectorAll("h1,h2,h3,button,a,nav,header,label,summary,[role='button']"));
+      for(const el of nodes){
+        if(!isVisibleUIElement(el)) continue;
+        const t = textNorm(el.textContent);
+        if(!t) continue;
+        if(t.length < 2 || t.length > 80) continue;
+        // skip if purely punctuation
+        if(!/[A-Za-z0-9]/.test(t)) continue;
+
+        const key = t.toLowerCase();
+        if(seen.has(key)) continue;
+        seen.add(key);
+
+        candidates.push({
+          text: t,
+          tag: el.tagName.toLowerCase(),
+          selector: cssPath(el)
+        });
+        if(candidates.length >= 50) break;
+      }
+
+      // patch anchors: we store selectors for title/h1/sub/meta
+      const anchors = {
+        title: { kind:"title", selector:"title", before:title },
+        metaDesc: metaDescEl ? { kind:"meta", selector: "meta[name='description'],meta[property='og:description']", before:metaDesc } : null,
+        h1: h1El ? { kind:"text", selector: cssPath(h1El), before:h1 } : null,
+        sub: sub.el ? { kind:"text", selector: cssPath(sub.el), before:subText } : null
+      };
+
+      return {
+        title,
+        metaDesc,
+        h1,
+        sub: subText,
+        anchors,
+        candidates
+      };
+    }
+
+    /* =========================
+       PATCH ENGINE
+       - Stage edits for a selected page
+       - Patch stores: {title?, metaDesc?, h1?, sub?, anchors, notes}
+       - Apply modifies DOM and serializes back to HTML
+    ========================== */
+    function makeEmptyPatch(extracted){
+      return {
+        stagedAt: null,
+        edits: {
+          title: extracted.title || "",
+          metaDesc: extracted.metaDesc || "",
+          h1: extracted.h1 || "",
+          sub: extracted.sub || ""
+        },
+        anchors: extracted.anchors,
+        otherCandidates: extracted.candidates,
+        advisoryOtherText: "" // user can override notes list; not auto-applied
+      };
+    }
+
+    function computePatchDiff(page){
+      const ex = page.extracted;
+      const ed = page.patch?.edits;
+      if(!ex || !ed) return { changed:false, diff:{} };
+
+      const diff = {};
+      const keys = ["title","metaDesc","h1","sub"];
+      let changed = false;
+      for(const k of keys){
+        const a = (ex[k] || "");
+        const b = (ed[k] || "");
+        if(a !== b){
+          changed = true;
+          diff[k] = { before:a, after:b };
+        }
+      }
+      return { changed, diff };
+    }
+
+    function serializeHTML(doc){
+      // Preserve doctype if present (best effort)
+      const doctype = doc.doctype ? `<!doctype ${doc.doctype.name}>` : "<!doctype html>";
+      return doctype + "\n" + doc.documentElement.outerHTML;
+    }
+
+    function applyPatchToHTML(html, patch){
+      const doc = parseHTML(html);
+
+      // TITLE
+      if(typeof patch.edits.title === "string"){
+        doc.title = patch.edits.title;
+      }
+
+      // META DESC (ensure one exists if user sets it)
+      if(patch.edits.metaDesc && patch.edits.metaDesc.trim().length){
+        let meta = doc.querySelector("meta[name='description']");
+        if(!meta){
+          meta = doc.createElement("meta");
+          meta.setAttribute("name","description");
+          doc.head.appendChild(meta);
+        }
+        meta.setAttribute("content", patch.edits.metaDesc.trim());
+      }
+
+      // H1 via selector anchor if available
+      if(patch.anchors?.h1?.selector && typeof patch.edits.h1 === "string"){
+        const el = doc.querySelector(patch.anchors.h1.selector);
+        if(el) el.textContent = patch.edits.h1;
+      }
+
+      // SUB via selector anchor if available
+      if(patch.anchors?.sub?.selector && typeof patch.edits.sub === "string"){
+        const el = doc.querySelector(patch.anchors.sub.selector);
+        if(el) el.textContent = patch.edits.sub;
+      }
+
+      return serializeHTML(doc);
+    }
+
+    /* =========================
+       RENDER: library list
+    ========================== */
+    function escapeHtml(s){
+      return (s||"").replace(/[&<>"']/g, c => ({
+        "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
+      }[c]));
+    }
+
+    function stagedCount(){
+      return STATE.pages.reduce((acc,p)=> acc + (computePatchDiff(p).changed ? 1 : 0), 0);
+    }
+
+    function updateStageIndicator(){
+      const count = stagedCount();
+      if(count > 0){
+        els.stageDot.classList.add("on");
+        els.stageLabel.textContent = `${count} staged`;
+      } else {
+        els.stageDot.classList.remove("on");
+        els.stageLabel.textContent = "no staged edits";
+      }
+    }
+
+    function renderLibrary(){
+      const q = (els.search.value || "").toLowerCase().trim();
+      els.pageList.innerHTML = "";
+
+      const filtered = STATE.pages.filter(p => {
+        const ex = p.extracted || {};
+        const hay = [p.filename, ex.title, ex.h1, ex.sub].join(" ").toLowerCase();
+        return !q || hay.includes(q);
+      });
+
+      filtered.forEach((p, idx) => {
+        const ex = p.extracted || {};
+        const diff = computePatchDiff(p).changed;
+        const row = document.createElement("div");
+        row.className = "row";
+        row.dataset.id = p.id;
+        row.innerHTML = `
+          <div class="miniSq" aria-hidden="true" style="${diff ? "background:#fff;" : ""}"></div>
+          <div class="label" title="${escapeHtml(p.filename)}">${escapeHtml(p.filename)} — ${escapeHtml(ex.title || "—")}</div>
+          <div class="tag">${diff ? "STAGED" : "OK"}</div>
+        `;
+        row.addEventListener("click", ()=> selectPage(p.id));
+        els.pageList.appendChild(row);
+      });
+
+      els.libMeta.textContent = `${STATE.pages.length} loaded`;
+      updateStageIndicator();
+    }
+
+    /* =========================
+       SELECTION + EDITOR BINDING
+    ========================== */
+    function setEditorEmpty(){
+      els.fTitle.value = "";
+      els.fDesc.value = "";
+      els.fH1.value = "";
+      els.fSub.value = "";
+      els.fOther.value = "";
+      els.patchView.value = "";
+    }
+
+    function setPreviewFor(page){
+      els.previewFrame.srcdoc = page.html || page.originalHtml || "";
+    }
+
+    function updatePatchView(page){
+      const { changed, diff } = computePatchDiff(page);
+      const obj = {
+        pageId: page.id,
+        filename: page.filename,
+        changed,
+        diff,
+        anchors: page.patch?.anchors || null,
+        advisoryOtherText: page.patch?.advisoryOtherText || ""
+      };
+      els.patchView.value = JSON.stringify(obj, null, 2);
+    }
+
+    function refreshSelectionUI(){
+      const p = getSel();
+      if(!p){
+        els.selTitle.textContent = "PREVIEW";
+        els.selSub.textContent = "— no selection";
+        els.selMeta.textContent = "—";
+        setEditorEmpty();
+        els.previewFrame.srcdoc = "";
+        updateStageIndicator();
+        return;
+      }
+
+      const ex = p.extracted;
+      els.selTitle.textContent = "PREVIEW";
+      els.selSub.textContent = p.filename;
+      els.selMeta.textContent = `ID ${p.id.slice(0,8)} // ${computePatchDiff(p).changed ? "STAGED" : "OK"}`;
+
+      // Load staged edits into editor fields
+      els.fTitle.value = p.patch.edits.title || "";
+      els.fDesc.value  = p.patch.edits.metaDesc || "";
+      els.fH1.value    = p.patch.edits.h1 || "";
+      els.fSub.value   = p.patch.edits.sub || "";
+
+      // candidates list (advisory)
+      const lines = (p.patch.otherCandidates || []).map(c => `${c.tag} :: ${c.text} :: ${c.selector}`).join("\n");
+      els.fOther.value = (p.patch.advisoryOtherText && p.patch.advisoryOtherText.trim().length)
+        ? p.patch.advisoryOtherText
+        : lines;
+
+      setPreviewFor(p);
+      updatePatchView(p);
+      updateStageIndicator();
+    }
+
+    function selectPage(id){
+      STATE.selectionId = id;
+      refreshSelectionUI();
+      status("SELECTED.");
+    }
+
+    function stageFromEditor(){
+      const p = getSel();
+      if(!p) return;
+
+      // stage edits
+      p.patch.edits.title = els.fTitle.value || "";
+      p.patch.edits.metaDesc = els.fDesc.value || "";
+      p.patch.edits.h1 = els.fH1.value || "";
+      p.patch.edits.sub = els.fSub.value || "";
+
+      // advisory other text
+      p.patch.advisoryOtherText = els.fOther.value || "";
+      p.patch.stagedAt = new Date().toISOString();
+
+      updatePatchView(p);
+      renderLibrary();
+      refreshSelectionUI();
+      status("STAGED.");
+    }
+
+    ["input","change"].forEach(ev => {
+      els.fTitle.addEventListener(ev, stageFromEditor);
+      els.fDesc.addEventListener(ev, stageFromEditor);
+      els.fH1.addEventListener(ev, stageFromEditor);
+      els.fSub.addEventListener(ev, stageFromEditor);
+      // fOther is intentionally not auto-staged on every keystroke (can be big)
+    });
+    els.fOther.addEventListener("blur", stageFromEditor);
+
+    els.refreshPreviewBtn.addEventListener("click", ()=>{
+      const p = getSel();
+      if(!p) return;
+      setPreviewFor(p);
+      status("PREVIEW REFRESHED.");
+    });
+
+    /* =========================
+       APPLY STAGED
+       - Applies patch to selected or all pages with diffs
+    ========================== */
+    function applyAllStaged(){
+      let applied = 0;
+      for(const p of STATE.pages){
+        const diff = computePatchDiff(p);
+        if(!diff.changed) continue;
+        try{
+          p.html = applyPatchToHTML(p.html || p.originalHtml, p.patch);
+          p.extracted = extractFields(p.html);
+          // rebase patch onto new extracted values (so diff resolves)
+          p.patch = makeEmptyPatch(p.extracted);
+          p.appliedAt = new Date().toISOString();
+          applied++;
+        }catch(e){
+          diag(`Apply failed for ${p.filename}: ${String(e)}`);
+        }
+      }
+      renderLibrary();
+      refreshSelectionUI();
+      status(`APPLIED: ${applied}`);
+      diag("READY.");
+    }
+
+    els.applyBtn.addEventListener("click", applyAllStaged);
+
+    /* =========================
+       IMPORT (multi)
+    ========================== */
+    async function addPageFromFile(file){
+      const filename = file.name || ("page_" + uid() + ".html");
+      const html = await file.text();
+
+      const extracted = extractFields(html);
+      const page = {
+        id: uid(),
+        filename,
+        originalHtml: html,
+        html: html,
+        extracted,
+        patch: makeEmptyPatch(extracted),
+        importedAt: new Date().toISOString()
+      };
+      STATE.pages.push(page);
+    }
+
+    async function importFiles(files){
+      const list = Array.from(files || []);
+      if(!list.length) return;
+
+      status(`IMPORTING ${list.length}…`);
+      diag("—");
+
+      for(const f of list){
+        const ext = (f.name || "").split(".").pop().toLowerCase();
+        const ok = (f.type === "text/html") || ext === "html" || ext === "htm";
+        if(!ok){
+          diag(`Skipped non-HTML: ${f.name}`);
+          continue;
+        }
+        try{
+          await addPageFromFile(f);
+        }catch(e){
+          diag(`Import failed: ${f.name} :: ${String(e)}`);
+        }
+      }
+
+      renderLibrary();
+      status("IMPORT COMPLETE.");
+
+      // auto-select first if none
+      if(!STATE.selectionId && STATE.pages.length){
+        selectPage(STATE.pages[0].id);
+      }
+    }
+
+    els.multiInput.addEventListener("change", async ()=>{
+      await importFiles(els.multiInput.files);
+      els.multiInput.value = "";
+    });
+
+    // Dropzone
+    (function wireDropZone(){
+      const dz = els.dropZone;
+
+      ["dragenter","dragover"].forEach(ev => dz.addEventListener(ev, (e)=>{
+        e.preventDefault();
+        dz.classList.add("dragover");
+        e.dataTransfer.dropEffect = "copy";
+      }));
+      ["dragleave","drop"].forEach(ev => dz.addEventListener(ev, ()=> dz.classList.remove("dragover")));
+
+      dz.addEventListener("drop", async (e)=>{
+        e.preventDefault();
+        await importFiles(e.dataTransfer.files);
+      });
+    })();
+
+    els.search.addEventListener("input", renderLibrary);
+
+    /* =========================
+       EXPORT: JSON + HTML ZIP
+       - Produces:
+         1) state.json (includes per-page patches + extracted)
+         2) /html/<filename> (final html content, post-apply or current)
+       - Uses a minimal ZIP writer (store only) for reliability.
+    ========================== */
+
+    // Minimal ZIP (STORE) builder: no compression (fast + stable)
+    function u32(n){ const b=new Uint8Array(4); b[0]=n&255; b[1]=(n>>>8)&255; b[2]=(n>>>16)&255; b[3]=(n>>>24)&255; return b; }
+    function u16(n){ const b=new Uint8Array(2); b[0]=n&255; b[1]=(n>>>8)&255; return b; }
+
+    // CRC32
+    const CRC32_TABLE = (() => {
+      const t = new Uint32Array(256);
+      for(let i=0;i<256;i++){
+        let c=i;
+        for(let k=0;k<8;k++) c = (c & 1) ? (0xEDB88320 ^ (c>>>1)) : (c>>>1);
+        t[i]=c>>>0;
+      }
+      return t;
+    })();
+    function crc32(buf){
+      let c = 0xFFFFFFFF;
+      for(let i=0;i<buf.length;i++){
+        c = CRC32_TABLE[(c ^ buf[i]) & 0xFF] ^ (c>>>8);
+      }
+      return (c ^ 0xFFFFFFFF) >>> 0;
+    }
+
+    function strToU8(s){ return new TextEncoder().encode(s); }
+
+    function zipStore(files){ // files: [{name, data(Uint8Array)}]
+      const localParts = [];
+      const centralParts = [];
+      let offset = 0;
+
+      for(const f of files){
+        const nameU8 = strToU8(f.name);
+        const dataU8 = f.data;
+        const crc = crc32(dataU8);
+        const size = dataU8.length;
+
+        // Local file header
+        const local = [];
+        local.push(u32(0x04034b50));    // signature
+        local.push(u16(20));            // version
+        local.push(u16(0));             // flags
+        local.push(u16(0));             // method 0 store
+        local.push(u16(0));             // mod time
+        local.push(u16(0));             // mod date
+        local.push(u32(crc));           // crc
+        local.push(u32(size));          // comp size
+        local.push(u32(size));          // uncomp size
+        local.push(u16(nameU8.length)); // name len
+        local.push(u16(0));             // extra len
+
+        const localBlob = concatU8(local.concat([nameU8, dataU8]));
+        localParts.push(localBlob);
+
+        // Central directory header
+        const cd = [];
+        cd.push(u32(0x02014b50));       // signature
+        cd.push(u16(20));               // ver made
+        cd.push(u16(20));               // ver needed
+        cd.push(u16(0));                // flags
+        cd.push(u16(0));                // method
+        cd.push(u16(0));                // time
+        cd.push(u16(0));                // date
+        cd.push(u32(crc));              // crc
+        cd.push(u32(size));             // comp
+        cd.push(u32(size));             // uncomp
+        cd.push(u16(nameU8.length));    // name len
+        cd.push(u16(0));                // extra
+        cd.push(u16(0));                // comment
+        cd.push(u16(0));                // disk start
+        cd.push(u16(0));                // internal attr
+        cd.push(u32(0));                // external attr
+        cd.push(u32(offset));           // local header offset
+
+        const cdBlob = concatU8(cd.concat([nameU8]));
+        centralParts.push(cdBlob);
+
+        offset += localBlob.length;
+      }
+
+      const centralStart = offset;
+      const centralBlob = concatU8(centralParts.map(u=>u));
+      offset += centralBlob.length;
+
+      // End of central dir
+      const end = [];
+      end.push(u32(0x06054b50));
+      end.push(u16(0)); // disk
+      end.push(u16(0)); // disk start
+      end.push(u16(files.length));
+      end.push(u16(files.length));
+      end.push(u32(centralBlob.length));
+      end.push(u32(centralStart));
+      end.push(u16(0)); // comment len
+
+      const endBlob = concatU8(end);
+      return new Blob([concatU8(localParts), centralBlob, endBlob], { type:"application/zip" });
+    }
+
+    function concatU8(parts){
+      // parts: array of Uint8Array
+      const flat = parts.map(p => (p instanceof Uint8Array) ? p : new Uint8Array(p));
+      const total = flat.reduce((a,b)=>a+b.length,0);
+      const out = new Uint8Array(total);
+      let o=0;
+      for(const p of flat){ out.set(p, o); o += p.length; }
+      return out;
+    }
+
+    function safeFilename(name){
+      // keep it git-friendly
+      return (name || "page.html")
+        .replace(/\\/g,"/")
+        .split("/").pop()
+        .replace(/[^\w.\-]+/g,"_")
+        .replace(/_+/g,"_");
+    }
+
+    function exportAll(){
+      // sync global fields
+      STATE.systemRules = els.systemRules.value || "";
+      STATE.references = els.references.value || "";
+      STATE.ketaNote = els.floatNoteText.value || "";
+
+      const stateExport = JSON.parse(JSON.stringify(STATE));
+      stateExport.exportedAt = new Date().toISOString();
+
+      const files = [];
+
+      // state.json
+      files.push({ name:"state.json", data: strToU8(JSON.stringify(stateExport, null, 2)) });
+
+      // html pages
+      for(const p of STATE.pages){
+        const fn = safeFilename(p.filename);
+        const html = p.html || p.originalHtml || "";
+        files.push({ name:`html/${fn}`, data: strToU8(html) });
+      }
+
+      const blob = zipStore(files);
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = `ketadata_name_unifier_export_${new Date().toISOString().replace(/[:.]/g,"-")}.zip`;
+      a.click();
+      setTimeout(()=>URL.revokeObjectURL(a.href), 2000);
+
+      status("EXPORTED ZIP.");
+    }
+
+    els.exportBtn.addEventListener("click", exportAll);
+
+    /* =========================
+       CLEAR
+    ========================== */
+    function clearAll(){
+      STATE.pages = [];
+      STATE.selectionId = null;
+      els.search.value = "";
+      els.previewFrame.srcdoc = "";
+      els.systemRules.value = "";
+      els.references.value = "";
+      diag("READY.");
+      status("CLEARED.");
+      renderLibrary();
+      refreshSelectionUI();
+    }
+    els.clearBtn.addEventListener("click", clearAll);
+
+    /* =========================
+       KETA NOTE: icon state + floating note move/resize
+    ========================== */
+    let noteVisible = true;
+    function setNoteIconState(){ els.noteIconSq.classList.toggle("filled", !noteVisible); }
+    function showNote(){ noteVisible=true; els.floatNote.classList.remove("hidden"); setNoteIconState(); status("KETA NOTE ON."); }
+    function hideNote(){ noteVisible=false; els.floatNote.classList.add("hidden"); setNoteIconState(); status("KETA NOTE COLLAPSED."); }
+    function toggleNote(){ noteVisible ? hideNote() : showNote(); }
+
+    els.noteIconBtn.addEventListener("click", toggleNote);
+    els.noteCloseBtn.addEventListener("click", hideNote);
+    els.noteMinBtn.addEventListener("click", hideNote);
+
+    // Drag move
+    (function(){
+      let dragging=false, startX=0, startY=0, startLeft=0, startTop=0;
+      els.floatNoteHead.addEventListener("mousedown", (e)=>{
+        if(e.target === els.noteCloseBtn || e.target === els.noteMinBtn) return;
+        dragging=true;
+        const r=els.floatNote.getBoundingClientRect();
+        startLeft=r.left; startTop=r.top;
+        startX=e.clientX; startY=e.clientY;
+        document.addEventListener("mousemove", onMove);
+        document.addEventListener("mouseup", onUp);
+        e.preventDefault();
+      });
+      function onMove(e){
+        if(!dragging) return;
+        els.floatNote.style.left = (startLeft + (e.clientX-startX)) + "px";
+        els.floatNote.style.top  = (startTop  + (e.clientY-startY)) + "px";
+      }
+      function onUp(){
+        dragging=false;
+        document.removeEventListener("mousemove", onMove);
+        document.removeEventListener("mouseup", onUp);
+      }
+    })();
+
+    // Resize
+    (function(){
+      let resizing=false, startX=0, startY=0, startW=0, startH=0;
+      els.floatResizer.addEventListener("mousedown", (e)=>{
+        e.preventDefault();
+        resizing=true;
+        const r=els.floatNote.getBoundingClientRect();
+        startW=r.width; startH=r.height;
+        startX=e.clientX; startY=e.clientY;
+        document.addEventListener("mousemove", onResize);
+        document.addEventListener("mouseup", onUp);
+      });
+      function onResize(e){
+        if(!resizing) return;
+        els.floatNote.style.width = Math.max(240, startW + (e.clientX-startX)) + "px";
+        els.floatNote.style.height= Math.max(160, startH + (e.clientY-startY)) + "px";
+      }
+      function onUp(){
+        resizing=false;
+        document.removeEventListener("mousemove", onResize);
+        document.removeEventListener("mouseup", onUp);
+      }
+    })();
+
+    /* =========================
+       SPLITTERS
+    ========================== */
+    function setCSSVar(name, px){ document.documentElement.style.setProperty(name, px + "px"); }
+    function clamp(n,a,b){ return Math.max(a, Math.min(b,n)); }
+
+    (function wireSplitters(){
+      wireV(els.splitV1, (dx, start)=> setCSSVar("--leftW", clamp(start + dx, 280, 700)),
+            ()=> parseInt(getComputedStyle(document.documentElement).getPropertyValue("--leftW")));
+
+      wireV(els.splitV2, (dx, start)=> setCSSVar("--rightW", clamp(start - dx, 320, 760)),
+            ()=> parseInt(getComputedStyle(document.documentElement).getPropertyValue("--rightW")));
+
+      wireH(els.splitH, (dy, start)=> setCSSVar("--bottomH", clamp(start - dy, 120, 360)),
+            ()=> parseInt(getComputedStyle(document.documentElement).getPropertyValue("--bottomH")));
+
+      const bottomGrid = document.querySelector(".bottomGrid");
+      wireV(els.splitV3, (dx, start)=>{
+        const total = bottomGrid.getBoundingClientRect().width - parseInt(getComputedStyle(document.documentElement).getPropertyValue("--splitter"));
+        const nextLeftPx = clamp(start + dx, 240, total - 240);
+        bottomGrid.style.gridTemplateColumns = `${nextLeftPx}px var(--splitter) 1fr`;
+      }, ()=>{
+        const leftPane = bottomGrid.children[0];
+        return leftPane.getBoundingClientRect().width;
+      });
+
+      function wireV(el, onDelta, getStart){
+        let dragging=false, startX=0, startVal=0;
+        el.addEventListener("mousedown", (e)=>{
+          dragging=true;
+          startX=e.clientX;
+          startVal=getStart();
+          document.addEventListener("mousemove", onMove);
+          document.addEventListener("mouseup", onUp);
+          e.preventDefault();
+        });
+        function onMove(e){ if(!dragging) return; onDelta(e.clientX-startX, startVal); }
+        function onUp(){
+          dragging=false;
+          document.removeEventListener("mousemove", onMove);
+          document.removeEventListener("mouseup", onUp);
+        }
+      }
+      function wireH(el, onDelta, getStart){
+        let dragging=false, startY=0, startVal=0;
+        el.addEventListener("mousedown", (e)=>{
+          dragging=true;
+          startY=e.clientY;
+          startVal=getStart();
+          document.addEventListener("mousemove", onMove);
+          document.addEventListener("mouseup", onUp);
+          e.preventDefault();
+        });
+        function onMove(e){ if(!dragging) return; onDelta(e.clientY-startY, startVal); }
+        function onUp(){
+          dragging=false;
+          document.removeEventListener("mousemove", onMove);
+          document.removeEventListener("mouseup", onUp);
+        }
+      }
+    })();
+
+    /* =========================
+       KEYBOARD
+    ========================== */
+    document.addEventListener("keydown", (e)=>{
+      const p = getSel();
+
+      if(e.key.toLowerCase() === "n") toggleNote();
+
+      // Up/down selection in list
+      if(e.key === "ArrowDown" || e.key === "ArrowUp"){
+        if(!STATE.pages.length) return;
+        e.preventDefault();
+        const idx = STATE.pages.findIndex(x => x.id === STATE.selectionId);
+        const next = (e.key === "ArrowDown") ? Math.min(STATE.pages.length-1, (idx < 0 ? 0 : idx+1))
+                                             : Math.max(0, (idx < 0 ? 0 : idx-1));
+        selectPage(STATE.pages[next].id);
+      }
+
+      // Ctrl/Cmd+S => stage patch (prevent browser save)
+      if((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s"){
+        e.preventDefault();
+        stageFromEditor();
+      }
+
+      // Ctrl/Cmd+Enter => apply all staged
+      if((e.ctrlKey || e.metaKey) && e.key === "Enter"){
+        e.preventDefault();
+        applyAllStaged();
+      }
+    });
+
+    /* =========================
+       BOOT
+    ========================== */
+    (function boot(){
+      setNoteIconState(); // visible => black inside
+      renderLibrary();
+      refreshSelectionUI();
+      status("READY.");
+      diag("READY. Import HTML pages.");
+    })();
+  </script>
+</body>
+</html>
