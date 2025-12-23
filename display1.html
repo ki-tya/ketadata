@@ -1,0 +1,1434 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>KETADATA // BLACK BOOK CORPUS</title>
+
+  <!-- =========================================================
+       AESTHETIC (SAFE TO EDIT)
+       - White “glass box” stage, black pages, sharp edges.
+       - Do NOT rename IDs used by the ENGINE.
+  ========================================================== -->
+  <style>
+    :root{
+      --bg:#ffffff;          /* “glass box” field */
+      --ink:#000000;
+      --muted:#4a4a4a;
+      --hair:#d9d9d9;
+      --hair2:#bdbdbd;
+
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      --sans: Arial, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, sans-serif;
+
+      --topH:56px;
+      --leftW:320px;
+      --bottomH:170px;
+      --split:8px;
+
+      /* Visual controls (ENGINE updates these) */
+      --thumbBrightness: 1;
+      --thumbContrast: 1.25;
+      --thumbSaturate: 1;
+      --thumbInvert: 1;     /* 1 = invert on (black pages) */
+      --thumbGamma: 1;
+      --pageBrightness: 1;
+      --pageContrast: 1.25;
+      --pageSaturate: 1;
+      --pageInvert: 1;
+      --pageGamma: 1;
+    }
+
+    *{ box-sizing:border-box; }
+    html,body{ height:100%; }
+    body{
+      margin:0;
+      background:var(--bg);
+      color:var(--ink);
+      font-family:var(--sans);
+      overflow:hidden;
+    }
+
+    header{
+      height:var(--topH);
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      padding:0 12px;
+      border-bottom:1px solid var(--hair);
+      background:#fff;
+    }
+
+    .brand{ display:flex; flex-direction:column; line-height:1.05; user-select:none; }
+    .brand .top{ font-weight:700; letter-spacing:.14em; font-size:12px; }
+    .brand .sub{
+      font-family:var(--mono);
+      font-size:10px;
+      color:var(--muted);
+      letter-spacing:.08em;
+      margin-top:2px;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      max-width:65vw;
+    }
+
+    .topActions{ display:flex; align-items:center; gap:10px; }
+
+    .btn{
+      border:1px solid var(--hair2);
+      background:#fff;
+      color:#000;
+      padding:7px 10px;
+      font-size:11px;
+      font-family:var(--mono);
+      letter-spacing:.06em;
+      cursor:pointer;
+      user-select:none;
+      white-space:nowrap;
+    }
+    .btn:hover{ border-color:#000; }
+    .btn:active{ transform:translateY(1px); }
+
+    /* KETA NOTE icon (top bar) */
+    .noteIconBtn{
+      width:30px; height:30px;
+      border:1px solid #000;
+      background:#fff;
+      display:grid;
+      place-items:center;
+      cursor:pointer;
+      user-select:none;
+    }
+    .sqIcon{
+      width:12px; height:12px;
+      border:1px solid #000;
+      background:#fff; /* note visible -> hollow */
+    }
+    .sqIcon.filled{ background:#000; } /* collapsed -> filled */
+
+    /* Layout */
+    #viewport{
+      height:calc(100% - var(--topH));
+      display:grid;
+      grid-template-columns: var(--leftW) var(--split) 1fr;
+      grid-template-rows: 1fr var(--split) var(--bottomH);
+    }
+
+    .splitV, .splitH{
+      background:#fff;
+      position:relative;
+      cursor:col-resize;
+    }
+    .splitV{ border-right:1px solid var(--hair); border-left:1px solid var(--hair); }
+    .splitH{ border-top:1px solid var(--hair); border-bottom:1px solid var(--hair); cursor:row-resize; grid-column:1 / span 3; }
+    .splitV::after{
+      content:"";
+      position:absolute;
+      left:50%; top:8px; bottom:8px;
+      width:2px; transform:translateX(-50%);
+      background:var(--hair2);
+    }
+    .splitH::after{
+      content:"";
+      position:absolute;
+      top:50%; left:8px; right:8px;
+      height:2px; transform:translateY(-50%);
+      background:var(--hair2);
+    }
+
+    .panel{
+      overflow:hidden;
+      background:#fff;
+      border-right:1px solid var(--hair);
+      border-bottom:1px solid var(--hair);
+    }
+
+    .panelHeader{
+      height:44px;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      padding:0 10px;
+      border-bottom:1px solid var(--hair);
+      user-select:none;
+    }
+    .panelHeader .title{
+      font-family:var(--mono);
+      font-size:11px;
+      letter-spacing:.14em;
+    }
+    .panelHeader .meta{
+      font-family:var(--mono);
+      font-size:10px;
+      color:var(--muted);
+      letter-spacing:.08em;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      max-width:60%;
+      text-align:right;
+    }
+
+    .panelBody{
+      height:calc(100% - 44px);
+      overflow:auto;
+      padding:10px;
+    }
+
+    .hint{
+      font-family:var(--mono);
+      font-size:10px;
+      color:var(--muted);
+      letter-spacing:.06em;
+      line-height:1.35;
+      margin-bottom:10px;
+    }
+
+    /* Book list */
+    #bookList{ display:flex; flex-direction:column; gap:10px; }
+    .book{
+      border:1px solid var(--hair);
+      padding:10px;
+      display:grid;
+      grid-template-columns: 72px 1fr;
+      gap:10px;
+      cursor:pointer;
+      user-select:none;
+    }
+    .book:hover{ border-color:#000; }
+    .book.selected{ border-color:#000; }
+    .bookThumbWrap{
+      width:72px; height:72px;
+      border:1px solid var(--hair2);
+      background:#fff;
+      display:grid;
+      place-items:center;
+      overflow:hidden;
+    }
+    .bookThumb{
+      width:100%; height:100%;
+      object-fit:contain; /* preserves portrait/landscape uniformly */
+      background:#fff;
+      filter:
+        invert(var(--thumbInvert))
+        brightness(var(--thumbBrightness))
+        contrast(var(--thumbContrast))
+        saturate(var(--thumbSaturate));
+    }
+    /* gamma via mix-blend trick not real gamma; kept as slider in ENGINE by contrast curve if needed later */
+
+    .bookInfo{ min-width:0; }
+    .bookName{
+      font-family:var(--mono);
+      font-size:11px;
+      letter-spacing:.10em;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+    .bookMeta{
+      font-family:var(--mono);
+      font-size:10px;
+      color:var(--muted);
+      margin-top:6px;
+      letter-spacing:.06em;
+      display:flex;
+      gap:8px;
+      flex-wrap:wrap;
+    }
+    .tag{
+      border:1px solid var(--hair2);
+      padding:2px 6px;
+      white-space:nowrap;
+    }
+
+    /* Per-book note (collapsible) */
+    .bookNoteRow{
+      margin-top:8px;
+      display:flex;
+      gap:8px;
+      align-items:center;
+    }
+    .miniBtn{
+      border:1px solid var(--hair2);
+      background:#fff;
+      font-family:var(--mono);
+      font-size:10px;
+      padding:4px 8px;
+      cursor:pointer;
+      user-select:none;
+    }
+    .miniBtn:hover{ border-color:#000; }
+    .bookNote{
+      margin-top:8px;
+      border:1px solid var(--hair2);
+      padding:8px;
+      display:none;
+    }
+    .bookNote textarea{
+      width:100%;
+      min-height:90px;
+      border:1px solid var(--hair);
+      background:#fff;
+      color:#000;
+      font-family:var(--mono);
+      font-size:11px;
+      padding:8px;
+      outline:none;
+      resize:vertical;
+    }
+
+    /* Viewer */
+    #stage{
+      display:flex;
+      flex-direction:column;
+      height:100%;
+    }
+    #stageTop{
+      height:54px;
+      border-bottom:1px solid var(--hair);
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      padding:0 12px;
+      gap:10px;
+      background:#fff;
+      user-select:none;
+    }
+    #stageTop .left{
+      display:flex;
+      flex-direction:column;
+      min-width:0;
+      gap:2px;
+    }
+    #stageTop .title{
+      font-family:var(--mono);
+      font-size:11px;
+      letter-spacing:.14em;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+    #stageTop .sub{
+      font-family:var(--mono);
+      font-size:10px;
+      color:var(--muted);
+      letter-spacing:.08em;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+    #stageTop .right{ display:flex; gap:8px; align-items:center; }
+
+    /* The square “Finder center” viewport */
+    #viewer{
+      flex:1 1 auto;
+      display:grid;
+      place-items:center;
+      padding:16px;
+      background:#fff;
+    }
+    #viewerFrame{
+      width:min(78vh, 78vw);
+      height:min(78vh, 78vw);
+      border:1px solid var(--hair2);
+      background:#fff;
+      display:grid;
+      place-items:center;
+      overflow:hidden;
+      position:relative;
+    }
+    #pageImg{
+      width:100%;
+      height:100%;
+      object-fit:contain; /* preserves dims, uniform frame */
+      background:#fff;
+      filter:
+        invert(var(--pageInvert))
+        brightness(var(--pageBrightness))
+        contrast(var(--pageContrast))
+        saturate(var(--pageSaturate));
+    }
+    #pageOverlay{
+      position:absolute;
+      top:10px; left:10px;
+      border:1px solid var(--hair2);
+      padding:4px 8px;
+      font-family:var(--mono);
+      font-size:10px;
+      letter-spacing:.10em;
+      background:#fff;
+      color:#000;
+      opacity:.92;
+    }
+
+    /* Bottom filmstrip */
+    #stripPanel{ grid-column:1 / span 3; grid-row:3; background:#fff; border-top:1px solid var(--hair); }
+    #stripHead{
+      height:44px;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      padding:0 12px;
+      border-bottom:1px solid var(--hair);
+      user-select:none;
+    }
+    #stripHead .t{ font-family:var(--mono); font-size:11px; letter-spacing:.14em; }
+    #stripHead .m{ font-family:var(--mono); font-size:10px; color:var(--muted); letter-spacing:.08em; }
+
+    #filmstrip{
+      height:calc(100% - 44px);
+      overflow-x:auto;
+      overflow-y:hidden;
+      white-space:nowrap;
+      padding:10px;
+      display:flex;
+      gap:10px;
+      align-items:center;
+      background:#fff;
+    }
+    .thumbWrap{
+      width:120px;
+      height:90px;
+      border:1px solid var(--hair2);
+      background:#fff;
+      display:grid;
+      place-items:center;
+      overflow:hidden;
+      cursor:pointer;
+      user-select:none;
+      flex:0 0 auto;
+    }
+    .thumbWrap:hover{ border-color:#000; }
+    .thumbWrap.selected{ border-color:#000; }
+    .thumb{
+      width:100%;
+      height:100%;
+      object-fit:contain; /* keeps portrait/landscape intact */
+      background:#fff;
+      filter:
+        invert(var(--thumbInvert))
+        brightness(var(--thumbBrightness))
+        contrast(var(--thumbContrast))
+        saturate(var(--thumbSaturate));
+    }
+
+    /* Collapsible controls drawer */
+    #drawer{
+      position:fixed;
+      top:calc(var(--topH) + 10px);
+      right:10px;
+      width:340px;
+      border:1px solid #000;
+      background:#fff;
+      z-index:40;
+      display:none;
+    }
+    #drawer.on{ display:block; }
+    #drawerHead{
+      height:44px;
+      border-bottom:1px solid var(--hair);
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      padding:0 10px;
+      font-family:var(--mono);
+      font-size:11px;
+      letter-spacing:.12em;
+      user-select:none;
+      cursor:move;
+    }
+    #drawerBody{ padding:10px; }
+    .ctl{
+      border:1px solid var(--hair);
+      padding:10px;
+      margin-bottom:10px;
+    }
+    .ctl .h{
+      font-family:var(--mono);
+      font-size:10px;
+      color:var(--muted);
+      letter-spacing:.14em;
+      margin-bottom:8px;
+      display:flex;
+      justify-content:space-between;
+      gap:10px;
+      align-items:center;
+    }
+    .ctl input[type="range"]{ width:100%; }
+    .row2{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+    .miniX{
+      width:26px; height:26px;
+      border:1px solid var(--hair2);
+      display:grid; place-items:center;
+      font-family:var(--mono);
+      cursor:pointer;
+      user-select:none;
+    }
+    .miniX:hover{ border-color:#000; }
+
+    /* Floating Keta Note */
+    #floatNote{
+      position:fixed;
+      top:calc(var(--topH) + 18px);
+      left:18px;
+      width:360px;
+      height:240px;
+      border:1px solid #000;
+      background:#fff;
+      z-index:50;
+      display:flex;
+      flex-direction:column;
+    }
+    #floatNote.hidden{ display:none; }
+    #floatNoteHead{
+      height:38px;
+      border-bottom:1px solid var(--hair);
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      padding:0 10px;
+      cursor:move;
+      user-select:none;
+      font-family:var(--mono);
+      font-size:11px;
+      letter-spacing:.12em;
+    }
+    #floatNoteHead .left{ display:flex; align-items:center; gap:10px; }
+    #floatNoteHead .right{ display:flex; gap:8px; }
+    .iconBtn{
+      width:26px; height:26px;
+      border:1px solid var(--hair2);
+      display:grid;
+      place-items:center;
+      font-family:var(--mono);
+      font-size:12px;
+      cursor:pointer;
+      user-select:none;
+      background:#fff;
+      color:#000;
+    }
+    .iconBtn:hover{ border-color:#000; }
+    #floatNoteBody{ padding:10px; height:100%; }
+    #floatNoteText{
+      height:100%;
+      width:100%;
+      border:1px solid var(--hair);
+      background:#fff;
+      color:#000;
+      font-family:var(--mono);
+      font-size:11px;
+      padding:8px;
+      outline:none;
+      resize:none;
+    }
+    #floatResizer{
+      position:absolute;
+      right:2px; bottom:2px;
+      width:14px; height:14px;
+      border:1px solid var(--hair2);
+      cursor:nwse-resize;
+      background:#fff;
+    }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar{ width:10px; height:10px; }
+    ::-webkit-scrollbar-thumb{ background:#cfcfcf; border:2px solid #fff; }
+    ::-webkit-scrollbar-track{ background:#fff; }
+  </style>
+</head>
+
+<body>
+  <header>
+    <div class="brand">
+      <div class="top">KETADATA</div>
+      <div class="sub" id="brandSub">BLACK BOOK CORPUS // GLASS BOX DISPLAY</div>
+    </div>
+
+    <div class="topActions">
+      <div class="noteIconBtn" id="noteIconBtn" title="Toggle KETA NOTE (N)">
+        <div class="sqIcon" id="noteIconSq"></div>
+      </div>
+
+      <button class="btn" id="controlsBtn">CONTROLS</button>
+      <button class="btn" id="homeBtn">HOME</button>
+      <button class="btn" id="copyLinkBtn">COPY PAGE LINK</button>
+    </div>
+  </header>
+
+  <div id="viewport">
+    <!-- LEFT -->
+    <section class="panel" id="leftPanel" style="grid-column:1;grid-row:1;">
+      <div class="panelHeader">
+        <div class="title">BOOKS</div>
+        <div class="meta" id="booksMeta">0 loaded</div>
+      </div>
+      <div class="panelBody">
+        <div class="hint">
+          Canon corpus. Each book icon is Page 001. Click a book to enter. Notes are per-book and persistent (local storage).
+        </div>
+        <div id="bookList"></div>
+      </div>
+    </section>
+
+    <div class="splitV" id="splitV" style="grid-column:2;grid-row:1;"></div>
+
+    <!-- CENTER -->
+    <main class="panel" id="centerPanel" style="grid-column:3;grid-row:1; border-right:none;">
+      <div id="stage">
+        <div id="stageTop">
+          <div class="left">
+            <div class="title" id="stageTitle">—</div>
+            <div class="sub" id="stageSub">Select a book.</div>
+          </div>
+          <div class="right">
+            <button class="btn" id="prevBtn">PREV</button>
+            <button class="btn" id="nextBtn">NEXT</button>
+            <button class="btn" id="openFolderBtn">OPEN FOLDER</button>
+          </div>
+        </div>
+
+        <div id="viewer">
+          <div id="viewerFrame">
+            <img id="pageImg" alt="page" />
+            <div id="pageOverlay">—</div>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <div class="splitH" id="splitH" style="grid-row:2;"></div>
+
+    <!-- BOTTOM FILMSTRIP -->
+    <section id="stripPanel">
+      <div id="stripHead">
+        <div class="t">PAGES</div>
+        <div class="m" id="stripMeta">—</div>
+      </div>
+      <div id="filmstrip"></div>
+    </section>
+  </div>
+
+  <!-- Controls Drawer (collapsible / draggable) -->
+  <div id="drawer">
+    <div id="drawerHead">
+      <div>VISUAL / INTENSITY</div>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <div class="miniX" id="resetBtn" title="reset">R</div>
+        <div class="miniX" id="drawerClose" title="close">×</div>
+      </div>
+    </div>
+    <div id="drawerBody">
+      <div class="hint" style="margin-bottom:10px;">
+        Controls apply to (A) icons/thumbnails and (B) the main page display. Default = inverted.
+      </div>
+
+      <div class="ctl">
+        <div class="h">
+          <span>THUMBNAILS</span>
+          <span id="thumbReadout" style="font-size:10px;color:var(--muted);font-family:var(--mono);">INV 1.00 · B 1.00 · C 1.25 · S 1.00</span>
+        </div>
+        <div class="row2">
+          <div>
+            <div class="h"><span>INVERT</span><span id="thumbInvV">1.00</span></div>
+            <input id="thumbInvert" type="range" min="0" max="1" step="0.01" value="1" />
+          </div>
+          <div>
+            <div class="h"><span>BRIGHT</span><span id="thumbBriV">1.00</span></div>
+            <input id="thumbBrightness" type="range" min="0.5" max="2" step="0.01" value="1" />
+          </div>
+        </div>
+        <div style="height:10px;"></div>
+        <div class="row2">
+          <div>
+            <div class="h"><span>CONTRAST</span><span id="thumbConV">1.25</span></div>
+            <input id="thumbContrast" type="range" min="0.6" max="2.5" step="0.01" value="1.25" />
+          </div>
+          <div>
+            <div class="h"><span>SATURATE</span><span id="thumbSatV">1.00</span></div>
+            <input id="thumbSaturate" type="range" min="0" max="2" step="0.01" value="1" />
+          </div>
+        </div>
+      </div>
+
+      <div class="ctl">
+        <div class="h">
+          <span>MAIN PAGE</span>
+          <span id="pageReadout" style="font-size:10px;color:var(--muted);font-family:var(--mono);">INV 1.00 · B 1.00 · C 1.25 · S 1.00</span>
+        </div>
+        <div class="row2">
+          <div>
+            <div class="h"><span>INVERT</span><span id="pageInvV">1.00</span></div>
+            <input id="pageInvert" type="range" min="0" max="1" step="0.01" value="1" />
+          </div>
+          <div>
+            <div class="h"><span>BRIGHT</span><span id="pageBriV">1.00</span></div>
+            <input id="pageBrightness" type="range" min="0.5" max="2" step="0.01" value="1" />
+          </div>
+        </div>
+        <div style="height:10px;"></div>
+        <div class="row2">
+          <div>
+            <div class="h"><span>CONTRAST</span><span id="pageConV">1.25</span></div>
+            <input id="pageContrast" type="range" min="0.6" max="2.5" step="0.01" value="1.25" />
+          </div>
+          <div>
+            <div class="h"><span>SATURATE</span><span id="pageSatV">1.00</span></div>
+            <input id="pageSaturate" type="range" min="0" max="2" step="0.01" value="1" />
+          </div>
+        </div>
+      </div>
+
+      <div class="ctl">
+        <div class="h"><span>PERFORMANCE</span><span style="font-family:var(--mono);font-size:10px;color:var(--muted);">thumbnails lazy-load</span></div>
+        <div class="hint" style="margin:0;">
+          For 100–200 pages per book, this viewer lazy-loads thumbnails. If you want faster browsing, reduce thumb size or limit strip render window.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Floating Keta Note -->
+  <div id="floatNote">
+    <div id="floatNoteHead">
+      <div class="left">
+        <div style="width:10px;height:10px;border:1px solid #000;background:#fff;"></div>
+        <div>KETA NOTE</div>
+      </div>
+      <div class="right">
+        <div class="iconBtn" id="noteMinBtn" title="collapse">–</div>
+        <div class="iconBtn" id="noteCloseBtn" title="hide">×</div>
+      </div>
+    </div>
+    <div id="floatNoteBody">
+      <textarea id="floatNoteText" placeholder="GLOBAL NOTE // corpus decisions, indexing rules, next actions"></textarea>
+    </div>
+    <div id="floatResizer" title="resize"></div>
+  </div>
+
+  <!-- =========================================================
+       ENGINE (FUNCTIONAL LOGIC)
+       - Book manifest (edit this)
+       - URL generation (page_001.jpg etc)
+       - Finder-like square viewer + filmstrip
+       - Per-book notes + global note (localStorage)
+       - Visual/intensity controls (thumb + page)
+       - Resizable panels + draggable drawers/notes
+  ========================================================== -->
+  <script>
+    /* =========================
+       0) MANIFEST (EDIT THIS)
+       You define: id, title, basePath, pageCount, pad, ext.
+       basePath should be a RELATIVE PATH in your repo for GitHub Pages:
+         e.g. "blackbooks/book01/pages"
+       Then your images should be:
+         blackbooks/book01/pages/page_001.jpg
+         blackbooks/book01/pages/page_002.jpg
+         ...
+    ========================== */
+    const BOOKS = [
+      { id:"bb01", title:"BLACK BOOK I",  basePath:"blackbooks/bb01/pages", pageCount:160, pad:3, ext:"jpg" },
+      { id:"bb02", title:"BLACK BOOK II", basePath:"blackbooks/bb02/pages", pageCount:180, pad:3, ext:"jpg" },
+      { id:"bb03", title:"BLACK BOOK III",basePath:"blackbooks/bb03/pages", pageCount:140, pad:3, ext:"jpg" },
+      { id:"bb04", title:"BLACK BOOK IV", basePath:"blackbooks/bb04/pages", pageCount:200, pad:3, ext:"jpg" },
+      { id:"bb05", title:"BLACK BOOK V",  basePath:"blackbooks/bb05/pages", pageCount:120, pad:3, ext:"jpg" },
+      { id:"bb06", title:"BLACK BOOK VI", basePath:"blackbooks/bb06/pages", pageCount:155, pad:3, ext:"jpg" },
+      { id:"bb07", title:"BLACK BOOK VII",basePath:"blackbooks/bb07/pages", pageCount:175, pad:3, ext:"jpg" },
+      { id:"bb08", title:"BLACK BOOK VIII",basePath:"blackbooks/bb08/pages", pageCount:190, pad:3, ext:"jpg" },
+    ];
+
+    /* =========================
+       1) WIRING
+    ========================== */
+    const $ = (id) => document.getElementById(id);
+
+    const els = {
+      // top
+      noteIconBtn: $("noteIconBtn"),
+      noteIconSq: $("noteIconSq"),
+      controlsBtn: $("controlsBtn"),
+      homeBtn: $("homeBtn"),
+      copyLinkBtn: $("copyLinkBtn"),
+
+      // layout
+      splitV: $("splitV"),
+      splitH: $("splitH"),
+
+      // books
+      bookList: $("bookList"),
+      booksMeta: $("booksMeta"),
+
+      // stage
+      stageTitle: $("stageTitle"),
+      stageSub: $("stageSub"),
+      prevBtn: $("prevBtn"),
+      nextBtn: $("nextBtn"),
+      openFolderBtn: $("openFolderBtn"),
+      pageImg: $("pageImg"),
+      pageOverlay: $("pageOverlay"),
+      stripMeta: $("stripMeta"),
+      filmstrip: $("filmstrip"),
+      brandSub: $("brandSub"),
+
+      // drawer
+      drawer: $("drawer"),
+      drawerHead: $("drawerHead"),
+      drawerClose: $("drawerClose"),
+      resetBtn: $("resetBtn"),
+
+      // thumb controls
+      thumbInvert: $("thumbInvert"),
+      thumbBrightness: $("thumbBrightness"),
+      thumbContrast: $("thumbContrast"),
+      thumbSaturate: $("thumbSaturate"),
+      thumbInvV: $("thumbInvV"),
+      thumbBriV: $("thumbBriV"),
+      thumbConV: $("thumbConV"),
+      thumbSatV: $("thumbSatV"),
+      thumbReadout: $("thumbReadout"),
+
+      // page controls
+      pageInvert: $("pageInvert"),
+      pageBrightness: $("pageBrightness"),
+      pageContrast: $("pageContrast"),
+      pageSaturate: $("pageSaturate"),
+      pageInvV: $("pageInvV"),
+      pageBriV: $("pageBriV"),
+      pageConV: $("pageConV"),
+      pageSatV: $("pageSatV"),
+      pageReadout: $("pageReadout"),
+
+      // keta note
+      floatNote: $("floatNote"),
+      floatNoteHead: $("floatNoteHead"),
+      floatNoteText: $("floatNoteText"),
+      noteMinBtn: $("noteMinBtn"),
+      noteCloseBtn: $("noteCloseBtn"),
+      floatResizer: $("floatResizer"),
+    };
+
+    function hardFail(msg){
+      document.body.innerHTML = `<pre style="padding:16px;font-family:monospace;background:#fff;color:#000;border-top:4px solid #000;">${msg}</pre>`;
+      throw new Error(msg);
+    }
+    (function assertWiring(){
+      const missing = Object.entries(els).filter(([k,v]) => !v).map(([k])=>k);
+      if(missing.length) hardFail("WIRING ERROR: missing IDs:\n" + missing.join("\n"));
+    })();
+
+    /* =========================
+       2) STATE + STORAGE
+    ========================== */
+    const STORAGE_KEY = "ketadata_blackbooks_state_v1";
+
+    const STATE = {
+      version:"ketadata-blackbook-corpus-v1",
+      selectedBookId: null,
+      selectedPage: 1,
+      // visual controls
+      thumb: { invert:1, brightness:1, contrast:1.25, saturate:1 },
+      page:  { invert:1, brightness:1, contrast:1.25, saturate:1 },
+      // notes
+      globalNote:"",
+      perBookNote: {},         // { [bookId]: string }
+      perBookNoteOpen: {},     // { [bookId]: boolean }
+      // ui
+      drawerOpen:false,
+      leftW: 320,
+      bottomH: 170
+    };
+
+    function loadState(){
+      try{
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if(!raw) return;
+        const s = JSON.parse(raw);
+        if(s && s.version === STATE.version){
+          Object.assign(STATE, s);
+        }
+      }catch{}
+    }
+    function saveState(){
+      try{
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(STATE));
+      }catch{}
+    }
+
+    /* =========================
+       3) URL GEN
+    ========================== */
+    function padNum(n, pad){
+      return String(n).padStart(pad, "0");
+    }
+    function pageUrl(book, pageNum){
+      // page_001.jpg
+      return `${book.basePath}/page_${padNum(pageNum, book.pad)}.${book.ext}`;
+    }
+    function bookIconUrl(book){
+      return pageUrl(book, 1);
+    }
+
+    /* =========================
+       4) RENDER BOOK LIST (+ per-book notes)
+    ========================== */
+    function esc(s){
+      return (s||"").replace(/[&<>"']/g, c => ({
+        "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
+      }[c]));
+    }
+
+    function renderBooks(){
+      els.bookList.innerHTML = "";
+      els.booksMeta.textContent = `${BOOKS.length} books`;
+
+      for(const b of BOOKS){
+        const wrap = document.createElement("div");
+        wrap.className = "book" + (STATE.selectedBookId === b.id ? " selected" : "");
+        wrap.dataset.book = b.id;
+
+        const thumbWrap = document.createElement("div");
+        thumbWrap.className = "bookThumbWrap";
+        const img = document.createElement("img");
+        img.className = "bookThumb";
+        img.alt = b.title + " icon";
+        img.loading = "lazy";
+        img.src = bookIconUrl(b);
+        img.onerror = () => { img.style.opacity = "0.25"; img.title = "Missing icon (check paths)"; };
+        thumbWrap.appendChild(img);
+
+        const info = document.createElement("div");
+        info.className = "bookInfo";
+
+        const name = document.createElement("div");
+        name.className = "bookName";
+        name.textContent = b.title;
+
+        const meta = document.createElement("div");
+        meta.className = "bookMeta";
+        meta.innerHTML = `
+          <span class="tag">${b.pageCount} pages</span>
+          <span class="tag">${esc(b.basePath)}</span>
+        `;
+
+        const noteRow = document.createElement("div");
+        noteRow.className = "bookNoteRow";
+
+        const noteBtn = document.createElement("div");
+        noteBtn.className = "miniBtn";
+        noteBtn.textContent = (STATE.perBookNoteOpen[b.id] ? "HIDE NOTE" : "NOTE");
+        noteBtn.addEventListener("click", (e)=>{
+          e.stopPropagation();
+          STATE.perBookNoteOpen[b.id] = !STATE.perBookNoteOpen[b.id];
+          saveState();
+          renderBooks();
+        });
+
+        const jumpBtn = document.createElement("div");
+        jumpBtn.className = "miniBtn";
+        jumpBtn.textContent = "OPEN";
+        jumpBtn.addEventListener("click", (e)=>{
+          e.stopPropagation();
+          selectBook(b.id, 1);
+        });
+
+        noteRow.appendChild(noteBtn);
+        noteRow.appendChild(jumpBtn);
+
+        const noteBox = document.createElement("div");
+        noteBox.className = "bookNote";
+        noteBox.style.display = STATE.perBookNoteOpen[b.id] ? "block" : "none";
+        noteBox.innerHTML = `
+          <div style="font-family:var(--mono);font-size:10px;letter-spacing:.14em;color:var(--muted);margin-bottom:6px;">BOOK NOTE</div>
+          <textarea placeholder="Notes for ${esc(b.title)}"></textarea>
+        `;
+        const ta = noteBox.querySelector("textarea");
+        ta.value = STATE.perBookNote[b.id] || "";
+        ta.addEventListener("input", ()=>{
+          STATE.perBookNote[b.id] = ta.value;
+          saveState();
+        });
+
+        info.appendChild(name);
+        info.appendChild(meta);
+        info.appendChild(noteRow);
+        info.appendChild(noteBox);
+
+        wrap.appendChild(thumbWrap);
+        wrap.appendChild(info);
+
+        wrap.addEventListener("click", ()=>{
+          selectBook(b.id, 1);
+        });
+
+        els.bookList.appendChild(wrap);
+      }
+    }
+
+    /* =========================
+       5) SELECT BOOK + PAGES
+       Finder-like behavior:
+       - Selected page is centered in a square frame
+       - Pages are filmstrip below
+       Performance:
+       - Filmstrip uses lazy loading + windowed render.
+    ========================== */
+    function getBook(id){
+      return BOOKS.find(x => x.id === id) || null;
+    }
+
+    function selectBook(bookId, pageNum){
+      const b = getBook(bookId);
+      if(!b) return;
+
+      STATE.selectedBookId = bookId;
+      STATE.selectedPage = clamp(pageNum, 1, b.pageCount);
+      saveState();
+
+      els.stageTitle.textContent = b.title;
+      els.stageSub.textContent = `${b.pageCount} pages // ${b.basePath}`;
+      els.brandSub.textContent = `BLACK BOOK CORPUS // ${b.title}`;
+      renderBooks();
+      renderPage();
+      renderFilmstrip();
+    }
+
+    function clamp(n, a, b){ return Math.max(a, Math.min(b, n)); }
+
+    function renderPage(){
+      const b = getBook(STATE.selectedBookId);
+      if(!b){
+        els.pageImg.removeAttribute("src");
+        els.pageOverlay.textContent = "—";
+        els.stripMeta.textContent = "—";
+        return;
+      }
+      const p = STATE.selectedPage;
+      const url = pageUrl(b, p);
+      els.pageImg.src = url;
+      els.pageOverlay.textContent = `${b.id.toUpperCase()} // PAGE ${String(p).padStart(3,"0")}`;
+      els.stripMeta.textContent = `${b.title} — PAGE ${p}/${b.pageCount}`;
+    }
+
+    // Render a window of thumbnails around selected page to keep it fast.
+    function renderFilmstrip(){
+      const b = getBook(STATE.selectedBookId);
+      els.filmstrip.innerHTML = "";
+      if(!b) return;
+
+      const p = STATE.selectedPage;
+
+      const WINDOW = 60;               // thumbnails rendered at once
+      const half = Math.floor(WINDOW/2);
+      let start = Math.max(1, p - half);
+      let end = Math.min(b.pageCount, start + WINDOW - 1);
+      start = Math.max(1, end - WINDOW + 1);
+
+      // Leading “jump” markers if trimmed
+      if(start > 1){
+        els.filmstrip.appendChild(makeJumpThumb("…", 1));
+        els.filmstrip.appendChild(makeJumpThumb("…", start));
+      }
+
+      for(let i=start; i<=end; i++){
+        const tw = document.createElement("div");
+        tw.className = "thumbWrap" + (i===p ? " selected" : "");
+        tw.title = `Page ${i}`;
+        const im = document.createElement("img");
+        im.className = "thumb";
+        im.loading = "lazy";
+        im.alt = `thumb ${i}`;
+        im.src = pageUrl(b, i);
+        im.onerror = () => { im.style.opacity="0.25"; };
+        tw.appendChild(im);
+        tw.addEventListener("click", ()=>{
+          STATE.selectedPage = i;
+          saveState();
+          renderPage();
+          renderFilmstrip();
+        });
+        els.filmstrip.appendChild(tw);
+      }
+
+      if(end < b.pageCount){
+        els.filmstrip.appendChild(makeJumpThumb("…", end));
+        els.filmstrip.appendChild(makeJumpThumb("…", b.pageCount));
+      }
+
+      // ensure selected thumb roughly centered in strip
+      requestAnimationFrame(()=>{
+        const sel = els.filmstrip.querySelector(".thumbWrap.selected");
+        if(sel){
+          const r = sel.getBoundingClientRect();
+          const fr = els.filmstrip.getBoundingClientRect();
+          const dx = (r.left + r.width/2) - (fr.left + fr.width/2);
+          els.filmstrip.scrollLeft += dx;
+        }
+      });
+    }
+
+    function makeJumpThumb(label, toPage){
+      const tw = document.createElement("div");
+      tw.className = "thumbWrap";
+      tw.style.display="grid";
+      tw.style.placeItems="center";
+      tw.style.fontFamily="var(--mono)";
+      tw.style.fontSize="12px";
+      tw.style.letterSpacing=".12em";
+      tw.textContent = label;
+      tw.addEventListener("click", ()=>{
+        const b = getBook(STATE.selectedBookId);
+        if(!b) return;
+        STATE.selectedPage = clamp(toPage, 1, b.pageCount);
+        saveState();
+        renderPage();
+        renderFilmstrip();
+      });
+      return tw;
+    }
+
+    /* =========================
+       6) VISUAL / INTENSITY CONTROLS
+       Controls map to CSS variables used by thumbnails + main page.
+    ========================== */
+    function setVar(name, value){
+      document.documentElement.style.setProperty(name, value);
+    }
+
+    function applyVisualState(){
+      setVar("--thumbInvert", STATE.thumb.invert);
+      setVar("--thumbBrightness", STATE.thumb.brightness);
+      setVar("--thumbContrast", STATE.thumb.contrast);
+      setVar("--thumbSaturate", STATE.thumb.saturate);
+
+      setVar("--pageInvert", STATE.page.invert);
+      setVar("--pageBrightness", STATE.page.brightness);
+      setVar("--pageContrast", STATE.page.contrast);
+      setVar("--pageSaturate", STATE.page.saturate);
+
+      // readouts
+      els.thumbInvV.textContent = Number(STATE.thumb.invert).toFixed(2);
+      els.thumbBriV.textContent = Number(STATE.thumb.brightness).toFixed(2);
+      els.thumbConV.textContent = Number(STATE.thumb.contrast).toFixed(2);
+      els.thumbSatV.textContent = Number(STATE.thumb.saturate).toFixed(2);
+      els.thumbReadout.textContent = `INV ${Number(STATE.thumb.invert).toFixed(2)} · B ${Number(STATE.thumb.brightness).toFixed(2)} · C ${Number(STATE.thumb.contrast).toFixed(2)} · S ${Number(STATE.thumb.saturate).toFixed(2)}`;
+
+      els.pageInvV.textContent = Number(STATE.page.invert).toFixed(2);
+      els.pageBriV.textContent = Number(STATE.page.brightness).toFixed(2);
+      els.pageConV.textContent = Number(STATE.page.contrast).toFixed(2);
+      els.pageSatV.textContent = Number(STATE.page.saturate).toFixed(2);
+      els.pageReadout.textContent = `INV ${Number(STATE.page.invert).toFixed(2)} · B ${Number(STATE.page.brightness).toFixed(2)} · C ${Number(STATE.page.contrast).toFixed(2)} · S ${Number(STATE.page.saturate).toFixed(2)}`;
+    }
+
+    function bindControls(){
+      // init sliders
+      els.thumbInvert.value = STATE.thumb.invert;
+      els.thumbBrightness.value = STATE.thumb.brightness;
+      els.thumbContrast.value = STATE.thumb.contrast;
+      els.thumbSaturate.value = STATE.thumb.saturate;
+
+      els.pageInvert.value = STATE.page.invert;
+      els.pageBrightness.value = STATE.page.brightness;
+      els.pageContrast.value = STATE.page.contrast;
+      els.pageSaturate.value = STATE.page.saturate;
+
+      const hook = (el, on) => el.addEventListener("input", on);
+
+      hook(els.thumbInvert, ()=>{ STATE.thumb.invert = Number(els.thumbInvert.value); saveState(); applyVisualState(); });
+      hook(els.thumbBrightness, ()=>{ STATE.thumb.brightness = Number(els.thumbBrightness.value); saveState(); applyVisualState(); });
+      hook(els.thumbContrast, ()=>{ STATE.thumb.contrast = Number(els.thumbContrast.value); saveState(); applyVisualState(); });
+      hook(els.thumbSaturate, ()=>{ STATE.thumb.saturate = Number(els.thumbSaturate.value); saveState(); applyVisualState(); });
+
+      hook(els.pageInvert, ()=>{ STATE.page.invert = Number(els.pageInvert.value); saveState(); applyVisualState(); });
+      hook(els.pageBrightness, ()=>{ STATE.page.brightness = Number(els.pageBrightness.value); saveState(); applyVisualState(); });
+      hook(els.pageContrast, ()=>{ STATE.page.contrast = Number(els.pageContrast.value); saveState(); applyVisualState(); });
+      hook(els.pageSaturate, ()=>{ STATE.page.saturate = Number(els.pageSaturate.value); saveState(); applyVisualState(); });
+
+      els.resetBtn.addEventListener("click", ()=>{
+        STATE.thumb = { invert:1, brightness:1, contrast:1.25, saturate:1 };
+        STATE.page  = { invert:1, brightness:1, contrast:1.25, saturate:1 };
+        saveState();
+        bindControls(); // re-seed slider values
+        applyVisualState();
+      });
+    }
+
+    /* =========================
+       7) DRAWER + NOTE (toggle / drag / resize)
+    ========================== */
+    function toggleDrawer(force){
+      const next = (typeof force === "boolean") ? force : !STATE.drawerOpen;
+      STATE.drawerOpen = next;
+      els.drawer.classList.toggle("on", next);
+      saveState();
+    }
+
+    // Drawer drag
+    (function wireDrawerDrag(){
+      let dragging=false, sx=0, sy=0, sl=0, st=0;
+      els.drawerHead.addEventListener("mousedown", (e)=>{
+        if(e.target === els.drawerClose || e.target === els.resetBtn) return;
+        dragging=true;
+        const r = els.drawer.getBoundingClientRect();
+        sl = r.left; st = r.top; sx = e.clientX; sy = e.clientY;
+        document.addEventListener("mousemove", move);
+        document.addEventListener("mouseup", up);
+        e.preventDefault();
+      });
+      function move(e){
+        if(!dragging) return;
+        els.drawer.style.left = (sl + (e.clientX - sx)) + "px";
+        els.drawer.style.top  = (st + (e.clientY - sy)) + "px";
+        els.drawer.style.right = "auto";
+      }
+      function up(){
+        dragging=false;
+        document.removeEventListener("mousemove", move);
+        document.removeEventListener("mouseup", up);
+      }
+    })();
+
+    els.drawerClose.addEventListener("click", ()=> toggleDrawer(false));
+    els.controlsBtn.addEventListener("click", ()=> toggleDrawer());
+
+    // Keta note icon state
+    let noteVisible = true;
+    function setNoteIconState(){ els.noteIconSq.classList.toggle("filled", !noteVisible); }
+    function showNote(){ noteVisible=true; els.floatNote.classList.remove("hidden"); setNoteIconState(); }
+    function hideNote(){ noteVisible=false; els.floatNote.classList.add("hidden"); setNoteIconState(); }
+    function toggleNote(){ noteVisible ? hideNote() : showNote(); }
+
+    els.noteIconBtn.addEventListener("click", toggleNote);
+    els.noteCloseBtn.addEventListener("click", hideNote);
+    els.noteMinBtn.addEventListener("click", hideNote);
+
+    // Note drag
+    (function wireNoteDrag(){
+      let dragging=false, sx=0, sy=0, sl=0, st=0;
+      els.floatNoteHead.addEventListener("mousedown", (e)=>{
+        if(e.target === els.noteCloseBtn || e.target === els.noteMinBtn) return;
+        dragging=true;
+        const r = els.floatNote.getBoundingClientRect();
+        sl=r.left; st=r.top; sx=e.clientX; sy=e.clientY;
+        document.addEventListener("mousemove", move);
+        document.addEventListener("mouseup", up);
+        e.preventDefault();
+      });
+      function move(e){
+        if(!dragging) return;
+        els.floatNote.style.left = (sl + (e.clientX - sx)) + "px";
+        els.floatNote.style.top  = (st + (e.clientY - sy)) + "px";
+      }
+      function up(){
+        dragging=false;
+        document.removeEventListener("mousemove", move);
+        document.removeEventListener("mouseup", up);
+      }
+    })();
+
+    // Note resize
+    (function wireNoteResize(){
+      let resizing=false, sx=0, sy=0, sw=0, sh=0;
+      els.floatResizer.addEventListener("mousedown", (e)=>{
+        e.preventDefault();
+        resizing=true;
+        const r = els.floatNote.getBoundingClientRect();
+        sw=r.width; sh=r.height; sx=e.clientX; sy=e.clientY;
+        document.addEventListener("mousemove", move);
+        document.addEventListener("mouseup", up);
+      });
+      function move(e){
+        if(!resizing) return;
+        els.floatNote.style.width  = Math.max(260, sw + (e.clientX - sx)) + "px";
+        els.floatNote.style.height = Math.max(160, sh + (e.clientY - sy)) + "px";
+      }
+      function up(){
+        resizing=false;
+        document.removeEventListener("mousemove", move);
+        document.removeEventListener("mouseup", up);
+      }
+    })();
+
+    // Persist global note
+    els.floatNoteText.addEventListener("input", ()=>{
+      STATE.globalNote = els.floatNoteText.value;
+      saveState();
+    });
+
+    /* =========================
+       8) NAV (prev/next, open folder, copy link)
+    ========================== */
+    function stepPage(delta){
+      const b = getBook(STATE.selectedBookId);
+      if(!b) return;
+      STATE.selectedPage = clamp(STATE.selectedPage + delta, 1, b.pageCount);
+      saveState();
+      renderPage();
+      renderFilmstrip();
+    }
+
+    els.prevBtn.addEventListener("click", ()=> stepPage(-1));
+    els.nextBtn.addEventListener("click", ()=> stepPage(1));
+
+    els.homeBtn.addEventListener("click", ()=>{
+      STATE.selectedBookId = null;
+      STATE.selectedPage = 1;
+      saveState();
+      els.stageTitle.textContent = "—";
+      els.stageSub.textContent = "Select a book.";
+      els.brandSub.textContent = "BLACK BOOK CORPUS // GLASS BOX DISPLAY";
+      els.pageImg.removeAttribute("src");
+      els.pageOverlay.textContent = "—";
+      els.stripMeta.textContent = "—";
+      els.filmstrip.innerHTML = "";
+      renderBooks();
+    });
+
+    els.openFolderBtn.addEventListener("click", ()=>{
+      const b = getBook(STATE.selectedBookId);
+      if(!b) return;
+      // best-effort: copy basePath for you
+      navigator.clipboard?.writeText(b.basePath).catch(()=>{});
+      alert("Copied basePath to clipboard:\n\n" + b.basePath + "\n\n(Use it to verify repo folder + image names.)");
+    });
+
+    els.copyLinkBtn.addEventListener("click", async ()=>{
+      // deep link: ?book=bb01&page=23
+      const b = getBook(STATE.selectedBookId);
+      const url = new URL(window.location.href);
+      if(b){
+        url.searchParams.set("book", b.id);
+        url.searchParams.set("page", String(STATE.selectedPage));
+      }else{
+        url.searchParams.delete("book");
+        url.searchParams.delete("page");
+      }
+      try{
+        await navigator.clipboard.writeText(url.toString());
+        alert("Copied link:\n\n" + url.toString());
+      }catch{
+        alert("Copy blocked. Here is the link:\n\n" + url.toString());
+      }
+    });
+
+    /* =========================
+       9) RESIZABLE PANELS
+    ========================== */
+    function setCSSVar(name, px){ document.documentElement.style.setProperty(name, px + "px"); }
+
+    (function wireSplitters(){
+      // left width
+      let dragV=false, sx=0, start=0;
+      els.splitV.addEventListener("mousedown", (e)=>{
+        dragV=true; sx=e.clientX;
+        start = parseInt(getComputedStyle(document.documentElement).getPropertyValue("--leftW")) || 320;
+        document.addEventListener("mousemove", mv);
+        document.addEventListener("mouseup", up);
+        e.preventDefault();
+      });
+      function mv(e){
+        if(!dragV) return;
+        const next = clamp(start + (e.clientX - sx), 260, 520);
+        setCSSVar("--leftW", next);
+        STATE.leftW = next;
+      }
+      function up(){
+        dragV=false;
+        document.removeEventListener("mousemove", mv);
+        document.removeEventListener("mouseup", up);
+        saveState();
+      }
+
+      // bottom height
+      let dragH=false, sy=0, startH=0;
+      els.splitH.addEventListener("mousedown", (e)=>{
+        dragH=true; sy=e.clientY;
+        startH = parseInt(getComputedStyle(document.documentElement).getPropertyValue("--bottomH")) || 170;
+        document.addEventListener("mousemove", mh);
+        document.addEventListener("mouseup", uh);
+        e.preventDefault();
+      });
+      function mh(e){
+        if(!dragH) return;
+        // dragging splitter changes bottom height inversely
+        const next = clamp(startH - (e.clientY - sy), 120, 320);
+        setCSSVar("--bottomH", next);
+        STATE.bottomH = next;
+      }
+      function uh(){
+        dragH=false;
+        document.removeEventListener("mousemove", mh);
+        document.removeEventListener("mouseup", uh);
+        saveState();
+      }
+    })();
+
+    /* =========================
+       10) DEEP LINK LOAD (?book=bb01&page=10)
+    ========================== */
+    function applyDeepLink(){
+      const url = new URL(window.location.href);
+      const book = url.searchParams.get("book");
+      const page = parseInt(url.searchParams.get("page") || "1", 10);
+      if(book){
+        const b = getBook(book);
+        if(b){
+          selectBook(book, isNaN(page) ? 1 : page);
+          return true;
+        }
+      }
+      return false;
+    }
+
+    /* =========================
+       11) KEYBOARD
+    ========================== */
+    document.addEventListener("keydown", (e)=>{
+      const tag = (document.activeElement?.tagName || "").toLowerCase();
+      const typing = (tag === "textarea" || tag === "input");
+      if(typing) return;
+
+      if(e.key.toLowerCase() === "n") toggleNote();
+      if(e.key.toLowerCase() === "c") toggleDrawer();
+      if(e.key === "ArrowLeft") stepPage(-1);
+      if(e.key === "ArrowRight") stepPage(1);
+      if(e.key.toLowerCase() === "h") els.homeBtn.click();
+    });
+
+    /* =========================
+       12) BOOT
+    ========================== */
+    (function boot(){
+      loadState();
+
+      // restore layout sizes
+      if(STATE.leftW) setCSSVar("--leftW", clamp(STATE.leftW, 260, 520));
+      if(STATE.bottomH) setCSSVar("--bottomH", clamp(STATE.bottomH, 120, 320));
+
+      // restore notes + visuals
+      els.floatNoteText.value = STATE.globalNote || "";
+      bindControls();
+      applyVisualState();
+
+      // drawer state
+      toggleDrawer(!!STATE.drawerOpen);
+
+      // note state default visible
+      setNoteIconState();
+
+      renderBooks();
+
+      // deep link wins, else restore last selection, else home
+      if(applyDeepLink()) return;
+
+      if(STATE.selectedBookId){
+        selectBook(STATE.selectedBookId, STATE.selectedPage || 1);
+      }else{
+        els.stageTitle.textContent = "—";
+        els.stageSub.textContent = "Select a book.";
+        els.pageOverlay.textContent = "—";
+      }
+    })();
+  </script>
+</body>
+</html>
