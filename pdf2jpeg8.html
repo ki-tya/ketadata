@@ -1,0 +1,766 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1.0" />
+<title>KETADATA — PDF → IMAGES</title>
+
+<style>
+  :root{
+    --bg:#fff; --fg:#000; --muted:#666; --line:#ddd;
+    --panel:#fff; --chip:#f6f6f6; --shadow: 0 1px 0 rgba(0,0,0,.06);
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--bg); color:var(--fg);
+    font-family: Arial, Helvetica, sans-serif;
+    letter-spacing:.01em;
+  }
+  header{
+    position:sticky; top:0; z-index:20;
+    background:rgba(255,255,255,.92);
+    backdrop-filter: blur(10px);
+    border-bottom:1px solid var(--line);
+    padding:14px 18px;
+    display:flex; align-items:center; justify-content:space-between;
+  }
+  .brand{
+    display:flex; flex-direction:column; gap:2px;
+  }
+  .brand .title{font-weight:700; letter-spacing:.12em; font-size:12px}
+  .brand .sub{font-size:11px; color:var(--muted)}
+  .actions{display:flex; gap:10px; align-items:center}
+  .btn{
+    border:1px solid #000; background:#fff; color:#000;
+    padding:8px 12px; font-size:11px; letter-spacing:.12em;
+    cursor:pointer; border-radius:999px;
+  }
+  .btn:disabled{opacity:.35; cursor:not-allowed}
+  .btn.ghost{border-color:var(--line); color:#111}
+  main{
+    display:grid;
+    grid-template-columns: 1fr 360px;
+    gap:0;
+    min-height: calc(100vh - 56px);
+  }
+  .left{padding:18px 18px 28px}
+  .right{
+    border-left:1px solid var(--line);
+    padding:18px;
+    background:#fff;
+  }
+  .card{
+    border:1px solid var(--line);
+    border-radius:14px;
+    padding:14px;
+    background:var(--panel);
+    box-shadow: var(--shadow);
+    margin-bottom:12px;
+  }
+  .row{
+    display:grid;
+    grid-template-columns: 1fr 1fr;
+    gap:10px;
+  }
+  label{
+    display:block;
+    font-size:10px;
+    letter-spacing:.14em;
+    color:#111;
+    margin:0 0 6px;
+  }
+  input[type="file"], select, input[type="number"], input[type="text"]{
+    width:100%;
+    padding:10px 10px;
+    border:1px solid var(--line);
+    border-radius:10px;
+    font-size:12px;
+    background:#fff;
+  }
+  input[type="range"]{width:100%}
+  .krow{
+    display:flex; align-items:center; justify-content:space-between; gap:10px;
+    margin-top:8px;
+    font-size:11px;
+    color:#111;
+  }
+  .chip{
+    display:inline-flex; align-items:center; gap:8px;
+    padding:7px 10px;
+    border:1px solid var(--line);
+    border-radius:999px;
+    background:var(--chip);
+    font-size:11px;
+  }
+  .progress{
+    width:100%;
+    height:10px;
+    border:1px solid var(--line);
+    border-radius:999px;
+    overflow:hidden;
+    background:#fff;
+  }
+  .bar{height:100%; width:0%; background:#000}
+  .log{
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    font-size:11px;
+    white-space:pre-wrap;
+    color:#111;
+    max-height:220px;
+    overflow:auto;
+    border:1px solid var(--line);
+    border-radius:12px;
+    padding:10px;
+  }
+  .previewWrap{
+    border:1px solid var(--line);
+    border-radius:14px;
+    overflow:hidden;
+    background:#fff;
+  }
+  .previewTop{
+    display:flex; justify-content:space-between; align-items:center;
+    padding:10px 12px;
+    border-bottom:1px solid var(--line);
+    font-size:11px;
+    color:#111;
+    letter-spacing:.12em;
+  }
+  canvas{display:block; width:100%; height:auto}
+  .thumbs{
+    display:grid;
+    grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+    gap:8px;
+    padding:12px;
+  }
+  .thumbs img{
+    width:100%;
+    display:block;
+    border:1px solid var(--line);
+    border-radius:10px;
+    background:#000;
+  }
+  details summary{
+    cursor:pointer; font-size:11px; letter-spacing:.12em;
+    list-style:none;
+  }
+  details summary::-webkit-details-marker{display:none}
+  .noteBox{
+    width:100%;
+    min-height:150px;
+    border:1px solid var(--line);
+    border-radius:12px;
+    padding:10px;
+    font-size:12px;
+    resize:vertical;
+  }
+</style>
+</head>
+
+<body>
+<header>
+  <div class="brand">
+    <div class="title">KETADATA</div>
+    <div class="sub">PDF → IMAGES // LOCAL-FIRST // SEQUENTIAL // ZIP OUT</div>
+  </div>
+  <div class="actions">
+    <button class="btn ghost" id="clearBtn">CLEAR</button>
+    <button class="btn" id="convertBtn" disabled>CONVERT → ZIP</button>
+  </div>
+</header>
+
+<main>
+  <div class="left">
+    <div class="card">
+      <label>INPUT PDF</label>
+      <input type="file" id="pdfInput" accept="application/pdf" />
+      <div class="krow" style="margin-top:10px">
+        <span class="chip"><span id="fileName">—</span></span>
+        <span class="chip"><span id="pages">0</span> PAGES</span>
+        <span class="chip">NO UPLOAD</span>
+      </div>
+      <div class="krow" style="margin-top:10px">
+        <div class="progress"><div class="bar" id="bar"></div></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="row">
+        <div>
+          <label>OUTPUT FORMAT</label>
+          <select id="format">
+            <option value="jpeg">JPEG (.jpg)</option>
+            <option value="png">PNG (.png)</option>
+          </select>
+        </div>
+        <div>
+          <label>OUTPUT MODE</label>
+          <select id="mode">
+            <option value="normal">NORMAL</option>
+            <option value="invert">INVERT (BLACK PAGE / WHITE WRITING)</option>
+            <option value="threshold">THRESHOLD (B/W)</option>
+            <option value="xray">XRAY</option>
+            <option value="posterize">POSTERIZE</option>
+            <option value="glow">GLOW / HALATION</option>
+            <option value="fried">FRIED</option>
+            <option value="wire">WIREFRAME</option>
+            <option value="freak">FREAK MODE</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="row" style="margin-top:10px">
+        <div>
+          <label>SCALE (DETAIL)</label>
+          <input type="range" id="scale" min="1.0" max="2.8" step="0.1" value="2.0" />
+          <div class="krow"><span class="muted">If memory spikes, drop to 1.5</span><span class="chip" id="scaleVal">2.0×</span></div>
+        </div>
+        <div>
+          <label>JPEG QUALITY</label>
+          <input type="range" id="quality" min="0.5" max="1.0" step="0.02" value="0.90" />
+          <div class="krow"><span class="muted">PNG ignores quality</span><span class="chip" id="qualityVal">0.90</span></div>
+        </div>
+      </div>
+
+      <details style="margin-top:10px" open>
+        <summary>ADJUSTMENTS</summary>
+        <div class="row" style="margin-top:10px">
+          <div>
+            <label>BRIGHTNESS</label>
+            <input type="range" id="brightness" min="-0.5" max="0.5" step="0.02" value="0.0" />
+          </div>
+          <div>
+            <label>CONTRAST</label>
+            <input type="range" id="contrast" min="0.5" max="2.0" step="0.05" value="1.0" />
+          </div>
+        </div>
+        <div class="row" style="margin-top:10px">
+          <div>
+            <label>SATURATION</label>
+            <input type="range" id="saturation" min="0.0" max="2.0" step="0.05" value="1.0" />
+          </div>
+          <div>
+            <label>GAMMA</label>
+            <input type="range" id="gamma" min="0.6" max="1.8" step="0.05" value="1.0" />
+          </div>
+        </div>
+        <div class="row" style="margin-top:10px">
+          <div>
+            <label>SHARPEN (LIGHT)</label>
+            <input type="range" id="sharpen" min="0" max="1" step="0.05" value="0.0" />
+          </div>
+          <div>
+            <label>GRAIN</label>
+            <input type="range" id="grain" min="0" max="0.25" step="0.01" value="0.0" />
+          </div>
+        </div>
+      </details>
+
+      <details style="margin-top:10px">
+        <summary>PAGE RANGE</summary>
+        <div class="row" style="margin-top:10px">
+          <div>
+            <label>FROM</label>
+            <input type="number" id="fromPage" min="1" value="1" />
+          </div>
+          <div>
+            <label>TO</label>
+            <input type="number" id="toPage" min="1" value="1" />
+          </div>
+        </div>
+        <div class="krow" style="margin-top:8px">
+          <span class="muted">Default is full PDF once loaded</span>
+          <span class="chip">SEQUENTIAL</span>
+        </div>
+      </details>
+
+      <details style="margin-top:10px">
+        <summary>ZIP NAMING</summary>
+        <div style="margin-top:10px">
+          <label>ZIP FILE NAME</label>
+          <input type="text" id="zipName" value="pdf_to_images.zip" />
+        </div>
+      </details>
+    </div>
+
+    <div class="previewWrap">
+      <div class="previewTop">
+        <div>PREVIEW</div>
+        <div class="chip"><span id="previewInfo">0 / 0</span></div>
+      </div>
+      <canvas id="canvas"></canvas>
+      <div class="thumbs" id="thumbs"></div>
+    </div>
+
+    <div class="card" style="margin-top:12px">
+      <label>CONSOLE</label>
+      <div class="log" id="log">Waiting…</div>
+    </div>
+  </div>
+
+  <div class="right">
+    <div class="card">
+      <div class="krow" style="margin:0 0 10px">
+        <div style="font-weight:700; letter-spacing:.12em; font-size:11px">KETA NOTE</div>
+        <div style="font-size:11px; color:var(--muted)">PAGE-LEVEL</div>
+      </div>
+      <textarea class="noteBox" id="ketaNote" placeholder="SYSTEM NOTE // decisions, constraints, next actions"></textarea>
+      <div class="krow" style="margin-top:10px">
+        <button class="btn ghost" id="exportNoteBtn">EXPORT NOTE JSON</button>
+      </div>
+      <div class="krow" style="margin-top:10px; font-size:11px; color:var(--muted)">
+        Meta: <span id="meta">—</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <div style="font-weight:700; letter-spacing:.12em; font-size:11px; margin-bottom:10px">DIAGNOSTICS</div>
+      <div class="log" id="diag">No errors.</div>
+    </div>
+  </div>
+</main>
+
+<!-- stable libs (no vendor paths, no repo dependency) -->
+<script src="https://unpkg.com/pdfjs-dist@3.4.120/legacy/build/pdf.min.js"></script>
+<script src="https://unpkg.com/jszip@3.10.1/dist/jszip.min.js"></script>
+
+<script>
+  const $ = (id)=>document.getElementById(id);
+
+  const pdfInput = $("pdfInput");
+  const convertBtn = $("convertBtn");
+  const clearBtn = $("clearBtn");
+
+  const fileNameEl = $("fileName");
+  const pagesEl = $("pages");
+  const barEl = $("bar");
+  const logEl = $("log");
+  const diagEl = $("diag");
+
+  const canvas = $("canvas");
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  const thumbs = $("thumbs");
+
+  const formatEl = $("format");
+  const modeEl = $("mode");
+  const scaleEl = $("scale");
+  const qualityEl = $("quality");
+  const brightnessEl = $("brightness");
+  const contrastEl = $("contrast");
+  const saturationEl = $("saturation");
+  const gammaEl = $("gamma");
+  const sharpenEl = $("sharpen");
+  const grainEl = $("grain");
+  const fromPageEl = $("fromPage");
+  const toPageEl = $("toPage");
+  const zipNameEl = $("zipName");
+
+  const scaleValEl = $("scaleVal");
+  const qualityValEl = $("qualityVal");
+  const previewInfoEl = $("previewInfo");
+
+  const ketaNoteEl = $("ketaNote");
+  const exportNoteBtn = $("exportNoteBtn");
+  const metaEl = $("meta");
+
+  let pdfDoc = null;
+  let currentFile = null;
+  let lastPreviewPage = 1;
+
+  const log = (msg)=>{
+    logEl.textContent += "\n" + msg;
+    logEl.scrollTop = logEl.scrollHeight;
+  };
+
+  const diag = (msg)=>{
+    diagEl.textContent = msg;
+  };
+
+  function setProgress(p){
+    barEl.style.width = Math.max(0, Math.min(1, p))*100 + "%";
+  }
+
+  function resetUI(){
+    pdfDoc = null;
+    currentFile = null;
+    fileNameEl.textContent = "—";
+    pagesEl.textContent = "0";
+    previewInfoEl.textContent = "0 / 0";
+    thumbs.innerHTML = "";
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    canvas.width = 0; canvas.height = 0;
+    convertBtn.disabled = true;
+    setProgress(0);
+    diag("No errors.");
+    logEl.textContent = "Waiting…";
+    metaEl.textContent = "—";
+  }
+
+  function clamp(v, a, b){ return Math.max(a, Math.min(b, v)); }
+
+  // RGB<->HSL helpers for saturation
+  function rgbToHsl(r,g,b){
+    r/=255; g/=255; b/=255;
+    const max=Math.max(r,g,b), min=Math.min(r,g,b);
+    let h,s,l=(max+min)/2;
+    if(max===min){ h=s=0; }
+    else{
+      const d=max-min;
+      s=l>0.5? d/(2-max-min): d/(max+min);
+      switch(max){
+        case r: h=(g-b)/d + (g<b?6:0); break;
+        case g: h=(b-r)/d + 2; break;
+        case b: h=(r-g)/d + 4; break;
+      }
+      h/=6;
+    }
+    return [h,s,l];
+  }
+  function hslToRgb(h,s,l){
+    let r,g,b;
+    if(s===0){ r=g=b=l; }
+    else{
+      const hue2rgb=(p,q,t)=>{
+        if(t<0) t+=1;
+        if(t>1) t-=1;
+        if(t<1/6) return p+(q-p)*6*t;
+        if(t<1/2) return q;
+        if(t<2/3) return p+(q-p)*(2/3 - t)*6;
+        return p;
+      };
+      const q=l<0.5? l*(1+s): l+s-l*s;
+      const p=2*l-q;
+      r=hue2rgb(p,q,h+1/3);
+      g=hue2rgb(p,q,h);
+      b=hue2rgb(p,q,h-1/3);
+    }
+    return [Math.round(r*255),Math.round(g*255),Math.round(b*255)];
+  }
+
+  function applyTransforms(imageData){
+    const d = imageData.data;
+
+    const mode = modeEl.value;
+    const brightness = parseFloat(brightnessEl.value);   // -0.5..0.5
+    const contrast = parseFloat(contrastEl.value);       // 0.5..2.0
+    const saturation = parseFloat(saturationEl.value);   // 0..2
+    const gamma = parseFloat(gammaEl.value);             // 0.6..1.8
+    const grain = parseFloat(grainEl.value);             // 0..0.25
+
+    // per-pixel
+    for(let i=0;i<d.length;i+=4){
+      let r=d[i], g=d[i+1], b=d[i+2];
+
+      // brightness/contrast (contrast around mid)
+      r = (r - 128) * contrast + 128 + brightness*255;
+      g = (g - 128) * contrast + 128 + brightness*255;
+      b = (b - 128) * contrast + 128 + brightness*255;
+
+      // gamma
+      r = 255 * Math.pow(clamp(r,0,255)/255, 1/gamma);
+      g = 255 * Math.pow(clamp(g,0,255)/255, 1/gamma);
+      b = 255 * Math.pow(clamp(b,0,255)/255, 1/gamma);
+
+      // saturation
+      if (saturation !== 1){
+        const [h,s,l] = rgbToHsl(r,g,b);
+        const ns = clamp(s * saturation, 0, 1);
+        const rgb = hslToRgb(h, ns, l);
+        r=rgb[0]; g=rgb[1]; b=rgb[2];
+      }
+
+      // mode transforms
+      if(mode === "invert"){
+        r=255-r; g=255-g; b=255-b;
+      } else if(mode === "threshold"){
+        const y = 0.2126*r + 0.7152*g + 0.0722*b;
+        const t = y > 145 ? 255 : 0;
+        r=g=b=t;
+      } else if(mode === "xray"){
+        // high-contrast invert with cyan bias
+        const y = 0.2126*r + 0.7152*g + 0.0722*b;
+        let v = 255 - y;
+        v = (v - 128) * 1.35 + 128;
+        r = clamp(v*0.85,0,255);
+        g = clamp(v*1.05,0,255);
+        b = clamp(v*1.15,0,255);
+      } else if(mode === "posterize"){
+        const steps = 5;
+        r = Math.round(r/255*(steps-1))/(steps-1)*255;
+        g = Math.round(g/255*(steps-1))/(steps-1)*255;
+        b = Math.round(b/255*(steps-1))/(steps-1)*255;
+      } else if(mode === "glow"){
+        // mild lift + invert-ish vibe without full invert
+        const y = 0.2126*r + 0.7152*g + 0.0722*b;
+        const lift = (255 - y) * 0.35;
+        r = clamp(r + lift,0,255);
+        g = clamp(g + lift,0,255);
+        b = clamp(b + lift,0,255);
+      } else if(mode === "fried"){
+        // crunch + color skew
+        r = clamp((r-128)*1.9+128 + 18,0,255);
+        g = clamp((g-128)*1.7+128 - 6,0,255);
+        b = clamp((b-128)*2.1+128 + 12,0,255);
+      } else if(mode === "wire"){
+        // edge-ish: use luminance & amplify contrast; final invert
+        const y = 0.2126*r + 0.7152*g + 0.0722*b;
+        let v = clamp((y-128)*2.2+128,0,255);
+        v = 255 - v;
+        r=g=b=v;
+      } else if(mode === "freak"){
+        // controlled chaos: invert + posterize + channel swap
+        r=255-r; g=255-g; b=255-b;
+        const steps = 7;
+        r = Math.round(r/255*(steps-1))/(steps-1)*255;
+        g = Math.round(g/255*(steps-1))/(steps-1)*255;
+        b = Math.round(b/255*(steps-1))/(steps-1)*255;
+        const rr=r;
+        r=b; b=g; g=rr;
+      }
+
+      // grain
+      if(grain>0){
+        const n = (Math.random()*2-1)*255*grain;
+        r = clamp(r+n,0,255);
+        g = clamp(g+n,0,255);
+        b = clamp(b+n,0,255);
+      }
+
+      d[i]=clamp(r,0,255);
+      d[i+1]=clamp(g,0,255);
+      d[i+2]=clamp(b,0,255);
+    }
+
+    return imageData;
+  }
+
+  // light sharpen: unsharp mask-ish using convolution on a downsampled buffer would be heavy.
+  // We do a simple 3x3 sharpen kernel when slider > 0, but only once per page.
+  function applySharpenIfNeeded(){
+    const amt = parseFloat(sharpenEl.value);
+    if(amt <= 0) return;
+
+    const w = canvas.width, h = canvas.height;
+    const src = ctx.getImageData(0,0,w,h);
+    const dst = ctx.createImageData(w,h);
+    const s = src.data, d = dst.data;
+
+    // kernel: center 5, neighbors -1; blend with original via amt
+    const idx = (x,y)=> (y*w + x)*4;
+
+    for(let y=1;y<h-1;y++){
+      for(let x=1;x<w-1;x++){
+        let r=0,g=0,b=0;
+        const c = idx(x,y);
+        const up = idx(x,y-1), dn = idx(x,y+1), lf = idx(x-1,y), rt = idx(x+1,y);
+
+        r = 5*s[c] - s[up] - s[dn] - s[lf] - s[rt];
+        g = 5*s[c+1] - s[up+1] - s[dn+1] - s[lf+1] - s[rt+1];
+        b = 5*s[c+2] - s[up+2] - s[dn+2] - s[lf+2] - s[rt+2];
+
+        // blend
+        d[c]   = clamp(s[c]   + (r - s[c])   * amt, 0, 255);
+        d[c+1] = clamp(s[c+1] + (g - s[c+1]) * amt, 0, 255);
+        d[c+2] = clamp(s[c+2] + (b - s[c+2]) * amt, 0, 255);
+        d[c+3] = 255;
+      }
+    }
+    ctx.putImageData(dst,0,0);
+  }
+
+  async function renderPageToCanvas(pageNum){
+    const scale = parseFloat(scaleEl.value);
+    const page = await pdfDoc.getPage(pageNum);
+    const viewport = page.getViewport({ scale });
+    canvas.width = Math.floor(viewport.width);
+    canvas.height = Math.floor(viewport.height);
+
+    await page.render({ canvasContext: ctx, viewport }).promise;
+
+    // apply pixel transforms
+    let img = ctx.getImageData(0,0,canvas.width,canvas.height);
+    img = applyTransforms(img);
+    ctx.putImageData(img,0,0);
+
+    // optional sharpen
+    applySharpenIfNeeded();
+
+    previewInfoEl.textContent = `${pageNum} / ${pdfDoc.numPages}`;
+  }
+
+  function blobFromCanvas(){
+    const format = formatEl.value;
+    const q = parseFloat(qualityEl.value);
+    return new Promise((resolve)=>{
+      canvas.toBlob((blob)=>resolve(blob), format==="jpeg" ? "image/jpeg" : "image/png", q);
+    });
+  }
+
+  function addThumb(blob){
+    const img = document.createElement("img");
+    img.src = URL.createObjectURL(blob);
+    thumbs.appendChild(img);
+  }
+
+  function updateMeta(){
+    const meta = {
+      page: "KETADATA_PDF_TO_IMAGES",
+      timestamp: new Date().toISOString(),
+      file: currentFile ? currentFile.name : null,
+      settings: {
+        mode: modeEl.value,
+        format: formatEl.value,
+        scale: parseFloat(scaleEl.value),
+        quality: parseFloat(qualityEl.value),
+        brightness: parseFloat(brightnessEl.value),
+        contrast: parseFloat(contrastEl.value),
+        saturation: parseFloat(saturationEl.value),
+        gamma: parseFloat(gammaEl.value),
+        sharpen: parseFloat(sharpenEl.value),
+        grain: parseFloat(grainEl.value),
+        range: {
+          from: parseInt(fromPageEl.value,10) || 1,
+          to: parseInt(toPageEl.value,10) || (pdfDoc ? pdfDoc.numPages : 1)
+        }
+      }
+    };
+    metaEl.textContent = JSON.stringify(meta);
+    return meta;
+  }
+
+  exportNoteBtn.addEventListener("click", ()=>{
+    const meta = updateMeta();
+    const payload = {
+      meta,
+      note: ketaNoteEl.value || "",
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], {type:"application/json"});
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "keta_note.json";
+    a.click();
+  });
+
+  // events
+  scaleEl.addEventListener("input", ()=> scaleValEl.textContent = `${parseFloat(scaleEl.value).toFixed(1)}×`);
+  qualityEl.addEventListener("input", ()=> qualityValEl.textContent = `${parseFloat(qualityEl.value).toFixed(2)}`);
+
+  async function tryPreview(pageNum){
+    try{
+      if(!pdfDoc) return;
+      lastPreviewPage = clamp(pageNum, 1, pdfDoc.numPages);
+      await renderPageToCanvas(lastPreviewPage);
+      const b = await blobFromCanvas();
+      // preview thumb: only keep last 24 for sanity
+      addThumb(b);
+      while(thumbs.children.length > 24) thumbs.removeChild(thumbs.firstChild);
+      updateMeta();
+    } catch(e){
+      diag(`Preview error: ${e?.message || e}`);
+      log(`Preview error: ${e?.stack || e}`);
+    }
+  }
+
+  ["change","input"].forEach(evt=>{
+    [modeEl, formatEl, scaleEl, qualityEl, brightnessEl, contrastEl, saturationEl, gammaEl, sharpenEl, grainEl]
+      .forEach(el=> el.addEventListener(evt, ()=> tryPreview(lastPreviewPage)));
+  });
+
+  clearBtn.addEventListener("click", resetUI);
+
+  pdfInput.addEventListener("change", async (e)=>{
+    try{
+      const file = e.target.files[0];
+      if(!file) return;
+      resetUI();
+      currentFile = file;
+      fileNameEl.textContent = file.name;
+
+      log("Loading PDF (local)…");
+      const buf = await file.arrayBuffer();
+
+      // stable config: no worker
+      pdfDoc = await pdfjsLib.getDocument({
+        data: buf,
+        disableWorker: true,
+        isEvalSupported: false
+      }).promise;
+
+      pagesEl.textContent = String(pdfDoc.numPages);
+      fromPageEl.value = "1";
+      toPageEl.value = String(pdfDoc.numPages);
+      convertBtn.disabled = false;
+
+      log(`Loaded: ${pdfDoc.numPages} pages`);
+      diag("No errors.");
+
+      await tryPreview(1);
+    } catch(err){
+      convertBtn.disabled = true;
+      diag(`Load failed: ${err?.message || err}`);
+      log(`Load failed:\n${err?.stack || err}`);
+    }
+  });
+
+  convertBtn.addEventListener("click", async ()=>{
+    if(!pdfDoc || !currentFile) return;
+
+    try{
+      thumbs.innerHTML = "";
+      diag("No errors.");
+      log("Starting conversion (sequential)…");
+      setProgress(0);
+
+      const from = clamp(parseInt(fromPageEl.value,10) || 1, 1, pdfDoc.numPages);
+      const to = clamp(parseInt(toPageEl.value,10) || pdfDoc.numPages, 1, pdfDoc.numPages);
+      const start = Math.min(from,to);
+      const end = Math.max(from,to);
+
+      const zip = new JSZip();
+      const base = (currentFile.name || "pdf").replace(/\.pdf$/i,"");
+      const folder = zip.folder(base);
+
+      for(let p=start; p<=end; p++){
+        log(`Render ${p}/${end}…`);
+        await renderPageToCanvas(p);
+
+        const blob = await blobFromCanvas();
+        addThumb(blob);
+
+        const ext = (formatEl.value === "jpeg") ? "jpg" : "png";
+        folder.file(`page_${String(p).padStart(3,"0")}.${ext}`, blob);
+
+        setProgress((p-start+1)/(end-start+1));
+
+        // allow UI breathe
+        await new Promise(r=>setTimeout(r, 0));
+      }
+
+      log("Zipping…");
+      const out = await zip.generateAsync({type:"blob"});
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(out);
+      a.download = zipNameEl.value || "pdf_to_images.zip";
+      a.click();
+
+      log("Done.");
+    } catch(err){
+      diag(`Convert failed: ${err?.message || err}`);
+      log(`Convert failed:\n${err?.stack || err}`);
+    }
+  });
+
+  // keyboard: left/right preview pages
+  document.addEventListener("keydown", (e)=>{
+    if(!pdfDoc) return;
+    if(e.key === "ArrowLeft") tryPreview(lastPreviewPage-1);
+    if(e.key === "ArrowRight") tryPreview(lastPreviewPage+1);
+  });
+
+  // init
+  resetUI();
+  scaleValEl.textContent = `${parseFloat(scaleEl.value).toFixed(1)}×`;
+  qualityValEl.textContent = `${parseFloat(qualityEl.value).toFixed(2)}`;
+</script>
+</body>
+</html>
