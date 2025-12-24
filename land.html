@@ -1,0 +1,752 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>VI//DI</title>
+<style>
+  :root{
+    --bg:#000;
+    --fg:#fff;
+    --muted:rgba(255,255,255,0.55);
+    --line:rgba(255,255,255,0.18);
+    --line2:rgba(255,255,255,0.32);
+    --ctlbg:rgba(0,0,0,0.82);
+    --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  }
+  html,body{margin:0;height:100%;background:var(--bg);overflow:hidden}
+  canvas{display:block;width:100vw;height:100vh;background:#000}
+  /* VI/DI windows */
+  .win{
+    position:absolute;
+    left:24px; top:64px;
+    width:360px; height:240px;
+    border:1px solid var(--line2);
+    background:rgba(0,0,0,0.68);
+    backdrop-filter: blur(6px);
+    overflow:hidden;
+    resize:both;
+    min-width:220px;
+    min-height:160px;
+    z-index:30;
+  }
+  .win[data-role="di"]{left:auto; right:24px}
+  .head{
+    height:28px;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    padding:0 8px;
+    border-bottom:1px solid var(--line);
+    font-family:var(--mono);
+    font-size:11px;
+    letter-spacing:.14em;
+    text-transform:uppercase;
+    cursor:move;
+    user-select:none;
+  }
+  .head .tag{color:var(--muted)}
+  .head .btn{
+    border:1px solid var(--line);
+    background:transparent;
+    color:var(--fg);
+    font-family:var(--mono);
+    font-size:11px;
+    letter-spacing:.10em;
+    text-transform:uppercase;
+    padding:2px 8px;
+    cursor:pointer;
+  }
+  .head .btn:hover{border-color:var(--fg)}
+  .body{
+    height:calc(100% - 28px);
+    padding:10px;
+    font-family:var(--mono);
+    font-size:11px;
+    line-height:1.25;
+    color:var(--fg);
+  }
+  .meter{
+    height:10px;
+    border:1px solid var(--line);
+    position:relative;
+    margin:10px 0 12px;
+    overflow:hidden;
+  }
+  .meter > i{
+    position:absolute; left:0; top:0; bottom:0;
+    width:0%;
+    background:#fff;
+    opacity:0.85;
+  }
+  .grid{
+    display:grid;
+    grid-template-columns: 1fr 1fr;
+    gap:8px;
+  }
+  .row{
+    border:1px solid var(--line);
+    padding:8px;
+    background:rgba(0,0,0,0.35);
+  }
+  .k{
+    display:flex; justify-content:space-between; gap:8px;
+    color:var(--muted);
+    margin-bottom:6px;
+  }
+  .v{
+    font-size:12px;
+    letter-spacing:.06em;
+  }
+  /* Controller */
+  .ctrl{
+    position:absolute;
+    left:50%;
+    top:50%;
+    transform:translate(-50%,-50%);
+    width:min(720px, calc(100vw - 40px));
+    height:min(420px, calc(100vh - 40px));
+    border:1px solid var(--line2);
+    background:var(--ctlbg);
+    backdrop-filter: blur(8px);
+    z-index:100;
+    display:none;
+    resize:both;
+    overflow:hidden;
+  }
+  .ctrl.open{display:flex; flex-direction:column}
+  .ctrl .head{cursor:move}
+  .ctrl .body{padding:10px}
+  .ctrl .cols{
+    display:grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap:10px;
+    height:100%;
+  }
+  .panel{
+    border:1px solid var(--line);
+    padding:10px;
+    background:rgba(0,0,0,0.35);
+    min-height:0;
+    overflow:auto;
+  }
+  .panel h3{
+    margin:0 0 8px;
+    font-family:var(--mono);
+    font-size:11px;
+    letter-spacing:.14em;
+    text-transform:uppercase;
+    color:var(--muted);
+    font-weight:600;
+  }
+  .field{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:10px;
+    margin:8px 0;
+    font-family:var(--mono);
+    font-size:11px;
+    letter-spacing:.06em;
+    color:var(--fg);
+  }
+  .field input[type="range"]{width:58%}
+  .field input[type="number"]{
+    width:72px;
+    background:#000;
+    border:1px solid var(--line);
+    color:#fff;
+    font-family:var(--mono);
+    font-size:11px;
+    padding:4px 6px;
+    outline:none;
+  }
+  .pill{
+    display:inline-flex;
+    border:1px solid var(--line);
+    padding:4px 8px;
+    font-family:var(--mono);
+    font-size:11px;
+    letter-spacing:.10em;
+    text-transform:uppercase;
+    color:var(--muted);
+    margin-right:6px;
+  }
+  .hint{
+    margin-top:8px;
+    color:var(--muted);
+    font-family:var(--mono);
+    font-size:11px;
+    letter-spacing:.06em;
+    line-height:1.25;
+  }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<!-- VI WINDOW -->
+<div class="win" id="viWin" data-role="vi" style="left:24px; top:64px;">
+  <div class="head" id="viHead">
+    <div><span class="tag">VI</span> <span style="opacity:.65">/</span> SIGNAL</div>
+    <button class="btn" id="viHide">-</button>
+  </div>
+  <div class="body">
+    <div class="meter"><i id="viMeter"></i></div>
+    <div class="grid">
+      <div class="row">
+        <div class="k"><span>RATE</span><span id="viRateK">—</span></div>
+        <div class="v" id="viRateV">0.00</div>
+      </div>
+      <div class="row">
+        <div class="k"><span>DRIFT</span><span id="viDriftK">—</span></div>
+        <div class="v" id="viDriftV">0.00</div>
+      </div>
+      <div class="row">
+        <div class="k"><span>COUPLING</span><span id="viCoupleK">—</span></div>
+        <div class="v" id="viCoupleV">0.00</div>
+      </div>
+      <div class="row">
+        <div class="k"><span>JITTER</span><span id="viJitterK">—</span></div>
+        <div class="v" id="viJitterV">0.00</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- DI WINDOW -->
+<div class="win" id="diWin" data-role="di" style="right:24px; top:64px;">
+  <div class="head" id="diHead">
+    <div><span class="tag">DI</span> <span style="opacity:.65">/</span> DISSOLUTION</div>
+    <button class="btn" id="diHide">-</button>
+  </div>
+  <div class="body">
+    <div class="meter"><i id="diMeter"></i></div>
+    <div class="grid">
+      <div class="row">
+        <div class="k"><span>NOISE</span><span id="diNoiseK">—</span></div>
+        <div class="v" id="diNoiseV">0.00</div>
+      </div>
+      <div class="row">
+        <div class="k"><span>RUPTURE</span><span id="diRuptureK">—</span></div>
+        <div class="v" id="diRuptureV">0.00</div>
+      </div>
+      <div class="row">
+        <div class="k"><span>EROSION</span><span id="diErodeK">—</span></div>
+        <div class="v" id="diErodeV">0.00</div>
+      </div>
+      <div class="row">
+        <div class="k"><span>FLASH</span><span id="diFlashK">—</span></div>
+        <div class="v" id="diFlashV">0.00</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- CONTROLLER (HIDABLE, MOVABLE, RESIZABLE) -->
+<div class="ctrl" id="ctrl">
+  <div class="head" id="ctrlHead">
+    <div>CONTROLLER</div>
+    <button class="btn" id="ctrlClose">CLOSE</button>
+  </div>
+  <div class="body">
+    <div style="margin-bottom:10px;">
+      <span class="pill">C</span>
+      <span class="pill">SPACE</span>
+      <span class="pill">1–6</span>
+      <span class="pill">I</span>
+      <span class="pill">ESC</span>
+    </div>
+    <div class="cols">
+      <div class="panel">
+        <h3>GLOBAL</h3>
+        <div class="field">
+          <span>PRESET</span>
+          <input id="preset" type="range" min="1" max="6" step="1" />
+          <input id="presetN" type="number" min="1" max="6" step="1" />
+        </div>
+        <div class="field">
+          <span>INTENSITY</span>
+          <input id="intensity" type="range" min="0" max="1" step="0.001" />
+          <input id="intensityN" type="number" min="0" max="1" step="0.01" />
+        </div>
+        <div class="field">
+          <span>INVERT</span>
+          <input id="invert" type="range" min="0" max="1" step="1" />
+          <input id="invertN" type="number" min="0" max="1" step="1" />
+        </div>
+        <div class="hint">
+          CONTROLLER OPEN = HOTKEYS LOCKED (SCREEN REACTION OVERRIDDEN).<br/>
+          SPACE = ACCELERATION SURGE (WHEN CONTROLLER CLOSED).
+        </div>
+      </div>
+
+      <div class="panel">
+        <h3>VI (COHERENCE)</h3>
+        <div class="field">
+          <span>DRIFT</span>
+          <input id="viDrift" type="range" min="0" max="3" step="0.001" />
+          <input id="viDriftN" type="number" min="0" max="3" step="0.01" />
+        </div>
+        <div class="field">
+          <span>PULL</span>
+          <input id="viPull" type="range" min="0" max="3" step="0.001" />
+          <input id="viPullN" type="number" min="0" max="3" step="0.01" />
+        </div>
+        <div class="field">
+          <span>COUPLING</span>
+          <input id="viCoupling" type="range" min="0" max="1" step="0.001" />
+          <input id="viCouplingN" type="number" min="0" max="1" step="0.01" />
+        </div>
+        <div class="hint">
+          VI IS LOCAL SOVEREIGNTY: TIGHT CONTAINMENT + REPEATABLE TRAJECTORIES.
+        </div>
+      </div>
+
+      <div class="panel">
+        <h3>DI (DISSOLUTION)</h3>
+        <div class="field">
+          <span>NOISE</span>
+          <input id="diNoise" type="range" min="0" max="3" step="0.001" />
+          <input id="diNoiseN" type="number" min="0" max="3" step="0.01" />
+        </div>
+        <div class="field">
+          <span>RUPTURE</span>
+          <input id="diRupture" type="range" min="0" max="3" step="0.001" />
+          <input id="diRuptureN" type="number" min="0" max="3" step="0.01" />
+        </div>
+        <div class="field">
+          <span>FLASH</span>
+          <input id="diFlash" type="range" min="0" max="1" step="0.001" />
+          <input id="diFlashN" type="number" min="0" max="1" step="0.01" />
+        </div>
+        <div class="hint">
+          DI IS DECOHERENCE: LEAKAGE, GLITCH, BREAKS, BRIGHTNESS EVENTS.
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const canvas = document.getElementById("c");
+  const ctx = canvas.getContext("2d", { alpha:false });
+
+  const DPR = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+  const S = {
+    t: 0,
+    invert: 0,
+    preset: 3,
+    intensity: 0.55,
+
+    // VI (local)
+    viDrift: 1.10,
+    viPull: 1.25,
+    viCoupling: 0.82,
+
+    // DI (global)
+    diNoise: 1.10,
+    diRupture: 0.85,
+    diFlash: 0.08,
+
+    surge: 0,
+    seed: (Math.random() * 1e9) | 0,
+
+    ctrlOpen: false,
+    freezeInput: false
+  };
+
+  function resize(){
+    canvas.width = Math.floor(innerWidth * DPR);
+    canvas.height = Math.floor(innerHeight * DPR);
+  }
+  addEventListener("resize", resize, { passive:true });
+  resize();
+
+  // deterministic jitter
+  function rnd(){
+    S.seed = (S.seed * 1664525 + 1013904223) >>> 0;
+    return S.seed / 4294967296;
+  }
+  const clamp = (x,a,b)=> x<a?a : x>b?b : x;
+  const mix = (a,b,t)=> a + (b-a)*t;
+
+  // presets (intensity maps)
+  function applyPreset(k){
+    const p = clamp(k|0, 1, 6);
+    S.preset = p;
+    // ramp parameters: more acceleration, more rupture, more flash
+    const f = (p-1)/5; // 0..1
+    S.intensity = mix(0.35, 0.95, f);
+
+    S.viDrift   = mix(0.85, 1.85, f);
+    S.viPull    = mix(1.55, 0.85, f);     // pull weakens with higher preset
+    S.viCoupling= mix(0.92, 0.55, f);     // sovereignty degrades with higher preset
+
+    S.diNoise   = mix(0.55, 2.10, f);
+    S.diRupture = mix(0.35, 2.25, f);
+    S.diFlash   = mix(0.00, 0.22, f);
+  }
+  applyPreset(S.preset);
+
+  // particle field
+  const N = 1400;
+  const P = new Float32Array(N * 6); // x,y,vx,vy,life,tag (0 VI, 1 DI)
+  function resetField(){
+    const w = canvas.width, h = canvas.height;
+    const cx = w*0.5, cy = h*0.5;
+    for(let i=0;i<N;i++){
+      const o = i*6;
+      const tag = (i % 3 === 0) ? 0 : 1; // more DI than VI
+      let x,y;
+      if(tag===0){
+        x = cx + (rnd()-0.5)*w*0.22;
+        y = cy + (rnd()-0.5)*h*0.22;
+      } else {
+        x = rnd()*w; y = rnd()*h;
+      }
+      P[o+0]=x; P[o+1]=y;
+      P[o+2]=(rnd()-0.5)*0.8;
+      P[o+3]=(rnd()-0.5)*0.8;
+      P[o+4]=0.6 + rnd()*0.8;
+      P[o+5]=tag;
+    }
+  }
+  resetField();
+
+  // input lock when controller open
+  const KEY = new Set();
+  function isTypingTarget(t){
+    if(!t) return false;
+    const tag = String(t.tagName || "").toLowerCase();
+    return tag === "input" || tag === "textarea" || t.isContentEditable;
+  }
+
+  addEventListener("keydown", (e) => {
+    const typing = isTypingTarget(e.target);
+    if (S.ctrlOpen) {
+      // OVERRIDE: no screen reaction while controller open
+      // still allow ESC to close controller
+      if (e.code === "Escape") { e.preventDefault(); closeCtrl(); }
+      return;
+    }
+
+    if(!typing){
+      KEY.add(e.code);
+      if (e.code === "Space") e.preventDefault();
+      if (/^Digit[1-6]$/.test(e.code)) { applyPreset(+e.code.slice(-1)); syncUI(); }
+      if (e.code === "KeyI") { S.invert = S.invert ? 0 : 1; syncUI(); }
+      if (e.code === "KeyC") { openCtrl(); }
+      if (e.code === "KeyR") { resetField(); }
+    }
+  }, { passive:false });
+
+  addEventListener("keyup", (e) => {
+    KEY.delete(e.code);
+  }, { passive:true });
+
+  // controller wiring
+  const $ = (id)=>document.getElementById(id);
+
+  function bindPair(rangeId, numId, get, set){
+    const r = $(rangeId), n = $(numId);
+    const sync = () => { r.value = String(get()); n.value = String(get()); };
+    r.addEventListener("input", () => { set(parseFloat(r.value)); n.value = r.value; });
+    n.addEventListener("input", () => { set(parseFloat(n.value)); r.value = n.value; });
+    return sync;
+  }
+
+  const syncers = [];
+  syncers.push(bindPair("preset", "presetN", ()=>S.preset, (v)=>{ applyPreset(v); }));
+  syncers.push(bindPair("intensity", "intensityN", ()=>S.intensity, (v)=>{ S.intensity = clamp(v,0,1); }));
+  syncers.push(bindPair("invert", "invertN", ()=>S.invert, (v)=>{ S.invert = v ? 1 : 0; }));
+
+  syncers.push(bindPair("viDrift", "viDriftN", ()=>S.viDrift, (v)=>{ S.viDrift = clamp(v,0,3); }));
+  syncers.push(bindPair("viPull", "viPullN", ()=>S.viPull, (v)=>{ S.viPull = clamp(v,0,3); }));
+  syncers.push(bindPair("viCoupling", "viCouplingN", ()=>S.viCoupling, (v)=>{ S.viCoupling = clamp(v,0,1); }));
+
+  syncers.push(bindPair("diNoise", "diNoiseN", ()=>S.diNoise, (v)=>{ S.diNoise = clamp(v,0,3); }));
+  syncers.push(bindPair("diRupture", "diRuptureN", ()=>S.diRupture, (v)=>{ S.diRupture = clamp(v,0,3); }));
+  syncers.push(bindPair("diFlash", "diFlashN", ()=>S.diFlash, (v)=>{ S.diFlash = clamp(v,0,1); }));
+
+  function syncUI(){ for(const f of syncers) f(); }
+
+  const ctrl = $("ctrl");
+  const ctrlClose = $("ctrlClose");
+  ctrlClose.addEventListener("click", ()=>closeCtrl());
+
+  function openCtrl(){
+    S.ctrlOpen = true;
+    ctrl.classList.add("open");
+    ctrl.style.left = "50%";
+    ctrl.style.top = "50%";
+    ctrl.style.transform = "translate(-50%,-50%)";
+    syncUI();
+  }
+  function closeCtrl(){
+    S.ctrlOpen = false;
+    ctrl.classList.remove("open");
+  }
+
+  // click-to-focus: ensure controller captures interactions
+  ctrl.addEventListener("mousedown", (e)=>{ e.stopPropagation(); }, true);
+  ctrl.addEventListener("keydown", (e)=>{ e.stopPropagation(); }, true);
+
+  // movable/resizable windows
+  function makeDraggable(win, head){
+    let drag=false, ox=0, oy=0;
+    head.addEventListener("mousedown", (e)=>{
+      if(e.target.closest("button")) return;
+      drag=true;
+      const r = win.getBoundingClientRect();
+      ox = e.clientX - r.left;
+      oy = e.clientY - r.top;
+      win.style.left = r.left + "px";
+      win.style.top  = r.top  + "px";
+      win.style.right = "auto";
+    });
+    addEventListener("mousemove", (e)=>{
+      if(!drag) return;
+      win.style.left = (e.clientX - ox) + "px";
+      win.style.top  = (e.clientY - oy) + "px";
+    });
+    addEventListener("mouseup", ()=>{ drag=false; });
+  }
+  makeDraggable($("viWin"), $("viHead"));
+  makeDraggable($("diWin"), $("diHead"));
+  makeDraggable(ctrl, $("ctrlHead"));
+
+  // hide buttons for VI/DI windows
+  $("viHide").addEventListener("click", ()=>{ $("viWin").style.display="none"; });
+  $("diHide").addEventListener("click", ()=>{ $("diWin").style.display="none"; });
+
+  // re-show windows via double click on canvas corners (no text)
+  canvas.addEventListener("dblclick", (e)=>{
+    const x = e.clientX, y = e.clientY;
+    const w = innerWidth, h = innerHeight;
+    const inLeftTop = (x < w*0.25 && y < h*0.25);
+    const inRightTop = (x > w*0.75 && y < h*0.25);
+    if(inLeftTop) $("viWin").style.display="block";
+    if(inRightTop) $("diWin").style.display="block";
+  });
+
+  // render metrics (no words on canvas; windows show numeric intensities)
+  const viMeter = $("viMeter");
+  const diMeter = $("diMeter");
+
+  function updateMeters(vi, di){
+    viMeter.style.width = (clamp(vi,0,1)*100).toFixed(1) + "%";
+    diMeter.style.width = (clamp(di,0,1)*100).toFixed(1) + "%";
+
+    $("viRateV").textContent = (vi*6.0).toFixed(2);
+    $("viDriftV").textContent = S.viDrift.toFixed(2);
+    $("viCoupleV").textContent = S.viCoupling.toFixed(2);
+    $("viJitterV").textContent = (S.diNoise*0.25).toFixed(2);
+
+    $("diNoiseV").textContent = S.diNoise.toFixed(2);
+    $("diRuptureV").textContent = S.diRupture.toFixed(2);
+    $("diErodeV").textContent = (1 - S.viCoupling).toFixed(2);
+    $("diFlashV").textContent = S.diFlash.toFixed(2);
+  }
+
+  // draw loop
+  let last = performance.now();
+  function loop(now){
+    const dt = Math.min(0.033, (now-last)/1000);
+    last = now;
+
+    // surge only when controller closed
+    const holding = (!S.ctrlOpen && KEY.has("Space"));
+    S.surge = mix(S.surge, holding ? 1 : 0, holding ? 0.08 : 0.05);
+    S.t += dt * (0.70 + 2.8*S.surge) * (0.65 + S.intensity);
+
+    const w = canvas.width, h = canvas.height;
+    const cx = w*0.5, cy = h*0.5;
+
+    const bg = S.invert ? 255 : 0;
+    const fg = S.invert ? 0 : 255;
+
+    // afterimage (memory)
+    const fade = mix(0.16, 0.03, clamp(S.intensity*0.9 + S.surge*0.6, 0, 1));
+    ctx.fillStyle = `rgba(${bg},${bg},${bg},${fade})`;
+    ctx.fillRect(0,0,w,h);
+
+    // global “spine” attractor (continuity line)
+    const R = Math.min(w,h)*0.28;
+    const sx = cx + Math.cos(S.t*0.23) * R * mix(0.20, 0.85, S.intensity);
+    const sy = cy + Math.sin(S.t*0.17) * R * mix(0.20, 0.85, S.intensity);
+
+    // rupture flashes (DI)
+    if(S.diFlash > 0){
+      const pulse = Math.max(0, Math.sin(S.t*(2.0 + 7.0*S.intensity + 10.0*S.surge)));
+      if(pulse > (0.992 - 0.010*S.diFlash - 0.012*S.intensity)){
+        const a = clamp(S.diFlash * (0.08 + 0.35*S.intensity + 0.35*S.surge), 0, 0.65);
+        ctx.fillStyle = `rgba(${fg},${fg},${fg},${a})`;
+        ctx.fillRect(0,0,w,h);
+      }
+    }
+
+    ctx.lineWidth = 1 * DPR;
+    ctx.lineCap = "butt";
+
+    // track signals for meters
+    let viSig = 0;
+    let diSig = 0;
+
+    for(let i=0;i<N;i++){
+      const o=i*6;
+      let x=P[o+0], y=P[o+1], vx=P[o+2], vy=P[o+3], life=P[o+4];
+      const tag=P[o+5];
+
+      // normalized for field dynamics
+      const nx = (x - cx) / (Math.min(w,h));
+      const ny = (y - cy) / (Math.min(w,h));
+      const a = Math.atan2(ny, nx);
+      const r = Math.hypot(nx, ny) + 1e-6;
+
+      // VI: local vortex w/ pull (sovereignty)
+      const localCurl = (0.55 + S.viDrift) * (1.0/(0.26 + r));
+      const lx = -Math.sin(a)*localCurl;
+      const ly =  Math.cos(a)*localCurl;
+
+      const px = (cx - x) / (Math.min(w,h));
+      const py = (cy - y) / (Math.min(w,h));
+      const pl = Math.hypot(px,py) + 1e-6;
+      const pux = (px/pl) * (0.22 + 0.55*S.viPull);
+      const puy = (py/pl) * (0.22 + 0.55*S.viPull);
+
+      // DI: spine curl + noise + rupture shear (dissolution)
+      const dx = (x - sx) / (Math.min(w,h));
+      const dy = (y - sy) / (Math.min(w,h));
+      const da = Math.atan2(dy, dx);
+      const dr = Math.hypot(dx, dy) + 1e-6;
+      const globalCurl = (0.35 + 1.25*S.diRupture) * (1.0/(0.38 + dr));
+      const gx = -Math.sin(da) * globalCurl;
+      const gy =  Math.cos(da) * globalCurl;
+
+      const jx = (rnd()-0.5) * 0.65 * S.diNoise;
+      const jy = (rnd()-0.5) * 0.65 * S.diNoise;
+
+      // coupling: VI can resist DI depending on viCoupling
+      const cVi = clamp(S.viCoupling,0,1);
+      const cDi = 1 - cVi;
+
+      const base = (0.55 + 1.65*S.intensity) * (0.85 + 2.25*S.surge);
+      const k = tag===0 ? (0.95*cVi) : (0.35*cVi);
+
+      // integrate (VI-biased or DI-biased)
+      vx = vx*0.985 + (lx*k + gx*(1-k) + pux*cVi + jx*cDi) * 0.010 * base;
+      vy = vy*0.985 + (ly*k + gy*(1-k) + puy*cVi + jy*cDi) * 0.010 * base;
+
+      // rupture shear: occasional angular discontinuity
+      const rupture = (tag===1 ? S.diRupture : S.diRupture*0.35) * (0.2 + 0.8*S.intensity);
+      if(rnd() < (0.002 + 0.006*rupture + 0.010*S.surge)){
+        const ang = (rnd()-0.5) * Math.PI * rupture;
+        const cos = Math.cos(ang), sin = Math.sin(ang);
+        const nvx = vx*cos - vy*sin;
+        const nvy = vx*sin + vy*cos;
+        vx = nvx; vy = nvy;
+      }
+
+      const x2 = x + vx * DPR * base;
+      const y2 = y + vy * DPR * base;
+
+      // life / respawn
+      life -= dt * (0.10 + 0.35*S.intensity + 0.55*S.surge);
+      const out = (x2 < -40 || x2 > w+40 || y2 < -40 || y2 > h+40);
+      if(life <= 0 || out){
+        const isVI = (tag===0);
+        if(isVI){
+          x = cx + (rnd()-0.5)*w*0.22;
+          y = cy + (rnd()-0.5)*h*0.22;
+        } else {
+          x = rnd()*w; y = rnd()*h;
+        }
+        vx = (rnd()-0.5)*0.8;
+        vy = (rnd()-0.5)*0.8;
+        life = 0.55 + rnd()*0.85;
+      } else {
+        // draw
+        const a0 = tag===0 ? 0.22 : 0.14;
+        const alpha = clamp(a0 + 0.22*S.intensity + 0.28*S.surge, 0.05, 0.62);
+        ctx.strokeStyle = `rgba(${fg},${fg},${fg},${alpha})`;
+        ctx.beginPath();
+        ctx.moveTo(x,y);
+        ctx.lineTo(x2,y2);
+        ctx.stroke();
+
+        // signal aggregation
+        const sp = Math.hypot(vx,vy);
+        if(tag===0) viSig += sp;
+        else diSig += sp;
+
+        x = x2; y = y2;
+      }
+
+      P[o+0]=x; P[o+1]=y; P[o+2]=vx; P[o+3]=vy; P[o+4]=life;
+    }
+
+    // normalize signals
+    viSig = clamp(viSig / (N*0.085), 0, 1);
+    diSig = clamp(diSig / (N*0.085), 0, 1);
+    updateMeters(viSig, diSig);
+
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
+
+  // ESC closes controller if open; otherwise does nothing
+  addEventListener("keydown", (e)=>{
+    if(e.code==="Escape" && S.ctrlOpen){
+      e.preventDefault();
+      closeCtrl();
+    }
+    if(e.code==="KeyC" && !S.ctrlOpen && !isTypingTarget(e.target)){
+      // allow open via C (handled already) but keep redundancy safe
+    }
+  }, { passive:false });
+
+  // open controller on load? no.
+  // expose minimal debug
+  window.__VIDI = { S, applyPreset, resetField, openCtrl, closeCtrl };
+})();
+</script>
+</body>
+</html>
+
+<!--
+============================================================
+KETADATA HTML SERIALIZATION STAMP
+
+FILE_ID: VI_DI_INTERFACE_NICKLAND_V1
+ROOM_ID: BASE
+VERSION: vidi.nickland.v1
+UPDATED_AT: 2025-12-23T00:00:00-05:00
+AUTHOR: KNG / BIGGIE
+INTENT: VI/DI COUPLED INTENSITY INTERFACE (CONTROLLERS HIDABLE + INPUT OVERRIDE)
+STATUS: DERIVED (BASE-CONFORMANT)
+
+AE:
+- BLACK FIELD / WHITE STROKES
+- SHARP GEOMETRY / NO KITSCH
+- NUMERIC READOUTS ONLY (NO CANVAS TEXT)
+- WINDOWS MOVABLE / RESIZABLE
+
+EE:
+- COUPLED FIELD DYNAMICS: VI (LOCAL CONTAINMENT) + DI (DECOHERENCE)
+- PRESETS 1–6 CONTROL SYSTEM INTENSITY PROFILE
+- SPACE = SURGE (ACCELERATION) WHEN CONTROLLER CLOSED
+- I = INVERT, R = RESET FIELD, C = CONTROLLER
+- RUPTURE FLASH EVENTS (DI)
+
+WB:
+- CONTROLLER HIDABLE
+- CONTROLLER OPEN OVERRIDES SCREEN REACTION (HOTKEYS LOCKED)
+- WINDOWS MOVABLE / RESIZABLE
+- NO STORAGE / NO EXPORT (RUNTIME ARTIFACT)
+
+CHANGELOG:
+- 2025-12-23: INITIAL BUILD
+============================================================
+-->
