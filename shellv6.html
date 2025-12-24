@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>KETADATA SHELL v4 — BASE</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <style>
+    /* =========================
+       AE — GLOBAL
+       ========================= */
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      background: #000;
+      color: #fff;
+      font-family: Arial, sans-serif;
+      overflow: hidden;
+    }
+
+    #world {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      letter-spacing: 0.08em;
+    }
+
+    /* =========================
+       AE — KETA_NOTE
+       ========================= */
+    #KETA_NOTE_ROOT {
+      position: fixed;
+      left: 16px;
+      bottom: 16px;
+      width: 360px;
+      max-width: calc(100vw - 32px);
+      height: 220px;
+      background: rgba(0,0,0,0.92);
+      border: 1px solid rgba(255,255,255,0.35);
+      z-index: 999999;
+      display: flex;
+      flex-direction: column;
+    }
+
+    #KETA_NOTE_HEADER {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 10px;
+      border-bottom: 1px solid rgba(255,255,255,0.18);
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    #KETA_NOTE_TEXTAREA {
+      flex: 1;
+      resize: none;
+      border: 0;
+      outline: 0;
+      padding: 10px;
+      background: transparent;
+      color: rgba(255,255,255,0.9);
+      font-size: 12px;
+      line-height: 1.3;
+    }
+
+    .keta-btn {
+      all: unset;
+      cursor: pointer;
+      color: rgba(255,255,255,0.65);
+      margin-left: 10px;
+    }
+  </style>
+</head>
+
+<body>
+
+  <!-- =========================
+       EE — WORLD PLACEHOLDER
+       ========================= -->
+  <div id="world">
+    BASE
+  </div>
+
+  <!-- =========================
+       EE/WB — KETA_NOTE
+       ========================= -->
+  <section id="KETA_NOTE_ROOT">
+    <div id="KETA_NOTE_HEADER">
+      <div id="KETA_NOTE_STATUS">KETA_NOTE | ROOM: BASE | STATE: —</div>
+      <div>
+        <button id="KETA_EXPORT" class="keta-btn">EXPORT</button>
+        <button id="KETA_TOGGLE" class="keta-btn">-</button>
+      </div>
+    </div>
+    <textarea id="KETA_NOTE_TEXTAREA" spellcheck="false"></textarea>
+  </section>
+
+  <script>
+  /* =====================================================
+     EE/WB — KETA_NOTE CONTINUITY KERNEL (BASE)
+     ===================================================== */
+
+  (function(){
+    const LS = localStorage;
+
+    const KEYS = {
+      content: "KETA_NOTE::content",
+      meta:    "KETA_NOTE::meta",
+      log:     "KETA_NOTE::log"
+    };
+
+    const DEFAULT_META = {
+      version: "KETA_NOTE_KERNEL_v1",
+      pageId: "shellv4_base",
+      roomId: "base",
+      stateId: null,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+
+    function readJSON(k, f){ try { return JSON.parse(LS.getItem(k)); } catch { return f; } }
+    function writeJSON(k, v){ LS.setItem(k, JSON.stringify(v)); }
+    function now(){ return new Date().toISOString(); }
+
+    let meta = readJSON(KEYS.meta, null) || DEFAULT_META;
+    writeJSON(KEYS.meta, meta);
+
+    const status = document.getElementById("KETA_NOTE_STATUS");
+    const ta = document.getElementById("KETA_NOTE_TEXTAREA");
+
+    function updateHeader(){
+      status.textContent =
+        `KETA_NOTE | ROOM: ${meta.roomId.toUpperCase()} | STATE: ${meta.stateId || "—"}`;
+    }
+
+    function setMeta(patch){
+      meta = { ...meta, ...patch, updatedAt: now() };
+      writeJSON(KEYS.meta, meta);
+      updateHeader();
+    }
+
+    ta.value = LS.getItem(KEYS.content) || "";
+    ta.addEventListener("input", () => {
+      LS.setItem(KEYS.content, ta.value);
+      setMeta({});
+    });
+
+    document.getElementById("KETA_TOGGLE").onclick = () => {
+      const root = document.getElementById("KETA_NOTE_ROOT");
+      const collapsed = root.style.height === "34px";
+      root.style.height = collapsed ? "220px" : "34px";
+      ta.style.display = collapsed ? "block" : "none";
+    };
+
+    document.getElementById("KETA_EXPORT").onclick = () => {
+      const blob = new Blob(
+        [JSON.stringify({
+          meta,
+          content: LS.getItem(KEYS.content),
+          log: readJSON(KEYS.log, [])
+        }, null, 2)],
+        { type: "application/json" }
+      );
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = "KETA_NOTE_EXPORT.json";
+      a.click();
+      URL.revokeObjectURL(a.href);
+    };
+
+    // -------- Guard: resurrect note if removed
+    new MutationObserver(() => {
+      if (!document.getElementById("KETA_NOTE_ROOT")) location.reload();
+    }).observe(document.documentElement, { childList: true, subtree: true });
+
+    // -------- Public API
+    window.KETA_NOTE = {
+      setContext({ roomId = meta.roomId, stateId = meta.stateId } = {}){
+        setMeta({ roomId, stateId });
+      },
+      setRoom(roomId){
+        setMeta({ roomId });
+      },
+      setState(stateId){
+        setMeta({ stateId });
+      }
+    };
+
+    updateHeader();
+  })();
+  </script>
+
+</body>
+</html>
