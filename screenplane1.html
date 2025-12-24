@@ -1,0 +1,696 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>KETADATA // SCREENPLANE (SHELL8) — LIGHTS 1-6 ONLY</title>
+<style>
+  :root{
+    --bg:#000; --fg:#fff; --mut:#8a8a8a; --line:#262626; --line2:#3a3a3a;
+    --panelW: 390px; --pad:10px;
+  }
+  html,body{margin:0;height:100%;background:var(--bg);overflow:hidden;font-family:Arial, Helvetica, sans-serif}
+  *{box-sizing:border-box}
+  button,input,select,textarea{font-family:inherit}
+
+  /* === SCREENPLANE === */
+  #root{position:fixed; inset:0; background:#000;}
+  #stage{
+    position:absolute; inset:0; background:#000;
+    filter:none;
+  }
+  #stage.inverted{ filter: invert(1); }
+
+  /* === LIGHTS OVERLAY (SHELL LEVEL) === */
+  #lights{
+    position:absolute; inset:0;
+    pointer-events:none;
+    z-index:45;
+    opacity:0;
+    transition:opacity 80ms linear;
+    mix-blend-mode:screen;
+  }
+  /* geometric "lights" texture (no color) */
+  #lights::before{
+    content:"";
+    position:absolute; inset:-20%;
+    background:
+      radial-gradient(circle at 18% 22%, rgba(255,255,255,0.16), rgba(0,0,0,0) 48%),
+      radial-gradient(circle at 72% 34%, rgba(255,255,255,0.12), rgba(0,0,0,0) 52%),
+      radial-gradient(circle at 44% 78%, rgba(255,255,255,0.10), rgba(0,0,0,0) 56%),
+      linear-gradient(90deg, rgba(255,255,255,0.06) 1px, rgba(0,0,0,0) 1px),
+      linear-gradient(0deg,  rgba(255,255,255,0.06) 1px, rgba(0,0,0,0) 1px);
+    background-size: auto, auto, auto, 120px 120px, 120px 120px;
+    filter: blur(0.6px);
+  }
+  /* subtle strobe-like shimmer controlled by JS using CSS vars */
+  #lights{
+    --L: 0;
+    --pulse: 0;
+    opacity: calc(var(--L) * 0.14);
+    transform: translateZ(0);
+  }
+
+  /* === HUD === */
+  #hud{
+    position:absolute; top:0; left:0; height:100vh; width:var(--panelW);
+    background:rgba(0,0,0,0.88);
+    border-right:1px solid var(--line);
+    color:var(--fg);
+    padding:10px 10px 14px;
+    z-index:50;
+    user-select:none;
+  }
+  .big{font-size:14px; letter-spacing:0.14em; margin:0 0 4px;}
+  .title{font-size:12px; letter-spacing:0.12em; color:var(--mut); margin:2px 0 10px;}
+  .sep{height:1px; background:var(--line); margin:10px 0;}
+  .row{display:flex; gap:8px; align-items:center; margin:8px 0;}
+  .row label{flex:0 0 110px; font-size:12px; letter-spacing:0.06em; color:var(--mut);}
+  .row input[type="text"], .row select{
+    flex:1;
+    background:#000; color:var(--fg);
+    border:1px solid var(--line);
+    padding:8px 10px; border-radius:0;
+    font-size:12px;
+  }
+  textarea{
+    width:100%; height:112px; resize:none;
+    background:#000; color:var(--fg);
+    border:1px solid var(--line);
+    padding:8px; border-radius:0;
+    font-size:11px;
+    font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace;
+  }
+  button{
+    background:#000; color:var(--fg);
+    border:1px solid var(--line);
+    padding:8px 10px; border-radius:0;
+    font-size:12px; letter-spacing:0.10em;
+    cursor:pointer;
+  }
+  button:hover{border-color:var(--line2)}
+  .hint{font-size:11px; color:var(--mut); line-height:1.35; letter-spacing:0.04em}
+  .pill{display:inline-block;border:1px solid var(--line);padding:2px 6px;margin:2px 6px 0 0;color:var(--mut);font-size:11px}
+
+  /* === STAGES === */
+  .stageFrame{
+    position:absolute;
+    border:1px solid var(--line);
+    background:#000;
+    overflow:hidden;
+  }
+  #centerStage{
+    left:calc(var(--panelW) + var(--pad));
+    top:var(--pad);
+    right:var(--pad);
+    bottom:var(--pad);
+    display:none;
+    z-index:5;
+  }
+  #gridStage{
+    left:calc(var(--panelW) + var(--pad));
+    top:var(--pad);
+    right:var(--pad);
+    bottom:var(--pad);
+    display:none;
+    z-index:5;
+  }
+  #grid{
+    position:absolute; inset:0;
+    display:grid;
+    gap:8px;
+    padding:8px;
+  }
+  .cell{
+    border:1px solid var(--line);
+    background:#000;
+    overflow:hidden;
+    position:relative;
+  }
+  #fullStage{
+    left:0; top:0; right:0; bottom:0;
+    display:none;
+    z-index:1;
+  }
+
+  iframe.surface{
+    width:100%; height:100%;
+    border:0;
+    background:#000;
+  }
+
+  /* floating nodule */
+  .nodule{
+    position:absolute;
+    width:420px; height:260px;
+    border:1px solid var(--line);
+    background:#000;
+    z-index:40;
+    display:flex; flex-direction:column;
+  }
+  .noduleHeader{
+    height:34px;
+    display:flex; align-items:center; gap:8px;
+    border-bottom:1px solid var(--line);
+    padding:0 8px;
+    color:var(--mut);
+    letter-spacing:0.10em;
+    user-select:none;
+    cursor:move;
+  }
+  .noduleHeader .spacer{flex:1}
+  .noduleHeader button{padding:4px 8px; font-size:11px;}
+  .noduleBody{flex:1; position:relative; background:#000;}
+  .noduleBody iframe{width:100%; height:100%; border:0; background:#000;}
+  .resizeHandle{
+    position:absolute; right:0; bottom:0;
+    width:16px; height:16px;
+    border-left:1px solid var(--line);
+    border-top:1px solid var(--line);
+    cursor:nwse-resize;
+  }
+
+  #corner{
+    position:fixed; right:10px; bottom:10px;
+    color:rgba(255,255,255,0.28);
+    font-size:11px; letter-spacing:0.14em;
+    pointer-events:none;
+    z-index:60;
+  }
+</style>
+</head>
+<body>
+<div id="root">
+  <div id="stage">
+    <div id="fullStage" class="stageFrame"></div>
+    <div id="centerStage" class="stageFrame"></div>
+    <div id="gridStage" class="stageFrame"><div id="grid"></div></div>
+  </div>
+
+  <div id="lights" aria-hidden="true"></div>
+
+  <div id="hud">
+    <div class="big">KETADATA // SCREENPLANE</div>
+    <div class="title">SHELL8 SCREEN-OF-SCREENS — HOTKEYS: 1–6 LIGHTS, SHIFT+I INVERT</div>
+
+    <div class="row">
+      <label>MODE</label>
+      <select id="mode">
+        <option value="FULL">FULL (TAKEOVER)</option>
+        <option value="CENTER">CENTER STAGE</option>
+        <option value="GRID">GRID STAGE</option>
+      </select>
+    </div>
+
+    <div class="row">
+      <label>MODULE</label>
+      <select id="module">
+        <option value="CUSTOM_URL">CUSTOM URL</option>
+        <option value="CUSTOM_HTML">CUSTOM HTML (SRCDOC)</option>
+      </select>
+    </div>
+
+    <div class="row">
+      <label>URL</label>
+      <input id="url" type="text" placeholder="https://... or /path/module.html" />
+    </div>
+
+    <div class="sep"></div>
+
+    <div class="row">
+      <button id="mount">MOUNT</button>
+      <button id="unmount">UNMOUNT</button>
+      <button id="clear">CLEAR</button>
+    </div>
+
+    <div class="row">
+      <button id="spawnNodule">SPAWN VIDEO NODULE</button>
+      <button id="invertBtn">INVERT</button>
+    </div>
+
+    <div class="sep"></div>
+
+    <div class="row">
+      <label>GRID</label>
+      <select id="gridPreset">
+        <option value="2x2">2x2</option>
+        <option value="3x3">3x3</option>
+        <option value="4x3">4x3</option>
+        <option value="4x4">4x4</option>
+      </select>
+      <button id="applyGrid">APPLY</button>
+    </div>
+
+    <div class="sep"></div>
+
+    <div class="row"><label>SRCDOC</label></div>
+    <textarea id="srcdoc" spellcheck="false" placeholder="PASTE FULL HTML HERE (CUSTOM_HTML)"></textarea>
+
+    <div class="sep"></div>
+
+    <div class="row">
+      <button id="export">EXPORT STATE</button>
+      <button id="import">IMPORT STATE</button>
+    </div>
+    <textarea id="io" spellcheck="false" placeholder="STATE JSON"></textarea>
+
+    <div class="sep"></div>
+
+    <div class="hint">
+      <span class="pill">1–6</span> LIGHTS LEVEL
+      <span class="pill">SHIFT+I</span> INVERT (GLOBAL)
+    </div>
+  </div>
+
+  <div id="corner">SHELL8 // SCREENPLANE // COMPOSITOR</div>
+</div>
+
+<script>
+(() => {
+  /* ============================================================
+     KETADATA SHELL8 — SYSTEM UNIVERSALS
+     ============================================================ */
+
+  const KETADATA_SYSTEM = {
+    SHELL: "SHELL8",
+    MODE: "SCREENPLANE",
+    FILE_ID: "SCREENPLANE_COMPOSITOR_V2_MINHOTKEYS",
+    ROOM_ID: "KETADATA_OS",
+    VERSION: "shell8.screenplane.v2",
+    UPDATED_AT: "2025-12-24T00:00:00-05:00",
+    AUTHOR: "KNG / BIGGIE",
+    STATUS: "ACTIVE",
+    IO: { INPUT: "KEYBOARD(UNIVERSALS)+HUD", OUTPUT: "MULTI_STAGE_COMPOSITE", STORAGE: "NONE" },
+    STATE: { EXPORTABLE: true, PERSISTENT: false, SNAPSHOT: null },
+    COMMAND_MAP: {
+      LIGHTS_1_6: "Digit1..Digit6",
+      INVERT_TOGGLE: "Shift+KeyI"
+    }
+  };
+
+  function KETA_EXPORT_STATE(){ return snapshotState(); }
+  function KETA_IMPORT_STATE(s){ return applySnapshot(s); }
+
+  Object.defineProperty(window, "__KETADATA__", {
+    value: Object.freeze({
+      SYSTEM: Object.freeze(KETADATA_SYSTEM),
+      EXPORT: KETA_EXPORT_STATE,
+      IMPORT: KETA_IMPORT_STATE
+    }),
+    writable:false, configurable:false, enumerable:false
+  });
+
+  /* ============================================================
+     DOM
+     ============================================================ */
+
+  const stage = document.getElementById("stage");
+  const lights = document.getElementById("lights");
+
+  const fullStage   = document.getElementById("fullStage");
+  const centerStage = document.getElementById("centerStage");
+  const gridStage   = document.getElementById("gridStage");
+  const grid        = document.getElementById("grid");
+
+  const elMode = document.getElementById("mode");
+  const elModule = document.getElementById("module");
+  const elURL = document.getElementById("url");
+  const elSrcdoc = document.getElementById("srcdoc");
+  const elIO = document.getElementById("io");
+  const elGridPreset = document.getElementById("gridPreset");
+
+  const btnMount = document.getElementById("mount");
+  const btnUnmount = document.getElementById("unmount");
+  const btnClear = document.getElementById("clear");
+  const btnSpawn = document.getElementById("spawnNodule");
+  const btnInvert = document.getElementById("invertBtn");
+  const btnApplyGrid = document.getElementById("applyGrid");
+  const btnExport = document.getElementById("export");
+  const btnImport = document.getElementById("import");
+
+  /* ============================================================
+     STATE
+     ============================================================ */
+
+  const S = {
+    invert: false,
+    lightsLevel: 0, // 0..6
+    lightsPulse: 0  // internal shimmer (no hotkey)
+  };
+
+  function setInvert(on){
+    S.invert = !!on;
+    stage.classList.toggle("inverted", S.invert);
+  }
+
+  function setLightsLevel(n){
+    const lvl = Math.max(0, Math.min(6, n|0));
+    S.lightsLevel = lvl;
+    lights.style.setProperty("--L", String(lvl));
+    // micro pulse on change (still shell-level, still no extra hotkeys)
+    S.lightsPulse = 1;
+  }
+
+  /* ============================================================
+     STAGES
+     ============================================================ */
+
+  function showMode(mode){
+    fullStage.style.display   = (mode==="FULL") ? "block" : "none";
+    centerStage.style.display = (mode==="CENTER") ? "block" : "none";
+    gridStage.style.display   = (mode==="GRID") ? "block" : "none";
+    elMode.value = mode;
+  }
+
+  function clearEl(el){ while (el.firstChild) el.removeChild(el.firstChild); }
+
+  function makeSurfaceIframe({url, srcdoc}){
+    const f = document.createElement("iframe");
+    f.className = "surface";
+    f.setAttribute("allow", "autoplay; fullscreen; picture-in-picture");
+    f.setAttribute("referrerpolicy", "no-referrer");
+    if (srcdoc && srcdoc.trim()) f.srcdoc = srcdoc;
+    else if (url && url.trim()) f.src = url;
+    return f;
+  }
+
+  function resolveModule(){
+    const mod = elModule.value;
+    if (mod === "CUSTOM_HTML") return { url:"", srcdoc: elSrcdoc.value || "" };
+    return { url: elURL.value.trim(), srcdoc:"" };
+  }
+
+  function parseGrid(s){
+    const m = String(s||"2x2").toLowerCase().split("x");
+    const rows = Math.max(1, Math.min(6, parseInt(m[0],10)||2));
+    const cols = Math.max(1, Math.min(6, parseInt(m[1],10)||2));
+    return {rows, cols};
+  }
+
+  function ensureGrid(rows, cols){
+    grid.style.gridTemplateRows = `repeat(${rows}, 1fr)`;
+    grid.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+    const need = rows * cols;
+    const have = grid.children.length;
+
+    if (have > need){
+      for (let i=have-1;i>=need;i--) grid.removeChild(grid.children[i]);
+    } else if (have < need){
+      for (let i=have;i<need;i++){
+        const cell = document.createElement("div");
+        cell.className = "cell";
+        grid.appendChild(cell);
+      }
+    }
+  }
+
+  function mount(){
+    const mode = elMode.value;
+    const {url, srcdoc} = resolveModule();
+
+    if (mode==="GRID"){
+      const {rows, cols} = parseGrid(elGridPreset.value);
+      ensureGrid(rows, cols);
+      Array.from(grid.querySelectorAll(".cell")).forEach(cell => {
+        clearEl(cell);
+        cell.appendChild(makeSurfaceIframe({url, srcdoc}));
+      });
+      return;
+    }
+
+    const target = (mode==="FULL") ? fullStage : centerStage;
+    clearEl(target);
+    target.appendChild(makeSurfaceIframe({url, srcdoc}));
+  }
+
+  function unmount(){
+    const mode = elMode.value;
+    if (mode==="GRID"){
+      Array.from(grid.querySelectorAll(".cell")).forEach(cell => clearEl(cell));
+      return;
+    }
+    clearEl(mode==="FULL" ? fullStage : centerStage);
+  }
+
+  function clearAll(){
+    clearEl(fullStage);
+    clearEl(centerStage);
+    Array.from(grid.querySelectorAll(".cell")).forEach(cell => clearEl(cell));
+    Array.from(document.querySelectorAll(".nodule")).forEach(n => n.remove());
+  }
+
+  /* ============================================================
+     FLOATING VIDEO NODULE
+     ============================================================ */
+
+  function spawnVideoNodule(url){
+    const n = document.createElement("div");
+    n.className = "nodule";
+    n.style.left = (Math.random()*220 + 520) + "px";
+    n.style.top  = (Math.random()*220 + 80) + "px";
+
+    const head = document.createElement("div");
+    head.className = "noduleHeader";
+    head.textContent = "VIDEO_NODULE";
+
+    const spacer = document.createElement("div");
+    spacer.className = "spacer";
+
+    const close = document.createElement("button");
+    close.textContent = "X";
+    close.addEventListener("click", () => n.remove());
+
+    head.appendChild(spacer);
+    head.appendChild(close);
+
+    const body = document.createElement("div");
+    body.className = "noduleBody";
+
+    const f = document.createElement("iframe");
+    f.setAttribute("allow", "autoplay; fullscreen; picture-in-picture");
+    f.setAttribute("referrerpolicy", "no-referrer");
+    f.src = url || "about:blank";
+    body.appendChild(f);
+
+    const h = document.createElement("div");
+    h.className = "resizeHandle";
+    body.appendChild(h);
+
+    n.appendChild(head);
+    n.appendChild(body);
+    document.getElementById("root").appendChild(n);
+
+    makeDraggable(n, head);
+    makeResizable(n, h);
+    return n;
+  }
+
+  function makeDraggable(el, handle){
+    let sx=0, sy=0, ox=0, oy=0, drag=false;
+    handle.addEventListener("pointerdown", (e) => {
+      drag=true; el.setPointerCapture(e.pointerId);
+      sx=e.clientX; sy=e.clientY;
+      const r=el.getBoundingClientRect();
+      ox=r.left; oy=r.top;
+    });
+    handle.addEventListener("pointermove", (e) => {
+      if(!drag) return;
+      el.style.left = (ox + (e.clientX - sx)) + "px";
+      el.style.top  = (oy + (e.clientY - sy)) + "px";
+    });
+    handle.addEventListener("pointerup", () => drag=false);
+    handle.addEventListener("pointercancel", () => drag=false);
+  }
+
+  function makeResizable(el, handle){
+    let sx=0, sy=0, ow=0, oh=0, rez=false;
+    handle.addEventListener("pointerdown", (e) => {
+      rez=true; el.setPointerCapture(e.pointerId);
+      sx=e.clientX; sy=e.clientY;
+      const r=el.getBoundingClientRect();
+      ow=r.width; oh=r.height;
+      e.preventDefault();
+    });
+    handle.addEventListener("pointermove", (e) => {
+      if(!rez) return;
+      el.style.width  = Math.max(260, ow + (e.clientX - sx)) + "px";
+      el.style.height = Math.max(160, oh + (e.clientY - sy)) + "px";
+    });
+    handle.addEventListener("pointerup", () => rez=false);
+    handle.addEventListener("pointercancel", () => rez=false);
+  }
+
+  /* ============================================================
+     EXPORT / IMPORT
+     ============================================================ */
+
+  function snapshotState(){
+    const nodules = Array.from(document.querySelectorAll(".nodule")).map(n => {
+      const r = n.getBoundingClientRect();
+      const src = n.querySelector("iframe")?.src || "";
+      return { x:r.left, y:r.top, w:r.width, h:r.height, src };
+    });
+
+    return {
+      SHELL: "SHELL8",
+      MODE: "SCREENPLANE",
+      FILE_ID: KETADATA_SYSTEM.FILE_ID,
+      VERSION: KETADATA_SYSTEM.VERSION,
+      screen: {
+        mode: elMode.value,
+        module: elModule.value,
+        url: elURL.value || "",
+        srcdoc: elSrcdoc.value || "",
+        gridPreset: elGridPreset.value
+      },
+      membrane: { invert: S.invert, lightsLevel: S.lightsLevel },
+      nodules
+    };
+  }
+
+  function applySnapshot(s){
+    try{
+      if(!s || s.SHELL!=="SHELL8") return false;
+      if(s.FILE_ID && s.FILE_ID !== KETADATA_SYSTEM.FILE_ID) return false;
+
+      const scr = s.screen || {};
+      elMode.value = scr.mode || "FULL";
+      elModule.value = scr.module || "CUSTOM_URL";
+      elURL.value = scr.url || "";
+      elSrcdoc.value = scr.srcdoc || "";
+      elGridPreset.value = scr.gridPreset || "2x2";
+
+      const mem = s.membrane || {};
+      setInvert(!!mem.invert);
+      setLightsLevel(mem.lightsLevel|0);
+
+      clearAll();
+      showMode(elMode.value);
+      if (elMode.value==="GRID"){
+        const {rows, cols} = parseGrid(elGridPreset.value);
+        ensureGrid(rows, cols);
+      }
+      mount();
+
+      (s.nodules || []).forEach(n => {
+        const node = spawnVideoNodule(n.src || "about:blank");
+        node.style.left = (n.x || 520) + "px";
+        node.style.top  = (n.y || 80) + "px";
+        node.style.width  = Math.max(260, n.w || 420) + "px";
+        node.style.height = Math.max(160, n.h || 260) + "px";
+      });
+
+      return true;
+    }catch(_e){ return false; }
+  }
+
+  /* ============================================================
+     UNIVERSAL HOTKEYS ONLY
+     - Digit1..Digit6: lights level
+     - Shift+I: invert
+     ============================================================ */
+
+  addEventListener("keydown", (e) => {
+    if (e.repeat) return;
+
+    // 1–6 LIGHTS
+    if (/^Digit[1-6]$/.test(e.code)){
+      setLightsLevel(parseInt(e.code.slice(-1), 10));
+      return;
+    }
+
+    // SHIFT+I INVERT
+    if (e.code === "KeyI" && e.shiftKey){
+      setInvert(!S.invert);
+      return;
+    }
+  }, { passive:true });
+
+  /* ============================================================
+     LIGHTS SHIMMER (no hotkeys)
+     ============================================================ */
+  let last = performance.now();
+  function tick(now){
+    const dt = Math.min(0.05, (now-last)/1000);
+    last = now;
+    // decay pulse
+    S.lightsPulse = Math.max(0, S.lightsPulse - dt*2.2);
+    // subtle drift
+    const t = now * 0.00012;
+    lights.style.transform =
+      `translate(${Math.sin(t)*2}px, ${Math.cos(t*0.9)*2}px) scale(${1 + S.lightsPulse*0.01})`;
+    requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+
+  /* ============================================================
+     HUD EVENTS (buttons only)
+     ============================================================ */
+
+  btnMount.addEventListener("click", () => { showMode(elMode.value); mount(); });
+  btnUnmount.addEventListener("click", () => unmount());
+  btnClear.addEventListener("click", () => clearAll());
+  btnInvert.addEventListener("click", () => setInvert(!S.invert));
+
+  btnApplyGrid.addEventListener("click", () => {
+    const {rows, cols} = parseGrid(elGridPreset.value);
+    ensureGrid(rows, cols);
+  });
+
+  btnSpawn.addEventListener("click", () => spawnVideoNodule(elURL.value.trim() || "about:blank"));
+
+  btnExport.addEventListener("click", () => { elIO.value = JSON.stringify(snapshotState(), null, 2); });
+  btnImport.addEventListener("click", () => {
+    try{ applySnapshot(JSON.parse(elIO.value || "{}")); }catch(_e){}
+  });
+
+  // boot
+  showMode("FULL");
+  setInvert(false);
+  setLightsLevel(0);
+})();
+</script>
+
+</body>
+</html>
+
+<!--
+============================================================
+KETADATA HTML SERIALIZATION STAMP
+
+SHELL: SHELL8
+MODE: SCREENPLANE
+
+FILE_ID: SCREENPLANE_COMPOSITOR_V2_MINHOTKEYS
+ROOM_ID: KETADATA_OS
+VERSION: shell8.screenplane.v2
+UPDATED_AT: 2025-12-24T00:00:00-05:00
+AUTHOR: KNG / BIGGIE
+INTENT: PRIMARY SCREENPLANE THAT MOUNTS VI/DI SURFACES + GRID + CENTER + FLOATING VIDEO NODULES
+STATUS: ACTIVE
+
+AE:
+- BLACK FIELD
+- WHITE/GRAY LINES
+- SHARP GEOMETRY
+- LIGHTS OVERLAY (SHELL LEVEL) CONTROLLED BY 1–6
+- NO EXTRA HOTKEYS
+
+EE:
+- STAGE MODES: FULL / CENTER / GRID (BUTTON-DRIVEN)
+- MODULE MOUNT: URL OR SRCDOC
+- GRID PRESETS (BUTTON-DRIVEN)
+- FLOATING VIDEO NODULE: DRAG/RESIZE/CLOSE (MOUSE)
+- GLOBAL INVERT (SHIFT+I + BUTTON)
+- EXPORT/IMPORT STATE (BUTTON-DRIVEN)
+- UNIVERSAL HOTKEYS ONLY: Digit1..Digit6 + Shift+I
+
+WB:
+- __KETADATA__ UNIVERSALS PRESENT (SYSTEM + EXPORT/IMPORT)
+- HOTKEY SURFACE KEPT MINIMAL FOR EARLY STABILITY
+- CONTINUITY GUARANTEED: 1–6 ALWAYS MEANS LIGHTS
+
+CHANGELOG:
+- 2025-12-24: V2 MIN HOTKEYS; 1–6 LIGHTS ONLY; SHIFT+I INVERT ONLY
+============================================================
+-->
