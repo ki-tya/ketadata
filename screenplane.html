@@ -1,0 +1,693 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>KETADATA // SCREENPLANE (SHELL8)</title>
+<style>
+  :root{
+    --bg:#000; --fg:#fff; --mut:#8a8a8a; --line:#262626; --line2:#3a3a3a;
+    --panelW: 380px;
+    --stagePad: 10px;
+  }
+  html,body{margin:0;height:100%;background:var(--bg);overflow:hidden;font-family:Arial, Helvetica, sans-serif}
+  *{box-sizing:border-box}
+  button,input,select,textarea{font-family:inherit}
+
+  /* === SCREENPLANE === */
+  #root{position:fixed; inset:0; background:#000;}
+  #stage{
+    position:absolute; inset:0;
+    background:#000;
+  }
+
+  /* === CONTROL HUD (Shell8) === */
+  #hud{
+    position:absolute; top:0; left:0; height:100vh; width:var(--panelW);
+    background:rgba(0,0,0,0.88);
+    border-right:1px solid var(--line);
+    color:var(--fg);
+    padding:10px 10px 14px;
+    transform:translateX(0);
+    transition:transform 120ms linear;
+    z-index:50;
+  }
+  #hud.hidden{ transform:translateX(calc(-1 * var(--panelW))); }
+  .big{font-size:14px; letter-spacing:0.14em; margin:0 0 4px;}
+  .title{font-size:12px; letter-spacing:0.12em; color:var(--mut); margin:2px 0 10px;}
+  .sep{height:1px; background:var(--line); margin:10px 0;}
+  .row{display:flex; gap:8px; align-items:center; margin:8px 0;}
+  .row label{flex:0 0 120px; font-size:12px; letter-spacing:0.06em; color:var(--mut);}
+  .row input[type="text"], .row select{
+    flex:1;
+    background:#000; color:var(--fg);
+    border:1px solid var(--line);
+    padding:8px 10px; border-radius:0;
+    font-size:12px;
+  }
+  textarea{
+    width:100%; height:120px; resize:none;
+    background:#000; color:var(--fg);
+    border:1px solid var(--line);
+    padding:8px; border-radius:0;
+    font-size:11px;
+    font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace;
+  }
+  button{
+    background:#000; color:var(--fg);
+    border:1px solid var(--line);
+    padding:8px 10px; border-radius:0;
+    font-size:12px; letter-spacing:0.10em;
+    cursor:pointer;
+  }
+  button:hover{border-color:var(--line2)}
+  .hint{font-size:11px; color:var(--mut); line-height:1.35; letter-spacing:0.04em}
+  .pill{display:inline-block;border:1px solid var(--line);padding:2px 6px;margin:2px 6px 0 0;color:var(--mut);font-size:11px}
+
+  /* === STAGES === */
+  .stageFrame{
+    position:absolute;
+    border:1px solid var(--line);
+    background:#000;
+    overflow:hidden;
+  }
+
+  /* Center stage: one slot, centered */
+  #centerStage{
+    left:calc(var(--panelW) + var(--stagePad));
+    top:var(--stagePad);
+    right:var(--stagePad);
+    bottom:var(--stagePad);
+    display:none;
+    z-index:5;
+  }
+
+  /* Grid stage: N slots */
+  #gridStage{
+    left:calc(var(--panelW) + var(--stagePad));
+    top:var(--stagePad);
+    right:var(--stagePad);
+    bottom:var(--stagePad);
+    display:none;
+    z-index:5;
+  }
+  #grid{
+    position:absolute; inset:0;
+    display:grid;
+    gap:8px;
+    padding:8px;
+  }
+  .cell{
+    border:1px solid var(--line);
+    background:#000;
+    overflow:hidden;
+    position:relative;
+  }
+
+  /* Full takeover stage */
+  #fullStage{
+    left:0; top:0; right:0; bottom:0;
+    display:none;
+    z-index:1;
+  }
+
+  /* iframe render surface */
+  iframe.surface{
+    width:100%; height:100%;
+    border:0;
+    background:#000;
+  }
+
+  /* floating nodule: inner shell8 embed */
+  .nodule{
+    position:absolute;
+    width:420px; height:260px;
+    border:1px solid var(--line);
+    background:#000;
+    z-index:40;
+    display:flex; flex-direction:column;
+  }
+  .noduleHeader{
+    height:34px;
+    display:flex; align-items:center; gap:8px;
+    border-bottom:1px solid var(--line);
+    padding:0 8px;
+    color:var(--mut);
+    letter-spacing:0.10em;
+    user-select:none;
+    cursor:move;
+  }
+  .noduleHeader .spacer{flex:1}
+  .noduleHeader button{padding:4px 8px; font-size:11px;}
+  .noduleBody{flex:1; position:relative; background:#000;}
+  .noduleBody iframe{width:100%; height:100%; border:0; background:#000;}
+  .resizeHandle{
+    position:absolute; right:0; bottom:0;
+    width:16px; height:16px;
+    border-left:1px solid var(--line);
+    border-top:1px solid var(--line);
+    cursor:nwse-resize;
+  }
+
+  /* corner mark */
+  #corner{
+    position:fixed; right:10px; bottom:10px;
+    color:rgba(255,255,255,0.28);
+    font-size:11px; letter-spacing:0.14em;
+    pointer-events:none;
+    z-index:60;
+  }
+</style>
+</head>
+<body>
+<div id="root">
+  <div id="stage">
+    <div id="fullStage" class="stageFrame"></div>
+
+    <div id="centerStage" class="stageFrame"></div>
+
+    <div id="gridStage" class="stageFrame">
+      <div id="grid"></div>
+    </div>
+  </div>
+
+  <div id="hud">
+    <div class="big">KETADATA // SCREENPLANE</div>
+    <div class="title">SHELL8 SCREEN-OF-SCREENS — MOUNT / ROUTE / COMPOSE</div>
+
+    <div class="row">
+      <label>MODE</label>
+      <select id="mode">
+        <option value="FULL">FULL (TAKEOVER)</option>
+        <option value="CENTER">CENTER STAGE</option>
+        <option value="GRID">GRID STAGE</option>
+      </select>
+    </div>
+
+    <div class="row">
+      <label>MODULE</label>
+      <select id="module">
+        <option value="HYPERSTITION">HYPERSTITION_SURFACE</option>
+        <option value="KDTV1">KDTV1</option>
+        <option value="PHOTOBOOTH">PHOTOBOOTH</option>
+        <option value="CUSTOM_URL">CUSTOM URL</option>
+        <option value="CUSTOM_HTML">CUSTOM HTML (SRCDOC)</option>
+      </select>
+    </div>
+
+    <div class="row">
+      <label>URL</label>
+      <input id="url" type="text" placeholder="https://... or /path/module.html" />
+    </div>
+
+    <div class="sep"></div>
+
+    <div class="row">
+      <button id="mount">MOUNT</button>
+      <button id="unmount">UNMOUNT</button>
+      <button id="clear">CLEAR</button>
+    </div>
+
+    <div class="row">
+      <button id="spawnNodule">SPAWN VIDEO NODULE</button>
+      <button id="hudToggle">HUD (H)</button>
+    </div>
+
+    <div class="sep"></div>
+
+    <div class="row">
+      <label>GRID</label>
+      <select id="gridPreset">
+        <option value="2x2">2x2</option>
+        <option value="3x3">3x3</option>
+        <option value="4x3">4x3</option>
+        <option value="4x4">4x4</option>
+      </select>
+      <button id="applyGrid">APPLY</button>
+    </div>
+
+    <div class="sep"></div>
+
+    <div class="row"><label>SRCDOC</label></div>
+    <textarea id="srcdoc" spellcheck="false" placeholder="PASTE FULL HTML HERE (CUSTOM_HTML)"></textarea>
+
+    <div class="sep"></div>
+
+    <div class="row">
+      <button id="export">EXPORT STATE</button>
+      <button id="import">IMPORT STATE</button>
+    </div>
+    <textarea id="io" spellcheck="false" placeholder="STATE JSON"></textarea>
+
+    <div class="sep"></div>
+
+    <div class="hint">
+      <span class="pill">H</span> HUD TOGGLE
+      <span class="pill">ESC</span> CLEAR ALL
+      <span class="pill">N</span> SPAWN NODULE
+      <span class="pill">G</span> GRID MODE
+      <span class="pill">C</span> CENTER MODE
+      <span class="pill">F</span> FULL MODE
+    </div>
+  </div>
+
+  <div id="corner">SHELL8 // SCREENPLANE // COMPOSITOR</div>
+</div>
+
+<script>
+(() => {
+  /* ============================================================
+     KETADATA SHELL8 — SYSTEM UNIVERSALS (SCREENPLANE COMPOSITOR)
+     ============================================================ */
+
+  const KETADATA_SYSTEM = {
+    SHELL: "SHELL8",
+    MODE: "SCREENPLANE",
+    FILE_ID: "SCREENPLANE_COMPOSITOR_V1",
+    ROOM_ID: "KETADATA_OS",
+    VERSION: "shell8.screenplane.v1",
+    UPDATED_AT: "2025-12-24T00:00:00-05:00",
+    AUTHOR: "KNG / BIGGIE",
+    STATUS: "ACTIVE",
+    IO: { INPUT: "KEYBOARD+HUD", OUTPUT: "MULTI_STAGE_COMPOSITE", STORAGE: "NONE" },
+    STATE: { EXPORTABLE: true, PERSISTENT: false, SNAPSHOT: null },
+    COMMAND_MAP: {
+      HUD_TOGGLE: "KeyH",
+      CLEAR_ALL: "Escape",
+      MODE_FULL: "KeyF",
+      MODE_CENTER: "KeyC",
+      MODE_GRID: "KeyG",
+      SPAWN_NODULE: "KeyN",
+      EXPORT: "HUD_BUTTON",
+      IMPORT: "HUD_BUTTON"
+    }
+  };
+
+  function KETA_EXPORT_STATE(){ return snapshotState(); }
+  function KETA_IMPORT_STATE(s){ return applySnapshot(s); }
+
+  Object.defineProperty(window, "__KETADATA__", {
+    value: Object.freeze({
+      SYSTEM: Object.freeze(KETADATA_SYSTEM),
+      EXPORT: KETA_EXPORT_STATE,
+      IMPORT: KETA_IMPORT_STATE
+    }),
+    writable:false, configurable:false, enumerable:false
+  });
+
+  /* ============================================================
+     REGISTRY (MACHINE-MOUNTABLE MODULES)
+     - For prior VI surfaces: use URL or srcdoc.
+     - For KDTV1/PHOTOBOOTH: mount their HTML (URL) here when you have it.
+     ============================================================ */
+
+  const REGISTRY = {
+    HYPERSTITION: { type:"URL", url:"" },     // set url or paste srcdoc
+    KDTV1:        { type:"URL", url:"" },     // set later
+    PHOTOBOOTH:   { type:"URL", url:"" }      // set later
+  };
+
+  /* ============================================================
+     DOM
+     ============================================================ */
+
+  const hud = document.getElementById("hud");
+  const fullStage = document.getElementById("fullStage");
+  const centerStage = document.getElementById("centerStage");
+  const gridStage = document.getElementById("gridStage");
+  const grid = document.getElementById("grid");
+
+  const elMode = document.getElementById("mode");
+  const elModule = document.getElementById("module");
+  const elURL = document.getElementById("url");
+  const elSrcdoc = document.getElementById("srcdoc");
+  const elIO = document.getElementById("io");
+  const elGridPreset = document.getElementById("gridPreset");
+
+  const btnMount = document.getElementById("mount");
+  const btnUnmount = document.getElementById("unmount");
+  const btnClear = document.getElementById("clear");
+  const btnSpawn = document.getElementById("spawnNodule");
+  const btnHud = document.getElementById("hudToggle");
+  const btnApplyGrid = document.getElementById("applyGrid");
+  const btnExport = document.getElementById("export");
+  const btnImport = document.getElementById("import");
+
+  function showMode(mode){
+    fullStage.style.display = (mode==="FULL") ? "block" : "none";
+    centerStage.style.display = (mode==="CENTER") ? "block" : "none";
+    gridStage.style.display = (mode==="GRID") ? "block" : "none";
+    elMode.value = mode;
+  }
+
+  /* ============================================================
+     MOUNTING
+     ============================================================ */
+
+  function makeSurfaceIframe({url, srcdoc}){
+    const f = document.createElement("iframe");
+    f.className = "surface";
+    f.setAttribute("allow", "autoplay; fullscreen; picture-in-picture");
+    f.setAttribute("referrerpolicy", "no-referrer");
+    if (srcdoc && srcdoc.trim()) f.srcdoc = srcdoc;
+    else if (url && url.trim()) f.src = url;
+    return f;
+  }
+
+  function clearStage(el){
+    while (el.firstChild) el.removeChild(el.firstChild);
+  }
+
+  function activeStageEl(){
+    const m = elMode.value;
+    if (m==="FULL") return fullStage;
+    if (m==="CENTER") return centerStage;
+    return gridStage;
+  }
+
+  function mount(){
+    const mode = elMode.value;
+    const mod = elModule.value;
+
+    if (mode==="GRID"){
+      // mount into all cells (or first cell if you prefer; currently all)
+      const {rows, cols} = parseGrid(elGridPreset.value);
+      ensureGrid(rows, cols);
+      const cells = Array.from(grid.querySelectorAll(".cell"));
+      cells.forEach(cell => {
+        clearStage(cell);
+        const {url, srcdoc} = resolveModule(mod);
+        cell.appendChild(makeSurfaceIframe({url, srcdoc}));
+      });
+      return;
+    }
+
+    const stage = (mode==="FULL") ? fullStage : centerStage;
+    clearStage(stage);
+    const {url, srcdoc} = resolveModule(mod);
+    stage.appendChild(makeSurfaceIframe({url, srcdoc}));
+  }
+
+  function unmount(){
+    const mode = elMode.value;
+    if (mode==="GRID"){
+      Array.from(grid.querySelectorAll(".cell")).forEach(cell => clearStage(cell));
+      return;
+    }
+    clearStage(activeStageEl());
+  }
+
+  function clearAll(){
+    clearStage(fullStage);
+    clearStage(centerStage);
+    Array.from(grid.querySelectorAll(".cell")).forEach(cell => clearStage(cell));
+    // remove nodules
+    Array.from(document.querySelectorAll(".nodule")).forEach(n => n.remove());
+  }
+
+  function resolveModule(mod){
+    if (mod==="CUSTOM_URL") return { url: elURL.value.trim(), srcdoc:"" };
+    if (mod==="CUSTOM_HTML") return { url:"", srcdoc: elSrcdoc.value || "" };
+
+    const reg = REGISTRY[mod];
+    if (!reg) return { url:"", srcdoc:"" };
+
+    // If user typed URL, prefer it when registry URL is empty
+    if (reg.type==="URL") return { url: reg.url || elURL.value.trim(), srcdoc:"" };
+    if (reg.type==="SRCDOC") return { url:"", srcdoc: reg.html || elSrcdoc.value || "" };
+    return { url:"", srcdoc:"" };
+  }
+
+  /* ============================================================
+     GRID
+     ============================================================ */
+
+  function parseGrid(s){
+    const m = String(s||"2x2").toLowerCase().split("x");
+    const rows = Math.max(1, Math.min(6, parseInt(m[0],10)||2));
+    const cols = Math.max(1, Math.min(6, parseInt(m[1],10)||2));
+    return {rows, cols};
+  }
+
+  function ensureGrid(rows, cols){
+    grid.style.gridTemplateRows = `repeat(${rows}, 1fr)`;
+    grid.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+    const need = rows * cols;
+    const have = grid.children.length;
+
+    if (have > need){
+      for (let i=have-1;i>=need;i--) grid.removeChild(grid.children[i]);
+    } else if (have < need){
+      for (let i=have;i<need;i++){
+        const cell = document.createElement("div");
+        cell.className = "cell";
+        grid.appendChild(cell);
+      }
+    }
+  }
+
+  /* ============================================================
+     FLOATING VIDEO NODULE (INNER SHELL8 EMBED)
+     ============================================================ */
+
+  function spawnVideoNodule(url){
+    const n = document.createElement("div");
+    n.className = "nodule";
+    n.style.left = (Math.random()*220 + 520) + "px";
+    n.style.top  = (Math.random()*220 + 80) + "px";
+
+    const head = document.createElement("div");
+    head.className = "noduleHeader";
+    head.textContent = "VIDEO_NODULE";
+
+    const spacer = document.createElement("div");
+    spacer.className = "spacer";
+
+    const close = document.createElement("button");
+    close.textContent = "X";
+    close.addEventListener("click", () => n.remove());
+
+    head.appendChild(spacer);
+    head.appendChild(close);
+
+    const body = document.createElement("div");
+    body.className = "noduleBody";
+
+    const f = document.createElement("iframe");
+    f.setAttribute("allow", "autoplay; fullscreen; picture-in-picture");
+    f.setAttribute("referrerpolicy", "no-referrer");
+    f.src = url || "about:blank";
+    body.appendChild(f);
+
+    const h = document.createElement("div");
+    h.className = "resizeHandle";
+    body.appendChild(h);
+
+    n.appendChild(head);
+    n.appendChild(body);
+    document.getElementById("root").appendChild(n);
+
+    makeDraggable(n, head);
+    makeResizable(n, h);
+    return n;
+  }
+
+  function makeDraggable(el, handle){
+    let sx=0, sy=0, ox=0, oy=0, drag=false;
+    handle.addEventListener("pointerdown", (e) => {
+      drag=true;
+      el.setPointerCapture(e.pointerId);
+      sx=e.clientX; sy=e.clientY;
+      const r=el.getBoundingClientRect();
+      ox=r.left; oy=r.top;
+    });
+    handle.addEventListener("pointermove", (e) => {
+      if(!drag) return;
+      const dx=e.clientX - sx, dy=e.clientY - sy;
+      el.style.left = (ox+dx) + "px";
+      el.style.top  = (oy+dy) + "px";
+    });
+    handle.addEventListener("pointerup", () => drag=false);
+    handle.addEventListener("pointercancel", () => drag=false);
+  }
+
+  function makeResizable(el, handle){
+    let sx=0, sy=0, ow=0, oh=0, rez=false;
+    handle.addEventListener("pointerdown", (e) => {
+      rez=true;
+      el.setPointerCapture(e.pointerId);
+      sx=e.clientX; sy=e.clientY;
+      const r=el.getBoundingClientRect();
+      ow=r.width; oh=r.height;
+      e.preventDefault();
+    });
+    handle.addEventListener("pointermove", (e) => {
+      if(!rez) return;
+      const dx=e.clientX - sx, dy=e.clientY - sy;
+      el.style.width  = Math.max(260, ow+dx) + "px";
+      el.style.height = Math.max(160, oh+dy) + "px";
+    });
+    handle.addEventListener("pointerup", () => rez=false);
+    handle.addEventListener("pointercancel", () => rez=false);
+  }
+
+  /* ============================================================
+     STATE IO
+     ============================================================ */
+
+  function snapshotState(){
+    const mode = elMode.value;
+    const module = elModule.value;
+    const gridPreset = elGridPreset.value;
+
+    // capture nodules
+    const nodules = Array.from(document.querySelectorAll(".nodule")).map(n => {
+      const r = n.getBoundingClientRect();
+      const src = n.querySelector("iframe")?.src || "";
+      return { x:r.left, y:r.top, w:r.width, h:r.height, src };
+    });
+
+    return {
+      SHELL: "SHELL8",
+      MODE: "SCREENPLANE",
+      FILE_ID: KETADATA_SYSTEM.FILE_ID,
+      VERSION: KETADATA_SYSTEM.VERSION,
+      screen: { mode, module, url: elURL.value || "", srcdoc: elSrcdoc.value || "", gridPreset },
+      registry: REGISTRY,
+      nodules
+    };
+  }
+
+  function applySnapshot(s){
+    try{
+      if(!s || s.SHELL!=="SHELL8") return false;
+      if(s.FILE_ID && s.FILE_ID !== KETADATA_SYSTEM.FILE_ID) return false;
+
+      // apply screen params
+      const scr = s.screen || {};
+      elMode.value = scr.mode || "FULL";
+      elModule.value = scr.module || "HYPERSTITION";
+      elURL.value = scr.url || "";
+      elSrcdoc.value = scr.srcdoc || "";
+      elGridPreset.value = scr.gridPreset || "2x2";
+
+      // registry overwrite if provided
+      if (s.registry && typeof s.registry === "object"){
+        Object.keys(REGISTRY).forEach(k => {
+          if (s.registry[k] && typeof s.registry[k] === "object"){
+            REGISTRY[k] = s.registry[k];
+          }
+        });
+      }
+
+      // clear and restore
+      clearAll();
+      showMode(elMode.value);
+
+      if (elMode.value === "GRID"){
+        const {rows, cols} = parseGrid(elGridPreset.value);
+        ensureGrid(rows, cols);
+      }
+
+      // remount
+      mount();
+
+      // restore nodules
+      (s.nodules || []).forEach(n => {
+        const node = spawnVideoNodule(n.src || "about:blank");
+        node.style.left = (n.x || 520) + "px";
+        node.style.top  = (n.y || 80) + "px";
+        node.style.width  = Math.max(260, n.w || 420) + "px";
+        node.style.height = Math.max(160, n.h || 260) + "px";
+      });
+
+      return true;
+    }catch(_e){ return false; }
+  }
+
+  /* ============================================================
+     EVENTS
+     ============================================================ */
+
+  btnMount.addEventListener("click", () => { showMode(elMode.value); mount(); });
+  btnUnmount.addEventListener("click", () => { unmount(); });
+  btnClear.addEventListener("click", () => { clearAll(); });
+  btnHud.addEventListener("click", () => hud.classList.toggle("hidden"));
+
+  btnApplyGrid.addEventListener("click", () => {
+    const {rows, cols} = parseGrid(elGridPreset.value);
+    ensureGrid(rows, cols);
+  });
+
+  btnSpawn.addEventListener("click", () => spawnVideoNodule(elURL.value.trim() || "about:blank"));
+
+  btnExport.addEventListener("click", () => {
+    elIO.value = JSON.stringify(snapshotState(), null, 2);
+  });
+
+  btnImport.addEventListener("click", () => {
+    try{
+      const s = JSON.parse(elIO.value || "{}");
+      applySnapshot(s);
+    }catch(_e){}
+  });
+
+  addEventListener("keydown", (e) => {
+    if(e.repeat) return;
+    if(e.code === "KeyH") hud.classList.toggle("hidden");
+    if(e.code === "Escape") clearAll();
+    if(e.code === "KeyF"){ showMode("FULL"); }
+    if(e.code === "KeyC"){ showMode("CENTER"); }
+    if(e.code === "KeyG"){ showMode("GRID"); }
+    if(e.code === "KeyN"){ spawnVideoNodule(elURL.value.trim() || "about:blank"); }
+  }, { passive:true });
+
+  // boot
+  showMode("FULL");
+})();
+</script>
+
+</body>
+</html>
+
+<!--
+============================================================
+KETADATA HTML SERIALIZATION STAMP
+
+SHELL: SHELL8
+MODE: SCREENPLANE
+
+FILE_ID: SCREENPLANE_COMPOSITOR_V1
+ROOM_ID: KETADATA_OS
+VERSION: shell8.screenplane.v1
+UPDATED_AT: 2025-12-24T00:00:00-05:00
+AUTHOR: KNG / BIGGIE
+INTENT: COMPOSITE AND ROUTE MULTIPLE VI/DI SURFACES ONTO A SINGLE PRIMARY SCREEN OBJECT
+STATUS: ACTIVE
+
+AE:
+- BLACK FIELD
+- WHITE / GREY LINES
+- SHARP GEOMETRY
+- HIDABLE HUD
+- NO FRIENDLY UI
+- SCREEN IS THE OBJECT
+
+EE:
+- STAGE MODES: FULL / CENTER / GRID
+- MODULE MOUNTING VIA URL OR SRCDOC
+- GRID AUTOGENERATION (2x2..4x4)
+- STATE EXPORT/IMPORT (NO PERSISTENCE)
+- FLOATING VIDEO NODULE: DRAG + RESIZE + CLOSE
+- __KETADATA__ UNIVERSALS WITH EXPORT/IMPORT
+
+WB:
+- SINGLE-FILE PORTABLE COMPOSITOR
+- MODULE REGISTRY PLACEHOLDERS FOR KDTV1/PHOTOBOOTH
+- COMPATIBLE WITH PRIOR VI SURFACES ONCE WRAPPED AS URL/SRCDOC
+- SECURITY/ACCESS LAYERS DEFERRED TO SHELL POLICY (NOT IN MODULE)
+
+CHANGELOG:
+- 2025-12-24: INITIAL SCREENPLANE COMPOSITOR V1
+============================================================
+-->
