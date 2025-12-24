@@ -1,0 +1,1009 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>SHELL8 OS — VI/DI SURFACE (PASTE-IN)</title>
+
+<style>
+:root{
+  --bg:#000; --fg:#fff; --muted:#8a8a8a; --line:#222; --line2:#333;
+  --top:44px; --bot:34px;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  --sans: Arial, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+
+  --ctl-radius:0px;
+  --ctl-alpha:0.82;
+  --ctl-bg: rgba(0,0,0,var(--ctl-alpha));
+}
+
+*{box-sizing:border-box}
+html,body{height:100%; margin:0}
+body{background:var(--bg); color:var(--fg); font-family:var(--sans); overflow:hidden; user-select:none}
+#root{position:fixed; inset:0; background:#000}
+#root.invert{filter:invert(1)}
+
+/* STAGE + MOTION (same shell kernel intensity primitives) */
+#stage{position:absolute; inset:0; background:#000; z-index:0}
+#motion{
+  position:absolute; inset:0; pointer-events:none; opacity:0;
+  background:repeating-linear-gradient(
+    135deg,
+    rgba(255,255,255,0.06) 0px,
+    rgba(255,255,255,0.06) 1px,
+    rgba(0,0,0,0) 12px,
+    rgba(0,0,0,0) 22px
+  );
+  mix-blend-mode:screen;
+  transform:translate3d(0,0,0);
+  z-index:1;
+}
+#motion.run{opacity:0.12; animation:scanflow 2.2s linear infinite}
+@keyframes scanflow{0%{transform:translate3d(-80px,60px,0)}100%{transform:translate3d(80px,-60px,0)}}
+
+/* TOP BAR */
+.topbar{
+  position:absolute; top:0; left:0; right:0; height:var(--top);
+  display:flex; align-items:center; justify-content:space-between;
+  padding:0 10px; border-bottom:1px solid var(--line);
+  background:linear-gradient(180deg,#070707,#000);
+  z-index:50;
+}
+.brand{
+  display:flex; align-items:center; gap:10px;
+  font-family:var(--mono); font-size:12px; letter-spacing:.10em; text-transform:uppercase;
+}
+.brand .sq{width:10px;height:10px;border:1px solid var(--fg);background:#000}
+.actions{display:flex; align-items:center; gap:8px; font-family:var(--mono); font-size:12px}
+.btn{
+  background:transparent; color:var(--fg);
+  border:1px solid var(--line2);
+  padding:6px 10px; font-family:var(--mono); font-size:12px;
+  letter-spacing:.08em; text-transform:uppercase; cursor:pointer;
+}
+.btn:hover{border-color:var(--fg)}
+.btn:active{transform:translateY(1px)}
+.kbd{border:1px solid var(--line2); padding:2px 6px; color:var(--muted); font-size:11px}
+.pill{
+  border:1px solid var(--line2);
+  padding:2px 6px;
+  font-family:var(--mono);
+  font-size:10px;
+  letter-spacing:.06em;
+  text-transform:uppercase;
+  color:var(--muted);
+}
+
+/* BOTTOM BAR */
+.bottombar{
+  position:absolute; left:0; right:0; bottom:0; height:var(--bot);
+  display:flex; align-items:center; justify-content:space-between;
+  padding:0 10px; border-top:1px solid var(--line);
+  background:linear-gradient(0deg,#070707,#000);
+  z-index:50; font-family:var(--mono); font-size:11px; color:var(--muted);
+}
+.toggle{
+  border:1px solid var(--line2); background:transparent; color:var(--fg);
+  padding:4px 8px; font-family:var(--mono); font-size:11px;
+  letter-spacing:.08em; text-transform:uppercase; cursor:pointer;
+}
+.toggle:hover{border-color:var(--fg)}
+
+/* SYSTEM DRAWER (minimal — internal logic + IO only) */
+.drawer{
+  position:absolute; left:0; right:0; bottom:var(--bot);
+  height:38%; min-height:220px;
+  border-top:1px solid var(--line);
+  background:linear-gradient(180deg,#060606,#000);
+  display:none; z-index:60;
+}
+.drawer.open{display:flex; flex-direction:column}
+.drawerHead{
+  padding:8px 10px; border-bottom:1px solid var(--line);
+  font-family:var(--mono); font-size:12px; letter-spacing:.10em; text-transform:uppercase;
+  display:flex; justify-content:space-between; align-items:center;
+}
+.drawerBody{padding:10px; min-height:0; flex:1; overflow:auto}
+textarea{
+  width:100%;
+  border:1px solid var(--line2);
+  background:#050505;
+  color:var(--fg);
+  font-family:var(--mono);
+  font-size:12px;
+  padding:10px;
+  line-height:1.35;
+  outline:none;
+  resize:vertical;
+  min-height:140px;
+}
+
+/* TOAST */
+.toast{
+  position:absolute; left:12px; top:calc(var(--top) + 12px);
+  padding:8px 10px; border:1px solid var(--line2);
+  background:rgba(8,8,8,0.82);
+  font-family:var(--mono); font-size:11px; letter-spacing:.06em;
+  color:var(--fg); display:none; z-index:90;
+}
+
+/* =========================================================
+VI/DI SURFACE CONTAINER (THIS IS THE ONLY PART YOU PASTE)
+- It sits between top + bottom bars.
+========================================================= */
+#surface{
+  position:absolute;
+  top:var(--top);
+  bottom:var(--bot);
+  left:0; right:0;
+  z-index:10;
+  overflow:hidden;
+}
+
+/* Fullscreen mode: hide ALL controls */
+#root.fullscreenUi .topbar,
+#root.fullscreenUi .bottombar,
+#root.fullscreenUi .drawer{
+  display:none !important;
+}
+#root.fullscreenUi #surface{ top:0; bottom:0; }
+
+/* ---------- VI/DI BASE STYLES (generic, sharp) ---------- */
+.viWrap{
+  position:absolute;
+  inset:0;
+  display:grid;
+  grid-template-columns: 420px 1fr;
+  background:rgba(0,0,0,0.15);
+}
+.viLeft{
+  border-right:1px solid var(--line);
+  background:linear-gradient(180deg,#040404,#000);
+  overflow:auto;
+}
+.viRight{
+  overflow:auto;
+  background:linear-gradient(180deg,#020202,#000);
+}
+.viHead{
+  position:sticky;
+  top:0;
+  height:40px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  padding:0 10px;
+  border-bottom:1px solid var(--line);
+  background:rgba(0,0,0,0.75);
+  backdrop-filter: blur(6px);
+  z-index:5;
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:.10em;
+  text-transform:uppercase;
+}
+.viBody{padding:10px}
+.viItem{
+  border:1px solid var(--line2);
+  padding:10px;
+  cursor:pointer;
+  margin-bottom:10px;
+  background:rgba(0,0,0,0.35);
+  font-family:var(--mono);
+  font-size:11px;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+}
+.viItem:hover{border-color:var(--fg)}
+.viItem.sel{border-color:var(--fg)}
+.viMeta{
+  margin-top:8px;
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+  color:var(--muted);
+  font-size:10px;
+  letter-spacing:.06em;
+}
+.badge{
+  border:1px solid var(--line2);
+  padding:2px 6px;
+  display:inline-flex;
+  gap:6px;
+  align-items:center;
+}
+.dot{width:10px;height:10px;border:1px solid var(--fg);background:#000}
+.dot.fill{background:var(--fg)}
+.fieldLabel{
+  font-family:var(--mono);
+  font-size:11px;
+  letter-spacing:.10em;
+  text-transform:uppercase;
+  color:var(--muted);
+  margin:12px 0 6px;
+}
+input, select{
+  width:100%;
+  border:1px solid var(--line2);
+  background:#050505;
+  color:var(--fg);
+  font-family:var(--mono);
+  font-size:12px;
+  padding:10px;
+  outline:none;
+}
+.grid2{display:grid; grid-template-columns: 1fr 1fr; gap:10px}
+.hr{height:1px;background:var(--line);margin:12px 0}
+
+/* Collapsible blocks (DI) */
+.block{border:1px solid var(--line2); margin-bottom:10px; background:rgba(0,0,0,0.25)}
+.blockHead{
+  padding:10px;
+  border-bottom:1px solid var(--line);
+  cursor:pointer;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:.10em;
+  text-transform:uppercase;
+}
+.blockHead:hover{border-bottom-color:var(--fg)}
+.blockBody{padding:10px; display:block}
+.block.collapsed .blockBody{display:none}
+.block.collapsed .blockHead{border-bottom:none}
+
+/* Responsive */
+@media (max-width: 900px){
+  .viWrap{grid-template-columns: 1fr}
+  .viLeft{border-right:none; border-bottom:1px solid var(--line)}
+}
+</style>
+</head>
+
+<body>
+<div id="root">
+  <div id="stage" aria-hidden="true"></div>
+  <div id="motion" aria-hidden="true"></div>
+  <div class="toast" id="toast"></div>
+
+  <!-- TOP BAR (SYSTEM) -->
+  <div class="topbar">
+    <div style="display:flex; gap:10px; align-items:center">
+      <div class="brand">
+        <span class="sq"></span>
+        <span>SHELL8 // OS</span>
+        <span style="color:var(--muted); letter-spacing:.02em; text-transform:none">VI/DI SURFACE</span>
+      </div>
+      <div class="pill">STATE <span id="sig2">∅</span></div>
+    </div>
+
+    <div class="actions">
+      <button class="btn" id="btnImport">IMPORT</button>
+      <button class="btn" id="btnExport">EXPORT</button>
+      <button class="btn" id="btnCopy">COPY</button>
+      <button class="btn" id="btnFull">FULL</button>
+      <span class="kbd" title="Invert all colors">Shift+I</span>
+      <span class="kbd" title="Select light preset">1–6</span>
+      <span class="kbd" title="Transport (light+motion)">Space</span>
+      <span class="kbd" title="Toggle fullscreen UI">F</span>
+    </div>
+  </div>
+
+  <!-- VI/DI SURFACE (PASTE-IN AREA) -->
+  <div id="surface">
+    <div class="viWrap" id="viWrap">
+      <div class="viLeft">
+        <div class="viHead">
+          <div>VI OBJECTS</div>
+          <div style="display:flex; gap:8px; align-items:center">
+            <button class="btn" id="btnNew">NEW</button>
+            <button class="btn" id="btnCollapseAll">COLLAPSE</button>
+          </div>
+        </div>
+        <div class="viBody">
+          <input id="filter" placeholder="FILTER (ID / NAME / TAG)" />
+          <div class="hr"></div>
+          <div id="list"></div>
+        </div>
+      </div>
+
+      <div class="viRight">
+        <div class="viHead">
+          <div id="editorTitle">SELECT</div>
+          <div style="display:flex; gap:8px; align-items:center">
+            <button class="btn" id="btnTrace">TRACE</button>
+            <button class="btn" id="btnDelete">DELETE</button>
+          </div>
+        </div>
+        <div class="viBody" id="editor"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SYSTEM DRAWER -->
+  <div class="drawer" id="drawer">
+    <div class="drawerHead">
+      <div>SYSTEM</div>
+      <div style="display:flex; gap:8px; align-items:center">
+        <span id="sig" style="color:var(--muted); font-family:var(--mono); font-size:11px">∅</span>
+        <button class="btn" id="btnCloseDrawer">CLOSE</button>
+      </div>
+    </div>
+    <div class="drawerBody">
+      <textarea id="universals" placeholder="LAWS / CONSTRAINTS / REFERENCES"></textarea>
+      <div style="margin-top:8px; color:var(--muted); font-family:var(--mono); font-size:11px; letter-spacing:.06em">
+        CONTROLS: F = FULLSCREEN UI. SYSTEM DRAWER MUST BE COLLAPSIBLE. SURFACE MUST BE STATE-DRIVEN.
+      </div>
+    </div>
+  </div>
+
+  <!-- BOTTOM BAR (SYSTEM) -->
+  <div class="bottombar">
+    <div style="display:flex; gap:10px; align-items:center">
+      <button class="toggle" id="toggleDrawer">SYSTEM</button>
+      <span>SIG: <span id="sig3">∅</span></span>
+    </div>
+    <div style="display:flex; gap:12px; align-items:center">
+      <span>LIGHT: <span id="lightLabel">1</span></span>
+      <span>RUN: <span id="runLabel">OFF</span></span>
+      <span>MOTION: <span id="motionLabel">OFF</span></span>
+      <span>UI: <span id="uiLabel">ON</span></span>
+    </div>
+  </div>
+
+  <input id="file" type="file" accept="application/json" style="display:none" />
+</div>
+
+<script>
+/* =========================================================
+SHELL8 OS WRAPPER
+- This is the "copy/paste into OS" version:
+  - Top+bottom bars
+  - Drawer
+  - Invert, Lights 1–6, Transport
+  - Fullscreen UI mode (F / FULL)
+- VI/DI interface is kept simple and state-driven.
+========================================================= */
+
+const FILE_ID = "SHELL8_OS_VI_DI_V1";
+const ROOM_ID = "OS";
+const VERSION_ID = "shell8.os.vi-di.v1";
+const STORAGE_KEY = `KDT::STATE::${FILE_ID}::${ROOM_ID}::${VERSION_ID}`;
+
+const DEFAULT = {
+  version: "SHELL8_OS_VI_DI_V1",
+  updatedAt: new Date().toISOString(),
+  universals: "VI/DI — STATE OBJECT SURFACE\n\nLAW: OBJECTS ARE INTERNAL VISUAL DATA (NOT SCREENS).\nLAW: TRACE IS THE INTENSIFIER.\nLAW: ALL CONTROLS COLLAPSIBLE.\n",
+  ui: {
+    invert:false,
+    lightPreset:1,
+    lightRunning:false,
+    motionOn:false,
+    fullscreenUi:false,
+    filter:"",
+    selectedId:null,
+    collapseAll:false
+  },
+  payload: {
+    objects: [],
+    traces: []
+  }
+};
+
+let STATE = loadLocal() || structuredClone(DEFAULT);
+
+const $ = (id)=>document.getElementById(id);
+const root = $("root");
+const stage = $("stage");
+const motion = $("motion");
+
+function nowISO(){ return new Date().toISOString(); }
+function uid(prefix="OBJ"){ return `${prefix}_${Math.random().toString(16).slice(2,10).toUpperCase()}`; }
+
+function mergeDefault(obj){
+  const out = structuredClone(DEFAULT);
+  Object.assign(out, obj||{});
+  out.ui = Object.assign(structuredClone(DEFAULT.ui), (obj&&obj.ui)||{});
+  out.payload = Object.assign(structuredClone(DEFAULT.payload), (obj&&obj.payload)||{});
+  if(!Array.isArray(out.payload.objects)) out.payload.objects=[];
+  if(!Array.isArray(out.payload.traces)) out.payload.traces=[];
+  return out;
+}
+function loadLocal(){
+  try{
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if(!raw) return null;
+    return mergeDefault(JSON.parse(raw));
+  }catch(e){ return null; }
+}
+function persist(){
+  STATE.updatedAt = nowISO();
+  try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(STATE)); }catch(e){}
+  render();
+}
+function exportState(){
+  return JSON.stringify({ STORAGE_KEY, FILE_ID, ROOM_ID, VERSION_ID, STATE }, null, 2);
+}
+function importState(text){
+  const parsed = JSON.parse(text);
+  const incoming = parsed && parsed.STATE ? parsed.STATE : parsed;
+  STATE = mergeDefault(incoming);
+
+  stopLight(true);
+  if(STATE.ui.lightRunning) startLight(STATE.ui.lightPreset);
+
+  persist();
+}
+
+function stableSig(){
+  const core = JSON.stringify({
+    v:STATE.version,
+    i:STATE.ui.invert,
+    p:STATE.ui.lightPreset,
+    r:STATE.ui.lightRunning,
+    m:STATE.ui.motionOn,
+    fs:STATE.ui.fullscreenUi,
+    n:(STATE.payload.objects||[]).length,
+    t:(STATE.payload.traces||[]).length
+  });
+  let h=2166136261;
+  for(let i=0;i<core.length;i++){ h^=core.charCodeAt(i); h=Math.imul(h,16777619); }
+  return (h>>>0).toString(16).slice(0,8);
+}
+
+/* Toast */
+let toastTimer=null;
+function toast(msg){
+  const t=$("toast");
+  t.textContent=msg;
+  t.style.display="block";
+  if(toastTimer) clearTimeout(toastTimer);
+  toastTimer=setTimeout(()=>{ t.style.display="none"; }, 900);
+}
+
+/* Drawer / Fullscreen */
+function setDrawer(open){ $("drawer").classList.toggle("open", !!open); }
+function setFullscreen(on){
+  STATE.ui.fullscreenUi = !!on;
+  root.classList.toggle("fullscreenUi", STATE.ui.fullscreenUi);
+  if(STATE.ui.fullscreenUi) setDrawer(false);
+  persist();
+}
+
+/* =========================================================
+EE ▸ INTENSITY (INVERT / LIGHTS / TRANSPORT) — same kernel
+========================================================= */
+function setInvert(on){ STATE.ui.invert=!!on; persist(); }
+
+let lightInterval=null;
+let lightCount=0, lightAuxA=0, lightAuxB=0;
+
+function resetStage(){
+  stage.style.backgroundColor="#000000";
+  stage.style.filter="none";
+  lightCount=0; lightAuxA=0; lightAuxB=0;
+}
+function startLight(preset){
+  stopLight(true);
+  resetStage();
+  STATE.ui.lightPreset=preset;
+  STATE.ui.lightRunning=true;
+
+  if(preset===1){
+    lightInterval=setInterval(()=>{
+      const curr=stage.style.backgroundColor||"black";
+      stage.style.backgroundColor=(curr==="black"||curr==="rgb(0, 0, 0)") ? "white" : "black";
+      stage.style.filter="none";
+    },50);
+  }
+  if(preset===2){
+    lightInterval=setInterval(()=>{
+      lightAuxA=(lightAuxA+30)%360;
+      lightAuxB+=0.5;
+      const lightness=50+Math.sin(lightAuxB)*40;
+      stage.style.backgroundColor=`hsl(${lightAuxA}, 100%, ${lightness}%)`;
+      stage.style.filter="none";
+    },10);
+  }
+  if(preset===3){
+    lightInterval=setInterval(()=>{
+      lightCount++;
+      const beat=lightCount%16;
+      if(beat===0||beat===1){ stage.style.backgroundColor="#ffffff"; stage.style.filter="invert(1) contrast(3) brightness(2)"; }
+      else if(beat===2){ stage.style.backgroundColor="#000000"; stage.style.filter="invert(1) contrast(2)"; }
+      else if(beat===3){ stage.style.backgroundColor="#00ff00"; stage.style.filter="contrast(2) saturate(3)"; }
+      else if(beat===4){ stage.style.backgroundColor="#ff00ff"; stage.style.filter="invert(1) hue-rotate(90deg)"; }
+      else if(beat===5||beat===6){ stage.style.backgroundColor="#00ffff"; stage.style.filter="invert(0.7) contrast(2)"; }
+      else if(beat===7){ stage.style.backgroundColor="#ffffff"; stage.style.filter="invert(1) brightness(3)"; }
+      else if(beat===8){ stage.style.backgroundColor="#000000"; stage.style.filter="invert(1) contrast(3)"; }
+      else if(beat===9||beat===10){ stage.style.backgroundColor="#00ff00"; stage.style.filter="saturate(5) contrast(2)"; }
+      else if(beat===11){ stage.style.backgroundColor="#ff00ff"; stage.style.filter="invert(1) saturate(3)"; }
+      else { stage.style.backgroundColor="#0088ff"; stage.style.filter="contrast(1.5) brightness(1.2)"; }
+    },30);
+  }
+  if(preset===4){
+    lightInterval=setInterval(()=>{
+      lightAuxA+=0.08; lightCount++;
+      const red=Math.abs(Math.sin(lightAuxA))*255;
+      const pulse=Math.abs(Math.sin(lightAuxA*0.5));
+      const contrast=2+pulse*2;
+      const saturation=4+pulse*2;
+      if(lightCount%8===0){ stage.style.backgroundColor="#000000"; stage.style.filter="brightness(3) contrast(3)"; }
+      else if(lightCount%8===1){
+        stage.style.backgroundColor=`rgb(${red},0,0)`;
+        stage.style.filter=`contrast(${contrast+1}) saturate(${saturation+2}) brightness(${1.5+pulse*0.5})`;
+      } else {
+        stage.style.backgroundColor=`rgb(${red},0,0)`;
+        stage.style.filter=`contrast(${contrast}) saturate(${saturation}) brightness(${1.2+pulse*0.5})`;
+      }
+    },20);
+  }
+  if(preset===5){
+    lightInterval=setInterval(()=>{
+      lightAuxA+=15; lightAuxB=(lightAuxB+2)%100;
+      const hue=260+Math.sin(lightAuxA*0.1)*40;
+      const saturation=80+Math.cos(lightAuxA*0.05)*20;
+      const lightness=30+Math.sin(lightAuxB*0.1)*30;
+      const spiralBrightness=1+Math.abs(Math.sin(lightAuxA*0.05))*0.8;
+      const spiralContrast=1.5+Math.abs(Math.cos(lightAuxA*0.08))*1;
+      stage.style.backgroundColor=`hsl(${hue}, ${saturation}%, ${lightness}%)`;
+      stage.style.filter=`contrast(${spiralContrast}) saturate(2) brightness(${spiralBrightness}) hue-rotate(${lightAuxA*0.5}deg)`;
+    },25);
+  }
+  if(preset===6){
+    lightInterval=setInterval(()=>{
+      lightCount++;
+      if(lightCount%50===0){ stage.style.backgroundColor="#ffffff"; stage.style.filter="brightness(5) contrast(5)"; }
+      else if(lightCount%50===1){ stage.style.backgroundColor="#000000"; stage.style.filter="none"; }
+      else if(lightCount%50===2){ stage.style.backgroundColor="#ffffff"; stage.style.filter="brightness(5) contrast(5)"; }
+      else { stage.style.backgroundColor="#000000"; stage.style.filter="none"; }
+    },30);
+  }
+
+  persist();
+}
+function stopLight(silent=false){
+  if(lightInterval){ clearInterval(lightInterval); lightInterval=null; }
+  STATE.ui.lightRunning=false;
+  resetStage();
+  if(!silent) persist();
+}
+function selectPreset(preset){
+  STATE.ui.lightPreset=preset;
+  if(STATE.ui.lightRunning) startLight(preset);
+  else persist();
+}
+function toggleTransport(){
+  if(STATE.ui.lightRunning) stopLight(true);
+  else startLight(STATE.ui.lightPreset);
+  STATE.ui.motionOn = !STATE.ui.motionOn;
+  toast(`TRANSPORT ${STATE.ui.lightRunning ? "ON" : "OFF"} / MOTION ${STATE.ui.motionOn ? "ON" : "OFF"}`);
+  persist();
+}
+
+/* =========================================================
+VI/DI DATA OBJECT (kept minimal, state-driven)
+========================================================= */
+function ensurePayload(){
+  if(!STATE.payload) STATE.payload = {objects:[],traces:[]};
+  if(!Array.isArray(STATE.payload.objects)) STATE.payload.objects=[];
+  if(!Array.isArray(STATE.payload.traces)) STATE.payload.traces=[];
+}
+
+function computeScore(o){
+  const exec = Math.max(0, o.metrics.executions|0);
+  const inten = Math.max(0, Math.round((+o.metrics.intensity||0)*100)/100);
+  return Math.round((exec + inten*2.5) * 100) / 100;
+}
+
+function normalizeObj(o){
+  const out = {
+    id: o.id || uid("OBJ"),
+    name: String(o.name || "UNTITLED").toUpperCase(),
+    tags: Array.isArray(o.tags) ? o.tags.slice(0,12).map(x=>String(x||"").toUpperCase()).filter(Boolean) : [],
+    spec: String(o.spec || "INTERNAL VISUAL DATA OBJECT."),
+    surface: String(o.surface || "VI/DI"),
+    status: String(o.status || "ACTIVE").toUpperCase(),
+    collapsed: !!o.collapsed,
+    metrics: Object.assign({
+      createdAt: o.metrics?.createdAt || nowISO(),
+      updatedAt: nowISO(),
+      executions: Number.isFinite(o.metrics?.executions) ? o.metrics.executions : 0,
+      intensity: Number.isFinite(o.metrics?.intensity) ? o.metrics.intensity : 0,
+      lastTraceAt: o.metrics?.lastTraceAt || null,
+      score: 0
+    }, o.metrics||{})
+  };
+  out.metrics.score = computeScore(out);
+  return out;
+}
+
+function listObjs(){
+  ensurePayload();
+  STATE.payload.objects = STATE.payload.objects.map(normalizeObj);
+  const q = String(STATE.ui.filter||"").trim().toUpperCase();
+  let items = STATE.payload.objects.slice();
+
+  items.sort((a,b)=>{
+    const sa=+a.metrics.score||0, sb=+b.metrics.score||0;
+    if(sb!==sa) return sb-sa;
+    return Date.parse(b.metrics.updatedAt||0) - Date.parse(a.metrics.updatedAt||0);
+  });
+
+  if(q){
+    items = items.filter(o=>{
+      const hay = [o.id,o.name,(o.tags||[]).join(" "),o.status,o.surface].join(" ").toUpperCase();
+      return hay.includes(q);
+    });
+  }
+  return items;
+}
+
+function selected(){
+  const id = STATE.ui.selectedId;
+  if(!id) return null;
+  return STATE.payload.objects.find(o=>o.id===id) || null;
+}
+function select(id){ STATE.ui.selectedId=id||null; persist(); }
+
+function addObj(){
+  ensurePayload();
+  const o = normalizeObj({
+    id: uid("OBJ"),
+    name: "NEW OBJECT",
+    tags: ["VI","DI"],
+    spec: "INTERNAL VISUAL DATA OBJECT. NOT A SCREEN. NOT A DISPLAY.",
+    surface: "VI/DI",
+    status: "ACTIVE"
+  });
+  STATE.payload.objects.unshift(o);
+  STATE.ui.selectedId = o.id;
+  toast("NEW OBJECT");
+  persist();
+}
+
+function deleteSelected(){
+  const o = selected();
+  if(!o) return;
+  STATE.payload.objects = STATE.payload.objects.filter(x=>x.id!==o.id);
+  STATE.payload.traces.push({ at: nowISO(), type:"DELETE", objectId:o.id, delta:0, note:`DELETED ${o.name}` });
+  STATE.ui.selectedId = STATE.payload.objects[0]?.id || null;
+  toast("DELETED");
+  persist();
+}
+
+function updateSelected(patch){
+  const o = selected();
+  if(!o) return;
+  Object.assign(o, patch||{});
+  o.metrics.updatedAt = nowISO();
+  o.metrics.score = computeScore(o);
+  persist();
+}
+
+function trace(delta=1, note=""){
+  const o = selected();
+  if(!o) return;
+
+  const d = Number(delta);
+  const dd = Number.isFinite(d) ? d : 1;
+
+  o.metrics.executions += 1;
+  o.metrics.intensity = Math.max(0, (+o.metrics.intensity||0) + dd);
+  o.metrics.lastTraceAt = nowISO();
+  o.metrics.updatedAt = nowISO();
+  o.metrics.score = computeScore(o);
+
+  STATE.payload.traces.push({ at:o.metrics.lastTraceAt, type:"TRACE", objectId:o.id, delta:dd, note:String(note||"").slice(0,240) });
+  toast("TRACE");
+  persist();
+}
+
+/* Collapsible blocks */
+function setAllBlocksCollapsed(on){
+  STATE.ui.collapseAll = !!on;
+  persist();
+}
+
+/* =========================================================
+RENDER
+========================================================= */
+function escapeHtml(s){
+  return String(s ?? "").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;");
+}
+function escapeAttr(s){ return escapeHtml(s).replaceAll('"',"&quot;"); }
+
+function renderList(){
+  const list = $("list");
+  list.innerHTML = "";
+  const items = listObjs();
+
+  if(!items.length){
+    const empty = document.createElement("div");
+    empty.className = "viItem";
+    empty.style.cursor="default";
+    empty.textContent = "NO OBJECTS";
+    list.appendChild(empty);
+    return;
+  }
+
+  for(const o of items){
+    const div = document.createElement("div");
+    div.className = "viItem" + (STATE.ui.selectedId===o.id ? " sel" : "");
+    div.addEventListener("click", ()=>select(o.id));
+
+    const last = o.metrics.lastTraceAt ? new Date(o.metrics.lastTraceAt).toLocaleString() : "∅";
+
+    div.innerHTML = `
+      <div style="display:flex; justify-content:space-between; gap:10px; align-items:center">
+        <div>${escapeHtml(o.name)}</div>
+        <div class="badge">SCORE ${escapeHtml(String(o.metrics.score))}</div>
+      </div>
+      <div class="viMeta">
+        <span class="badge">${escapeHtml(o.id)}</span>
+        <span class="badge">EXEC ${escapeHtml(String(o.metrics.executions|0))}</span>
+        <span class="badge">INT ${escapeHtml(String(Math.round((+o.metrics.intensity||0)*100)/100))}</span>
+        <span class="badge">LAST ${escapeHtml(last)}</span>
+        <span class="badge">${escapeHtml(o.status)}</span>
+      </div>
+    `;
+    list.appendChild(div);
+  }
+}
+
+function renderEditor(){
+  const ed = $("editor");
+  const o = selected();
+  $("editorTitle").textContent = o ? o.name : "SELECT";
+
+  if(!o){
+    ed.innerHTML = `<div style="font-family:var(--mono); font-size:11px; letter-spacing:.06em; color:var(--muted)">
+      NO SELECTION. NEW CREATES OBJECT.
+    </div>`;
+    return;
+  }
+
+  const blocksCollapsed = !!STATE.ui.collapseAll;
+
+  ed.innerHTML = `
+    <div class="badge"><span class="dot fill"></span><span>ID</span><span>${escapeHtml(o.id)}</span></div>
+    <div class="hr"></div>
+
+    <div class="block ${blocksCollapsed ? "collapsed" : ""}">
+      <div class="blockHead" data-toggle="SPEC">
+        <span>SPEC</span><span style="color:var(--muted); font-size:11px">TOGGLE</span>
+      </div>
+      <div class="blockBody">
+        <div class="grid2">
+          <div>
+            <div class="fieldLabel">NAME</div>
+            <input id="name" value="${escapeAttr(o.name)}" />
+          </div>
+          <div>
+            <div class="fieldLabel">STATUS</div>
+            <select id="status">
+              ${["ACTIVE","DORMANT","ARCHIVED"].map(s=>`<option ${o.status===s?"selected":""}>${s}</option>`).join("")}
+            </select>
+          </div>
+        </div>
+
+        <div class="fieldLabel">TAGS (CSV)</div>
+        <input id="tags" value="${escapeAttr((o.tags||[]).join(","))}" />
+
+        <div class="fieldLabel">SURFACE</div>
+        <input id="surfaceIn" value="${escapeAttr(o.surface)}" />
+
+        <div class="fieldLabel">SPEC TEXT</div>
+        <textarea id="spec" style="min-height:140px">${escapeHtml(o.spec)}</textarea>
+      </div>
+    </div>
+
+    <div class="block ${blocksCollapsed ? "collapsed" : ""}">
+      <div class="blockHead" data-toggle="METRICS">
+        <span>INTENSITY</span><span style="color:var(--muted); font-size:11px">TRACE → INT</span>
+      </div>
+      <div class="blockBody">
+        <div class="grid2">
+          <div class="badge">EXEC ${escapeHtml(String(o.metrics.executions|0))}</div>
+          <div class="badge">INT ${escapeHtml(String(Math.round((+o.metrics.intensity||0)*100)/100))}</div>
+        </div>
+        <div class="hr"></div>
+        <div class="grid2">
+          <div>
+            <div class="fieldLabel">TRACE DELTA</div>
+            <input id="delta" value="1" />
+          </div>
+          <div>
+            <div class="fieldLabel">TRACE NOTE</div>
+            <input id="note" placeholder="OPTIONAL (240c)" />
+          </div>
+        </div>
+        <div style="margin-top:10px; display:flex; justify-content:flex-end">
+          <button class="btn" id="btnTraceInline">TRACE</button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  // block toggles (per-block, always allowed)
+  ed.querySelectorAll(".blockHead").forEach(h=>{
+    h.addEventListener("click", ()=>{
+      const block = h.parentElement;
+      block.classList.toggle("collapsed");
+    });
+  });
+
+  $("name").addEventListener("input",(e)=>updateSelected({ name:String(e.target.value||"").toUpperCase() }));
+  $("status").addEventListener("change",(e)=>updateSelected({ status:String(e.target.value||"ACTIVE").toUpperCase() }));
+  $("tags").addEventListener("input",(e)=>{
+    const tags = String(e.target.value||"").split(",").map(x=>x.trim().toUpperCase()).filter(Boolean).slice(0,12);
+    updateSelected({ tags });
+  });
+  $("surfaceIn").addEventListener("input",(e)=>updateSelected({ surface:String(e.target.value||"") }));
+  $("spec").addEventListener("input",(e)=>updateSelected({ spec:String(e.target.value||"") }));
+
+  $("btnTraceInline").addEventListener("click", ()=>{
+    const d = parseFloat(($("delta").value||"1"));
+    const note = ($("note").value||"");
+    trace(Number.isFinite(d)?d:1, note);
+    $("note").value="";
+  });
+}
+
+function render(){
+  ensurePayload();
+
+  root.classList.toggle("invert", !!STATE.ui.invert);
+  motion.classList.toggle("run", !!STATE.ui.motionOn);
+
+  root.classList.toggle("fullscreenUi", !!STATE.ui.fullscreenUi);
+
+  $("universals").value = STATE.universals || "";
+
+  const s = stableSig();
+  $("sig").textContent = s;
+  $("sig2").textContent = s;
+  $("sig3").textContent = s;
+
+  $("lightLabel").textContent = String(STATE.ui.lightPreset);
+  $("runLabel").textContent = STATE.ui.lightRunning ? "ON" : "OFF";
+  $("motionLabel").textContent = STATE.ui.motionOn ? "ON" : "OFF";
+  $("uiLabel").textContent = STATE.ui.fullscreenUi ? "OFF" : "ON";
+
+  $("filter").value = STATE.ui.filter || "";
+
+  renderList();
+  renderEditor();
+}
+
+/* =========================================================
+WIRING
+========================================================= */
+$("toggleDrawer").addEventListener("click", ()=> setDrawer(!$("drawer").classList.contains("open")));
+$("btnCloseDrawer").addEventListener("click", ()=> setDrawer(false));
+
+$("btnFull").addEventListener("click", ()=> setFullscreen(!STATE.ui.fullscreenUi));
+
+$("btnNew").addEventListener("click", addObj);
+$("btnDelete").addEventListener("click", deleteSelected);
+$("btnTrace").addEventListener("click", ()=> trace(1, "TRACE"));
+
+$("btnCollapseAll").addEventListener("click", ()=>{
+  setAllBlocksCollapsed(!STATE.ui.collapseAll);
+  toast(STATE.ui.collapseAll ? "ALL COLLAPSED" : "ALL EXPANDED");
+});
+
+$("filter").addEventListener("input", (e)=>{ STATE.ui.filter = String(e.target.value||""); persist(); });
+
+/* Import / Export */
+$("btnImport").addEventListener("click", ()=> $("file").click());
+$("file").addEventListener("change", async (e)=>{
+  const f = e.target.files && e.target.files[0];
+  if(!f) return;
+  const txt = await f.text();
+  importState(txt);
+  e.target.value = "";
+  toast("STATE IMPORTED");
+});
+$("btnExport").addEventListener("click", ()=>{ download("SHELL8_OS_VI_DI_state.json", exportState()); toast("STATE EXPORTED"); });
+$("btnCopy").addEventListener("click", ()=> copyText(exportState()));
+
+function download(filename, text){
+  const blob = new Blob([text], {type:"application/json"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href), 800);
+}
+async function copyText(text){
+  try{ await navigator.clipboard.writeText(text); toast("COPIED"); }
+  catch(e){ toast("COPY FAILED"); }
+}
+
+/* Hotkeys */
+document.addEventListener("keydown", (e)=>{
+  const tag = (e.target && e.target.tagName) ? e.target.tagName.toLowerCase() : "";
+  const typing = (tag==="textarea" || tag==="input" || tag==="select");
+
+  if(e.shiftKey && e.key.toLowerCase()==="i"){
+    e.preventDefault();
+    setInvert(!STATE.ui.invert);
+    toast(STATE.ui.invert ? "INVERT ON" : "INVERT OFF");
+    return;
+  }
+
+  if(!typing && /^[1-6]$/.test(e.key)){
+    e.preventDefault();
+    selectPreset(parseInt(e.key,10));
+    toast(`LIGHT ${STATE.ui.lightPreset} SELECTED`);
+    return;
+  }
+
+  if(!typing && (e.code==="Space" || e.key===" ")){
+    e.preventDefault();
+    toggleTransport();
+    return;
+  }
+
+  if(!typing && e.key.toLowerCase()==="f"){
+    e.preventDefault();
+    setFullscreen(!STATE.ui.fullscreenUi);
+    toast(STATE.ui.fullscreenUi ? "FULL UI OFF" : "FULL UI ON");
+    return;
+  }
+
+  if(!typing && e.key.toLowerCase()==="n"){
+    e.preventDefault(); addObj(); return;
+  }
+  if(!typing && e.key.toLowerCase()==="t"){
+    e.preventDefault(); trace(1,"TRACE"); return;
+  }
+  if(e.key==="Escape"){
+    setDrawer(false);
+    if(STATE.ui.fullscreenUi) setFullscreen(false);
+    stopLight(true);
+    STATE.ui.motionOn = false;
+    toast("CLOSED");
+    persist();
+    return;
+  }
+});
+
+/* Boot */
+ensurePayload();
+if(!STATE.payload.objects.length){
+  // seed one object
+  STATE.payload.objects.push(normalizeObj({
+    id: uid("OBJ"),
+    name: "VI/DI CANON",
+    tags: ["VI","DI","INTENSIFIER"],
+    spec: "VISUAL OBJECT SURFACE. INTERNAL DATA. COLLAPSIBLE CONTROLS. TRACE INTENSIFIES.",
+    surface: "VI/DI",
+    status: "ACTIVE",
+    metrics: { executions: 1, intensity: 1 }
+  }));
+  STATE.ui.selectedId = STATE.payload.objects[0].id;
+}
+render();
+persist();
+</script>
+</body>
+</html>
+
+<!--
+============================================================
+KETADATA HTML SERIALIZATION STAMP
+FILE_ID: SHELL8_OS_VI_DI_V1
+ROOM_ID: OS
+VERSION: shell8.os.vi-di.v1
+UPDATED_AT: 2025-12-24T00:00:00-05:00
+CHANGELOG:
+- OS WRAPPER ADDED (TOP/BOTTOM BARS + SYSTEM DRAWER + STATE IO)
+- VI/DI INTERFACE PASTED INTO SURFACE AREA (LEFT LIST / RIGHT EDITOR)
+- INTENSITY CONTROLS PRESERVED (INVERT / LIGHTS 1–6 / TRANSPORT / MOTION)
+- FULLSCREEN UI MODE ADDED (F OR FULL) HIDES ALL CONTROLS
+============================================================
+-->
