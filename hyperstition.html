@@ -1,0 +1,297 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>vi-interface</title>
+<style>
+  html,body{margin:0;height:100%;background:#000;overflow:hidden}
+  canvas{display:block;width:100vw;height:100vh}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<script>
+(() => {
+  const canvas = document.getElementById("c");
+  const ctx = canvas.getContext("2d", { alpha: false });
+
+  const DPR = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+  function resize(){
+    canvas.width = Math.floor(innerWidth * DPR);
+    canvas.height = Math.floor(innerHeight * DPR);
+  }
+  addEventListener("resize", resize, { passive:true });
+  resize();
+
+  // Controls (no UI): 1–6 preset, Space hold = surge, I = invert, R = reset
+  const S = {
+    invert: false,
+    preset: 3,
+    surge: 0,
+    t: 0,
+    seed: (Math.random() * 1e9) | 0
+  };
+
+  const KEY = new Set();
+  addEventListener("keydown", (e) => {
+    if (e.repeat) return;
+    KEY.add(e.code);
+    if (e.code === "Space") e.preventDefault();
+    if (/^Digit[1-6]$/.test(e.code)) S.preset = +e.code.slice(-1);
+    if (e.code === "KeyI") S.invert = !S.invert;
+    if (e.code === "KeyR") S.seed = (Math.random() * 1e9) | 0;
+  }, { passive:false });
+
+  addEventListener("keyup", (e) => {
+    KEY.delete(e.code);
+  }, { passive:true });
+
+  // Field: two coupled systems (local sovereignty vs global continuity) expressed as motion layers
+  const N = 1100;
+  const P = new Float32Array(N * 6); // x,y,vx,vy,life,tag
+  const W = () => canvas.width, H = () => canvas.height;
+
+  function rnd(n){ // deterministic-ish
+    S.seed = (S.seed * 1664525 + 1013904223) >>> 0;
+    return (S.seed / 4294967296) * n;
+  }
+
+  function reset(){
+    const w = W(), h = H();
+    for (let i=0;i<N;i++){
+      const o = i*6;
+      const ring = i % 2; // 0 = local, 1 = global
+      let x,y;
+      if (ring === 0){
+        // local cluster
+        x = w*0.5 + (rnd(1)-0.5) * w*0.25;
+        y = h*0.5 + (rnd(1)-0.5) * h*0.25;
+      } else {
+        // global ribbon
+        x = (rnd(1)) * w;
+        y = (rnd(1)) * h;
+      }
+      P[o+0]=x; P[o+1]=y;
+      P[o+2]=(rnd(1)-0.5)*0.6;
+      P[o+3]=(rnd(1)-0.5)*0.6;
+      P[o+4]=rnd(1);
+      P[o+5]=ring;
+    }
+  }
+  reset();
+
+  function clamp(x,a,b){ return x<a?a : x>b?b : x; }
+  function mix(a,b,t){ return a + (b-a)*t; }
+
+  function presetParams(k){
+    // intensity ladder (no labels)
+    switch(k){
+      case 1: return { fade:0.11, drift:0.55, curl:0.75, pull:0.35, grain:0.08, flash:0.00 };
+      case 2: return { fade:0.08, drift:0.75, curl:1.05, pull:0.45, grain:0.10, flash:0.00 };
+      case 3: return { fade:0.06, drift:0.95, curl:1.35, pull:0.55, grain:0.14, flash:0.02 };
+      case 4: return { fade:0.05, drift:1.15, curl:1.75, pull:0.70, grain:0.18, flash:0.04 };
+      case 5: return { fade:0.04, drift:1.45, curl:2.25, pull:0.88, grain:0.22, flash:0.07 };
+      case 6: return { fade:0.03, drift:1.85, curl:2.95, pull:1.05, grain:0.28, flash:0.12 };
+    }
+  }
+
+  function step(dt){
+    const w = W(), h = H();
+    const cx = w*0.5, cy = h*0.5;
+
+    const params = presetParams(S.preset);
+    const holding = KEY.has("Space");
+    S.surge = mix(S.surge, holding ? 1 : 0, holding ? 0.08 : 0.05);
+
+    // background persistence
+    // (invert is applied at render-time by swapping colors)
+    const bg = S.invert ? 255 : 0;
+    const fg = S.invert ? 0 : 255;
+
+    // controlled afterimage
+    ctx.fillStyle = `rgba(${bg},${bg},${bg},${params.fade})`;
+    ctx.fillRect(0,0,w,h);
+
+    // occasional staccato (intensity, not text)
+    if (params.flash > 0){
+      const pulse = Math.max(0, Math.sin(S.t* (2.2 + S.surge*6.0)) );
+      if (pulse > 0.985){
+        ctx.fillStyle = `rgba(${fg},${fg},${fg},${params.flash})`;
+        ctx.fillRect(0,0,w,h);
+      }
+    }
+
+    // draw strokes
+    ctx.lineWidth = 1 * DPR;
+    ctx.lineCap = "butt";
+
+    // two attractors: local (center) and global (moving “spine”)
+    const spineR = Math.min(w,h) * 0.28;
+    const sx = cx + Math.cos(S.t*0.23) * spineR * 0.55;
+    const sy = cy + Math.sin(S.t*0.19) * spineR * 0.55;
+
+    for (let i=0;i<N;i++){
+      const o=i*6;
+      let x=P[o+0], y=P[o+1];
+      let vx=P[o+2], vy=P[o+3];
+      let life=P[o+4];
+      const tag=P[o+5];
+
+      // normalized coords for field math
+      const nx = (x - cx) / (Math.min(w,h));
+      const ny = (y - cy) / (Math.min(w,h));
+
+      // field curls (two coupled)
+      const a = Math.atan2(ny, nx);
+      const r = Math.hypot(nx, ny) + 1e-6;
+
+      // local sovereignty vortex: tight, center-gravity, sharper turns
+      const localCurl = params.curl * (1.15 + 0.9*S.surge) * (1.0 / (0.35 + r));
+      const lx = -Math.sin(a) * localCurl;
+      const ly =  Math.cos(a) * localCurl;
+
+      // global continuity ribbon: long-wave drift along moving spine
+      const dx = (x - sx) / (Math.min(w,h));
+      const dy = (y - sy) / (Math.min(w,h));
+      const da = Math.atan2(dy, dx);
+      const dr = Math.hypot(dx, dy) + 1e-6;
+      const globalCurl = params.curl * 0.75 * (0.8 + 1.2*S.surge) * (1.0 / (0.50 + dr));
+      const gx = -Math.sin(da) * globalCurl;
+      const gy =  Math.cos(da) * globalCurl;
+
+      // coupling: each particle mostly follows its layer, but is tugged by the other
+      const kLocal = tag === 0 ? 0.82 : 0.38;
+      const kGlobal = tag === 1 ? 0.82 : 0.38;
+
+      // pull-to-attractor (containment membrane feeling)
+      const pull = params.pull * (0.35 + 0.75*S.surge);
+      const ax = tag===0 ? cx : sx;
+      const ay = tag===0 ? cy : sy;
+      const px = (ax - x) / (Math.min(w,h));
+      const py = (ay - y) / (Math.min(w,h));
+      const pl = Math.hypot(px, py) + 1e-6;
+      const pux = (px/pl) * pull;
+      const puy = (py/pl) * pull;
+
+      // grain jitter (intensity texture)
+      const jx = (rnd(1)-0.5) * params.grain * (0.5 + S.surge);
+      const jy = (rnd(1)-0.5) * params.grain * (0.5 + S.surge);
+
+      // integrate
+      vx = vx*0.985 + (lx*kLocal + gx*(1-kLocal) + pux + jx) * params.drift;
+      vy = vy*0.985 + (ly*kLocal + gy*(1-kLocal) + puy + jy) * params.drift;
+
+      // extra global drift for ribbon particles (continuity sweep)
+      if (tag === 1){
+        vx += Math.cos(S.t*0.18 + i*0.002) * 0.02 * (1 + 2*S.surge);
+        vy += Math.sin(S.t*0.16 + i*0.002) * 0.02 * (1 + 2*S.surge);
+      }
+
+      const x2 = x + vx * (0.85 + 1.75*S.surge) * DPR;
+      const y2 = y + vy * (0.85 + 1.75*S.surge) * DPR;
+
+      // stroke intensity
+      life -= dt * (0.10 + 0.25*S.surge);
+      if (life <= 0 || x2 < -40 || x2 > w+40 || y2 < -40 || y2 > h+40){
+        // respawn
+        const ring = tag;
+        if (ring === 0){
+          x = cx + (rnd(1)-0.5) * w*0.25;
+          y = cy + (rnd(1)-0.5) * h*0.25;
+        } else {
+          x = (rnd(1)) * w;
+          y = (rnd(1)) * h;
+        }
+        vx = (rnd(1)-0.5)*0.6;
+        vy = (rnd(1)-0.5)*0.6;
+        life = 0.6 + rnd(0.6);
+      } else {
+        // draw
+        const alpha = clamp(0.08 + (tag===0 ? 0.12 : 0.10) + 0.25*S.surge, 0.06, 0.55);
+        const c = fg;
+        ctx.strokeStyle = `rgba(${c},${c},${c},${alpha})`;
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        ctx.lineTo(x2, y2);
+        ctx.stroke();
+        x = x2; y = y2;
+      }
+
+      P[o+0]=x; P[o+1]=y;
+      P[o+2]=vx; P[o+3]=vy;
+      P[o+4]=life;
+    }
+  }
+
+  // Prime frame
+  ctx.fillStyle = "#000";
+  ctx.fillRect(0,0,canvas.width,canvas.height);
+
+  let last = performance.now();
+  function loop(now){
+    const dt = Math.min(0.033, (now - last) / 1000);
+    last = now;
+    S.t += dt * (0.85 + 1.75*S.surge);
+    step(dt);
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
+
+<!--
+============================================================
+KETADATA HTML SERIALIZATION STAMP
+
+FILE_ID: VI_INTERFACE_CONTINUITY_V1
+ROOM_ID: BASE
+VERSION: vi.interface.v1
+UPDATED_AT: 2025-12-23T00:00:00-05:00
+AUTHOR: KNG / BIGGIE
+INTENT: NON-VERBAL INTERFACE EXPRESSING CONTINUITY, SOVEREIGNTY, AND INTENSITY
+STATUS: DERIVED (BASE-CONFORMANT)
+
+AE:
+- BLACK FIELD
+- WHITE STROKES
+- NO TEXT
+- NO SYMBOLS
+- MOTION AS MEANING
+- INTENSITY AS SIGNAL
+- AFTERIMAGE AS MEMORY
+
+EE:
+- CONTINUOUS PARTICLE FIELD
+- COUPLED LOCAL / GLOBAL MOTION SYSTEMS
+- HOLD-BASED INTENSITY SURGE
+- PRESET-BASED DYNAMICS (1–6)
+- INVERTIBLE POLARITY
+- NON-DISCRETE STATE EVOLUTION
+
+WB:
+- NO UI CONTROLS
+- NO STORAGE
+- NO STATE EXPORT
+- NO PERSISTENCE
+- PURE RUNTIME EXPRESSION
+- READ-ONLY ARTIFACT
+
+DERIVED_FROM:
+- KETADATA BASE CONTRACT
+- SOVEREIGN PAGE PRINCIPLE
+- GLOBAL RECORD / LOCAL CONTEXT PHILOSOPHY
+
+NOTES:
+- THIS FILE CONTAINS NO LANGUAGE BY DESIGN.
+- MEANING IS ENCODED SOLELY THROUGH MOVEMENT AND INTENSITY.
+- STATE IS FELT, NOT STORED.
+
+============================================================
+CHANGELOG:
+- 2025-12-23: INITIAL SERIALIZATION AND CONTRACT ALIGNMENT
+============================================================
+-->
