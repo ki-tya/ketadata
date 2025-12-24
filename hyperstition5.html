@@ -1,0 +1,589 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>KETADATA // HYPERSTITION_SURFACE (SHELL8)</title>
+<style>
+  :root{
+    --bg:#000; --fg:#fff; --mut:#8a8a8a; --line:#2a2a2a;
+    --panelW: 360px;
+  }
+  html,body{margin:0;height:100%;background:var(--bg);overflow:hidden;font-family:Arial, Helvetica, sans-serif}
+  canvas{display:block;width:100vw;height:100vh}
+  /* non-friendly, sharp */
+  .hud{
+    position:fixed; top:0; left:0; width:var(--panelW); height:100vh;
+    background:rgba(0,0,0,0.86);
+    border-right:1px solid var(--line);
+    color:var(--fg);
+    padding:10px 10px 14px;
+    box-sizing:border-box;
+    transform:translateX(0);
+    transition:transform 120ms linear;
+    user-select:none;
+  }
+  .hud.hidden{ transform:translateX(calc(-1 * var(--panelW))); }
+  .row{display:flex; gap:8px; align-items:center; margin:8px 0;}
+  .row > label{flex:0 0 120px; font-size:12px; letter-spacing:0.06em;}
+  input[type="range"]{flex:1; width:100%;}
+  input[type="number"]{
+    width:86px; background:#000; color:var(--fg);
+    border:1px solid var(--line); padding:6px 8px; border-radius:0;
+    font-size:12px;
+  }
+  button{
+    background:#000; color:var(--fg); border:1px solid var(--line);
+    padding:8px 10px; border-radius:0; font-size:12px; letter-spacing:0.08em;
+    cursor:pointer;
+  }
+  button:hover{border-color:#555}
+  .title{font-size:12px; letter-spacing:0.12em; color:var(--mut); margin:2px 0 10px;}
+  .big{font-size:14px; letter-spacing:0.12em; margin:0 0 4px;}
+  .sep{height:1px; background:var(--line); margin:10px 0;}
+  textarea{
+    width:100%; height:86px; resize:none;
+    background:#000; color:var(--fg); border:1px solid var(--line);
+    padding:8px; box-sizing:border-box; border-radius:0; font-size:11px;
+    font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  }
+  .hint{font-size:11px; color:var(--mut); line-height:1.35; letter-spacing:0.04em}
+  .pill{display:inline-block;border:1px solid var(--line);padding:2px 6px;margin:2px 6px 0 0;color:var(--mut);font-size:11px}
+  .corner{
+    position:fixed; right:10px; bottom:10px;
+    color:rgba(255,255,255,0.35); font-size:11px; letter-spacing:0.12em;
+    pointer-events:none;
+  }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<div id="hud" class="hud">
+  <div class="big">KETADATA // HYPERSTITION_SURFACE</div>
+  <div class="title">SHELL8 VI/DI SURFACE — CONTROLLABLE — NON-VERBAL</div>
+
+  <div class="row"><label>PRESET</label>
+    <button data-preset="1">1</button><button data-preset="2">2</button><button data-preset="3">3</button>
+    <button data-preset="4">4</button><button data-preset="5">5</button><button data-preset="6">6</button>
+  </div>
+
+  <div class="row"><label>INTENSITY</label><input id="intensity" type="range" min="0" max="1" step="0.001" value="0.62"></div>
+  <div class="row"><label>DENSITY</label><input id="density" type="range" min="200" max="4200" step="10" value="1600"></div>
+  <div class="row"><label>AFTERIMAGE</label><input id="fade" type="range" min="0.01" max="0.25" step="0.001" value="0.06"></div>
+  <div class="row"><label>GLITCH</label><input id="glitch" type="range" min="0" max="1" step="0.001" value="0.18"></div>
+  <div class="row"><label>SPINE</label><input id="spine" type="range" min="0" max="1" step="0.001" value="0.55"></div>
+  <div class="row"><label>RITUAL</label><input id="ritual" type="range" min="0" max="1" step="0.001" value="0.42"></div>
+
+  <div class="row">
+    <label>INVERT</label><button id="invert">TOGGLE (I)</button>
+    <label style="flex:0 0 auto;margin-left:auto">STROBE</label><button id="strobe">TOGGLE (T)</button>
+  </div>
+
+  <div class="row">
+    <label>SEED</label>
+    <input id="seed" type="number" min="0" max="4294967295" step="1" value="1337">
+    <button id="reseat">RESEAT (R)</button>
+  </div>
+
+  <div class="sep"></div>
+
+  <div class="row">
+    <button id="export">EXPORT</button>
+    <button id="import">IMPORT</button>
+    <button id="reset">RESET</button>
+  </div>
+
+  <textarea id="io" spellcheck="false" placeholder="STATE JSON (EXPORT/IMPORT)"></textarea>
+
+  <div class="sep"></div>
+
+  <div class="hint">
+    <span class="pill">H</span> HIDE HUD
+    <span class="pill">SPACE</span> SURGE (HOLD)
+    <span class="pill">1–6</span> PRESET
+    <span class="pill">I</span> INVERT
+    <span class="pill">T</span> STROBE
+    <span class="pill">R</span> RESEAT
+  </div>
+</div>
+
+<div class="corner">SHELL8 // VI_OBJECT // HYPERSTITION</div>
+
+<script>
+(() => {
+  /* ============================================================
+     KETADATA SHELL8 — SYSTEM UNIVERSALS (NON-VISUAL CONTRACT)
+     ============================================================ */
+
+  const KETADATA_SYSTEM = {
+    SHELL: "SHELL8",
+    MODE: "VI_SURFACE",
+    FILE_ID: "HYPERSTITION_SURFACE_V1",
+    ROOM_ID: "VISUAL_OBJECTS",
+    VERSION: "vi.hyperstition.v1",
+    UPDATED_AT: "2025-12-24T00:00:00-05:00",
+    AUTHOR: "KNG / BIGGIE",
+    STATUS: "ACTIVE",
+    IO: { INPUT: "KEYBOARD+HUD", OUTPUT: "CANVAS", STORAGE: "NONE" },
+    STATE: { EXPORTABLE: true, PERSISTENT: false, SNAPSHOT: null },
+    COMMAND_MAP: {
+      HUD_TOGGLE: "KeyH",
+      SURGE_HOLD: "Space",
+      PRESET_1_6: "Digit1..Digit6",
+      INVERT_TOGGLE: "KeyI",
+      STROBE_TOGGLE: "KeyT",
+      RESEAT: "KeyR",
+      EXPORT: "HUD_BUTTON",
+      IMPORT: "HUD_BUTTON"
+    }
+  };
+
+  // Shell hooks (export/import are real; persistence intentionally off)
+  function KETA_EXPORT_STATE(){ return snapshotState(); }
+  function KETA_IMPORT_STATE(snapshot){ return applySnapshot(snapshot); }
+
+  Object.defineProperty(window, "__KETADATA__", {
+    value: Object.freeze({
+      SYSTEM: Object.freeze(KETADATA_SYSTEM),
+      EXPORT: KETA_EXPORT_STATE,
+      IMPORT: KETA_IMPORT_STATE
+    }),
+    writable:false, configurable:false, enumerable:false
+  });
+
+  /* ============================================================
+     RUNTIME
+     ============================================================ */
+
+  const canvas = document.getElementById("c");
+  const ctx = canvas.getContext("2d", { alpha:false });
+
+  const hud = document.getElementById("hud");
+  const elIntensity = document.getElementById("intensity");
+  const elDensity   = document.getElementById("density");
+  const elFade      = document.getElementById("fade");
+  const elGlitch    = document.getElementById("glitch");
+  const elSpine     = document.getElementById("spine");
+  const elRitual    = document.getElementById("ritual");
+  const elSeed      = document.getElementById("seed");
+  const elIO        = document.getElementById("io");
+
+  const btnInvert = document.getElementById("invert");
+  const btnStrobe = document.getElementById("strobe");
+  const btnReseat = document.getElementById("reseat");
+  const btnExport = document.getElementById("export");
+  const btnImport = document.getElementById("import");
+  const btnReset  = document.getElementById("reset");
+
+  const DPR = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+  function resize(){
+    canvas.width  = Math.floor(innerWidth * DPR);
+    canvas.height = Math.floor(innerHeight * DPR);
+  }
+  addEventListener("resize", resize, { passive:true });
+  resize();
+
+  const KEY = new Set();
+
+  const S = {
+    t: 0,
+    invert: false,
+    strobe: false,
+    surge: 0,
+    preset: 3,
+    seed: 1337 >>> 0,
+
+    intensity: 0.62,
+    targetN: 1600,
+    fade: 0.06,
+    glitch: 0.18,
+    spine: 0.55,
+    ritual: 0.42
+  };
+
+  // Deterministic RNG
+  function rnd(){
+    S.seed = (S.seed * 1664525 + 1013904223) >>> 0;
+    return S.seed / 4294967296;
+  }
+
+  function clamp(x,a,b){ return x<a?a : x>b?b : x; }
+  function mix(a,b,t){ return a + (b-a)*t; }
+
+  function presetApply(k){
+    S.preset = k|0;
+    // hyperstition ladder: more density + curl + strobe pressure + ritual coherence
+    const table = {
+      1:{intensity:0.35, targetN: 800,  fade:0.10, glitch:0.06, spine:0.35, ritual:0.20},
+      2:{intensity:0.48, targetN:1200,  fade:0.08, glitch:0.10, spine:0.45, ritual:0.30},
+      3:{intensity:0.62, targetN:1600,  fade:0.06, glitch:0.18, spine:0.55, ritual:0.42},
+      4:{intensity:0.74, targetN:2200,  fade:0.05, glitch:0.28, spine:0.62, ritual:0.55},
+      5:{intensity:0.86, targetN:3000,  fade:0.04, glitch:0.40, spine:0.70, ritual:0.68},
+      6:{intensity:0.98, targetN:3800,  fade:0.03, glitch:0.58, spine:0.78, ritual:0.82}
+    };
+    const p = table[S.preset] || table[3];
+    Object.assign(S, p);
+    syncHUD();
+    reinitField();
+  }
+
+  // Field
+  let N = 0;
+  let P = null; // x,y,vx,vy,life,layer(0/1),sig(0..1)
+  function reinitField(){
+    N = Math.max(200, Math.min(4200, (S.targetN|0)));
+    P = new Float32Array(N * 7);
+
+    const w = canvas.width, h = canvas.height;
+    const cx = w*0.5, cy = h*0.5;
+
+    for (let i=0;i<N;i++){
+      const o=i*7;
+      const layer = (i % 3 === 0) ? 1 : 0;     // 0 = local, 1 = spine
+      const sig = rnd();                        // pseudo-sigil parameter
+      let x,y;
+      if (layer===0){
+        x = cx + (rnd()-0.5) * w * 0.35;
+        y = cy + (rnd()-0.5) * h * 0.35;
+      }else{
+        x = rnd()*w; y = rnd()*h;
+      }
+      P[o+0]=x; P[o+1]=y;
+      P[o+2]=(rnd()-0.5)*0.8;
+      P[o+3]=(rnd()-0.5)*0.8;
+      P[o+4]=0.6 + rnd()*0.6; // life
+      P[o+5]=layer;
+      P[o+6]=sig;
+    }
+  }
+
+  function syncHUD(){
+    elIntensity.value = String(S.intensity);
+    elDensity.value   = String(S.targetN);
+    elFade.value      = String(S.fade);
+    elGlitch.value    = String(S.glitch);
+    elSpine.value     = String(S.spine);
+    elRitual.value    = String(S.ritual);
+    elSeed.value      = String(S.seed >>> 0);
+  }
+
+  function reseat(){
+    S.seed = ((Math.random()*4294967296)>>>0);
+    syncHUD();
+  }
+
+  function snapshotState(){
+    return {
+      SHELL: "SHELL8",
+      MODE: "VI_SURFACE",
+      FILE_ID: KETADATA_SYSTEM.FILE_ID,
+      VERSION: KETADATA_SYSTEM.VERSION,
+      t: S.t,
+      invert: S.invert,
+      strobe: S.strobe,
+      preset: S.preset,
+      seed: S.seed >>> 0,
+      intensity: S.intensity,
+      targetN: S.targetN|0,
+      fade: S.fade,
+      glitch: S.glitch,
+      spine: S.spine,
+      ritual: S.ritual
+    };
+  }
+
+  function applySnapshot(obj){
+    try{
+      if (!obj || obj.SHELL !== "SHELL8") return false;
+      if (obj.FILE_ID && obj.FILE_ID !== KETADATA_SYSTEM.FILE_ID) return false;
+
+      S.t = +obj.t || 0;
+      S.invert = !!obj.invert;
+      S.strobe = !!obj.strobe;
+      S.preset = clamp((obj.preset|0) || 3, 1, 6);
+
+      S.seed = (obj.seed>>>0) || (S.seed>>>0);
+      S.intensity = clamp(+obj.intensity || 0.62, 0, 1);
+      S.targetN = clamp((obj.targetN|0) || 1600, 200, 4200);
+      S.fade = clamp(+obj.fade || 0.06, 0.01, 0.25);
+      S.glitch = clamp(+obj.glitch || 0.18, 0, 1);
+      S.spine = clamp(+obj.spine || 0.55, 0, 1);
+      S.ritual = clamp(+obj.ritual || 0.42, 0, 1);
+
+      syncHUD();
+      reinitField();
+      return true;
+    }catch(_e){ return false; }
+  }
+
+  // HUD bindings
+  hud.addEventListener("input", () => {
+    S.intensity = +elIntensity.value;
+    S.targetN = +elDensity.value|0;
+    S.fade = +elFade.value;
+    S.glitch = +elGlitch.value;
+    S.spine = +elSpine.value;
+    S.ritual = +elRitual.value;
+    const newSeed = (Number(elSeed.value)>>>0);
+    if ((newSeed>>>0) !== (S.seed>>>0)) S.seed = newSeed>>>0;
+
+    // density changes require reinit (cheap enough at this scale)
+    reinitField();
+  });
+
+  document.querySelectorAll("button[data-preset]").forEach(b=>{
+    b.addEventListener("click", ()=> presetApply(+b.dataset.preset));
+  });
+
+  btnInvert.addEventListener("click", ()=> { S.invert = !S.invert; });
+  btnStrobe.addEventListener("click", ()=> { S.strobe = !S.strobe; });
+  btnReseat.addEventListener("click", ()=> { reseat(); reinitField(); });
+  btnReset.addEventListener("click", ()=> { presetApply(3); });
+
+  btnExport.addEventListener("click", ()=>{
+    const snap = snapshotState();
+    elIO.value = JSON.stringify(snap, null, 2);
+  });
+
+  btnImport.addEventListener("click", ()=>{
+    try{
+      const obj = JSON.parse(elIO.value || "{}");
+      applySnapshot(obj);
+    }catch(_e){}
+  });
+
+  // Keyboard
+  addEventListener("keydown", (e) => {
+    if (e.repeat) return;
+    KEY.add(e.code);
+    if (e.code === "Space") e.preventDefault();
+
+    if (/^Digit[1-6]$/.test(e.code)) presetApply(+e.code.slice(-1));
+    if (e.code === "KeyI") S.invert = !S.invert;
+    if (e.code === "KeyT") S.strobe = !S.strobe;
+    if (e.code === "KeyH") hud.classList.toggle("hidden");
+    if (e.code === "KeyR") { reseat(); reinitField(); }
+  }, { passive:false });
+
+  addEventListener("keyup", (e) => { KEY.delete(e.code); }, { passive:true });
+
+  // Initialize
+  presetApply(3);
+
+  // Render kernel: hyperstition = feedback loop where “sigils” cohere under ritual parameter,
+  // and “spine” acts as narrative attractor.
+  function step(dt){
+    const w = canvas.width, h = canvas.height;
+    const cx = w*0.5, cy = h*0.5;
+
+    // surge
+    const holding = KEY.has("Space");
+    S.surge = mix(S.surge, holding ? 1 : 0, holding ? 0.10 : 0.06);
+
+    const bg = S.invert ? 255 : 0;
+    const fg = S.invert ? 0 : 255;
+
+    // afterimage
+    ctx.fillStyle = `rgba(${bg},${bg},${bg},${S.fade})`;
+    ctx.fillRect(0,0,w,h);
+
+    // strobe (controlled violence)
+    if (S.strobe){
+      const p = Math.max(0, Math.sin(S.t * (2.1 + 7.0*S.intensity + 8.0*S.surge)));
+      if (p > 0.988){
+        ctx.fillStyle = `rgba(${fg},${fg},${fg},${0.05 + 0.15*S.intensity})`;
+        ctx.fillRect(0,0,w,h);
+      }
+    }
+
+    ctx.lineWidth = 1 * DPR;
+    ctx.lineCap = "butt";
+
+    // narrative spine: moving attractor chain
+    const R = Math.min(w,h) * (0.18 + 0.28*S.spine);
+    const sx = cx + Math.cos(S.t*0.23) * R;
+    const sy = cy + Math.sin(S.t*0.19) * R;
+    const sx2 = cx + Math.cos(S.t*0.17 + 1.4) * R * 0.7;
+    const sy2 = cy + Math.sin(S.t*0.21 + 1.4) * R * 0.7;
+
+    // global parameters
+    const baseDrift = 0.6 + 2.4*S.intensity;
+    const ritual = S.ritual;               // coherence strength
+    const glitch = S.glitch * (0.35 + 0.95*S.surge);
+    const speed = (0.65 + 1.85*S.intensity + 2.1*S.surge) * DPR;
+
+    for (let i=0;i<N;i++){
+      const o=i*7;
+      let x=P[o+0], y=P[o+1], vx=P[o+2], vy=P[o+3], life=P[o+4];
+      const layer=P[o+5];
+      const sig=P[o+6]; // 0..1
+
+      // normalize
+      const nx = (x - cx) / (Math.min(w,h));
+      const ny = (y - cy) / (Math.min(w,h));
+      const a = Math.atan2(ny, nx);
+      const r = Math.hypot(nx, ny) + 1e-6;
+
+      // sigil curl: each particle has a latent “glyph angle”
+      const glyph = (sig*6.28318530718) + Math.sin(S.t*0.7 + sig*12.0) * (0.6*glitch);
+      const curl = (1.0 / (0.30 + r)) * (1.2 + 2.3*S.intensity + 2.5*S.surge);
+
+      // local vortex + glyph bias
+      const lx = (-Math.sin(a + glyph) * curl);
+      const ly = ( Math.cos(a + glyph) * curl);
+
+      // spine vortex (two-node)
+      const dx1 = (x - sx)  / (Math.min(w,h));
+      const dy1 = (y - sy)  / (Math.min(w,h));
+      const dx2 = (x - sx2) / (Math.min(w,h));
+      const dy2 = (y - sy2) / (Math.min(w,h));
+      const da1 = Math.atan2(dy1, dx1), dr1 = Math.hypot(dx1, dy1) + 1e-6;
+      const da2 = Math.atan2(dy2, dx2), dr2 = Math.hypot(dx2, dy2) + 1e-6;
+
+      const spineCurl1 = (1.0 / (0.55 + dr1)) * (0.8 + 2.0*S.spine + 2.0*S.surge);
+      const spineCurl2 = (1.0 / (0.55 + dr2)) * (0.8 + 2.0*S.spine + 2.0*S.surge);
+
+      const gx = (-Math.sin(da1 + glyph*0.3) * spineCurl1) + (-Math.sin(da2 - glyph*0.2) * spineCurl2);
+      const gy = ( Math.cos(da1 + glyph*0.3) * spineCurl1) + ( Math.cos(da2 - glyph*0.2) * spineCurl2);
+
+      // coupling weights: ritual increases cross-layer coherence (hyperstition = belief becomes field)
+      const kLocal = layer===0 ? (0.78 + 0.18*ritual) : (0.30 + 0.30*ritual);
+      const kSpine = layer===1 ? (0.78 + 0.18*ritual) : (0.30 + 0.30*ritual);
+
+      // containment pull
+      const ax = layer===0 ? cx : sx;
+      const ay = layer===0 ? cy : sy;
+      const px = (ax - x) / (Math.min(w,h));
+      const py = (ay - y) / (Math.min(w,h));
+      const pl = Math.hypot(px, py) + 1e-6;
+      const pull = (0.18 + 0.85*S.intensity + 0.85*S.surge) * (0.25 + 0.75*ritual);
+      const pux = (px/pl) * pull;
+      const puy = (py/pl) * pull;
+
+      // glitch jitter
+      const jx = (rnd()-0.5) * 0.22 * glitch;
+      const jy = (rnd()-0.5) * 0.22 * glitch;
+
+      // integrate
+      vx = vx*0.986 + ((lx*kLocal + gx*(1-kLocal)) + pux + jx) * baseDrift;
+      vy = vy*0.986 + ((ly*kLocal + gy*(1-kLocal)) + puy + jy) * baseDrift;
+
+      // spine drift sweep (narrative drag)
+      if (layer===1){
+        vx += Math.cos(S.t*0.17 + i*0.002) * 0.02 * (1 + 2.5*S.surge + 1.2*S.spine);
+        vy += Math.sin(S.t*0.16 + i*0.002) * 0.02 * (1 + 2.5*S.surge + 1.2*S.spine);
+      }
+
+      const x2 = x + vx * speed;
+      const y2 = y + vy * speed;
+
+      // life / respawn
+      life -= dt * (0.10 + 0.30*S.intensity + 0.30*S.surge);
+      if (life <= 0 || x2 < -60 || x2 > w+60 || y2 < -60 || y2 > h+60){
+        // respawn with ritual bias (more coherence = more central rebirth)
+        const centerBias = 0.15 + 0.65*ritual;
+        if (layer===0){
+          x = cx + (rnd()-0.5) * w * (0.45 - 0.22*centerBias);
+          y = cy + (rnd()-0.5) * h * (0.45 - 0.22*centerBias);
+        } else {
+          x = (centerBias*rnd() + (1-centerBias)*rnd()) * w;
+          y = (centerBias*rnd() + (1-centerBias)*rnd()) * h;
+        }
+        vx = (rnd()-0.5)*0.8;
+        vy = (rnd()-0.5)*0.8;
+        life = 0.55 + rnd()*0.75;
+      } else {
+        // render (hyperstition mark: thin but persistent)
+        const a0 = 0.05 + 0.28*S.intensity + 0.30*S.surge;
+        const alpha = clamp(a0 * (layer===1 ? 0.85 : 1.0) * (0.65 + 0.7*ritual), 0.06, 0.72);
+        const c = fg;
+        ctx.strokeStyle = `rgba(${c},${c},${c},${alpha})`;
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        ctx.lineTo(x2, y2);
+        ctx.stroke();
+        x = x2; y = y2;
+      }
+
+      P[o+0]=x; P[o+1]=y; P[o+2]=vx; P[o+3]=vy; P[o+4]=life;
+    }
+  }
+
+  // Prime
+  ctx.fillStyle = "#000";
+  ctx.fillRect(0,0,canvas.width,canvas.height);
+
+  // Loop
+  let last = performance.now();
+  function loop(now){
+    const dt = Math.min(0.033, (now-last)/1000);
+    last = now;
+    S.t += dt * (0.9 + 1.9*S.intensity + 2.2*S.surge);
+    step(dt);
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
+
+  // Read-only runtime telemetry (non-visual)
+  try{
+    Object.defineProperty(window.__KETADATA__, "RUNTIME", {
+      value: Object.freeze({
+        preset: () => S.preset,
+        invert: () => S.invert,
+        strobe: () => S.strobe,
+        surge:  () => S.surge,
+        time:   () => S.t
+      }),
+      writable:false, configurable:false, enumerable:false
+    });
+  }catch(_e){}
+})();
+</script>
+</body>
+</html>
+
+<!--
+============================================================
+KETADATA HTML SERIALIZATION STAMP
+
+SHELL: SHELL8
+MODE: VI_SURFACE
+
+FILE_ID: HYPERSTITION_SURFACE_V1
+ROOM_ID: VISUAL_OBJECTS
+VERSION: vi.hyperstition.v1
+UPDATED_AT: 2025-12-24T00:00:00-05:00
+AUTHOR: KNG / BIGGIE
+INTENT: RENDER A CONTROLLABLE HYPERSTITION FIELD (BELIEF-FEEDBACK MOTION) AS A VI OBJECT
+STATUS: ACTIVE
+
+AE:
+- BLACK FIELD
+- WHITE STROKES
+- SHARP HUD (OPTIONAL / HIDABLE)
+- NO FRIENDLY UI
+- NO DECORATIVE COLOR
+- MOTION IS SEMANTIC CARRIER
+- AFTERIMAGE AS MEMORY PRESSURE
+
+EE:
+- PARTICLE FIELD WITH SIGIL PARAMETER PER AGENT
+- COUPLED LOCAL VORTEX + NARRATIVE SPINE ATTRACTORS
+- RITUAL PARAMETER INCREASES COHERENCE (CROSS-LAYER COUPLING)
+- GLITCH PARAMETER ADDS JITTER + PHASE BIAS
+- SURGE (SPACE HOLD) AMPLIFIES SPEED/ENERGY
+- OPTIONAL STROBE FOR INTENSITY PUNCTUATION
+- EXPORT/IMPORT SNAPSHOT (NO PERSISTENCE)
+
+WB:
+- SHELL8 UNIVERSALS PRESENT (__KETADATA__ SYSTEM/EXPORT/IMPORT/RUNTIME)
+- HUD HIDABLE (H)
+- KEYMAP CONSISTENT WITH KETADATA PRACTICE
+- STATE IS EXPORTABLE BUT NOT STORED BY DEFAULT
+- SINGLE-FILE, SOVEREIGN, PORTABLE
+
+CHANGELOG:
+- 2025-12-24: INITIAL SHELL8 VI HYPERSTITION SURFACE
+============================================================
+-->
