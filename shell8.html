@@ -347,22 +347,42 @@ AE ▸ KETA NOTE (THIN / ELEGANT / SHARP)
         <button class="btn" id="btnCloseDrawer">CLOSE</button>
       </div>
     </div>
+
     <div class="drawerBody">
       <textarea id="universals" placeholder="LAWS / CONSTRAINTS / REFERENCES"></textarea>
       <div style="margin-top:8px; color:var(--muted); font-family:var(--mono); font-size:11px">
         EE: axiom → KETADATA ⇒ KETA_NOTE ⇒ EXPORTABLE STATE
       </div>
+
+      <!-- =====================================================
+      ROOM SECTION (UPDATED: MULTI PRESETS + ACTIVE ROOM)
+      ====================================================== -->
       <div style="margin-top:8px; display:flex; gap:8px; align-items:center; font-family:var(--mono); font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted)">
         <span>ROOM</span>
         <input id="roomInput" style="flex:1; background:#000; color:#fff; border:1px solid var(--line2); padding:6px 8px; font-family:var(--mono); outline:none" placeholder="e.g. VAULT / LAB / BASEMENT" />
       </div>
+
       <div style="margin-top:8px; display:flex; gap:8px; align-items:center; font-family:var(--mono); font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted)">
         <span>ROOM URL</span>
         <input id="roomUrlInput" style="flex:1; background:#000; color:#fff; border:1px solid var(--line2); padding:6px 8px; font-family:var(--mono); outline:none" placeholder="optional: ketadata.com/vault/index.html" />
       </div>
+
       <div style="margin-top:8px; display:flex; gap:8px; align-items:center">
-        <button class="btn" id="btnSaveRoom">SAVE ROOM</button>
+        <button class="btn" id="btnSaveRoom" title="Add/Update preset for this ROOM">SAVE PRESET</button>
+        <button class="btn" id="btnSetActiveRoom" title="Set this ROOM as active (ROOM + ROOM URL)">SET ACTIVE</button>
+        <button class="btn" id="btnDeleteRoom" title="Delete preset for this ROOM">DELETE</button>
       </div>
+
+      <div style="margin-top:10px; border-top:1px solid var(--line); padding-top:10px">
+        <div style="font-family:var(--mono); font-size:12px; letter-spacing:.10em; text-transform:uppercase; color:var(--muted); margin-bottom:8px">
+          ROOM PRESETS
+        </div>
+        <div id="roomList" style="display:flex; flex-direction:column; gap:6px"></div>
+        <div style="margin-top:8px; color:var(--muted); font-family:var(--mono); font-size:11px">
+          CLICK = LOAD INTO FIELDS. DOUBLE CLICK = SET ACTIVE.
+        </div>
+      </div>
+      <!-- ===================================================== -->
     </div>
   </div>
 
@@ -749,6 +769,124 @@ function selectPreset(preset){
 }
 
 /* =========================================================
+WB ▸ ROOM PRESETS (MULTI-ROOM REGISTRY)
+- Stores many rooms + urls as presets.
+- Active room remains STATE.room / STATE.roomUrl (existing behavior).
+- Presets stored in STATE.payload.roomPresets (non-breaking).
+========================================================= */
+function ensureRoomPresets(){
+  if(!STATE.payload || typeof STATE.payload !== "object") STATE.payload = {};
+  if(!Array.isArray(STATE.payload.roomPresets)) STATE.payload.roomPresets = [];
+}
+function canonRoomName(name){
+  return String(name || "").trim().toUpperCase();
+}
+function upsertRoomPreset(roomName, url){
+  ensureRoomPresets();
+  const room = canonRoomName(roomName) || "BASE";
+  const roomUrl = String(url || "").trim();
+
+  const idx = STATE.payload.roomPresets.findIndex(r => canonRoomName(r.room) === room);
+  const preset = { room, roomUrl, updatedAt: nowISO() };
+
+  if(idx >= 0) STATE.payload.roomPresets[idx] = Object.assign({}, STATE.payload.roomPresets[idx], preset);
+  else STATE.payload.roomPresets.unshift(Object.assign({ createdAt: nowISO() }, preset));
+
+  return preset;
+}
+function deleteRoomPreset(roomName){
+  ensureRoomPresets();
+  const room = canonRoomName(roomName);
+  if(!room) return;
+  STATE.payload.roomPresets = STATE.payload.roomPresets.filter(r => canonRoomName(r.room) !== room);
+}
+function loadPresetToFields(roomName){
+  ensureRoomPresets();
+  const room = canonRoomName(roomName);
+  const preset = STATE.payload.roomPresets.find(r => canonRoomName(r.room) === room);
+  if(!preset) return;
+  $("roomInput").value = preset.room || "";
+  $("roomUrlInput").value = preset.roomUrl || "";
+}
+function setActiveRoom(roomName, url){
+  STATE.room = (canonRoomName(roomName) || "BASE").trim();
+  STATE.roomUrl = String(url || "").trim();
+}
+function renderRoomList(){
+  const el = $("roomList");
+  if(!el) return;
+
+  ensureRoomPresets();
+
+  const presets = STATE.payload.roomPresets.slice().sort((a,b)=>{
+    const ta = Date.parse(a.updatedAt || a.createdAt || 0);
+    const tb = Date.parse(b.updatedAt || b.createdAt || 0);
+    return tb - ta;
+  });
+
+  el.innerHTML = "";
+
+  if(!presets.length){
+    const empty = document.createElement("div");
+    empty.style.border = "1px solid var(--line2)";
+    empty.style.padding = "8px 10px";
+    empty.style.fontFamily = "var(--mono)";
+    empty.style.fontSize = "11px";
+    empty.style.letterSpacing = ".08em";
+    empty.style.textTransform = "uppercase";
+    empty.style.color = "var(--muted)";
+    empty.textContent = "NO PRESETS";
+    el.appendChild(empty);
+    return;
+  }
+
+  presets.forEach(p=>{
+    const row = document.createElement("div");
+    row.style.border = "1px solid var(--line2)";
+    row.style.padding = "8px 10px";
+    row.style.fontFamily = "var(--mono)";
+    row.style.fontSize = "11px";
+    row.style.letterSpacing = ".08em";
+    row.style.textTransform = "uppercase";
+    row.style.color = "var(--fg)";
+    row.style.cursor = "pointer";
+    row.style.display = "flex";
+    row.style.justifyContent = "space-between";
+    row.style.gap = "10px";
+
+    const left = document.createElement("div");
+    left.textContent = p.room || "ROOM";
+
+    const right = document.createElement("div");
+    right.style.color = "var(--muted)";
+    right.style.whiteSpace = "nowrap";
+    right.style.overflow = "hidden";
+    right.style.textOverflow = "ellipsis";
+    right.style.maxWidth = "55%";
+    right.textContent = (p.roomUrl && p.roomUrl.trim()) ? "URL" : "NO URL";
+
+    row.addEventListener("click", ()=>{
+      loadPresetToFields(p.room);
+      toast("PRESET LOADED");
+    });
+
+    row.addEventListener("dblclick", ()=>{
+      setActiveRoom(p.room, p.roomUrl);
+      toast("ACTIVE ROOM SET");
+      persist();
+    });
+
+    if(canonRoomName(STATE.room) === canonRoomName(p.room)){
+      row.style.borderColor = "var(--fg)";
+    }
+
+    row.appendChild(left);
+    row.appendChild(right);
+    el.appendChild(row);
+  });
+}
+
+/* =========================================================
 WB ▸ UI / IO / NOTE / DRAWER / HOTKEYS
 ========================================================= */
 function setDrawer(open){ $("drawer").classList.toggle("open", !!open); }
@@ -805,6 +943,9 @@ function render(){
   if(hasUrl){
     $("roomJumpTxt").textContent = `ROOM LINK: ${(STATE.room||"ROOM").toUpperCase()}`;
   }
+
+  // UPDATED: render presets list
+  renderRoomList();
 }
 
 /* Buttons */
@@ -835,10 +976,30 @@ $("ketaIcon").addEventListener("click", ()=>{
 $("btnHideNote").addEventListener("click", ()=> setKetaNote(false));
 $("ketaText").addEventListener("input", ()=>{ STATE.ketaNote = $("ketaText").value; saveGlobalKetaNote(STATE.ketaNote); persist(); });
 
+/* UPDATED: room preset actions */
 $("btnSaveRoom").addEventListener("click", ()=>{
-  STATE.room = ($("roomInput").value || "BASE").trim();
-  STATE.roomUrl = ($("roomUrlInput").value || "").trim();
-  toast("ROOM SAVED");
+  const roomName = $("roomInput").value || "BASE";
+  const url = $("roomUrlInput").value || "";
+  upsertRoomPreset(roomName, url);
+  toast("PRESET SAVED");
+  persist();
+});
+$("btnSetActiveRoom").addEventListener("click", ()=>{
+  const roomName = $("roomInput").value || "BASE";
+  const url = $("roomUrlInput").value || "";
+  upsertRoomPreset(roomName, url);
+  setActiveRoom(roomName, url);
+  toast("ACTIVE ROOM SET");
+  persist();
+});
+$("btnDeleteRoom").addEventListener("click", ()=>{
+  const roomName = $("roomInput").value || "";
+  if(!roomName.trim()){
+    toast("NO ROOM");
+    return;
+  }
+  deleteRoomPreset(roomName);
+  toast("PRESET DELETED");
   persist();
 });
 
@@ -956,11 +1117,18 @@ WB: TOLERANT MERGE. PAGE SOVEREIGN STORAGE KEY. ROOM/STATE LABELING INTO NOTE ME
 
 LOCALSTORAGE_KEY: KDT::STATE::KETADATA_SHELL_V4::BASE::shellv4.base.v3
 EXPORT_ENVELOPE: { STORAGE_KEY, FILE_ID, ROOM_ID, VERSION_ID, STATE }
+
+NEW ROOM PRESETS:
+- STORED IN: STATE.payload.roomPresets[]
+- ACTIVE ROOM STILL: STATE.room / STATE.roomUrl
+- CLICK PRESET: LOAD FIELDS
+- DOUBLE CLICK PRESET: SET ACTIVE + PERSIST
 ============================================================
 CHANGELOG:
 - 2025-12-23: PAGE SOVEREIGN STORAGE KEY (NO SHARED STATE COLLISIONS)
 - 2025-12-23: ROOM DEFAULT SET TO BASE (WAS LOBBY IN LEGACY STATES)
 - 2025-12-23: EXPORT ENVELOPE INCLUDES FILE/ROOM/VERSION + STORAGE_KEY
 - 2025-12-23: KETA_NOTE TEXT MADE GLOBAL (CONTINUOUS ACROSS SOVEREIGN PAGES)
+- 2025-12-24: ROOM PRESETS ADDED (MULTI-ROOM REGISTRY + ACTIVE ROOM)
 ============================================================
 -->
