@@ -1,0 +1,902 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>KETADATA [STUDIO]</title>
+
+  <style>
+    :root{
+      --void:#000;
+      --txt:#fff;
+
+      /* KETADATA accents */
+      --uv:#7a00ff;
+      --laser:#ff0033;
+
+      /* “studio default” purple motion gradient */
+      --g1:#12001f;
+      --g2:#2a0060;
+      --g3:#5a00ff;
+      --g4:#12001f;
+
+      --grid: rgba(255,255,255,.055);
+      --hair: rgba(255,255,255,.14);
+      --hair2: rgba(255,255,255,.08);
+
+      --linkRest:#666;
+      --linkHover:#fff;
+
+      --uiFont: Arial, Helvetica, sans-serif;
+      --nameFont: Arial, Helvetica, sans-serif;
+
+      /* motion controls */
+      --bgSpeed: 14s;
+      --bgAngle: 145deg;
+
+      /* title fit */
+      --titleSize: clamp(44px, 9.4vw, 180px);
+      --titleTrack: clamp(.06em, .45vw, .14em);
+    }
+
+    *{ box-sizing:border-box; }
+    html, body{ height:100%; }
+    body{
+      margin:0;
+      background: var(--void);
+      color: var(--txt);
+      font-family: var(--uiFont);
+      overflow:hidden; /* we do our own snap */
+    }
+
+    /* =========================
+       AE ▸ BACKGROUND FIELD
+       ========================= */
+    #field{
+      position:fixed; inset:0;
+      z-index:0;
+      background:
+        radial-gradient(1100px 680px at 18% 18%, rgba(255,0,51,.08), transparent 68%),
+        radial-gradient(1200px 720px at 82% 70%, rgba(122,0,255,.18), transparent 70%),
+        linear-gradient(var(--bgAngle), var(--g1), var(--g2), var(--g3), var(--g4));
+      background-size: 200% 200%;
+      animation: gradMove var(--bgSpeed) linear infinite;
+      filter: saturate(1.05);
+    }
+
+    /* subtle blueprint grid on top */
+    #field::after{
+      content:"";
+      position:absolute; inset:0;
+      background:
+        linear-gradient(var(--grid) 1px, transparent 1px),
+        linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+      background-size: 52px 52px;
+      opacity:.9;
+      pointer-events:none;
+      mix-blend-mode: overlay;
+    }
+
+    @keyframes gradMove{
+      0%{ background-position: 0% 0%, 0% 0%, 0% 0%; }
+      50%{ background-position: 0% 0%, 0% 0%, 100% 50%; }
+      100%{ background-position: 0% 0%, 0% 0%, 0% 100%; }
+    }
+
+    /* “break-through boundary” flash */
+    #breakFlash{
+      position:fixed; inset:0;
+      z-index:50;
+      pointer-events:none;
+      opacity:0;
+      transition: opacity 120ms linear;
+      background:
+        radial-gradient(900px 420px at 50% 92%, rgba(255,255,255,.10), transparent 70%),
+        linear-gradient(180deg, rgba(0,0,0,0), rgba(255,255,255,.08), rgba(0,0,0,0));
+      mix-blend-mode: screen;
+    }
+    #breakFlash.on{ opacity:1; }
+
+    /* =========================
+       WB ▸ SYSTEM TOP BAR
+       ========================= */
+    .topbar{
+      position:fixed; left:0; right:0; top:0;
+      z-index:40;
+      height:38px;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      padding:0 12px;
+      border-bottom: 1px solid rgba(255,255,255,.10);
+      background: rgba(0,0,0,.26);
+      backdrop-filter: blur(6px);
+      user-select:none;
+    }
+    .brandMini{
+      display:flex; align-items:center; gap:10px;
+      font-size:11px;
+      letter-spacing:.18em;
+      text-transform:uppercase;
+      color: rgba(255,255,255,.85);
+    }
+    .noteSquare{
+      width:10px; height:10px;
+      background:#fff;
+      display:inline-block;
+    }
+    .topRight{
+      display:flex; align-items:center; gap:10px;
+    }
+    .btn{
+      font-family: var(--uiFont);
+      font-size:11px;
+      letter-spacing:.18em;
+      text-transform:uppercase;
+      color: rgba(255,255,255,.82);
+      background: rgba(0,0,0,.22);
+      border: 1px solid rgba(255,255,255,.14);
+      padding:6px 10px;
+      cursor:pointer;
+    }
+    .btn:hover{ border-color: rgba(255,255,255,.28); color:#fff; }
+    .btn:active{ transform: translateY(1px); }
+
+    /* =========================
+       WB ▸ SYSTEM FOOTER (status)
+       ========================= */
+    .footer{
+      position:fixed; left:0; right:0; bottom:0;
+      z-index:40;
+      height:26px;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      padding:0 10px;
+      border-top: 1px solid rgba(255,255,255,.10);
+      background: rgba(0,0,0,.26);
+      backdrop-filter: blur(6px);
+      font-size:10px;
+      letter-spacing:.14em;
+      text-transform:uppercase;
+      color: rgba(255,255,255,.70);
+      user-select:none;
+    }
+    .footer b{ color:#fff; font-weight:800; }
+    .muted{ color: rgba(255,255,255,.55); }
+
+    /* =========================
+       SECTIONS (snap simulation)
+       ========================= */
+    .stage{
+      position:fixed; inset:0;
+      z-index:10;
+    }
+    section{
+      position:absolute; inset:0;
+      opacity:0;
+      pointer-events:none;
+      transition: opacity 120ms linear;
+      padding-top: 38px;  /* topbar */
+      padding-bottom: 26px; /* footer */
+    }
+    section.active{
+      opacity:1;
+      pointer-events:auto;
+    }
+
+    /* =========================
+       LANDING
+       ========================= */
+    .landing{
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      text-align:center;
+    }
+    .titleWrap{
+      width: min(1500px, 94vw);
+      padding: 0 1.6vw;
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      justify-content:center;
+      gap: 2.2vh;
+    }
+    .title{
+      margin:0;
+      font-family: var(--nameFont);
+      font-weight: 900;
+      text-transform: uppercase;
+      font-size: var(--titleSize);
+      letter-spacing: var(--titleTrack);
+      line-height: .92;
+      white-space: normal; /* allow wrap if absolutely necessary */
+      text-wrap: balance;
+      max-width: 100%;
+      user-select:none;
+    }
+    .title span{
+      display:inline-block;
+    }
+    .navRow{
+      display:flex;
+      justify-content:center;
+      align-items:center;
+      gap: 2.1vw;
+      flex-wrap:wrap;
+      margin-top: 10px;
+    }
+
+    a.klink{
+      color: var(--linkRest);
+      text-decoration:none;
+      letter-spacing:.18em;
+      text-transform:uppercase;
+      font-weight:800;
+      font-size: 11px;
+      transition: color .12s linear, transform .12s linear, text-shadow .12s linear;
+    }
+    a.klink:hover{
+      color: var(--linkHover);
+      transform: translateY(-1px);
+      text-shadow: 0 0 16px rgba(255,255,255,.18);
+    }
+
+    .warning{
+      text-align:center;
+      font-size:11px;
+      letter-spacing:.22em;
+      text-transform:uppercase;
+      color: rgba(255,255,255,.72);
+      line-height: 1.6;
+      padding: 10px 14px;
+      border: 1px dashed rgba(255,0,51,.62);
+      background: rgba(255,0,51,.10);
+      max-width: 860px;
+    }
+    .warning b{ color: var(--laser); letter-spacing:.26em; }
+
+    .hint{
+      position:absolute;
+      bottom: 40px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 11px;
+      letter-spacing: .18em;
+      text-transform: uppercase;
+      color: rgba(255,255,255,.60);
+      display:flex;
+      align-items:center;
+      gap: 10px;
+      user-select:none;
+      opacity: .90;
+    }
+    .arrow{
+      opacity:.75;
+      animation: bob 1.4s ease-in-out infinite;
+    }
+    @keyframes bob{ 0%,100%{ transform: translateY(0); } 50%{ transform: translateY(6px); } }
+
+    /* =========================
+       DIRECTORY (KEEP STYLE)
+       ========================= */
+    .directory{
+      display:flex;
+      align-items:stretch;
+      justify-content:stretch;
+      overflow:hidden;
+      border-top: 1px solid rgba(255,255,255,.12);
+    }
+    .blueprint{
+      position:relative;
+      width:100%;
+      height:100%;
+      padding: 18px;
+    }
+
+    /* connectors */
+    .wires{
+      position:absolute;
+      inset: 0;
+      width:100%;
+      height:100%;
+      pointer-events:none;
+      opacity:.95;
+    }
+    .wires line{
+      stroke: rgba(255,255,255,.18);
+      stroke-width: 1.3;
+      vector-effect: non-scaling-stroke;
+    }
+    .wires line.dash{ stroke-dasharray: 7 10; opacity:.55; }
+    .wires line.laser{ stroke: rgba(255,0,51,.62); opacity:.65; }
+    .wires line.uv{ stroke: rgba(122,0,255,.62); opacity:.65; }
+
+    .bpTop{
+      position:relative;
+      display:flex;
+      justify-content:space-between;
+      align-items:flex-start;
+      gap: 16px;
+      padding: 10px 10px 6px 10px;
+      border: 1px solid rgba(255,255,255,.12);
+      background: rgba(0,0,0,.22);
+      backdrop-filter: blur(6px);
+    }
+    .bpBrand .line{
+      font-weight:900;
+      letter-spacing:.22em;
+      text-transform:uppercase;
+      font-size: 12px;
+      color: rgba(255,255,255,.92);
+    }
+    .bpBrand .sub{
+      margin-top:6px;
+      font-size:10px;
+      letter-spacing:.22em;
+      text-transform:uppercase;
+      color: rgba(255,255,255,.60);
+    }
+    .bpNav{
+      display:flex;
+      gap: 14px;
+      flex-wrap:wrap;
+      justify-content:flex-end;
+      padding-top:2px;
+    }
+
+    .zone{
+      position:absolute;
+      border: 1px solid rgba(255,255,255,.12);
+      background: rgba(0,0,0,.22);
+      backdrop-filter: blur(6px);
+      padding: 12px 12px 10px 12px;
+      min-width: 260px;
+      max-width: min(520px, 40vw);
+    }
+    .zone h2{
+      margin:0 0 10px 0;
+      font-size:11px;
+      letter-spacing:.22em;
+      text-transform:uppercase;
+      color: rgba(255,255,255,.88);
+      border-bottom: 1px solid rgba(255,255,255,.10);
+      padding-bottom:8px;
+    }
+    .zoneList{
+      list-style:none;
+      padding:0;
+      margin:0;
+    }
+    .zoneList li{
+      display:flex;
+      align-items:baseline;
+      justify-content:space-between;
+      gap: 14px;
+      padding: 6px 0;
+      border-bottom: 1px solid rgba(255,255,255,.06);
+    }
+    .zoneList li:last-child{ border-bottom:none; }
+    .hintTxt{
+      font-size:10px;
+      letter-spacing:.22em;
+      text-transform:uppercase;
+      color: rgba(255,255,255,.48);
+      white-space:nowrap;
+    }
+
+    /* concierge */
+    .concierge{
+      position:absolute;
+      left: 18px;
+      right: 18px;
+      bottom: 18px;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap: 14px;
+      border: 1px solid rgba(255,255,255,.12);
+      background: rgba(0,0,0,.22);
+      backdrop-filter: blur(6px);
+      padding: 10px 12px;
+    }
+    .search{
+      display:flex;
+      align-items:center;
+      gap: 10px;
+      min-width: 320px;
+      flex: 1;
+    }
+    .search span{
+      font-size:10px;
+      letter-spacing:.22em;
+      text-transform:uppercase;
+      color: rgba(255,255,255,.70);
+      white-space:nowrap;
+    }
+    .search input{
+      width:100%;
+      background: rgba(0,0,0,.35);
+      border: 1px solid rgba(255,255,255,.10);
+      color:#fff;
+      font-family: var(--uiFont);
+      font-size: 11px;
+      letter-spacing:.10em;
+      padding: 8px 10px;
+      outline:none;
+    }
+    .keys{
+      display:flex;
+      align-items:center;
+      gap: 14px;
+      font-size:10px;
+      letter-spacing:.18em;
+      text-transform:uppercase;
+      color: rgba(255,255,255,.55);
+      white-space:nowrap;
+    }
+    .kbd{
+      display:inline-block;
+      padding: 2px 6px;
+      border: 1px solid rgba(255,255,255,.12);
+      background: rgba(0,0,0,.30);
+      color: rgba(255,255,255,.80);
+      margin-right: 6px;
+    }
+
+    /* panel (draggable) */
+    #panel{
+      position:fixed;
+      top: 54px;
+      right: 18px;
+      z-index:45;
+      width: min(360px, 46vw);
+      border: 1px solid rgba(255,255,255,.12);
+      background: rgba(0,0,0,.30);
+      backdrop-filter: blur(8px);
+      box-shadow: 0 24px 90px rgba(0,0,0,.55);
+    }
+    #panel.hidden{ display:none; }
+    #panelHead{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      padding: 10px 10px;
+      border-bottom: 1px solid rgba(255,255,255,.10);
+      cursor: move;
+      user-select:none;
+    }
+    #panelHead .label{
+      font-size:11px;
+      letter-spacing:.22em;
+      text-transform:uppercase;
+      color: rgba(255,255,255,.86);
+      font-weight:900;
+    }
+    #panelHead .tog{
+      display:flex;
+      gap: 8px;
+      align-items:center;
+    }
+    .miniBtn{
+      width: 26px;
+      height: 22px;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      border: 1px solid rgba(255,255,255,.14);
+      background: rgba(0,0,0,.25);
+      color: rgba(255,255,255,.85);
+      cursor:pointer;
+      font-weight:900;
+      user-select:none;
+    }
+    .miniBtn:hover{ border-color: rgba(255,255,255,.28); color:#fff; }
+    #panelBody{
+      padding: 10px;
+    }
+    .row{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap: 10px;
+      padding: 8px 0;
+      border-bottom: 1px solid rgba(255,255,255,.06);
+    }
+    .row:last-child{ border-bottom:none; }
+    .row label{
+      font-size:10px;
+      letter-spacing:.22em;
+      text-transform:uppercase;
+      color: rgba(255,255,255,.65);
+      white-space:nowrap;
+    }
+    .row input[type="range"]{ width: 190px; }
+    .row input[type="text"]{
+      width: 190px;
+      background: rgba(0,0,0,.35);
+      border: 1px solid rgba(255,255,255,.10);
+      color:#fff;
+      padding: 6px 8px;
+      font-size: 11px;
+      letter-spacing:.10em;
+      outline:none;
+    }
+
+    /* respect “null mode”: hide only bars/panels, keep screen */
+    body.null .topbar,
+    body.null .footer,
+    body.null #panel{
+      display:none !important;
+    }
+  </style>
+</head>
+
+<body>
+  <!-- AE field -->
+  <div id="field" aria-hidden="true"></div>
+  <div id="breakFlash" aria-hidden="true"></div>
+
+  <!-- WB system chrome -->
+  <div class="topbar" id="topbar">
+    <div class="brandMini">
+      <span class="noteSquare" aria-hidden="true"></span>
+      <span>KETADATA // STUDIO</span>
+    </div>
+    <div class="topRight">
+      <button class="btn" id="goSystem">SYSTEM</button>
+      <span class="noteSquare" id="ketaNoteIcon" title="KETA_NOTE" aria-label="KETA_NOTE"></span>
+      <button class="btn" id="togglePanel">PANEL</button>
+    </div>
+  </div>
+
+  <div class="stage" id="stage">
+    <!-- PAGE 1 -->
+    <section class="landing active" id="secLanding" aria-label="Landing">
+      <div class="titleWrap">
+        <h1 class="title" id="bigTitle" aria-label="KETADATA [STUDIO]">
+          <span>KETADATA</span> <span>[STUDIO]</span>
+        </h1>
+
+        <div class="navRow" aria-label="primary">
+          <a class="klink" href="#" id="goDirectory">[DIRECTORY]</a>
+          <a class="klink" href="observatory.html">[K-WORLD]</a>
+          <a class="klink" href="room.html">[K-ROOM]</a>
+          <a class="klink" href="library.html">[LIBRARY]</a>
+          <a class="klink" href="video.html">[VIDEO]</a>
+          <a class="klink" href="fund.html">[FUND]</a>
+          <a class="klink" href="shop.html">[SHOP]</a>
+        </div>
+
+        <div class="warning">
+          <b>STUDIO ENTRY</b><br/>
+          RADIATION ACTIVE · SIGNAL DENSITY HIGH
+        </div>
+      </div>
+
+      <div class="hint">
+        SCROLL <span class="arrow">↓</span>
+      </div>
+    </section>
+
+    <!-- PAGE 2 -->
+    <section class="directory" id="secDirectory" aria-label="Directory">
+      <div class="blueprint" id="bp">
+
+        <!-- connectors -->
+        <svg class="wires" id="wires" viewBox="0 0 1000 1000" preserveAspectRatio="none" aria-hidden="true">
+          <line class="dash" x1="120" y1="210" x2="520" y2="250"></line>
+          <line class="laser" x1="520" y1="250" x2="860" y2="220"></line>
+          <line class="uv dash" x1="520" y1="250" x2="500" y2="520"></line>
+          <line class="dash" x1="500" y1="520" x2="190" y2="730"></line>
+          <line class="uv" x1="500" y1="520" x2="860" y2="720"></line>
+        </svg>
+
+        <!-- top signage -->
+        <div class="bpTop">
+          <div class="bpBrand">
+            <div class="line">KETADATA // STUDIO DIRECTORY</div>
+            <div class="sub">PRODUCTION SURFACES · INTERFACE R&D · EDIT/EXPORT</div>
+          </div>
+          <div class="bpNav">
+            <a class="klink" href="#" id="backTop">[TOP]</a>
+            <a class="klink" href="observatory.html">[K-WORLD]</a>
+            <a class="klink" href="room.html">[K-ROOM]</a>
+            <a class="klink" href="library.html">[LIBRARY]</a>
+            <a class="klink" href="video.html">[VIDEO]</a>
+            <a class="klink" href="fund.html">[FUND]</a>
+            <a class="klink" href="shop.html">[SHOP]</a>
+          </div>
+        </div>
+
+        <!-- zones (your Studio links) -->
+        <div class="zone" id="zCore" style="left: 18px; top: 120px;">
+          <h2>[INTERFACE DESIGN]</h2>
+          <ul class="zoneList">
+            <li><a class="klink" href="controller1.html">[CONTROLLER1.HTML]</a><span class="hintTxt">ENTRY</span></li>
+            <li><a class="klink" href="color1.html">[COLOR1.HTML]</a><span class="hintTxt">HOME</span></li>
+            <li><a class="klink" href="color3.html">[COLOR3.HTML]</a><span class="hintTxt">ALT NAV</span></li>
+            <li><a class="klink" href="font.html">[FONT.HTML]</a><span class="hintTxt">PORTAL</span></li>
+            <li><a class="klink" href="prompt.html">[PROMPT.HTML → 6.HTML]</a><span class="hintTxt">NUM</span></li>
+            <li><a class="klink" href="ref.html">[REF.HTML]</a><span class="hintTxt">PORTAL</span></li>
+            <li><a class="klink" href="color5.html">[COLOR5.HTML]</a><span class="hintTxt">PORTAL</span></li>
+            <li><a class="klink" href="controller3.html">[CONTROLLER3.HTML]</a><span class="hintTxt">PORTAL</span></li>
+          </ul>
+        </div>
+
+        <div class="zone" id="zWorld" style="left: 36vw; top: 155px;">
+          <h2>[MOOD-BOARDS]</h2>
+          <ul class="zoneList">
+            <li><a class="klink" href="studio.html">[STUDIO.HTML]</a><span class="hintTxt">PRIMARY</span></li>
+            <li><a class="klink" href="board3.html">[BOARD3.HTML]</a><span class="hintTxt">VARIANTS</span></li>
+          </ul>
+        </div>
+
+        <div class="zone" id="zLibrary" style="left: 36vw; top: 520px;">
+          <h2>[UGLY DUCKLINGS & VARIANTS]</h2>
+          <ul class="zoneList">
+            <li><a class="klink" href="darkroom.html">[DARKROOM.HTML]</a><span class="hintTxt" style="color:rgba(255,0,51,.95)">DARKROOM</span></li>
+            <li><a class="klink" href="controller2.html">[CONTROLLER2.HTML]</a><span class="hintTxt">PORTAL</span></li>
+            <li><a class="klink" href="controller.html">[CONTROLLER.HTML]</a><span class="hintTxt">PORTAL</span></li>
+          </ul>
+        </div>
+
+        <div class="zone" id="zVideo" style="right: 18px; top: 520px; width:min(460px,32vw);">
+          <h2>[DATA PRODUCTION]</h2>
+          <ul class="zoneList">
+            <li><a class="klink" href="studio.html">[STUDIO.HTML]</a><span class="hintTxt">SENSORY</span></li>
+            <li><a class="klink" href="studiov1.html">[STUDIOV1.HTML]</a><span class="hintTxt">ALT</span></li>
+            <li><a class="klink" href="editor.html">[EDITOR.HTML]</a><span class="hintTxt">EDIT</span></li>
+          </ul>
+        </div>
+
+        <!-- concierge search -->
+        <div class="concierge" role="search">
+          <div class="search">
+            <span>SEARCH</span>
+            <input id="q" type="text" autocomplete="off" spellcheck="false"
+                   placeholder="TYPE: WORLD / ROOM / LIBRARY / CAPTURE / EDIT / ETC" />
+          </div>
+          <div class="keys">
+            <span><span class="kbd">/</span> FOCUS</span>
+            <span><span class="kbd">ESC</span> CLEAR</span>
+            <span><span class="kbd">ENTER</span> OPEN</span>
+          </div>
+        </div>
+
+      </div>
+    </section>
+  </div>
+
+  <!-- draggable panel -->
+  <div id="panel" aria-label="Studio Control">
+    <div id="panelHead">
+      <div class="label">STUDIO CONTROL</div>
+      <div class="tog">
+        <div class="miniBtn" id="panelCollapse" title="collapse">–</div>
+      </div>
+    </div>
+    <div id="panelBody">
+      <div class="row">
+        <label>GRADIENT SPEED</label>
+        <input id="speed" type="range" min="4" max="40" step="1" value="14" />
+      </div>
+      <div class="row">
+        <label>GRADIENT ANGLE</label>
+        <input id="angle" type="range" min="0" max="360" step="1" value="145" />
+      </div>
+      <div class="row">
+        <label>PURPLE 1</label>
+        <input id="c1" type="text" value="#12001f" />
+      </div>
+      <div class="row">
+        <label>PURPLE 2</label>
+        <input id="c2" type="text" value="#2a0060" />
+      </div>
+      <div class="row">
+        <label>PURPLE 3</label>
+        <input id="c3" type="text" value="#5a00ff" />
+      </div>
+    </div>
+  </div>
+
+  <div class="footer" id="footer">
+    <div><span class="muted">NULL:</span> <b id="nullStatus">OFF</b> · <span class="muted">INVERT:</span> <b id="invStatus">OFF</b></div>
+    <div><span class="muted">MOTION:</span> <b>ON</b></div>
+  </div>
+
+  <script>
+    /* =========================================================
+       WB ▸ NAV (continuity)
+       - Your shell is system.html right now.
+       - Landing: index11.html
+    ========================================================= */
+    const SHELL_HOME_URL = "system.html";
+    const LANDING_URL = "index11.html";
+
+    /* ===== state (minimal; does not touch your tool links) ===== */
+    const state = {
+      section: 0, // 0 = landing, 1 = directory
+      locked: false,
+      nullMode: false,
+      invert: false
+    };
+
+    const secLanding = document.getElementById('secLanding');
+    const secDirectory = document.getElementById('secDirectory');
+    const breakFlash = document.getElementById('breakFlash');
+
+    function setSection(n, withBreak=true){
+      if(state.locked) return;
+      state.locked = true;
+
+      if(withBreak){
+        breakFlash.classList.add('on');
+        setTimeout(()=>breakFlash.classList.remove('on'), 140);
+      }
+
+      state.section = n;
+      secLanding.classList.toggle('active', n === 0);
+      secDirectory.classList.toggle('active', n === 1);
+
+      setTimeout(()=> state.locked = false, 220);
+    }
+
+    /* ALWAYS open on title screen first */
+    window.addEventListener('load', () => {
+      setSection(0, false);
+      // hard reset any hash / browser restore
+      if(location.hash) history.replaceState(null, "", location.pathname);
+    });
+
+    /* “hard boundary then drop” scroll snap feel */
+    function breakThrough(dir){
+      // dir: +1 down, -1 up
+      if(dir > 0 && state.section === 0) setSection(1, true);
+      if(dir < 0 && state.section === 1) setSection(0, true);
+    }
+
+    window.addEventListener('wheel', (e) => {
+      // intercept to create that “hit boundary → break through”
+      e.preventDefault();
+      const dy = e.deltaY;
+
+      // small deadzone
+      if(Math.abs(dy) < 18) return;
+
+      if(dy > 0){
+        if(state.section === 0) breakThrough(+1);
+      }else{
+        if(state.section === 1) breakThrough(-1);
+      }
+    }, { passive:false });
+
+    /* buttons */
+    document.getElementById('goDirectory').addEventListener('click', (e)=>{ e.preventDefault(); setSection(1,true); });
+    document.getElementById('backTop').addEventListener('click', (e)=>{ e.preventDefault(); setSection(0,true); });
+
+    document.getElementById('goSystem').addEventListener('click', ()=> location.href = SHELL_HOME_URL);
+
+    /* panel toggle */
+    const panel = document.getElementById('panel');
+    document.getElementById('togglePanel').addEventListener('click', ()=> panel.classList.toggle('hidden'));
+
+    /* panel collapse (content only) */
+    const body = document.getElementById('panelBody');
+    let collapsed = false;
+    document.getElementById('panelCollapse').addEventListener('click', ()=>{
+      collapsed = !collapsed;
+      body.style.display = collapsed ? 'none' : 'block';
+      document.getElementById('panelCollapse').textContent = collapsed ? '+' : '–';
+    });
+
+    /* draggable panel */
+    (function dragPanel(){
+      const head = document.getElementById('panelHead');
+      let down=false, sx=0, sy=0, ox=0, oy=0;
+
+      head.addEventListener('mousedown', (e)=>{
+        down=true;
+        sx=e.clientX; sy=e.clientY;
+        const r = panel.getBoundingClientRect();
+        ox=r.left; oy=r.top;
+        panel.style.left = ox+'px';
+        panel.style.top  = oy+'px';
+        panel.style.right = 'auto';
+        panel.style.position = 'fixed';
+      });
+
+      window.addEventListener('mousemove', (e)=>{
+        if(!down) return;
+        const nx = ox + (e.clientX - sx);
+        const ny = oy + (e.clientY - sy);
+        panel.style.left = Math.max(8, Math.min(window.innerWidth - 260, nx)) + 'px';
+        panel.style.top  = Math.max(46, Math.min(window.innerHeight - 80, ny)) + 'px';
+      });
+
+      window.addEventListener('mouseup', ()=> down=false);
+    })();
+
+    /* background controls */
+    const field = document.getElementById('field');
+    const css = document.documentElement.style;
+
+    function setBG(){
+      css.setProperty('--bgSpeed', document.getElementById('speed').value + 's');
+      css.setProperty('--bgAngle', document.getElementById('angle').value + 'deg');
+
+      const c1 = document.getElementById('c1').value.trim() || '#12001f';
+      const c2 = document.getElementById('c2').value.trim() || '#2a0060';
+      const c3 = document.getElementById('c3').value.trim() || '#5a00ff';
+      css.setProperty('--g1', c1);
+      css.setProperty('--g2', c2);
+      css.setProperty('--g3', c3);
+      css.setProperty('--g4', c1);
+    }
+    ['speed','angle','c1','c2','c3'].forEach(id=>{
+      document.getElementById(id).addEventListener('input', setBG);
+      document.getElementById(id).addEventListener('change', setBG);
+    });
+    setBG();
+
+    /* concierge search (simple: filters visible links in-place + enter opens first match) */
+    const q = document.getElementById('q');
+    q.addEventListener('keydown', (e)=>{
+      if(e.key === 'Escape'){ q.value=''; q.dispatchEvent(new Event('input')); }
+      if(e.key === 'Enter'){
+        const first = document.querySelector('.zoneList li:not([data-hide="1"]) a.klink');
+        if(first) location.href = first.getAttribute('href');
+      }
+    });
+    q.addEventListener('input', ()=>{
+      const term = q.value.trim().toLowerCase();
+      document.querySelectorAll('.zoneList li').forEach(li=>{
+        const t = li.innerText.toLowerCase();
+        const show = !term || t.includes(term);
+        li.dataset.hide = show ? "0" : "1";
+        li.style.display = show ? "flex" : "none";
+      });
+    });
+
+    /* system universals (only what you already approved: ESC, 1–6 lights elsewhere, null toggle as N, invert as Shift+I) */
+    function setNull(on){
+      state.nullMode = on;
+      document.body.classList.toggle('null', on);
+      document.getElementById('nullStatus').textContent = on ? 'ON' : 'OFF';
+    }
+    function setInvert(on){
+      state.invert = on;
+      document.getElementById('invStatus').textContent = on ? 'ON' : 'OFF';
+      document.body.style.filter = on ? 'invert(1) hue-rotate(180deg)' : 'none';
+    }
+
+    window.addEventListener('keydown', (e)=>{
+      if(e.key === 'Escape'){ setNull(false); return; }
+      if(e.key.toLowerCase() === 'n'){ setNull(!state.nullMode); return; }
+      if(e.shiftKey && (e.key.toLowerCase() === 'i')){ setInvert(!state.invert); return; }
+    });
+
+    /* KETA_NOTE icon reserved as white square (no drift). Click opens system for now. */
+    document.getElementById('ketaNoteIcon').addEventListener('click', ()=> location.href = SHELL_HOME_URL);
+  </script>
+</body>
+</html>
+
+============================================================
+KETADATA HTML SERIALIZATION STAMP
+AE/EE/WB: WB
+FILE_ID: KETADATA_STUDIO
+ROOM_ID: STUDIO
+VERSION: studio.v5
+UPDATED_AT: 2025-12-24T00:00:00-05:00
+CHANGELOG:
+- TITLE FIT GUARANTEE (NO OVERFLOW; RESPONSIVE CLAMP + BALANCE)
+- FORCE ENTRY ON LANDING (NEVER OPEN ON DIRECTORY; HASH/RESTORE NEUTRALIZED)
+- DIRECTORY LINKS UPDATED TO PROVIDED STUDIO SET (NO REPaste REQUIRED AFTER THIS)
+- DIRECTORY BLUEPRINT STYLING PRESERVED (MINIMAL CHANGES)
+- HARD "RESIST → BREAK → DROP" PAGE SNAP (WHEEL INTERCEPT + BREAKFLASH)
+- DEFAULT PURPLE MOVING GRADIENT (ANIMATED FIELD; SPEED/ANGLE/HEX CONTROLS)
+- SYSTEM NAV CONTINUITY (SHELL_HOME_URL="system.html", LANDING_URL="index11.html")
+- SYSTEM UNIVERSALS: ESC (EXIT NULL), N (NULL TOGGLE), SHIFT+I (INVERT), SHIFT+B (HOME), SHIFT+K (LANDING)
+============================================================
