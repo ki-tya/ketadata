@@ -1,0 +1,757 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>KETADATA // ROOM REGISTRY</title>
+
+<style>
+:root{
+  --bg:#000; --fg:#fff; --muted:#8a8a8a; --line:#222; --line2:#333;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  --sans: Arial, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+  --top:44px; --bot:34px;
+  --ctl-radius:0px;
+  --note-border: rgba(255,255,255,0.78);
+}
+
+*{box-sizing:border-box}
+html,body{height:100%; margin:0}
+body{background:var(--bg); color:var(--fg); font-family:var(--sans); overflow:hidden; user-select:none}
+
+#root{position:fixed; inset:0; background:#000}
+#root.invert{ filter: invert(1); }
+
+/* NULL MODE */
+#root.null .topbar,
+#root.null .bottombar,
+#root.null .drawer,
+#root.null .ketaNote,
+#root.null .toast{
+  display:none !important;
+}
+
+#stage{position:absolute; inset:0; background:#000}
+
+/* Motion (industrial scanflow) */
+#motion{
+  position:absolute; inset:0; pointer-events:none; opacity:0;
+  background: repeating-linear-gradient(
+    135deg,
+    rgba(255,255,255,0.06) 0px,
+    rgba(255,255,255,0.06) 1px,
+    rgba(0,0,0,0) 12px,
+    rgba(0,0,0,0) 22px
+  );
+  mix-blend-mode: screen;
+  transform: translate3d(0,0,0);
+}
+#motion.run{opacity:0.12; animation: scanflow 2.2s linear infinite}
+@keyframes scanflow{0%{transform:translate3d(-80px,60px,0)} 100%{transform:translate3d(80px,-60px,0)}}
+
+/* Bars */
+.topbar{
+  position:absolute; top:0; left:0; right:0; height:var(--top);
+  display:flex; align-items:center; justify-content:space-between;
+  padding:0 10px;
+  border-bottom:1px solid var(--line);
+  background:linear-gradient(180deg,#070707,#000);
+  z-index:10;
+}
+.brand{display:flex; align-items:center; gap:10px; font-family:var(--mono); font-size:12px; letter-spacing:.10em; text-transform:uppercase}
+.brand .sq{width:10px; height:10px; border:1px solid var(--fg); background:#000}
+.actions{display:flex; align-items:center; gap:8px; font-family:var(--mono); font-size:12px}
+.btn{
+  background:transparent; color:var(--fg);
+  border:1px solid var(--line2);
+  padding:6px 10px;
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  cursor:pointer;
+}
+.btn:hover{border-color:var(--fg)}
+.btn:active{transform:translateY(1px)}
+.kbd{border:1px solid var(--line2); padding:2px 6px; color:var(--muted); font-size:11px}
+
+.bottombar{
+  position:absolute; left:0; right:0; bottom:0; height:var(--bot);
+  display:flex; align-items:center; justify-content:space-between;
+  padding:0 10px;
+  border-top:1px solid var(--line);
+  background:linear-gradient(0deg,#070707,#000);
+  z-index:10;
+  font-family:var(--mono); font-size:11px; color:var(--muted);
+}
+.toggle{
+  border:1px solid var(--line2);
+  background:transparent; color:var(--fg);
+  padding:4px 8px;
+  font-family:var(--mono);
+  font-size:11px;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  cursor:pointer;
+}
+.toggle:hover{border-color:var(--fg)}
+
+/* Drawer */
+.drawer{
+  position:absolute; left:0; right:0; bottom:var(--bot);
+  height:52%; min-height:300px;
+  border-top:1px solid var(--line);
+  background:linear-gradient(180deg,#060606,#000);
+  display:none;
+  z-index:20;
+}
+.drawer.open{display:flex; flex-direction:column}
+.drawerHead{
+  padding:8px 10px; border-bottom:1px solid var(--line);
+  font-family:var(--mono); font-size:12px; letter-spacing:.10em; text-transform:uppercase;
+  display:flex; justify-content:space-between; align-items:center;
+}
+.drawerBody{padding:10px; min-height:0; flex:1; overflow:auto}
+
+.fieldRow{
+  display:flex; gap:8px; align-items:center;
+  font-family:var(--mono); font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted);
+}
+.fieldRow input{
+  flex:1; background:#000; color:#fff; border:1px solid var(--line2);
+  padding:6px 8px; font-family:var(--mono); outline:none;
+}
+.small{font-size:11px; color:var(--muted); font-family:var(--mono)}
+
+.list{
+  margin-top:10px;
+  display:flex; flex-direction:column; gap:6px;
+}
+.row{
+  border:1px solid var(--line2);
+  padding:8px 10px;
+  font-family:var(--mono);
+  font-size:11px;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  color:var(--fg);
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+}
+.row .meta{color:var(--muted); max-width:52%; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.row .left{display:flex; gap:10px; align-items:center; min-width:0}
+.row .name{white-space:nowrap}
+.row .url{color:var(--muted); max-width:44vw; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+
+.ketaIcon{width:16px; height:16px; border:2px solid var(--fg); background:var(--fg); cursor:pointer}
+.ketaIcon.open{background:#000}
+
+/* KETA NOTE */
+.ketaNote{
+  position:absolute; top:60px; right:16px;
+  width:340px; height:220px;
+  display:none;
+  z-index:30;
+  resize:both; overflow:hidden;
+  border-radius:var(--ctl-radius);
+  background:rgba(0,0,0,0.80);
+  border:1px solid var(--note-border);
+  backdrop-filter: blur(6px);
+}
+.ketaNote.open{display:flex; flex-direction:column}
+.ketaHead{
+  padding:8px 10px;
+  border-bottom:1px solid rgba(255,255,255,0.14);
+  font-family:var(--mono);
+  font-size:11px;
+  letter-spacing:.14em;
+  text-transform:uppercase;
+  display:flex; justify-content:space-between; align-items:center;
+  cursor:move;
+}
+.ketaBody{padding:10px; min-height:0; flex:1}
+.ketaNote textarea{
+  background:#000; color:#fff;
+  border:1px solid rgba(255,255,255,0.22);
+  width:100%; height:100%;
+  resize:none; padding:10px; outline:none;
+}
+.headBtn{
+  background:transparent; color:var(--fg);
+  border:1px solid rgba(255,255,255,0.18);
+  padding:2px 8px;
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  cursor:pointer;
+}
+.headBtn:hover{border-color:rgba(255,255,255,0.6)}
+
+/* Toast */
+.toast{
+  position:absolute; left:12px; top:calc(var(--top) + 12px);
+  padding:8px 10px; border:1px solid var(--line2);
+  background:rgba(8,8,8,0.82);
+  font-family:var(--mono); font-size:11px; letter-spacing:.06em;
+  color:var(--fg);
+  display:none; z-index:40;
+}
+</style>
+</head>
+
+<body>
+<div id="root">
+  <div id="stage"></div>
+  <div id="motion" aria-hidden="true"></div>
+  <div class="toast" id="toast"></div>
+
+  <div class="topbar">
+    <div class="brand">
+      <span class="sq"></span>
+      <span>KETADATA // ROOM REGISTRY</span>
+      <span style="color:var(--muted); letter-spacing:.02em; text-transform:none">v1</span>
+    </div>
+    <div class="actions">
+      <button class="btn" id="btnWriteToBase" title="WRITE REGISTRY TO SHARED KEY">WRITE→BASE</button>
+      <button class="btn" id="btnExport">EXPORT</button>
+      <button class="btn" id="btnCopy">COPY</button>
+      <button class="btn" id="btnImport">IMPORT</button>
+
+      <span class="kbd" title="Invert all colors">Shift+I</span>
+      <span class="kbd" title="Null the system (hide all UI)">Shift+0</span>
+
+      <button class="btn" id="btnNull" title="NULL MODE (SHIFT+0)">NULL</button>
+      <div id="ketaIcon" class="ketaIcon" title="KETA_NOTE"></div>
+    </div>
+  </div>
+
+  <div class="drawer" id="drawer">
+    <div class="drawerHead">
+      <div>REGISTRY / ROUTER</div>
+      <div style="display:flex; gap:8px; align-items:center">
+        <span id="sig" style="color:var(--muted); font-family:var(--mono); font-size:11px">∅</span>
+        <button class="btn" id="btnCloseDrawer">CLOSE</button>
+      </div>
+    </div>
+
+    <div class="drawerBody">
+      <div class="fieldRow">
+        <span>ROOM</span>
+        <input id="roomInput" placeholder="E.G. STUDIO / LAB / SHOP" />
+      </div>
+      <div style="height:8px"></div>
+      <div class="fieldRow">
+        <span>URL</span>
+        <input id="urlInput" placeholder="E.G. studio.html" />
+      </div>
+      <div style="height:8px"></div>
+      <div style="display:flex; gap:8px; flex-wrap:wrap">
+        <button class="btn" id="btnUpsert">SAVE</button>
+        <button class="btn" id="btnOpenNewTab">OPEN (NEW TAB)</button>
+        <button class="btn" id="btnDelete">DELETE</button>
+        <button class="btn" id="btnClearFields">CLEAR</button>
+      </div>
+
+      <div style="margin-top:10px; border-top:1px solid var(--line); padding-top:10px">
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:10px">
+          <div style="font-family:var(--mono); font-size:12px; letter-spacing:.10em; text-transform:uppercase; color:var(--muted)">
+            ROOMS
+          </div>
+          <div class="small">CLICK = LOAD • DOUBLE CLICK = OPEN NEW TAB • CTRL+↑/↓ = REORDER</div>
+        </div>
+        <div class="list" id="list"></div>
+      </div>
+
+      <div style="margin-top:10px; border-top:1px solid var(--line); padding-top:10px">
+        <div style="font-family:var(--mono); font-size:12px; letter-spacing:.10em; text-transform:uppercase; color:var(--muted); margin-bottom:6px">
+          SHARED HANDOFF KEY
+        </div>
+        <div class="small">
+          WRITES TO: <span style="color:#fff">KDT::ROOM_REGISTRY_V1</span> (BASE MERGES FROM THIS)
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="bottombar">
+    <div style="display:flex; gap:10px; align-items:center">
+      <button class="toggle" id="toggleDrawer">SYSTEM</button>
+      <span>STATE: <span id="sig2">∅</span></span>
+      <span style="margin-left:8px">NULL: <span id="nullLabel">OFF</span></span>
+    </div>
+    <div style="display:flex; gap:12px; align-items:center">
+      <span>MOTION: <span id="motionLabel">OFF</span></span>
+    </div>
+  </div>
+
+  <div class="ketaNote" id="ketaNote">
+    <div class="ketaHead" id="ketaHead">
+      <div>KETA_NOTE</div>
+      <button class="headBtn" id="btnHideNote">-</button>
+    </div>
+    <div class="ketaBody">
+      <textarea id="ketaText" placeholder="REGISTRY NOTE"></textarea>
+    </div>
+  </div>
+
+  <input id="file" type="file" accept="application/json" style="display:none" />
+</div>
+
+<script>
+/* =========================================================
+EE ▸ ROOM REGISTRY ROUTER (SOVEREIGN PAGE + SHARED HANDOFF)
+========================================================= */
+
+const FILE_ID = "KETADATA_ROOM_REGISTRY";
+const ROOM_ID = "REGISTRY";
+const VERSION_ID = "room.registry.v1";
+const STORAGE_KEY = `KDT::STATE::${FILE_ID}::${ROOM_ID}::${VERSION_ID}`;
+
+// Shared key that BASE reads/merges
+const SHARED_REGISTRY_KEY = "KDT::ROOM_REGISTRY_V1";
+
+// Optional: if you want a “go to base” button later, set this.
+// const BASE_URL = "system.html";
+
+const DEFAULT = {
+  version: "KETADATA_SHELL_KERNEL_v1",
+  updatedAt: new Date().toISOString(),
+  ketaNote: "",
+  ketaNoteMeta: {
+    version: "KETA_NOTE_META_v1",
+    noteId: "GLOBAL",
+    roomId: "REGISTRY",
+    stateId: null,
+    categoryIds: [],
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  },
+  ui: { invert:false, nullMode:true, motionOn:false }, // default entry = NULL
+  payload: {
+    rooms: [
+      { room:"ROOM", url:"room.html", createdAt:new Date().toISOString(), updatedAt:new Date().toISOString() },
+      { room:"WORLD", url:"map.html", createdAt:new Date().toISOString(), updatedAt:new Date().toISOString() },
+      { room:"STUDIO", url:"tester3.html", createdAt:new Date().toISOString(), updatedAt:new Date().toISOString() },
+      { room:"LAB", url:"labyrinth.html", createdAt:new Date().toISOString(), updatedAt:new Date().toISOString() },
+      { room:"PHOTOBOOTH", url:"crunch1.html", createdAt:new Date().toISOString(), updatedAt:new Date().toISOString() },
+      { room:"KDTV", url:"kdtv1.html", createdAt:new Date().toISOString(), updatedAt:new Date().toISOString() },
+      { room:"SHOP", url:"shop.html", createdAt:new Date().toISOString(), updatedAt:new Date().toISOString() }
+    ]
+  }
+};
+
+let STATE = loadLocal() || structuredClone(DEFAULT);
+
+const $ = (id)=>document.getElementById(id);
+const root = $("root");
+const motion = $("motion");
+
+function nowISO(){ return new Date().toISOString(); }
+function canonRoomName(name){ return String(name||"").trim().toUpperCase(); }
+function safeUrl(u){ return String(u||"").trim(); }
+
+function stableSig(){
+  const core = JSON.stringify({
+    v:STATE.version,
+    i:STATE.ui.invert,
+    n:STATE.ui.nullMode,
+    m:STATE.ui.motionOn,
+    r:(STATE.payload.rooms||[]).length,
+    k:(STATE.ketaNote||"").length
+  });
+  let h=2166136261;
+  for(let i=0;i<core.length;i++){ h^=core.charCodeAt(i); h=Math.imul(h,16777619); }
+  return (h>>>0).toString(16).slice(0,8);
+}
+
+function ensureMeta(){
+  if(!STATE.ketaNoteMeta || typeof STATE.ketaNoteMeta!=="object"){
+    STATE.ketaNoteMeta = structuredClone(DEFAULT.ketaNoteMeta);
+  }
+}
+function syncMeta(reason){
+  ensureMeta();
+  STATE.ketaNoteMeta.roomId = "REGISTRY";
+  STATE.ketaNoteMeta.stateId = stableSig();
+  STATE.ketaNoteMeta.updatedAt = nowISO();
+  if(reason){
+    STATE.ketaNoteMeta._last = { reason, at: STATE.ketaNoteMeta.updatedAt };
+  }
+}
+
+function mergeDefault(obj){
+  const out = structuredClone(DEFAULT);
+  Object.assign(out, obj||{});
+  out.ui = Object.assign(structuredClone(DEFAULT.ui), (obj&&obj.ui)||{});
+  out.payload = Object.assign(structuredClone(DEFAULT.payload), (obj&&obj.payload)||{});
+  if(!Array.isArray(out.payload.rooms)) out.payload.rooms = [];
+  if(obj && obj.ketaNoteMeta) out.ketaNoteMeta = Object.assign(structuredClone(DEFAULT.ketaNoteMeta), obj.ketaNoteMeta);
+  return out;
+}
+
+function persist(){
+  STATE.updatedAt = nowISO();
+  syncMeta("persist");
+  try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(STATE)); }catch(e){}
+  render();
+}
+
+function loadLocal(){
+  try{
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if(!raw) return null;
+    return mergeDefault(JSON.parse(raw));
+  }catch(e){ return null; }
+}
+
+function exportState(){
+  syncMeta("export");
+  return JSON.stringify({ STORAGE_KEY, FILE_ID, ROOM_ID, VERSION_ID, STATE }, null, 2);
+}
+function importState(text){
+  const parsed = JSON.parse(text);
+  const incoming = parsed && parsed.STATE ? parsed.STATE : parsed;
+  STATE = mergeDefault(incoming);
+  syncMeta("import");
+  persist();
+}
+
+/* Shared write (BASE merges from this) */
+function toBasePayload(){
+  // Convert to the BASE-compatible shape: roomPresets[]
+  const roomPresets = (STATE.payload.rooms||[]).map(x=>({
+    room: canonRoomName(x.room),
+    roomUrl: safeUrl(x.url),
+    createdAt: x.createdAt || nowISO(),
+    updatedAt: nowISO()
+  })).filter(x=>x.room && x.roomUrl);
+  return {
+    version: "KDT_ROOM_REGISTRY_V1",
+    updatedAt: nowISO(),
+    roomPresets
+  };
+}
+function writeSharedRegistry(){
+  try{
+    localStorage.setItem(SHARED_REGISTRY_KEY, JSON.stringify(toBasePayload()));
+    toast("WROTE SHARED REGISTRY");
+  }catch(e){
+    toast("WRITE FAILED");
+  }
+}
+
+/* List ops */
+function upsert(room, url){
+  const r = canonRoomName(room);
+  const u = safeUrl(url);
+  if(!r || !u) return false;
+
+  const idx = (STATE.payload.rooms||[]).findIndex(x => canonRoomName(x.room) === r);
+  const row = { room:r, url:u, updatedAt: nowISO() };
+  if(idx >= 0){
+    STATE.payload.rooms[idx] = Object.assign({}, STATE.payload.rooms[idx], row);
+  }else{
+    STATE.payload.rooms.unshift(Object.assign({ createdAt: nowISO() }, row));
+  }
+  return true;
+}
+function remove(room){
+  const r = canonRoomName(room);
+  STATE.payload.rooms = (STATE.payload.rooms||[]).filter(x => canonRoomName(x.room) !== r);
+}
+function openNewTab(url){
+  const u = safeUrl(url);
+  if(!u) return;
+  window.open(u, "_blank", "noopener,noreferrer");
+}
+
+/* Reorder */
+function move(room, dir){
+  const r = canonRoomName(room);
+  const arr = STATE.payload.rooms || [];
+  const i = arr.findIndex(x => canonRoomName(x.room)===r);
+  if(i<0) return;
+  const j = i + dir;
+  if(j<0 || j>=arr.length) return;
+  const tmp = arr[i]; arr[i] = arr[j]; arr[j] = tmp;
+}
+
+/* UI */
+function setDrawer(open){ $("drawer").classList.toggle("open", !!open); }
+function setKetaNote(open){
+  $("ketaNote").classList.toggle("open", !!open);
+  $("ketaIcon").classList.toggle("open", !!open);
+}
+function setNullMode(on){
+  STATE.ui.nullMode = !!on;
+  if(STATE.ui.nullMode){ setDrawer(false); setKetaNote(false); }
+  persist();
+}
+function toggleNullMode(){ setNullMode(!STATE.ui.nullMode); toast(STATE.ui.nullMode?"NULL ON":"NULL OFF"); }
+function setInvert(on){ STATE.ui.invert = !!on; persist(); }
+
+function download(filename, text){
+  const blob = new Blob([text], {type:"application/json"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href), 800);
+}
+async function copy(text){
+  try{ await navigator.clipboard.writeText(text); toast("COPIED"); }
+  catch(e){ toast("COPY FAILED"); }
+}
+let toastTimer=null;
+function toast(msg){
+  if(STATE.ui.nullMode) return;
+  const t = $("toast");
+  t.textContent = msg;
+  t.style.display = "block";
+  if(toastTimer) clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=>{ t.style.display="none"; }, 900);
+}
+
+function renderList(){
+  const el = $("list");
+  el.innerHTML = "";
+  const arr = (STATE.payload.rooms||[]);
+
+  if(!arr.length){
+    const d = document.createElement("div");
+    d.className = "row";
+    d.style.color = "var(--muted)";
+    d.textContent = "NO ROOMS";
+    el.appendChild(d);
+    return;
+  }
+
+  arr.forEach(x=>{
+    const row = document.createElement("div");
+    row.className = "row";
+    row.tabIndex = 0;
+
+    const left = document.createElement("div");
+    left.className = "left";
+
+    const name = document.createElement("div");
+    name.className = "name";
+    name.textContent = canonRoomName(x.room);
+
+    const url = document.createElement("div");
+    url.className = "url";
+    url.textContent = safeUrl(x.url);
+
+    left.appendChild(name);
+    left.appendChild(url);
+
+    const right = document.createElement("div");
+    right.style.display = "flex";
+    right.style.gap = "8px";
+    right.style.alignItems = "center";
+
+    const bOpen = document.createElement("button");
+    bOpen.className = "btn";
+    bOpen.style.padding = "4px 8px";
+    bOpen.style.fontSize = "11px";
+    bOpen.textContent = "OPEN";
+    bOpen.addEventListener("click",(ev)=>{ ev.stopPropagation(); openNewTab(x.url); });
+
+    const bDel = document.createElement("button");
+    bDel.className = "btn";
+    bDel.style.padding = "4px 8px";
+    bDel.style.fontSize = "11px";
+    bDel.textContent = "DEL";
+    bDel.addEventListener("click",(ev)=>{ ev.stopPropagation(); remove(x.room); persist(); });
+
+    right.appendChild(bOpen);
+    right.appendChild(bDel);
+
+    row.appendChild(left);
+    row.appendChild(right);
+
+    row.addEventListener("click", ()=>{
+      $("roomInput").value = canonRoomName(x.room);
+      $("urlInput").value = safeUrl(x.url);
+      toast("LOADED");
+    });
+
+    row.addEventListener("dblclick", ()=>{
+      openNewTab(x.url);
+    });
+
+    // ctrl+up/down reorder while focused
+    row.addEventListener("keydown",(ev)=>{
+      if(!ev.ctrlKey) return;
+      if(ev.key==="ArrowUp"){ ev.preventDefault(); move(x.room, -1); persist(); }
+      if(ev.key==="ArrowDown"){ ev.preventDefault(); move(x.room,  1); persist(); }
+    });
+
+    el.appendChild(row);
+  });
+}
+
+function render(){
+  root.classList.toggle("invert", !!STATE.ui.invert);
+  root.classList.toggle("null", !!STATE.ui.nullMode);
+  motion.classList.toggle("run", !!STATE.ui.motionOn);
+
+  $("ketaText").value = STATE.ketaNote || "";
+
+  const s = stableSig();
+  $("sig").textContent = s;
+  $("sig2").textContent = s;
+
+  $("nullLabel").textContent = STATE.ui.nullMode ? "ON" : "OFF";
+  $("motionLabel").textContent = STATE.ui.motionOn ? "ON" : "OFF";
+
+  renderList();
+}
+
+/* Buttons */
+$("toggleDrawer").addEventListener("click", ()=>{ if(STATE.ui.nullMode) return; setDrawer(!$("drawer").classList.contains("open")); });
+$("btnCloseDrawer").addEventListener("click", ()=> setDrawer(false));
+
+$("btnNull").addEventListener("click", ()=> toggleNullMode());
+$("btnImport").addEventListener("click", ()=> $("file").click());
+$("btnExport").addEventListener("click", ()=> download("KETADATA_room_registry_state.json", exportState()));
+$("btnCopy").addEventListener("click", ()=> copy(exportState()));
+
+$("file").addEventListener("change", async (e)=>{
+  const f = e.target.files && e.target.files[0];
+  if(!f) return;
+  const txt = await f.text();
+  importState(txt);
+  e.target.value = "";
+  toast("IMPORTED");
+});
+
+$("btnUpsert").addEventListener("click", ()=>{
+  const ok = upsert($("roomInput").value, $("urlInput").value);
+  if(!ok){ toast("NEED ROOM+URL"); return; }
+  persist();
+});
+$("btnOpenNewTab").addEventListener("click", ()=> openNewTab($("urlInput").value));
+$("btnDelete").addEventListener("click", ()=>{
+  const r = $("roomInput").value;
+  if(!String(r||"").trim()){ toast("NO ROOM"); return; }
+  remove(r); persist();
+});
+$("btnClearFields").addEventListener("click", ()=>{ $("roomInput").value=""; $("urlInput").value=""; toast("CLEARED"); });
+
+$("btnWriteToBase").addEventListener("click", ()=>{
+  writeSharedRegistry();
+});
+
+/* KETA NOTE */
+$("ketaIcon").addEventListener("click", ()=>{
+  if(STATE.ui.nullMode) return;
+  const open = !$("ketaNote").classList.contains("open");
+  setKetaNote(open);
+  toast(open ? "KETA_NOTE OPEN" : "KETA_NOTE CLOSED");
+});
+$("btnHideNote").addEventListener("click", ()=> setKetaNote(false));
+$("ketaText").addEventListener("input", ()=>{
+  STATE.ketaNote = $("ketaText").value;
+  persist();
+});
+
+/* Hotkeys */
+document.addEventListener("keydown", (e)=>{
+  const tag = (e.target && e.target.tagName) ? e.target.tagName.toLowerCase() : "";
+  const typing = (tag==="textarea" || tag==="input");
+
+  if(e.shiftKey && e.key.toLowerCase()==="i"){
+    e.preventDefault();
+    setInvert(!STATE.ui.invert);
+    toast(STATE.ui.invert ? "INVERT ON" : "INVERT OFF");
+    return;
+  }
+
+  // Shift+0 null (strict)
+  if(e.shiftKey && e.key === "0"){
+    e.preventDefault();
+    toggleNullMode();
+    return;
+  }
+
+  // Esc = hard close
+  if(e.key==="Escape"){
+    setDrawer(false);
+    setKetaNote(false);
+    STATE.ui.nullMode = false;
+    toast("CLOSED");
+    persist();
+    return;
+  }
+
+  // quick open while list is focused: Enter opens loaded url
+  if(!typing && e.key==="Enter"){
+    const u = $("urlInput").value;
+    if(String(u||"").trim()) openNewTab(u);
+  }
+});
+
+/* Drag note */
+(function dragNote(){
+  const box = $("ketaNote");
+  const head = $("ketaHead");
+  let dragging=false, ox=0, oy=0;
+  head.addEventListener("mousedown", (e)=>{
+    if(e.target.closest("button")) return;
+    dragging=true;
+    const r = box.getBoundingClientRect();
+    ox = e.clientX - r.left;
+    oy = e.clientY - r.top;
+    box.style.left = r.left + "px";
+    box.style.top  = r.top + "px";
+    box.style.right = "auto";
+  });
+  window.addEventListener("mousemove", (e)=>{
+    if(!dragging) return;
+    box.style.left = (e.clientX - ox) + "px";
+    box.style.top  = (e.clientY - oy) + "px";
+  });
+  window.addEventListener("mouseup", ()=> dragging=false);
+})();
+
+/* Boot: default entry = NULL MODE (controller collapsed) */
+syncMeta("boot");
+render();
+
+/* KETA_NOTE external hooks (optional) */
+window.KETA_NOTE = {
+  setCategoryIds(ids){
+    ensureMeta();
+    STATE.ketaNoteMeta.categoryIds = Array.isArray(ids) ? ids.slice(0,64) : [];
+    STATE.ketaNoteMeta.updatedAt = nowISO();
+    persist();
+  },
+  getMeta(){
+    ensureMeta();
+    return structuredClone(STATE.ketaNoteMeta);
+  }
+};
+</script>
+</body>
+</html>
+
+<!--
+============================================================
+KETADATA HTML SERIALIZATION STAMP
+FILE_ID: KETADATA_ROOM_REGISTRY
+ROOM_ID: REGISTRY
+VERSION: room.registry.v1
+UPDATED_AT: 2025-12-25T00:00:00-05:00
+AUTHOR: KNG / BIGGIE
+INTENT: ROOM REGISTRY ROUTER (NEW TAB OPEN) + SHARED HANDOFF KEY
+STATUS: CANONICAL CANDIDATE
+
+AE: SHARP BLACK/WHITE. GEOMETRIC. NO KITSCH. ALL CAPS.
+EE: EXPORTABLE STATE. KETA_NOTE. INVERT. NULL MODE DEFAULT ENTRY.
+WB: SHARED HANDOFF LOCALSTORAGE KEY = KDT::ROOM_REGISTRY_V1 (BASE MERGE).
+============================================================
+-->
