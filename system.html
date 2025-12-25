@@ -46,6 +46,7 @@ body{
 #root.null .drawer,
 #root.null .ketaNote,
 #root.null #roomJump,
+#root.null #pinnedPanel,
 #root.null .toast{
   display:none !important;
 }
@@ -321,6 +322,25 @@ AE ▸ KETA NOTE (THIN / ELEGANT / SHARP)
     <button class="btn" id="btnDismissRoom">DISMISS</button>
   </div>
 
+  <!-- MULTI-ACTIVE (PINNED) ROOMS PANEL -->
+  <div id="pinnedPanel" style="
+    position:absolute;
+    left:10px;
+    top:calc(var(--top) + 54px);
+    z-index:26;
+    display:none;
+    gap:8px;
+    flex-wrap:wrap;
+    align-items:center;
+    padding:8px 10px;
+    border:1px solid var(--line2);
+    background:rgba(0,0,0,0.82);
+    font-family:var(--mono);
+    font-size:11px;
+    letter-spacing:.08em;
+    text-transform:uppercase;">
+  </div>
+
   <div class="toast" id="toast"></div>
 
   <!-- WB ▸ TOPBAR -->
@@ -501,7 +521,10 @@ const DEFAULT = {
     nullMode:false,      // NEW: Shift+0
     lightPreset: 1,
     lightRunning: false,
-    motionOn: false
+    motionOn: false,
+
+    // MULTI-ACTIVE: pinned rooms (names only, canonicalized)
+    pinnedRooms: []
   },
 
   payload: {
@@ -844,6 +867,26 @@ function canonRoomName(name){
   return String(name || "").trim().toUpperCase();
 }
 
+/* MULTI-ACTIVE (PINNED) */
+function ensurePinnedRooms(){
+  if(!STATE.ui) STATE.ui = {};
+  if(!Array.isArray(STATE.ui.pinnedRooms)) STATE.ui.pinnedRooms = [];
+  // canonicalize any legacy values
+  STATE.ui.pinnedRooms = STATE.ui.pinnedRooms.map(canonRoomName).filter(Boolean);
+}
+function isPinned(roomName){
+  ensurePinnedRooms();
+  const r = canonRoomName(roomName);
+  return STATE.ui.pinnedRooms.includes(r);
+}
+function togglePin(roomName){
+  ensurePinnedRooms();
+  const r = canonRoomName(roomName);
+  const i = STATE.ui.pinnedRooms.indexOf(r);
+  if(i >= 0) STATE.ui.pinnedRooms.splice(i,1);
+  else STATE.ui.pinnedRooms.push(r);
+}
+
 function upsertRoomPreset(roomName, url){
   ensureRoomPresets();
   const room = canonRoomName(roomName) || "BASE";
@@ -925,6 +968,7 @@ function renderRoomList(){
     row.style.display = "flex";
     row.style.justifyContent = "space-between";
     row.style.gap = "10px";
+    row.style.alignItems = "center";
 
     const left = document.createElement("div");
     left.textContent = p.room || "ROOM";
@@ -936,6 +980,18 @@ function renderRoomList(){
     right.style.textOverflow = "ellipsis";
     right.style.maxWidth = "55%";
     right.textContent = (p.roomUrl && p.roomUrl.trim()) ? "URL" : "NO URL";
+
+    const pin = document.createElement("button");
+    pin.className = "btn";
+    pin.style.padding = "4px 8px";
+    pin.style.fontSize = "11px";
+    pin.textContent = isPinned(p.room) ? "UNPIN" : "PIN";
+    pin.addEventListener("click", (ev)=>{
+      ev.stopPropagation();
+      togglePin(p.room);
+      toast(isPinned(p.room) ? "PINNED" : "UNPINNED");
+      persist();
+    });
 
     row.addEventListener("click", ()=>{
       loadPresetToFields(p.room);
@@ -954,6 +1010,7 @@ function renderRoomList(){
 
     row.appendChild(left);
     row.appendChild(right);
+    row.appendChild(pin);
     el.appendChild(row);
   });
 }
@@ -979,6 +1036,60 @@ function renderNavQuick(){
       goActiveRoom();
     });
     el.appendChild(b);
+  });
+}
+
+function renderPinnedPanel(){
+  const el = $("pinnedPanel");
+  if(!el) return;
+
+  ensurePinnedRooms();
+  ensureRoomPresets();
+
+  if(STATE.ui.nullMode || STATE.ui.pinnedRooms.length === 0){
+    el.style.display = "none";
+    el.innerHTML = "";
+    return;
+  }
+
+  el.style.display = "flex";
+  el.innerHTML = "";
+
+  const title = document.createElement("div");
+  title.style.color = "var(--muted)";
+  title.textContent = "ACTIVE SET";
+  el.appendChild(title);
+
+  const byName = new Map(STATE.payload.roomPresets.map(p => [canonRoomName(p.room), p]));
+
+  STATE.ui.pinnedRooms.forEach(name=>{
+    const p = byName.get(name);
+    if(!p) return;
+
+    const chip = document.createElement("button");
+    chip.className = "btn";
+    chip.textContent = name;
+
+    // click = set canonical active (no navigation)
+    chip.addEventListener("click", ()=>{
+      setActiveRoom(p.room, p.roomUrl);
+      toast("ACTIVE SET");
+      persist();
+    });
+
+    // right-click = GO (fast wiring)
+    chip.addEventListener("contextmenu", (ev)=>{
+      ev.preventDefault();
+      setActiveRoom(p.room, p.roomUrl);
+      persist();
+      goActiveRoom();
+    });
+
+    if(canonRoomName(STATE.room) === name){
+      chip.style.borderColor = "var(--fg)";
+    }
+
+    el.appendChild(chip);
   });
 }
 
@@ -1043,6 +1154,7 @@ function render(){
 
   renderRoomList();
   renderNavQuick();
+  renderPinnedPanel();
 }
 
 /* Buttons */
@@ -1126,27 +1238,26 @@ document.addEventListener("keydown", (e)=>{
     return;
   }
 
-  // Shift+0 null mode
-// Shift+N null mode (stable)
-if(e.shiftKey && e.key.toLowerCase() === "n"){
-  e.preventDefault();
-  toggleNullMode();
-  return;
-}
-
+  // Shift+N null mode (stable)
+  if(e.shiftKey && e.key.toLowerCase() === "n"){
+    e.preventDefault();
+    toggleNullMode();
+    return;
+  }
 
   // Shift+b home (shell)
-if (e.shiftKey && e.key.toLowerCase() === "b") {
-  e.preventDefault();
-  goHome();
-  return;
-}
-// Shift+K = LANDING (ketadata.com)
-if (e.shiftKey && e.key.toLowerCase() === "k") {
-  e.preventDefault();
-  goLanding();
-  return;
-}
+  if (e.shiftKey && e.key.toLowerCase() === "b") {
+    e.preventDefault();
+    goHome();
+    return;
+  }
+
+  // Shift+K = LANDING (ketadata.com)
+  if (e.shiftKey && e.key.toLowerCase() === "k") {
+    e.preventDefault();
+    goLanding();
+    return;
+  }
 
   // lights 1–6
   if(!typing && /^[1-6]$/.test(e.key)){
@@ -1201,6 +1312,7 @@ if (e.shiftKey && e.key.toLowerCase() === "k") {
 })();
 
 /* Boot */
+ensurePinnedRooms();
 ensureKetaNoteMeta();
 ensureRoomPresets();
 syncKetaNoteMeta("boot");
@@ -1222,7 +1334,7 @@ window.KETA_NOTE = {
 /* =========================================================
 AE: sharp, thin, machinic note; all caps commands; industrial density
 EE: KETA_NOTE + exportable state; invert-all; lights 1–6; transport motion; NULL MODE
-WB: tolerant merge; sovereign storage key; room presets registry; SHIFT+` home hook
+WB: tolerant merge; sovereign storage key; room presets registry
 ========================================================= */
 </script>
 </body>
@@ -1240,15 +1352,13 @@ INTENT: SHELL8 KERNEL (SINGLE-FILE)
 STATUS: CANONICAL
 
 AE: SHARP BLACK/WHITE. GEOMETRIC. NO KITSCH. ALL CAPS COMMANDS.
-EE: EXPORTABLE STATE. GLOBAL KETA_NOTE. INVERT. LIGHTS 1–6. TRANSPORT. NULL MODE (SHIFT+0). HOME HOOK (SHIFT+`).
+EE: EXPORTABLE STATE. GLOBAL KETA_NOTE. INVERT. LIGHTS 1–6. TRANSPORT. NULL MODE.
 WB: TOLERANT MERGE. PAGE SOVEREIGN STORAGE KEY. ROOM PRESETS SEEDED.
 
 LOCALSTORAGE_KEY: KDT::STATE::KETADATA_SHELL8::BASE::shell8.base.v1
 EXPORT_ENVELOPE: { STORAGE_KEY, FILE_ID, ROOM_ID, VERSION_ID, STATE }
 ============================================================
 CHANGELOG:
-- 2025-12-24: SHIFT+0 NULL MODE (HIDE ALL UI)
-- 2025-12-24: SEEDED NAV PRESETS (ROOM/WORLD/STUDIO/LAB/PHOTOBOOTH/KDTV/SHOP)
-- 2025-12-24: SHIFT+` HOME HOOK (SHELL_HOME_URL)
+- 2025-12-24: MULTI-ACTIVE (PINNED) ROOMS PANEL + PIN/UNPIN IN PRESET LIST
 ============================================================
 -->
