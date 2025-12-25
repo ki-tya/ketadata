@@ -1,0 +1,1537 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>ROOM POD // K-ROOM</title>
+  <style>
+    /* ============================================================
+       ROOM POD: KETADATA SYSTEM CONTINUITY
+       - No drift: KETA_NOTE icon stays white square.
+       - No surprise hotkeys: all functions are clickable first.
+       ============================================================ */
+
+    :root{
+      --BG:#000;
+
+      /* System chrome */
+      --S8_LINE: rgba(255,255,255,.10);
+      --S8_LINE2: rgba(255,255,255,.18);
+      --S8_PANEL: rgba(0,0,0,.62);
+      --S8_PANEL2: rgba(255,255,255,.035);
+      --S8_TEXT: rgba(255,255,255,.86);
+      --S8_MUTED: rgba(255,255,255,.56);
+      --S8_MUTED2: rgba(255,255,255,.40);
+      --S8_R: 12px;
+
+      /* Lights (continuous 0..1) */
+      --S8_LIGHT: 0.0;
+
+      /* Room controls */
+      --ROOM_SPIN: 0.0;             /* 0..1 */
+      --ROOM_LIGHT_INTENSITY: 2.0;  /* 0..6 */
+      --ROOM_LIGHT_COLOR: #808080;
+
+      /* Timer (default stays red, but adjustable) */
+      --TIMER_COLOR: #ff0000;
+      --TIMER_GLOW: rgba(255,0,0,.65);
+
+      /* Synth pad */
+      --PAD_BG: rgba(0,0,0,.58);
+      --PAD_BG2: rgba(255,255,255,.03);
+      --PAD_STROKE: rgba(255,255,255,.12);
+      --PAD_STROKE2: rgba(255,255,255,.18);
+      --PAD_R: 16px;
+
+      /* Scene background (original uses 0x1a1a1a) */
+      --SCENE_BG: #1a1a1a;
+    }
+
+    *{ box-sizing:border-box; }
+    html, body { margin:0; height:100%; background:var(--BG); color:#fff; font-family: Arial, Helvetica, sans-serif; }
+    #mount { position:fixed; inset:0; }
+
+    /* ===== Overlay container ===== */
+    .overlay { position:fixed; inset:0; pointer-events:none; z-index:50; }
+
+    /* ===== Shell8 Top/Bottom bars ===== */
+    .s8Top, .s8Bottom{
+      position:fixed;
+      left:12px; right:12px;
+      z-index:100;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:12px;
+      padding:10px 12px;
+      border:1px solid var(--S8_LINE);
+      border-radius:999px;
+      background: var(--S8_PANEL);
+      backdrop-filter: blur(12px);
+      pointer-events:auto;
+    }
+    .s8Top{ top:12px; }
+    .s8Bottom{ bottom:12px; }
+
+    .s8Brand{
+      user-select:none;
+      display:flex;
+      align-items:baseline;
+      gap:10px;
+      padding:7px 10px;
+      border:1px solid var(--S8_LINE);
+      border-radius:999px;
+      background: rgba(0,0,0,.35);
+      letter-spacing:.22em;
+      text-transform:uppercase;
+      font-size:11px;
+      color: var(--S8_MUTED);
+      white-space:nowrap;
+    }
+    .s8Brand strong{
+      color: rgba(255,255,255,.88);
+      font-weight:700;
+      letter-spacing:.26em;
+    }
+    .s8Brand .slash{ opacity:.6; }
+
+    .s8Group{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; justify-content:flex-end; }
+
+    .s8Btn{
+      cursor:pointer;
+      user-select:none;
+      border:1px solid var(--S8_LINE);
+      background: rgba(255,255,255,.03);
+      color: var(--S8_MUTED);
+      border-radius:999px;
+      padding:8px 10px;
+      font-size:11px;
+      letter-spacing:.14em;
+      text-transform:uppercase;
+      transition: border-color .15s ease, color .15s ease, background .15s ease;
+    }
+    .s8Btn:hover{ border-color: var(--S8_LINE2); color: rgba(255,255,255,.75); background: rgba(255,255,255,.045); }
+    .s8Btn:active{ transform: translateY(1px); }
+    .s8Btn.red{
+      border-color: rgba(255,42,42,.55);
+      background: rgba(255,42,42,.06);
+      color: rgba(255,255,255,.72);
+    }
+
+    .s8Pill{
+      border:1px solid var(--S8_LINE);
+      border-radius:999px;
+      padding:8px 10px;
+      background: rgba(0,0,0,.35);
+      color: var(--S8_MUTED2);
+      font-size:11px;
+      letter-spacing:.10em;
+      text-transform:uppercase;
+      white-space:nowrap;
+      user-select:none;
+    }
+
+    /* Lights dots (continuous) */
+    .s8Lights{
+      display:flex;
+      gap:6px;
+      align-items:center;
+      padding:6px 8px;
+      border:1px solid var(--S8_LINE);
+      border-radius:999px;
+      background: rgba(255,255,255,.02);
+      user-select:none;
+    }
+    .s8LightDot{
+      width:14px; height:14px;
+      border-radius:999px;
+      border:1px solid var(--S8_LINE);
+      background: rgba(255,255,255,.02);
+      cursor:pointer;
+      position:relative;
+      overflow:hidden;
+    }
+    .s8LightDot::after{
+      content:"";
+      position:absolute; inset:0;
+      background: rgba(255,255,255, var(--S8_LIGHT));
+      opacity:.9;
+    }
+
+    /* KETA_NOTE icon anchor: ALWAYS WHITE SQUARE */
+    .ketaNoteIcon{
+      width:18px; height:18px;
+      border-radius:2px;
+      border:1px solid rgba(255,255,255,.88);
+      background:#fff;
+      box-shadow: 0 0 0 1px rgba(0,0,0,.6) inset;
+      flex:0 0 auto;
+    }
+
+    /* ===== KETA_NOTE panel ===== */
+    .s8Note{
+      position:fixed;
+      right:12px;
+      bottom:72px;
+      width:min(520px, calc(100vw - 24px));
+      max-height:min(70vh, 720px);
+      z-index:120;
+      border:1px solid var(--S8_LINE);
+      border-radius: var(--S8_R);
+      background: var(--S8_PANEL);
+      backdrop-filter: blur(12px);
+      display:none;
+      overflow:hidden;
+      box-shadow: 0 30px 120px rgba(0,0,0,.68);
+      pointer-events:auto;
+    }
+    .s8Note.on{ display:flex; flex-direction:column; }
+    .s8NoteHead{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      padding:10px 12px;
+      border-bottom:1px solid rgba(255,255,255,.08);
+    }
+    .s8NoteHead .t{
+      letter-spacing:.18em;
+      text-transform:uppercase;
+      font-size:11px;
+      color: var(--S8_MUTED);
+      user-select:none;
+    }
+    .s8NoteBody{ padding:10px 12px; overflow:auto; }
+    .s8Note textarea{
+      width:100%;
+      min-height:240px;
+      resize:vertical;
+      border:1px solid rgba(255,255,255,.10);
+      border-radius:10px;
+      background: rgba(255,255,255,.02);
+      color: var(--S8_TEXT);
+      outline:none;
+      padding:10px 10px;
+      font-size:12px;
+      letter-spacing:.02em;
+      line-height:1.35;
+    }
+
+    /* ===== HUD Timer (elevated, same concept) ===== */
+    .hud{
+      position:absolute;
+      left:50%;
+      bottom:8.2rem;
+      transform:translateX(-50%);
+      text-align:center;
+      pointer-events:auto;
+      display:flex;
+      flex-direction:column;
+      gap:1rem;
+      align-items:center;
+      z-index:60;
+    }
+
+    .timerFrame{
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      padding: 12px 18px;
+      border:1px solid rgba(255,255,255,.10);
+      border-radius: 999px;
+      background: rgba(0,0,0,.40);
+      backdrop-filter: blur(10px);
+      box-shadow: 0 18px 70px rgba(0,0,0,.55);
+    }
+
+    .timer{
+      font-size: clamp(48px, 12vw, 140px);
+      font-weight: 900;
+      letter-spacing: 0.14em;
+      color: var(--TIMER_COLOR);
+      text-shadow:
+        0 0 18px var(--TIMER_GLOW),
+        0 0 34px rgba(255,0,0,.28);
+      font-variant-numeric: tabular-nums;
+      line-height:1;
+      padding-left: .07em; /* optical balance for tracking */
+    }
+
+    .btnRow{
+      display:flex;
+      gap:14px;
+      align-items:center;
+      justify-content:center;
+    }
+
+    .btn{
+      cursor:pointer;
+      background: rgba(0,0,0,.30);
+      border:1px solid rgba(255,255,255,.12);
+      color: var(--TIMER_COLOR);
+      font-size:22px;
+      letter-spacing:.08em;
+      text-transform:uppercase;
+      border-radius: 999px;
+      padding: 10px 14px;
+      backdrop-filter: blur(10px);
+      box-shadow: 0 14px 50px rgba(0,0,0,.45);
+      transition: transform .15s ease, border-color .15s ease, background .15s ease;
+    }
+    .btn:hover{ transform: translateY(-1px); border-color: rgba(255,255,255,.18); background: rgba(255,255,255,.02); }
+    .btn:active{ transform: translateY(0); }
+    .btnSmall{
+      font-size:11px;
+      padding: 8px 10px;
+      color: rgba(255,255,255,.70);
+      letter-spacing:.12em;
+    }
+
+    /* ===== Synth Pad Menu (dark semi-transparent gear controller) ===== */
+    .padWrap{
+      position:fixed;
+      left:12px;
+      bottom:72px; /* above bottom bar */
+      width: min(560px, calc(100vw - 24px));
+      z-index:90;
+      pointer-events:auto;
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+    }
+
+    .pad{
+      border:1px solid var(--PAD_STROKE);
+      border-radius: var(--PAD_R);
+      background: var(--PAD_BG);
+      backdrop-filter: blur(14px);
+      box-shadow: 0 28px 120px rgba(0,0,0,.70);
+      overflow:hidden;
+    }
+
+    .padHead{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:12px;
+      padding: 10px 12px;
+      border-bottom:1px solid rgba(255,255,255,.08);
+      background: linear-gradient(to bottom, rgba(255,255,255,.03), rgba(255,255,255,0));
+    }
+    .padHead .left{
+      display:flex;
+      gap:10px;
+      align-items:center;
+      min-width:0;
+    }
+    .padTitle{
+      letter-spacing:.18em;
+      text-transform:uppercase;
+      font-size:11px;
+      color: rgba(255,255,255,.78);
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+    .padSub{
+      letter-spacing:.10em;
+      text-transform:uppercase;
+      font-size:10px;
+      color: var(--S8_MUTED2);
+      white-space:nowrap;
+    }
+
+    .padBody{
+      padding: 12px;
+      display:grid;
+      grid-template-columns: 1fr;
+      gap:12px;
+    }
+
+    .padSection{
+      border:1px solid rgba(255,255,255,.08);
+      border-radius: 14px;
+      background: rgba(255,255,255,.02);
+      overflow:hidden;
+    }
+    .padSectionHead{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:12px;
+      padding: 10px 10px;
+      border-bottom:1px solid rgba(255,255,255,.06);
+    }
+    .padSectionHead .label{
+      font-size:11px;
+      letter-spacing:.16em;
+      text-transform:uppercase;
+      color: rgba(255,255,255,.72);
+      user-select:none;
+    }
+    .padSectionHead .toggle{
+      cursor:pointer;
+      border:1px solid rgba(255,255,255,.10);
+      background: rgba(0,0,0,.18);
+      color: var(--S8_MUTED);
+      border-radius: 999px;
+      padding: 7px 10px;
+      font-size:11px;
+      letter-spacing:.12em;
+      text-transform:uppercase;
+    }
+    .padSectionBody{
+      padding: 10px;
+      display:grid;
+      gap:10px;
+    }
+    .padSection.collapsed .padSectionBody{ display:none; }
+
+    /* “gear” controls layout */
+    .gearGrid{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap:10px;
+    }
+    @media (max-width: 520px){
+      .gearGrid{ grid-template-columns: 1fr; }
+    }
+
+    .gear{
+      border:1px solid rgba(255,255,255,.10);
+      border-radius: 14px;
+      background: rgba(0,0,0,.22);
+      padding: 10px;
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+    }
+    .gearTop{
+      display:flex;
+      align-items:baseline;
+      justify-content:space-between;
+      gap:10px;
+    }
+    .gearTop .name{
+      font-size:11px;
+      letter-spacing:.14em;
+      text-transform:uppercase;
+      color: rgba(255,255,255,.74);
+    }
+    .gearTop .val{
+      font-size:10px;
+      letter-spacing:.14em;
+      text-transform:uppercase;
+      color: rgba(255,255,255,.60);
+    }
+    .gear input[type="range"]{ width:100%; }
+
+    .swatchBtn{
+      width: 34px; height: 34px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,.18);
+      background: #808080;
+      cursor:pointer;
+      box-shadow: 0 0 0 1px rgba(0,0,0,.6) inset;
+    }
+    .swatches{
+      display:flex;
+      gap:8px;
+      flex-wrap:wrap;
+    }
+    .swatch{
+      width: 26px; height: 26px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,.18);
+      cursor:pointer;
+      box-shadow: 0 0 0 1px rgba(0,0,0,.6) inset;
+      transition: transform .12s ease;
+    }
+    .swatch:hover{ transform: scale(1.06); }
+
+    .linkGrid{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap:10px;
+    }
+    @media (max-width: 520px){
+      .linkGrid{ grid-template-columns: 1fr; }
+    }
+    .linkBtn{
+      cursor:pointer;
+      border:1px solid rgba(255,255,255,.10);
+      border-radius: 14px;
+      background: rgba(0,0,0,.18);
+      padding: 10px;
+      text-align:left;
+      color: rgba(255,255,255,.78);
+      letter-spacing:.06em;
+      text-transform:uppercase;
+      font-size:11px;
+      transition: border-color .15s ease, background .15s ease;
+    }
+    .linkBtn:hover{ border-color: rgba(255,255,255,.18); background: rgba(255,255,255,.02); }
+    .linkBtn .meta{
+      display:block;
+      margin-top:6px;
+      font-size:10px;
+      color: rgba(255,255,255,.48);
+      letter-spacing:.10em;
+    }
+
+    /* Mini status */
+    .statusLine{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      border-top:1px solid rgba(255,255,255,.08);
+      padding: 10px 12px;
+      color: rgba(255,255,255,.55);
+      font-size:10px;
+      letter-spacing:.12em;
+      text-transform:uppercase;
+    }
+
+    /* ===== “Classic” corner controls from source (kept, refined) ===== */
+    .corner {
+      position:absolute;
+      top:5.1rem; /* under top bar */
+      display:flex;
+      gap:.5rem;
+      align-items:center;
+      pointer-events:auto;
+      z-index:70;
+    }
+    .leftCorner { left:1rem; }
+    .rightCorner { right:1rem; flex-direction:column; align-items:flex-end; }
+
+    .chip {
+      font-size:12px;
+      color:#fff;
+      border:1px solid rgba(255,255,255,.25);
+      border-radius:999px;
+      padding:.46rem .66rem;
+      background: rgba(255,255,255,.08);
+      backdrop-filter: blur(6px);
+      cursor:pointer;
+      letter-spacing:.10em;
+      text-transform:uppercase;
+      user-select:none;
+    }
+    .chip.active { background: rgba(168,85,247,.28); }
+
+    /* ===== Null mode behavior ===== */
+    .s8Null .s8Top,
+    .s8Null .s8Bottom,
+    .s8Null .padWrap,
+    .s8Null .corner,
+    .s8Null .hud,
+    .s8Null .s8Note{
+      display:none !important;
+    }
+
+    /* Small helper */
+    .hint {
+      position:fixed;
+      bottom:.5rem;
+      left:50%;
+      transform:translateX(-50%);
+      opacity:.5;
+      font-size:12px;
+      letter-spacing:.06em;
+      z-index:40;
+      pointer-events:none;
+    }
+  </style>
+</head>
+<body>
+  <!-- Three.js mount -->
+  <div id="mount"></div>
+
+  <!-- UI overlays -->
+  <div class="overlay" id="overlay">
+
+    <!-- Shell8 TOP BAR -->
+    <div class="s8Top" id="s8Top">
+      <div class="s8Brand" title="Shell8 System">
+        <strong>SHELL8</strong><span class="slash">//</span><span>ROOM POD</span>
+      </div>
+
+      <div class="s8Group" style="justify-content:center;">
+        <div class="s8Lights" title="LIGHTS (CLICK DOTS)">
+          <div class="s8LightDot" data-i="1" title="1"></div>
+          <div class="s8LightDot" data-i="2" title="2"></div>
+          <div class="s8LightDot" data-i="3" title="3"></div>
+          <div class="s8LightDot" data-i="4" title="4"></div>
+          <div class="s8LightDot" data-i="5" title="5"></div>
+          <div class="s8LightDot" data-i="6" title="6"></div>
+        </div>
+
+        <button class="s8Btn" id="s8InvertBtn" title="SHIFT+I">invert</button>
+        <button class="s8Btn red" id="s8NullBtn" title="SHIFT+N">null</button>
+
+        <!-- KETA_NOTE anchor: white square icon -->
+        <button class="s8Btn" id="s8NoteBtn" title="SHIFT+O" style="display:flex; align-items:center; gap:8px;">
+          <span class="ketaNoteIcon" aria-hidden="true"></span>
+          keta_note
+        </button>
+      </div>
+
+      <div class="s8Group">
+        <button class="s8Btn" id="s8HomeBtn">home</button>
+        <button class="s8Btn" id="s8ExportBtn">export</button>
+        <button class="s8Btn" id="s8ImportBtn">import</button>
+        <div class="s8Pill" id="s8Status">READY</div>
+      </div>
+    </div>
+
+    <!-- Shell8 BOTTOM BAR -->
+    <div class="s8Bottom" id="s8Bottom">
+      <div class="s8Pill">
+        CLICK-FIRST UI · HOTKEYS (SYSTEM ONLY): SHIFT+I INVERT · SHIFT+N NULL · SHIFT+O NOTE · 1-6 LIGHTS
+      </div>
+      <div class="s8Group">
+        <button class="s8Btn" id="padToggleBtn">menu</button>
+      </div>
+    </div>
+
+    <!-- KETA_NOTE PANEL -->
+    <div class="s8Note" id="s8Note">
+      <div class="s8NoteHead">
+        <div class="t">KETA_NOTE</div>
+        <div class="s8Group">
+          <button class="s8Btn" id="s8NoteSaveBtn">save</button>
+          <button class="s8Btn red" id="s8NoteCloseBtn">close</button>
+        </div>
+      </div>
+      <div class="s8NoteBody">
+        <textarea id="s8NoteText" spellcheck="false" placeholder="KETA_NOTE..."></textarea>
+      </div>
+    </div>
+
+    <!-- Synth pad menu -->
+    <div class="padWrap" id="padWrap">
+      <div class="pad" id="pad">
+        <div class="padHead">
+          <div class="left">
+            <div class="padTitle">ROOM POD CONTROL PANEL</div>
+            <div class="padSub" id="roomLabel">K-ROOM</div>
+          </div>
+          <div class="s8Group">
+            <button class="s8Btn" id="padCollapseAllBtn">collapse</button>
+            <button class="s8Btn red" id="padCloseBtn">close</button>
+          </div>
+        </div>
+
+        <div class="padBody">
+
+          <!-- ROOM CONTROLS -->
+          <div class="padSection" id="secRoom">
+            <div class="padSectionHead">
+              <div class="label">room controls</div>
+              <button class="padSectionHead toggle" data-toggle="#secRoom">toggle</button>
+            </div>
+            <div class="padSectionBody">
+              <div class="gearGrid">
+                <div class="gear">
+                  <div class="gearTop">
+                    <div class="name">spin</div>
+                    <div class="val" id="spinVal">off</div>
+                  </div>
+                  <input id="spinRange" type="range" min="0" max="1" step="0.01" value="0" />
+                  <button class="btnSmall btn" id="spinToggleBtn" title="Toggle rotation on/off">toggle</button>
+                </div>
+
+                <div class="gear">
+                  <div class="gearTop">
+                    <div class="name">light intensity</div>
+                    <div class="val" id="lightIntVal">2.0</div>
+                  </div>
+                  <input id="lightIntRange" type="range" min="0" max="6" step="0.05" value="2" />
+                  <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+                    <button class="btnSmall btn" id="pulsateToggleBtn">pulsate</button>
+                    <button class="swatchBtn" id="lightColorBtn" title="Light color"></button>
+                  </div>
+                  <div class="swatches" id="lightSwatches"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- TIMER CONTROLS -->
+          <div class="padSection" id="secTimer">
+            <div class="padSectionHead">
+              <div class="label">timer</div>
+              <button class="padSectionHead toggle" data-toggle="#secTimer">toggle</button>
+            </div>
+            <div class="padSectionBody">
+              <div class="gearGrid">
+                <div class="gear">
+                  <div class="gearTop">
+                    <div class="name">timer base color</div>
+                    <div class="val" id="timerColorVal">#ff0000</div>
+                  </div>
+                  <input id="timerColor" type="color" value="#ff0000" style="width:100%; height:44px; border:0; background:transparent; padding:0;" />
+                  <button class="btnSmall btn" id="timerResetColorBtn">reset</button>
+                </div>
+
+                <div class="gear">
+                  <div class="gearTop">
+                    <div class="name">duration</div>
+                    <div class="val" id="durVal">10:00</div>
+                  </div>
+                  <input id="durRange" type="range" min="1" max="60" step="1" value="10" />
+                  <div style="display:flex; gap:10px; flex-wrap:wrap;">
+                    <button class="btnSmall btn" id="durApplyBtn">apply</button>
+                    <button class="btnSmall btn" id="durResetBtn">reset 10</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- STATE MODES / NAV (custom HTML groups) -->
+          <div class="padSection" id="secModes">
+            <div class="padSectionHead">
+              <div class="label">state modes</div>
+              <button class="padSectionHead toggle" data-toggle="#secModes">toggle</button>
+            </div>
+            <div class="padSectionBody">
+              <div class="linkGrid" id="modeLinks"></div>
+            </div>
+          </div>
+
+        </div>
+
+        <div class="statusLine">
+          <div id="padStatusLeft">CLICK FIRST. HOTKEYS LATER.</div>
+          <div id="padStatusRight">ROOM POD</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Corner “classic” quick buttons (kept, but now redundant to synth pad; still clickable) -->
+    <div class="corner leftCorner">
+      <button id="quickPulsate" class="chip">pulsate</button>
+    </div>
+    <div class="corner rightCorner">
+      <button id="quickRotate" class="chip">spin</button>
+    </div>
+
+    <!-- Timer + start/reset -->
+    <div class="hud">
+      <div class="timerFrame">
+        <div id="timer" class="timer">10:00</div>
+      </div>
+      <div class="btnRow">
+        <button id="startStop" class="btn" title="Start/Pause">start</button>
+        <button id="reset" class="btn" title="Reset">reset</button>
+      </div>
+    </div>
+
+    <div class="hint" id="hint"></div>
+  </div>
+
+  <!-- Three.js (CDN) -->
+  <script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
+
+  <script>
+    /************************************************************
+     * ROOM POD SYSTEM: DO-NOT-BREAK STORAGE NAMESPACE
+     ************************************************************/
+    // IMPORTANT:
+    // Do not change FILE_ID / ROOM_ID / VERSION_ID unless you intend a new sovereign storage namespace.
+    // Set SHELL_HOME_URL to your OS file (e.g., system.html).
+
+    const FILE_ID = "SHELL8_ROOM_POD";   // keep stable across room pods
+    const ROOM_ID = "K_ROOM";            // unique per room
+    const VERSION_ID = "V1";             // bump only if you intentionally want a new storage namespace
+    const SHELL_HOME_URL = "system.html"; // your OS entry
+
+    const STORAGE_KEY = `${FILE_ID}::${ROOM_ID}::${VERSION_ID}`;
+
+    /************************************************************
+     * Source-derived state (kept conceptually identical) :contentReference[oaicite:1]{index=1}
+     ************************************************************/
+    let isActive = false;
+    let seconds = 600; // default 10 minutes
+    let lightColor = '#808080';
+    let isPulsating = false;
+    let isRotating = false;
+
+    // Room refinement: spin speed (0..1) separate from boolean isRotating
+    let spinAmount = 0.0;           // 0..1
+    let baseLightIntensity = 2.0;   // default 2 (matches source)
+
+    // Timer color (default red, adjustable)
+    let timerColor = '#ff0000';
+
+    // System state
+    const S8 = {
+      light: 0.0,     // 0..1 (system lights)
+      invert: false,
+      nullMode: false,
+      noteOpen: false,
+      ketaNote: "",
+      padOpen: true
+    };
+
+    const colorPresets = [
+      { name: 'Green',  color: '#51cf66' },
+      { name: 'Red',    color: '#ff6b6b' },
+      { name: 'Purple', color: '#9775fa' },
+      { name: 'Blue',   color: '#4a90e2' },
+      { name: 'Orange', color: '#ffa94d' },
+      { name: 'Gray',   color: '#808080' }
+    ];
+
+    // Custom HTML groups shown as “state modes” in synth pad
+    // Edit later: just change href/title/group text — no engine changes required.
+    const STATE_MODE_GROUPS = [
+      {
+        group: "system",
+        items: [
+          { title: "system home", href: "system.html", meta: "shell8 os" },
+          { title: "landing", href: "https://ketadata.com/index11.html", meta: "public" }
+        ]
+      },
+      {
+        group: "visual rooms",
+        items: [
+          { title: "photobooth", href: "photobooth.html", meta: "capture / effects" },
+          { title: "kdtv1 cinema", href: "kdtv1.html", meta: "immersive" },
+          { title: "kdtv multi", href: "kdtv_multi.html", meta: "grid" }
+        ]
+      },
+      {
+        group: "k-room presets",
+        items: [
+          { title: "neutral", href: "#preset:neutral", meta: "reset controls" },
+          { title: "pulse", href: "#preset:pulse", meta: "pulsate on" },
+          { title: "spin", href: "#preset:spin", meta: "spin on" }
+        ]
+      }
+    ];
+
+    /************************************************************
+     * DOM
+     ************************************************************/
+    const mount = document.getElementById('mount');
+
+    // Timer
+    const timerEl = document.getElementById('timer');
+    const startStopEl = document.getElementById('startStop');
+    const resetEl = document.getElementById('reset');
+
+    // Shell8
+    const s8Status = document.getElementById('s8Status');
+    const s8InvertBtn = document.getElementById('s8InvertBtn');
+    const s8NullBtn = document.getElementById('s8NullBtn');
+    const s8HomeBtn = document.getElementById('s8HomeBtn');
+    const s8ExportBtn = document.getElementById('s8ExportBtn');
+    const s8ImportBtn = document.getElementById('s8ImportBtn');
+    const s8NoteBtn = document.getElementById('s8NoteBtn');
+
+    const s8Note = document.getElementById('s8Note');
+    const s8NoteText = document.getElementById('s8NoteText');
+    const s8NoteSaveBtn = document.getElementById('s8NoteSaveBtn');
+    const s8NoteCloseBtn = document.getElementById('s8NoteCloseBtn');
+
+    // Pad
+    const padWrap = document.getElementById('padWrap');
+    const padCloseBtn = document.getElementById('padCloseBtn');
+    const padToggleBtn = document.getElementById('padToggleBtn');
+    const padCollapseAllBtn = document.getElementById('padCollapseAllBtn');
+    const padStatusLeft = document.getElementById('padStatusLeft');
+
+    // Room controls in pad
+    const spinRange = document.getElementById('spinRange');
+    const spinVal = document.getElementById('spinVal');
+    const spinToggleBtn = document.getElementById('spinToggleBtn');
+
+    const lightIntRange = document.getElementById('lightIntRange');
+    const lightIntVal = document.getElementById('lightIntVal');
+    const pulsateToggleBtn = document.getElementById('pulsateToggleBtn');
+    const lightColorBtn = document.getElementById('lightColorBtn');
+    const lightSwatches = document.getElementById('lightSwatches');
+
+    // Timer controls in pad
+    const timerColorInput = document.getElementById('timerColor');
+    const timerColorVal = document.getElementById('timerColorVal');
+    const timerResetColorBtn = document.getElementById('timerResetColorBtn');
+    const durRange = document.getElementById('durRange');
+    const durVal = document.getElementById('durVal');
+    const durApplyBtn = document.getElementById('durApplyBtn');
+    const durResetBtn = document.getElementById('durResetBtn');
+
+    // Modes
+    const modeLinks = document.getElementById('modeLinks');
+
+    // Quick corner buttons
+    const quickPulsate = document.getElementById('quickPulsate');
+    const quickRotate = document.getElementById('quickRotate');
+
+    // Hint
+    const hintEl = document.getElementById('hint');
+
+    /************************************************************
+     * UI helpers
+     ************************************************************/
+    function setStatus(msg){
+      s8Status.textContent = String(msg || "READY").toUpperCase();
+    }
+    function setHint(msg){
+      hintEl.textContent = msg || "";
+      if(!msg) return;
+      clearTimeout(setHint._t);
+      setHint._t = setTimeout(()=>{ hintEl.textContent=""; }, 1800);
+    }
+
+    function clamp(x, a, b){ return Math.max(a, Math.min(b, x)); }
+
+    function applySystemVisuals(){
+      document.documentElement.style.setProperty("--S8_LIGHT", String(S8.light));
+      document.documentElement.style.filter = S8.invert ? "invert(1) hue-rotate(180deg)" : "none";
+      document.body.classList.toggle("s8Null", !!S8.nullMode);
+
+      s8Note.classList.toggle("on", !!S8.noteOpen);
+      padWrap.style.display = S8.padOpen ? "flex" : "none";
+    }
+
+    function applyRoomVisuals(){
+      document.documentElement.style.setProperty("--ROOM_SPIN", String(spinAmount));
+      document.documentElement.style.setProperty("--ROOM_LIGHT_INTENSITY", String(baseLightIntensity));
+      document.documentElement.style.setProperty("--ROOM_LIGHT_COLOR", lightColor);
+
+      document.documentElement.style.setProperty("--TIMER_COLOR", timerColor);
+      // approximate glow from chosen color
+      document.documentElement.style.setProperty("--TIMER_GLOW", hexToRgba(timerColor, 0.62));
+    }
+
+    function hexToRgba(hex, a){
+      const h = String(hex || "#ff0000").replace("#","");
+      const v = h.length === 3 ? h.split("").map(x=>x+x).join("") : h;
+      const r = parseInt(v.slice(0,2),16) || 255;
+      const g = parseInt(v.slice(2,4),16) || 0;
+      const b = parseInt(v.slice(4,6),16) || 0;
+      return `rgba(${r},${g},${b},${a})`;
+    }
+
+    /************************************************************
+     * Persistent state (system + room)
+     ************************************************************/
+    function snapshot(){
+      return {
+        meta:{
+          FILE_ID, ROOM_ID, VERSION_ID,
+          updatedAt: new Date().toISOString(),
+          shellHomeUrl: SHELL_HOME_URL
+        },
+        system:{
+          ...S8
+        },
+        room:{
+          isActive,
+          seconds,
+          lightColor,
+          isPulsating,
+          isRotating,
+          spinAmount,
+          baseLightIntensity,
+          timerColor,
+          note: S8.ketaNote || ""
+        }
+      };
+    }
+
+    function hydrate(obj){
+      if(!obj) return;
+      if(obj.system){
+        Object.assign(S8, obj.system);
+      }
+      if(obj.room){
+        const r = obj.room;
+        if(typeof r.isActive === "boolean") isActive = r.isActive;
+        if(Number.isFinite(r.seconds)) seconds = r.seconds;
+        if(typeof r.lightColor === "string") lightColor = r.lightColor;
+        if(typeof r.isPulsating === "boolean") isPulsating = r.isPulsating;
+        if(typeof r.isRotating === "boolean") isRotating = r.isRotating;
+        if(Number.isFinite(r.spinAmount)) spinAmount = r.spinAmount;
+        if(Number.isFinite(r.baseLightIntensity)) baseLightIntensity = r.baseLightIntensity;
+        if(typeof r.timerColor === "string") timerColor = r.timerColor;
+        if(typeof r.note === "string") S8.ketaNote = r.note;
+      }
+      s8NoteText.value = S8.ketaNote || "";
+    }
+
+    function saveLocal(){
+      try{
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot()));
+        setStatus("SAVED");
+      }catch(e){
+        setStatus("SAVE_FAIL");
+      }
+    }
+
+    function loadLocal(){
+      try{
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if(!raw) return false;
+        const obj = JSON.parse(raw);
+        hydrate(obj);
+        setStatus("LOADED");
+        return true;
+      }catch(e){
+        return false;
+      }
+    }
+
+    function exportJSON(){
+      const blob = new Blob([JSON.stringify(snapshot(), null, 2)], { type:"application/json" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = `ROOM_POD_${ROOM_ID}_STATE.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(a.href);
+      setStatus("EXPORTED");
+    }
+
+    function importJSON(){
+      const inp = document.createElement("input");
+      inp.type = "file";
+      inp.accept = "application/json";
+      inp.onchange = async ()=>{
+        const f = inp.files && inp.files[0];
+        if(!f) return;
+        try{
+          const text = await f.text();
+          const obj = JSON.parse(text);
+          hydrate(obj);
+          // apply
+          applySystemVisuals();
+          applyRoomVisuals();
+          updateUI();
+          setStatus("IMPORTED");
+          saveLocal();
+        }catch(e){
+          setStatus("IMPORT_FAIL");
+          alert("Invalid JSON.");
+        }
+      };
+      inp.click();
+    }
+
+    /************************************************************
+     * Three.js setup (same concept as source, but parameterized)
+     ************************************************************/
+    let scene, camera, renderer, floodLight, animationId;
+    let time = 0;
+
+    function initThree() {
+      const width = mount.clientWidth;
+      const height = mount.clientHeight;
+
+      scene = new THREE.Scene();
+      scene.background = new THREE.Color(getComputedStyle(document.documentElement).getPropertyValue("--SCENE_BG").trim() || "#1a1a1a");
+
+      camera = new THREE.PerspectiveCamera(95, width / height, 0.1, 1000);
+      camera.position.set(0, 0.5, 0);
+      camera.lookAt(0, 1.5, -8);
+
+      renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer.setSize(width, height);
+      renderer.shadowMap.enabled = true;
+      renderer.domElement.style.width = '100%';
+      renderer.domElement.style.height = '100%';
+      renderer.domElement.style.display = 'block';
+      mount.appendChild(renderer.domElement);
+
+      const ambientLight = new THREE.AmbientLight(0xffffff, 0.3);
+      scene.add(ambientLight);
+
+      floodLight = new THREE.PointLight(0x808080, baseLightIntensity, 25);
+      floodLight.position.set(0, 4, 0);
+      scene.add(floodLight);
+
+      // Floor
+      const floor = new THREE.Mesh(
+        new THREE.CircleGeometry(6, 64),
+        new THREE.MeshStandardMaterial({ color: 0x0a0a0a, roughness: 0.8, metalness: 0.2 })
+      );
+      floor.rotation.x = -Math.PI / 2;
+      scene.add(floor);
+
+      // Walls
+      const walls = new THREE.Mesh(
+        new THREE.CylinderGeometry(6, 6, 5, 64, 1, true),
+        new THREE.MeshStandardMaterial({ color: 0x2a2a2a, roughness: 0.3, metalness: 0.7, side: THREE.BackSide })
+      );
+      walls.position.y = 2.5;
+      scene.add(walls);
+
+      // Ceiling
+      const ceiling = new THREE.Mesh(
+        new THREE.CircleGeometry(6, 64),
+        new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.1, metalness: 0.9, side: THREE.BackSide })
+      );
+      ceiling.rotation.x = Math.PI / 2;
+      ceiling.position.y = 5;
+      scene.add(ceiling);
+
+      // Panoramic window
+      const windowMesh = new THREE.Mesh(
+        new THREE.CylinderGeometry(5.85, 5.85, 3.5, 64, 1, true, 0, Math.PI * 1.3),
+        new THREE.MeshStandardMaterial({ color: 0xaaccee, transparent: true, opacity: 0.15, roughness: 0.05, metalness: 0.95, side: THREE.DoubleSide })
+      );
+      windowMesh.position.y = 2.5;
+      windowMesh.rotation.y = -Math.PI * 0.65;
+      scene.add(windowMesh);
+
+      // Window frame rings
+      const frameMat = new THREE.MeshStandardMaterial({ color: 0xcccccc, roughness: 0.1, metalness: 0.95 });
+      const frameTop = new THREE.Mesh(new THREE.TorusGeometry(5.85, 0.08, 16, 64), frameMat);
+      frameTop.position.y = 4.25; frameTop.rotation.x = Math.PI / 2; scene.add(frameTop);
+      const frameBottom = new THREE.Mesh(new THREE.TorusGeometry(5.85, 0.08, 16, 64), frameMat);
+      frameBottom.position.y = 0.75; frameBottom.rotation.x = Math.PI / 2; scene.add(frameBottom);
+
+      // Vertical supports
+      for (let i = 0; i < 4; i++) {
+        const angle = (Math.PI * 1.3 / 3) * i - Math.PI * 0.65;
+        const x = Math.sin(angle) * 5.85;
+        const z = Math.cos(angle) * 5.85;
+        const support = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 3.5, 16), frameMat);
+        support.position.set(x, 2.5, z);
+        scene.add(support);
+      }
+
+      // Sky + horizon
+      const sky = new THREE.Mesh(
+        new THREE.SphereGeometry(50, 32, 32),
+        new THREE.MeshBasicMaterial({ color: 0x0a0a0a, side: THREE.BackSide })
+      );
+      scene.add(sky);
+
+      const horizon = new THREE.Mesh(
+        new THREE.PlaneGeometry(100, 25),
+        new THREE.MeshBasicMaterial({ color: 0x0a0a0a })
+      );
+      horizon.position.set(0, -2, -35);
+      scene.add(horizon);
+
+      function animate() {
+        animationId = requestAnimationFrame(animate);
+        time += 0.01;
+
+        // Pulsate: modulate around baseLightIntensity (refined control)
+        if (floodLight) {
+          if (isPulsating) {
+            const wobble = Math.sin(time * 2) * 0.8;
+            floodLight.intensity = clamp(baseLightIntensity + wobble, 0, 10);
+          } else {
+            floodLight.intensity = baseLightIntensity;
+          }
+        }
+
+        // Spin: refined (speed = spinAmount)
+        if (isRotating && spinAmount > 0) {
+          scene.rotation.y += 0.0005 + (spinAmount * 0.0065);
+        }
+
+        renderer.render(scene, camera);
+      }
+      animate();
+
+      window.addEventListener('resize', onResize);
+      function onResize() {
+        const w = mount.clientWidth, h = mount.clientHeight;
+        camera.aspect = w / h;
+        camera.updateProjectionMatrix();
+        renderer.setSize(w, h);
+      }
+    }
+
+    function applyLightToThree(){
+      if(floodLight){
+        floodLight.color.set(lightColor);
+        floodLight.intensity = baseLightIntensity;
+      }
+      lightColorBtn.style.backgroundColor = lightColor;
+    }
+
+    /************************************************************
+     * Timer (concept unchanged; elevated presentation only)
+     ************************************************************/
+    let tickInterval = null;
+
+    function formatTime(totalSeconds) {
+      const m = Math.floor(totalSeconds / 60);
+      const s = totalSeconds % 60;
+      return String(m).padStart(2,'0') + ':' + String(s).padStart(2,'0');
+    }
+    function updateTimerDisplay() {
+      timerEl.textContent = formatTime(seconds);
+      durVal.textContent = formatTime(Number(durRange.value) * 60);
+    }
+
+    function startTimer() {
+      if (tickInterval || seconds <= 0) return;
+      tickInterval = setInterval(() => {
+        seconds--;
+        updateTimerDisplay();
+        if (seconds <= 0) {
+          stopTimer();
+          isActive = false;
+          startStopEl.textContent = "start";
+          setHint("TIMER END");
+          saveLocal();
+        }
+      }, 1000);
+    }
+    function stopTimer() { clearInterval(tickInterval); tickInterval = null; }
+    function resetTimer() {
+      stopTimer();
+      seconds = Number(durRange.value) * 60;
+      isActive = false;
+      updateTimerDisplay();
+      startStopEl.textContent = "start";
+      saveLocal();
+    }
+
+    /************************************************************
+     * Synth pad: build modes + swatches + UI bindings
+     ************************************************************/
+    function buildLightSwatches(){
+      lightSwatches.innerHTML = "";
+      colorPresets.forEach(p=>{
+        const b = document.createElement("button");
+        b.className = "swatch";
+        b.style.backgroundColor = p.color;
+        b.title = p.name;
+        b.addEventListener("click", ()=>{
+          lightColor = p.color;
+          applyRoomVisuals();
+          applyLightToThree();
+          updateUI();
+          saveLocal();
+          setStatus("LIGHT_COLOR");
+        });
+        lightSwatches.appendChild(b);
+      });
+      lightColorBtn.style.backgroundColor = lightColor;
+    }
+
+    function buildModeLinks(){
+      modeLinks.innerHTML = "";
+      STATE_MODE_GROUPS.forEach(group=>{
+        group.items.forEach(item=>{
+          const btn = document.createElement("button");
+          btn.className = "linkBtn";
+          btn.innerHTML = `${item.title}<span class="meta">${group.group} · ${item.meta || ""}</span>`;
+          btn.addEventListener("click", ()=>{
+            // Internal presets via hash
+            if(item.href && item.href.startsWith("#preset:")){
+              const key = item.href.replace("#preset:","");
+              applyPreset(key);
+              saveLocal();
+              setStatus("PRESET");
+              return;
+            }
+            // External / internal navigation
+            window.location.href = item.href;
+          });
+          modeLinks.appendChild(btn);
+        });
+      });
+    }
+
+    function applyPreset(key){
+      if(key === "neutral"){
+        isPulsating = false;
+        isRotating = false;
+        spinAmount = 0.0;
+        baseLightIntensity = 2.0;
+        lightColor = "#808080";
+        timerColor = "#ff0000";
+      }
+      if(key === "pulse"){
+        isPulsating = true;
+        isRotating = false;
+        spinAmount = 0.0;
+      }
+      if(key === "spin"){
+        isRotating = true;
+        spinAmount = Math.max(spinAmount, 0.35);
+      }
+      applyRoomVisuals();
+      applyLightToThree();
+      updateUI();
+    }
+
+    /************************************************************
+     * UI update
+     ************************************************************/
+    function updateUI(){
+      // Spin
+      spinRange.value = String(spinAmount);
+      spinVal.textContent = (isRotating && spinAmount > 0) ? `${Math.round(spinAmount*100)}%` : "off";
+      quickRotate.classList.toggle("active", !!isRotating);
+
+      // Light intensity
+      lightIntRange.value = String(baseLightIntensity);
+      lightIntVal.textContent = baseLightIntensity.toFixed(2);
+
+      // Pulsate
+      pulsateToggleBtn.classList.toggle("active", !!isPulsating);
+      quickPulsate.classList.toggle("active", !!isPulsating);
+
+      // Timer color
+      timerColorInput.value = timerColor;
+      timerColorVal.textContent = timerColor.toLowerCase();
+
+      // Timer duration slider label (minutes)
+      durVal.textContent = formatTime(Number(durRange.value) * 60);
+
+      // Note
+      s8NoteText.value = S8.ketaNote || "";
+
+      // Apply CSS variables
+      applyRoomVisuals();
+      applySystemVisuals();
+    }
+
+    /************************************************************
+     * Click-first event wiring
+     ************************************************************/
+    // Shell buttons
+    s8HomeBtn.addEventListener("click", ()=>{ window.location.href = SHELL_HOME_URL; });
+    s8InvertBtn.addEventListener("click", ()=>{ S8.invert = !S8.invert; applySystemVisuals(); saveLocal(); setStatus("INVERT"); });
+    s8NullBtn.addEventListener("click", ()=>{ S8.nullMode = !S8.nullMode; applySystemVisuals(); saveLocal(); setStatus(S8.nullMode ? "NULL" : "LIVE"); });
+    s8ExportBtn.addEventListener("click", exportJSON);
+    s8ImportBtn.addEventListener("click", importJSON);
+
+    // Note
+    s8NoteBtn.addEventListener("click", ()=>{ S8.noteOpen = !S8.noteOpen; applySystemVisuals(); setStatus("NOTE"); });
+    s8NoteSaveBtn.addEventListener("click", ()=>{
+      S8.ketaNote = s8NoteText.value || "";
+      saveLocal();
+      setStatus("NOTE_SAVED");
+    });
+    s8NoteCloseBtn.addEventListener("click", ()=>{ S8.noteOpen = false; applySystemVisuals(); setStatus("NOTE_CLOSED"); });
+
+    // Lights dots (system)
+    document.querySelectorAll(".s8LightDot").forEach(dot=>{
+      dot.addEventListener("click", ()=>{
+        const i = Number(dot.dataset.i || "1");
+        const mapping = {1:0.0,2:0.2,3:0.4,4:0.6,5:0.8,6:1.0};
+        S8.light = mapping[i] ?? 0.0;
+        applySystemVisuals();
+        saveLocal();
+        setStatus("LIGHT " + i);
+      });
+    });
+
+    // Pad open/close
+    padCloseBtn.addEventListener("click", ()=>{ S8.padOpen = false; applySystemVisuals(); saveLocal(); setStatus("MENU_OFF"); });
+    padToggleBtn.addEventListener("click", ()=>{ S8.padOpen = !S8.padOpen; applySystemVisuals(); saveLocal(); setStatus("MENU"); });
+
+    // Collapse all sections (room/timer/modes)
+    padCollapseAllBtn.addEventListener("click", ()=>{
+      document.querySelectorAll(".padSection").forEach(sec=>sec.classList.add("collapsed"));
+      setHint("SECTIONS COLLAPSED");
+    });
+
+    // Section toggles
+    document.querySelectorAll("[data-toggle]").forEach(btn=>{
+      btn.addEventListener("click", ()=>{
+        const sel = btn.getAttribute("data-toggle");
+        const sec = document.querySelector(sel);
+        if(!sec) return;
+        sec.classList.toggle("collapsed");
+      });
+    });
+
+    // Spin controls
+    spinRange.addEventListener("input", ()=>{
+      spinAmount = Number(spinRange.value);
+      if(spinAmount <= 0.001) { spinAmount = 0.0; }
+      updateUI();
+    });
+    spinRange.addEventListener("change", ()=>{ saveLocal(); });
+
+    spinToggleBtn.addEventListener("click", ()=>{
+      isRotating = !isRotating;
+      if(isRotating && spinAmount === 0) spinAmount = 0.35;
+      updateUI();
+      saveLocal();
+      setStatus("SPIN");
+    });
+
+    // Light intensity
+    lightIntRange.addEventListener("input", ()=>{
+      baseLightIntensity = Number(lightIntRange.value);
+      if(floodLight) floodLight.intensity = baseLightIntensity;
+      updateUI();
+    });
+    lightIntRange.addEventListener("change", ()=>{ saveLocal(); setStatus("LIGHT_INT"); });
+
+    // Pulsate
+    pulsateToggleBtn.addEventListener("click", ()=>{
+      isPulsating = !isPulsating;
+      updateUI();
+      saveLocal();
+      setStatus("PULSATE");
+    });
+
+    // Light color main button cycles presets (click-first convenience)
+    lightColorBtn.addEventListener("click", ()=>{
+      const idx = colorPresets.findIndex(p=>p.color.toLowerCase() === lightColor.toLowerCase());
+      const next = colorPresets[(idx + 1 + colorPresets.length) % colorPresets.length];
+      lightColor = next.color;
+      applyLightToThree();
+      updateUI();
+      saveLocal();
+      setStatus("LIGHT_COLOR");
+      setHint(next.name.toUpperCase());
+    });
+
+    // Timer color
+    timerColorInput.addEventListener("input", ()=>{
+      timerColor = timerColorInput.value;
+      updateUI();
+    });
+    timerColorInput.addEventListener("change", ()=>{ saveLocal(); setStatus("TIMER_COLOR"); });
+
+    timerResetColorBtn.addEventListener("click", ()=>{
+      timerColor = "#ff0000";
+      updateUI();
+      saveLocal();
+      setStatus("TIMER_COLOR");
+      setHint("RESET");
+    });
+
+    // Duration (minutes)
+    durRange.addEventListener("input", ()=>{ updateTimerDisplay(); });
+    durApplyBtn.addEventListener("click", ()=>{
+      // apply new duration; if running, keep running but reset seconds to new total
+      const total = Number(durRange.value) * 60;
+      seconds = total;
+      updateTimerDisplay();
+      saveLocal();
+      setStatus("DURATION");
+      setHint("APPLIED");
+    });
+    durResetBtn.addEventListener("click", ()=>{
+      durRange.value = "10";
+      seconds = 600;
+      updateTimerDisplay();
+      saveLocal();
+      setStatus("DURATION");
+      setHint("RESET 10");
+    });
+
+    // Quick corner buttons remain clickable
+    quickPulsate.addEventListener("click", ()=>{ pulsateToggleBtn.click(); });
+    quickRotate.addEventListener("click", ()=>{ spinToggleBtn.click(); });
+
+    // Timer buttons
+    startStopEl.addEventListener('click', () => {
+      isActive = !isActive;
+      if (isActive) {
+        startTimer();
+        startStopEl.textContent = "pause";
+        setStatus("RUN");
+      } else {
+        stopTimer();
+        startStopEl.textContent = "start";
+        setStatus("PAUSE");
+      }
+      saveLocal();
+    });
+    resetEl.addEventListener('click', resetTimer);
+
+    /************************************************************
+     * Hotkeys (restricted): system universals only
+     * No new function hotkeys introduced here.
+     ************************************************************/
+    window.addEventListener("keydown", (e)=>{
+      const tag = (e.target && e.target.tagName) ? e.target.tagName.toLowerCase() : "";
+      const isTyping = (tag === "input" || tag === "textarea" || tag === "select");
+      if(isTyping) return;
+
+      // System lights 1-6
+      if(!e.shiftKey && /^[1-6]$/.test(e.key)){
+        const n = Number(e.key);
+        const mapping = {1:0.0,2:0.2,3:0.4,4:0.6,5:0.8,6:1.0};
+        S8.light = mapping[n] ?? 0.0;
+        applySystemVisuals();
+        saveLocal();
+        setStatus("LIGHT " + n);
+        e.preventDefault();
+        return;
+      }
+
+      if(e.shiftKey){
+        const k = e.key.toLowerCase();
+        if(k === "i"){ S8.invert = !S8.invert; applySystemVisuals(); saveLocal(); setStatus("INVERT"); e.preventDefault(); return; }
+        if(k === "n"){ S8.nullMode = !S8.nullMode; applySystemVisuals(); saveLocal(); setStatus(S8.nullMode ? "NULL" : "LIVE"); e.preventDefault(); return; }
+        if(k === "o"){ S8.noteOpen = !S8.noteOpen; applySystemVisuals(); setStatus("NOTE"); e.preventDefault(); return; }
+      }
+    });
+
+    /************************************************************
+     * Boot
+     ************************************************************/
+    function boot(){
+      // Load saved state if present
+      loadLocal();
+
+      // Ensure note state binds
+      s8NoteText.value = S8.ketaNote || "";
+
+      // Build pad UI
+      buildLightSwatches();
+      buildModeLinks();
+
+      // Apply visuals
+      applyRoomVisuals();
+      applySystemVisuals();
+
+      // Timer
+      updateTimerDisplay();
+
+      // Three
+      initThree();
+      applyLightToThree();
+
+      // Update UI
+      updateUI();
+
+      setStatus("READY");
+      padStatusLeft.textContent = "CLICK FIRST. HOTKEYS LATER.";
+    }
+
+    boot();
+  </script>
+
+  <!-- ===========================================================
+    AE/EE/WB SERIALIZATION STAMP (MANDATORY)
+    AE: Aesthetic | EE: Engine | WB: Wiring Bridge
+  ============================================================ -->
+  <!--
+    AE::FILE_ID=SHELL8_ROOM_POD
+    EE::ROOM_ID=K_ROOM
+    WB::VERSION_ID=V1
+    WB::SHELL_HOME_URL=system.html
+    WB::UPDATED_AT=2025-12-24T00:00:00.000Z
+    WB::CHANGELOG=
+    - ROOM POD WRAP: Shell8 top/bottom bars + KETA_NOTE (white square anchor) + state IO
+    - Added synth-pad menu grouping custom HTMLs as state modes and exposing room controls
+    - Elevated timer styling; kept base red as default; added adjustable timer color + duration
+    - Refined spin + light intensity controls (click-first); no new hotkeys beyond system universals
+    - NULL hides system chrome/controllers; 3D room remains
+  -->
+</body>
+</html>
