@@ -1,0 +1,1686 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>KETADATA PHOTOBOOTH // CRUNCH // SHELL8 WRAP</title>
+
+  <style>
+    :root{
+      --bg:#000;
+      --fg:#fff;
+
+      --stroke:rgba(255,255,255,0.18);
+      --stroke2:rgba(255,255,255,0.12);
+
+      --glass:rgba(255,255,255,0.06);
+      --panel:rgba(0,0,0,0.88);
+      --shadow:rgba(0,0,0,0.78);
+
+      --muted:rgba(255,255,255,0.62);
+      --muted2:rgba(255,255,255,0.45);
+
+      --node:rgba(255,255,255,0.22);
+      --nodeOn:rgba(255,255,255,0.55);
+
+      /* SHELL8 */
+      --top:44px;
+      --bot:34px;
+      --line:#222;
+      --line2:#333;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      --sans: Arial, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+      --ctl-bg: rgba(0,0,0,0.80);
+      --note-border: rgba(255,255,255,0.78);
+    }
+
+    *{box-sizing:border-box}
+    html,body{height:100%;margin:0;background:var(--bg);color:var(--fg);font-family:Arial, Helvetica, sans-serif;}
+    body{overflow:hidden;}
+
+    /* =========================================================
+       SHELL8 ROOT + NULL LAW
+    ========================================================= */
+    #root{
+      position:fixed;
+      inset:0;
+      background:#000;
+      overflow:hidden;
+    }
+    #root.invert{ filter: invert(1); }
+
+    /* NULL MODE: hide system bars + all controllers/drawers/notes, keep booth screen */
+    #root.null .topbar,
+    #root.null .bottombar,
+    #root.null .sysDrawer,
+    #root.null .ketaNote,
+    #root.null .toast,
+    #root.null #roomJump,
+    #root.null #ccBtn,
+    #root.null #drawer{
+      display:none !important;
+    }
+
+    /* =========================================================
+       SYSTEM LIGHTS STAGE (BEHIND PHOTOBOOTH)
+    ========================================================= */
+    #sysStage{
+      position:fixed;
+      inset:0;
+      background:#000;
+      filter:none;
+      z-index:0;
+    }
+
+    /* =========================================================
+       PHOTOBOOTH STAGE (UNCHANGED STRUCTURE, NOW UNDER SYSTEM BARS)
+    ========================================================= */
+    #stage{
+      position:fixed;
+      inset:0;
+      display:flex; align-items:center; justify-content:center;
+      background:transparent; /* lights live on #sysStage */
+      z-index:1;
+    }
+
+    /* photobooth frame (single visible object) */
+    #frame{
+      position:relative;
+      width:min(92vw, 980px);
+      height:min(86vh, 720px);
+      border:1px solid var(--stroke);
+      background:#000;
+      box-shadow:0 24px 90px var(--shadow);
+      overflow:hidden;
+    }
+
+    video, canvas{
+      position:absolute; inset:0;
+      width:100%; height:100%;
+      object-fit:cover;
+      image-rendering:pixelated;
+      transform:translateZ(0);
+    }
+
+    /* scanline / lo-fi veil */
+    #overlay{
+      pointer-events:none;
+      position:absolute; inset:0;
+      mix-blend-mode:screen;
+      opacity:0.18;
+      background:
+        repeating-linear-gradient(0deg,
+          rgba(255,255,255,0.05) 0px,
+          rgba(255,255,255,0.05) 1px,
+          rgba(0,0,0,0) 2px,
+          rgba(0,0,0,0) 4px);
+    }
+
+    /* micro brand */
+    #brand{
+      position:absolute; left:12px; top:10px;
+      display:flex; align-items:center; gap:8px;
+      letter-spacing:0.18em; text-transform:uppercase;
+      font-size:11px;
+      color:rgba(255,255,255,0.78);
+      user-select:none;
+      pointer-events:none;
+    }
+    .note{
+      width:8px; height:8px; background:#fff;
+      display:inline-block;
+    }
+    #status{
+      margin-left:6px;
+      letter-spacing:0.12em;
+      font-size:10px;
+      color:rgba(255,255,255,0.40);
+      white-space:nowrap;
+    }
+
+    /* COMMAND/CONTROL BUTTON (the only obvious UI control) */
+    #ccBtn{
+      position:absolute; right:10px; top:10px;
+      width:28px; height:28px;
+      border:1px solid rgba(255,255,255,0.24);
+      background:rgba(0,0,0,0.45);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      cursor:pointer;
+      display:grid;
+      place-items:center;
+      padding:0;
+      z-index:5;
+    }
+    #ccBtn:hover{ background:rgba(255,255,255,0.06); border-color:rgba(255,255,255,0.38); }
+    #ccGlyph{
+      width:10px; height:10px;
+      border:1px solid rgba(255,255,255,0.55);
+      background:transparent;
+      box-shadow:0 0 0 1px rgba(0,0,0,0.5) inset;
+      opacity:0.85;
+    }
+
+    /* MESSAGE */
+    #msg{
+      position:absolute; left:50%; top:50%;
+      transform:translate(-50%,-50%);
+      color:rgba(255,255,255,0.74);
+      font-size:11px;
+      letter-spacing:0.20em;
+      text-transform:uppercase;
+      padding:10px 12px;
+      border:1px solid rgba(255,255,255,0.20);
+      background:rgba(0,0,0,0.70);
+      display:none;
+      text-align:center;
+      max-width:84%;
+      z-index:6;
+    }
+
+    /* MINIMAL HOTKEY NODES (nearly invisible) */
+    #nodes{
+      position:absolute;
+      inset:0;
+      pointer-events:auto; /* allow click to select param */
+      z-index:4;
+    }
+    .node{
+      position:absolute;
+      width:6px; height:6px;
+      border-radius:999px;
+      background:var(--node);
+      opacity:0.35;
+      border:1px solid rgba(255,255,255,0.08);
+      cursor:default;
+      transition:opacity 120ms linear, transform 120ms linear, background 120ms linear;
+    }
+    .node:hover{ opacity:0.75; }
+    .node.on{
+      opacity:0.95;
+      background:var(--nodeOn);
+      transform:scale(1.15);
+      border-color:rgba(255,255,255,0.25);
+    }
+    /* place nodes in a tiny vertical rail near bottom-right */
+    .n1{ right:12px; bottom:112px; }
+    .n2{ right:12px; bottom:96px; }
+    .n3{ right:12px; bottom:80px; }
+    .n4{ right:12px; bottom:64px; }
+    .n5{ right:12px; bottom:48px; }
+
+    /* subtle bottom strip */
+    #strip{
+      position:absolute; left:12px; bottom:10px;
+      display:flex; align-items:center; gap:10px;
+      font-size:10px;
+      letter-spacing:0.16em;
+      text-transform:uppercase;
+      color:rgba(255,255,255,0.35);
+      user-select:none;
+      pointer-events:none;
+    }
+
+    /* OFF-SCREEN CONTROL DRAWER (outside photobooth) */
+    #drawer{
+      position:fixed;
+      top:0; right:0;
+      height:100vh;
+      width:min(380px, 92vw);
+      transform:translateX(100%);
+      transition:transform 180ms ease;
+      z-index:20;
+
+      background:var(--panel);
+      border-left:1px solid var(--stroke);
+      box-shadow:-18px 0 70px rgba(0,0,0,0.72);
+
+      display:flex;
+      flex-direction:column;
+    }
+    #drawer.open{ transform:translateX(0); }
+
+    /* =========================================================
+       PHOTOBOOTH DRAWER — AESTHETIC CONTINUITY PATCH ONLY
+       (NO FUNCTIONAL CHANGES; same IDs, same controls)
+    ========================================================= */
+    #drawer{
+      background: linear-gradient(180deg, #060606, #000);
+      border-left:1px solid var(--line);
+      box-shadow:-18px 0 70px rgba(0,0,0,0.78);
+    }
+    #drawerHeader{
+      padding:14px 14px 10px 14px;
+      border-bottom:1px solid var(--line);
+      display:flex; align-items:center; justify-content:space-between; gap:10px;
+      user-select:none;
+    }
+    #drawerHeader .title{
+      display:flex; align-items:center; gap:10px;
+      margin:0;
+      font-size:12px;
+      letter-spacing:0.18em;
+      text-transform:uppercase;
+      color:rgba(255,255,255,0.82);
+      font-family:var(--mono);
+    }
+    #closeDrawer{
+      width:32px; height:28px;
+      border:1px solid var(--line2);
+      background:transparent;
+      cursor:pointer;
+      color:rgba(255,255,255,0.7);
+      letter-spacing:0.12em;
+      text-transform:uppercase;
+      font-size:11px;
+      font-family:var(--mono);
+    }
+    #closeDrawer:hover{ background:rgba(255,255,255,0.06); border-color:rgba(255,255,255,0.34); }
+
+    #drawerBody{
+      padding:14px;
+      display:grid;
+      gap:12px;
+      overflow:auto;
+    }
+
+    .section{
+      border:1px solid var(--line2);
+      background:rgba(255,255,255,0.04);
+      padding:12px;
+    }
+    .sectionTitle{
+      margin:0 0 10px 0;
+      font-size:11px;
+      letter-spacing:0.18em;
+      text-transform:uppercase;
+      color:rgba(255,255,255,0.72);
+      font-family:var(--mono);
+    }
+
+    .row{
+      display:grid;
+      grid-template-columns: 1fr auto;
+      align-items:center;
+      gap:12px;
+      margin:10px 0;
+    }
+    label{
+      font-size:11px;
+      letter-spacing:0.12em;
+      text-transform:uppercase;
+      color:rgba(255,255,255,0.60);
+      font-family:var(--mono);
+    }
+    input[type="range"]{ width:170px; }
+
+    .chips{ display:flex; flex-wrap:wrap; gap:8px; }
+    .chip{
+      border:1px solid var(--line2);
+      background:transparent;
+      color:rgba(255,255,255,0.82);
+      padding:7px 10px;
+      font-size:11px;
+      letter-spacing:0.14em;
+      text-transform:uppercase;
+      cursor:pointer;
+      font-family:var(--mono);
+    }
+    .chip:hover{ background:rgba(255,255,255,0.06); border-color:rgba(255,255,255,0.34); }
+    .chip.on{ background:rgba(255,255,255,0.08); border-color:rgba(255,255,255,0.38); }
+
+    .hint{
+      margin-top:10px;
+      font-size:11px;
+      line-height:1.35;
+      color:rgba(255,255,255,0.52);
+      letter-spacing:0.06em;
+      font-family:var(--mono);
+    }
+    .keys{
+      margin-top:10px;
+      font-size:11px;
+      color:rgba(255,255,255,0.55);
+      letter-spacing:0.08em;
+      line-height:1.45;
+      font-family:var(--mono);
+    }
+    kbd{
+      display:inline-block;
+      padding:2px 6px;
+      border:1px solid var(--line2);
+      background:rgba(255,255,255,0.06);
+      font-family:var(--mono);
+      font-size:11px;
+      letter-spacing:0.14em;
+      text-transform:uppercase;
+      margin-right:6px;
+    }
+
+    /* tiny focus indicator when a parameter is selected */
+    #paramHUD{
+      position:absolute;
+      right:12px; bottom:12px;
+      padding:7px 9px;
+      border:1px solid rgba(255,255,255,0.14);
+      background:rgba(0,0,0,0.55);
+      color:rgba(255,255,255,0.50);
+      font-size:10px;
+      letter-spacing:0.18em;
+      text-transform:uppercase;
+      user-select:none;
+      z-index:5;
+      opacity:0.0;
+      transition:opacity 140ms linear;
+      pointer-events:none;
+      font-family:var(--mono);
+    }
+    #paramHUD.on{ opacity:1.0; }
+
+    :focus{ outline:none; }
+    :focus-visible{ outline:1px solid rgba(255,255,255,0.35); outline-offset:2px; }
+
+    /* =========================================================
+       SHELL8 TOP/BOTTOM BARS + SYSTEM DRAWER + KETA NOTE
+    ========================================================= */
+    .topbar{
+      position:absolute;
+      top:0; left:0; right:0;
+      height:var(--top);
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      padding:0 10px;
+      border-bottom:1px solid var(--line);
+      background:linear-gradient(180deg,#070707,#000);
+      z-index:50;
+    }
+    .brandSys{
+      display:flex; align-items:center; gap:10px;
+      font-family:var(--mono);
+      font-size:12px;
+      letter-spacing:.10em;
+      text-transform:uppercase;
+    }
+    .brandSys .sq{
+      width:10px; height:10px;
+      border:1px solid var(--fg);
+      background:#000;
+    }
+    .roomBadge{
+      display:flex; gap:8px; align-items:center;
+      font-family:var(--mono);
+      font-size:11px;
+      letter-spacing:.10em;
+      text-transform:uppercase;
+      color:rgba(255,255,255,0.55);
+      border:1px solid var(--line2);
+      padding:4px 8px;
+    }
+    .actionsSys{
+      display:flex; align-items:center; gap:8px;
+      font-family:var(--mono);
+      font-size:12px;
+    }
+    .btnSys{
+      background:transparent;
+      color:var(--fg);
+      border:1px solid var(--line2);
+      padding:6px 10px;
+      font-family:var(--mono);
+      font-size:12px;
+      letter-spacing:.08em;
+      text-transform:uppercase;
+      cursor:pointer;
+    }
+    .btnSys:hover{border-color:var(--fg)}
+    .btnSys:active{transform:translateY(1px)}
+    .kbdSys{
+      border:1px solid var(--line2);
+      padding:2px 6px;
+      color:rgba(255,255,255,0.55);
+      font-size:11px;
+      font-family:var(--mono);
+    }
+
+    .ketaIcon{
+      width:16px; height:16px;
+      border:2px solid var(--fg);
+      background:var(--fg);
+      cursor:pointer;
+    }
+    .ketaIcon.open{ background:#000; }
+
+    .bottombar{
+      position:absolute;
+      left:0; right:0; bottom:0;
+      height:var(--bot);
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      padding:0 10px;
+      border-top:1px solid var(--line);
+      background:linear-gradient(0deg,#070707,#000);
+      z-index:50;
+      font-family:var(--mono);
+      font-size:11px;
+      color:rgba(255,255,255,0.55);
+    }
+    .toggleSys{
+      border:1px solid var(--line2);
+      background:transparent;
+      color:var(--fg);
+      padding:4px 8px;
+      font-family:var(--mono);
+      font-size:11px;
+      letter-spacing:.08em;
+      text-transform:uppercase;
+      cursor:pointer;
+    }
+    .toggleSys:hover{border-color:var(--fg)}
+
+    .sysDrawer{
+      position:absolute;
+      left:0; right:0;
+      bottom:var(--bot);
+      height:42%;
+      min-height:240px;
+      border-top:1px solid var(--line);
+      background:linear-gradient(180deg,#060606,#000);
+      display:none;
+      z-index:60;
+    }
+    .sysDrawer.open{display:flex; flex-direction:column}
+    .drawerHead{
+      padding:8px 10px;
+      border-bottom:1px solid var(--line);
+      font-family:var(--mono);
+      font-size:12px;
+      letter-spacing:.10em;
+      text-transform:uppercase;
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+    }
+    .drawerBody{padding:10px; min-height:0; flex:1; overflow:auto}
+    .sysDrawer textarea{
+      width:100%;
+      border:1px solid var(--line2);
+      background:#050505;
+      color:var(--fg);
+      font-family:var(--mono);
+      font-size:12px;
+      padding:10px;
+      line-height:1.35;
+      outline:none;
+      resize:vertical;
+      min-height:140px;
+    }
+
+    .ketaNote{
+      position:absolute;
+      top:60px; right:16px;
+      width:340px; height:220px;
+      display:none;
+      z-index:70;
+      resize:both;
+      overflow:hidden;
+      background:var(--ctl-bg);
+      border:1px solid var(--note-border);
+      backdrop-filter: blur(6px);
+    }
+    .ketaNote.open{display:flex; flex-direction:column}
+    .ketaHead{
+      padding:8px 10px;
+      border-bottom:1px solid rgba(255,255,255,0.14);
+      font-family:var(--mono);
+      font-size:11px;
+      letter-spacing:.14em;
+      text-transform:uppercase;
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      cursor:move;
+    }
+    .ketaBody{padding:10px; min-height:0; flex:1}
+    .ketaNote textarea{
+      background:#000;
+      color:#fff;
+      border:1px solid rgba(255,255,255,0.22);
+      width:100%;
+      height:100%;
+      resize:none;
+      padding:10px;
+      outline:none;
+      font-family:var(--mono);
+    }
+    .headBtn{
+      background:transparent;
+      color:var(--fg);
+      border:1px solid rgba(255,255,255,0.18);
+      padding:2px 8px;
+      font-family:var(--mono);
+      font-size:12px;
+      letter-spacing:.08em;
+      text-transform:uppercase;
+      cursor:pointer;
+    }
+    .headBtn:hover{border-color:rgba(255,255,255,0.6)}
+
+    .toast{
+      position:absolute;
+      left:12px;
+      top:calc(var(--top) + 12px);
+      padding:8px 10px;
+      border:1px solid var(--line2);
+      background:rgba(8,8,8,0.82);
+      font-family:var(--mono);
+      font-size:11px;
+      letter-spacing:.06em;
+      color:var(--fg);
+      display:none;
+      z-index:80;
+    }
+
+    #roomJump{
+      position:absolute;
+      left:10px;
+      top:calc(var(--top) + 10px);
+      display:none;
+      align-items:center;
+      gap:10px;
+      padding:8px 10px;
+      border:1px solid var(--line2);
+      background:rgba(0,0,0,0.82);
+      z-index:75;
+      font-family:var(--mono);
+      font-size:11px;
+      letter-spacing:.08em;
+      text-transform:uppercase;
+    }
+    #roomJump.show{display:flex}
+
+  </style>
+</head>
+
+<body>
+  <div id="root">
+
+    <!-- System lights run here (behind booth) -->
+    <div id="sysStage" aria-hidden="true"></div>
+
+    <!-- PHOTOBOOTH (screen stays visible in NULL) -->
+    <div id="stage">
+      <div id="frame" aria-label="Photobooth">
+        <video id="video" playsinline autoplay muted></video>
+        <canvas id="out"></canvas>
+        <div id="overlay"></div>
+
+        <div id="brand">
+          <span class="note" aria-hidden="true"></span>
+          <span>KETADATA PHOTOBOOTH</span>
+          <span id="status">CRUNCH ON // INVERT OFF</span>
+        </div>
+
+        <!-- only visible control on the booth (hidden in NULL via root.null rule) -->
+        <button id="ccBtn" type="button" aria-label="Command / Control">
+          <span id="ccGlyph" aria-hidden="true"></span>
+        </button>
+
+        <!-- nearly invisible hotkey nodes -->
+        <div id="nodes" aria-label="Hotkey nodes">
+          <div class="node n1" data-key="1" title="1 (Pixel)"></div>
+          <div class="node n2" data-key="2" title="2 (Posterize)"></div>
+          <div class="node n3" data-key="3" title="3 (Noise)"></div>
+          <div class="node n4" data-key="4" title="4 (Crisp)"></div>
+          <div class="node n5" data-key="5" title="5 (Chroma)"></div>
+        </div>
+
+        <div id="paramHUD" aria-hidden="true"></div>
+        <div id="strip"><span>BLACK ONLY</span><span>NO GRADIENTS</span><span>CRUNCH PRESET</span></div>
+
+        <div id="msg"></div>
+      </div>
+    </div>
+
+    <!-- OFF-SCREEN PHOTOBOOTH DRAWER (hidden in NULL via root.null rule) -->
+    <aside id="drawer" aria-label="Controls drawer">
+      <div id="drawerHeader">
+        <p class="title"><span class="note" aria-hidden="true"></span> COMMAND / CONTROL</p>
+        <button id="closeDrawer" type="button">X</button>
+      </div>
+
+      <div id="drawerBody">
+        <div class="section">
+          <p class="sectionTitle">Modes</p>
+          <div class="chips">
+            <button class="chip on" id="crunchBtn" type="button">Crunch</button>
+            <button class="chip" id="invertBtn" type="button">Invert [I]</button>
+          </div>
+          <div class="hint">
+            Drawer is the only “visible UI.” On the booth: operate via nodes/hotkeys + mouse intensity.
+          </div>
+        </div>
+
+        <div class="section">
+          <p class="sectionTitle">Fry Controls</p>
+
+          <div class="row">
+            <label for="pixel">Pixel</label>
+            <input id="pixel" type="range" min="2" max="16" step="1" value="8" />
+          </div>
+
+          <div class="row">
+            <label for="poster">Posterize</label>
+            <input id="poster" type="range" min="2" max="12" step="1" value="5" />
+          </div>
+
+          <div class="row">
+            <label for="noise">Noise</label>
+            <input id="noise" type="range" min="0" max="1" step="0.01" value="0.28" />
+          </div>
+
+          <div class="row">
+            <label for="sharpen">Crisp</label>
+            <input id="sharpen" type="range" min="0" max="2" step="0.01" value="1.10" />
+          </div>
+
+          <div class="row">
+            <label for="bleed">Chroma</label>
+            <input id="bleed" type="range" min="0" max="8" step="1" value="4" />
+          </div>
+        </div>
+
+        <div class="section">
+          <p class="sectionTitle">Actions</p>
+          <div class="chips">
+            <button class="chip" id="snapBtn" type="button">Snap [Space]</button>
+            <button class="chip" id="saveBtn" type="button">Save PNG</button>
+            <button class="chip" id="resetBtn" type="button">Reset [R]</button>
+          </div>
+
+          <div class="keys">
+            <div><kbd>Space</kbd> snap</div>
+            <div><kbd>I</kbd> invert</div>
+            <div><kbd>R</kbd> reset preset</div>
+            <div><kbd>1–5</kbd> select parameter (nodes mirror these)</div>
+            <div><kbd>Shift+C</kbd> drawer toggle</div>
+            <div>Mouse X adjusts selected parameter. Press same key to deselect.</div>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- SHELL8: room jump (optional; here unused but present for contract) -->
+    <div id="roomJump">
+      <span id="roomJumpTxt">ROOM LINK DETECTED</span>
+      <button class="btnSys" id="btnGoRoom">GO</button>
+      <button class="btnSys" id="btnDismissRoom">DISMISS</button>
+    </div>
+
+    <div class="toast" id="toast"></div>
+
+    <!-- SHELL8 TOPBAR -->
+    <div class="topbar">
+      <div style="display:flex; gap:10px; align-items:center">
+        <div class="brandSys">
+          <span class="sq"></span>
+          <span>KETADATA // PHOTOBOOTH // SHELL8</span>
+          <span style="color:rgba(255,255,255,0.55); letter-spacing:.02em; text-transform:none">v1</span>
+        </div>
+        <div class="roomBadge" title="Room in state">
+          <span>ROOM</span>
+          <span id="roomName">PHOTOBOOTH</span>
+        </div>
+      </div>
+      <div class="actionsSys">
+        <button class="btnSys" id="btnImport">IMPORT</button>
+        <button class="btnSys" id="btnExport">EXPORT</button>
+        <button class="btnSys" id="btnCopy">COPY</button>
+
+        <span class="kbdSys" title="System invert">Shift+I</span>
+        <span class="kbdSys" title="Null UI">Shift+N</span>
+        <span class="kbdSys" title="Home (system.html)">Shift+B</span>
+        <span class="kbdSys" title="Landing (index11.html)">Shift+K</span>
+        <span class="kbdSys" title="Lights">1–6</span>
+
+        <button class="btnSys" id="btnNull" title="NULL MODE (SHIFT+N)">NULL</button>
+        <div id="ketaIcon" class="ketaIcon" title="KETA_NOTE"></div>
+      </div>
+    </div>
+
+    <!-- SHELL8 SYSTEM DRAWER -->
+    <div class="sysDrawer" id="sysDrawer">
+      <div class="drawerHead">
+        <div>SYSTEM UNIVERSALS</div>
+        <div style="display:flex; gap:8px; align-items:center">
+          <span id="sig" style="color:rgba(255,255,255,0.55); font-family:var(--mono); font-size:11px">∅</span>
+          <button class="btnSys" id="btnCopyUniversals">COPY</button>
+          <button class="btnSys" id="btnCloseSysDrawer">CLOSE</button>
+        </div>
+      </div>
+      <div class="drawerBody">
+        <textarea id="universals" placeholder="LAWS / CONSTRAINTS / REFERENCES"></textarea>
+        <div style="margin-top:8px; color:rgba(255,255,255,0.55); font-family:var(--mono); font-size:11px">
+          EE: axiom → KETADATA ⇒ KETA_NOTE ⇒ EXPORTABLE STATE
+        </div>
+      </div>
+    </div>
+
+    <!-- SHELL8 BOTTOMBAR -->
+    <div class="bottombar">
+      <div style="display:flex; gap:10px; align-items:center">
+        <button class="toggleSys" id="toggleSysDrawer">SYSTEM</button>
+        <span>STATE: <span id="sig2">∅</span></span>
+        <span style="margin-left:8px">NULL: <span id="nullLabel">OFF</span></span>
+      </div>
+      <div style="display:flex; gap:12px; align-items:center">
+        <span>LIGHT: <span id="lightLabel">1</span></span>
+        <span>RUN: <span id="runLabel">OFF</span></span>
+      </div>
+    </div>
+
+    <!-- SHELL8 KETA NOTE -->
+    <div class="ketaNote" id="ketaNote">
+      <div class="ketaHead" id="ketaHead">
+        <div>KETA_NOTE</div>
+        <button class="headBtn" id="btnHideNote">-</button>
+      </div>
+      <div class="ketaBody">
+        <textarea id="ketaText" placeholder="GLOBAL NOTE"></textarea>
+      </div>
+    </div>
+
+    <input id="file" type="file" accept="application/json" style="display:none" />
+  </div>
+
+  <script>
+    /* =========================================================
+       SHELL8 WRAP ▸ STATE + IO (SOVEREIGN FOR THIS PAGE)
+    ========================================================= */
+    const SHELL_HOME_URL = "system.html";
+    const LANDING_URL = "https://ketadata.com/index11.html";
+
+    // Sovereign storage for photobooth page (new page = new namespace is intended)
+    const FILE_ID = "KETADATA_PHOTOBOOTH";
+    const ROOM_ID = "PHOTOBOOTH";
+    const VERSION_ID = "photobooth.crunch.v1";
+    const STORAGE_KEY = `KDT::STATE::${FILE_ID}::${ROOM_ID}::${VERSION_ID}`;
+
+    // Global note continuity (same as shell)
+    const GLOBAL_KETA_NOTE_KEY = "KDT_GLOBAL_KETA_NOTE_V1";
+
+    const DEFAULT = {
+      version: "KETADATA_SHELL_KERNEL_v1",
+      updatedAt: new Date().toISOString(),
+      room: "PHOTOBOOTH",
+      universals: "",
+      ketaNote: "",
+      ui: {
+        invert:false,
+        nullMode:false,
+        lightPreset:1,
+        lightRunning:false
+      }
+    };
+
+    let STATE = loadLocal() || structuredClone(DEFAULT);
+
+    // Global note IO
+    function loadGlobalKetaNote(){
+      try{ return localStorage.getItem(GLOBAL_KETA_NOTE_KEY) ?? ""; }catch(e){ return ""; }
+    }
+    function saveGlobalKetaNote(text){
+      try{ localStorage.setItem(GLOBAL_KETA_NOTE_KEY, String(text ?? "")); }catch(e){}
+    }
+    { const g = loadGlobalKetaNote(); if(g) STATE.ketaNote = g; }
+
+    const $ = (id)=>document.getElementById(id);
+    const root = $("root");
+    const sysStage = $("sysStage");
+
+    function nowISO(){ return new Date().toISOString(); }
+    function stableSig(){
+      const core = JSON.stringify({
+        v:STATE.version,
+        r:STATE.room,
+        i:STATE.ui.invert,
+        n:STATE.ui.nullMode,
+        p:STATE.ui.lightPreset,
+        run:STATE.ui.lightRunning,
+        k:(STATE.ketaNote||"").length,
+        u:(STATE.universals||"").length
+      });
+      let h=2166136261;
+      for(let i=0;i<core.length;i++){ h^=core.charCodeAt(i); h=Math.imul(h,16777619); }
+      return (h>>>0).toString(16).slice(0,8);
+    }
+
+    function mergeDefault(obj){
+      const out = structuredClone(DEFAULT);
+      Object.assign(out, obj||{});
+      out.ui = Object.assign(structuredClone(DEFAULT.ui), (obj&&obj.ui)||{});
+      return out;
+    }
+
+    function loadLocal(){
+      try{
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if(!raw) return null;
+        return mergeDefault(JSON.parse(raw));
+      }catch(e){ return null; }
+    }
+
+    function persist(){
+      STATE.updatedAt = nowISO();
+      saveGlobalKetaNote(STATE.ketaNote || "");
+      try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(STATE)); }catch(e){}
+      renderShell();
+    }
+
+    function exportState(){
+      return JSON.stringify({ STORAGE_KEY, FILE_ID, ROOM_ID, VERSION_ID, STATE }, null, 2);
+    }
+
+    function importState(text){
+      const parsed = JSON.parse(text);
+      const incoming = parsed && parsed.STATE ? parsed.STATE : parsed;
+      STATE = mergeDefault(incoming);
+      saveGlobalKetaNote(STATE.ketaNote || "");
+      stopLight(true);
+      if(STATE.ui.lightRunning) startLight(STATE.ui.lightPreset);
+      persist();
+    }
+
+    /* =========================================================
+       SHELL8 WRAP ▸ CORE TOGGLES
+    ========================================================= */
+    function setInvert(on){
+      STATE.ui.invert = !!on;
+      root.classList.toggle("invert", STATE.ui.invert);
+      persist();
+    }
+
+    function setNullMode(on){
+      STATE.ui.nullMode = !!on;
+      root.classList.toggle("null", STATE.ui.nullMode);
+      // IMPORTANT: photobooth screen stays visible; only controllers hidden via CSS list
+      // Close drawers/notes for hard null:
+      setSysDrawer(false);
+      setKetaNote(false);
+      // Close photobooth drawer too (controller)
+      toggleDrawer(false);
+      persist();
+    }
+    function toggleNullMode(){ setNullMode(!STATE.ui.nullMode); toast(STATE.ui.nullMode ? "NULL ON" : "NULL OFF"); }
+
+    function goHome(){
+      const here = (location.pathname || "").split("/").pop();
+      const target = (SHELL_HOME_URL || "").split("/").pop();
+      if(here && target && here === target) return;
+      window.location.href = SHELL_HOME_URL;
+    }
+    function goLanding(){ window.location.href = LANDING_URL; }
+
+    /* =========================================================
+       SHELL8 WRAP ▸ LIGHTS (BEHIND BOOTH)
+    ========================================================= */
+    let lightInterval=null, lightCount=0, lightAuxA=0, lightAuxB=0;
+
+    function resetSysStage(){
+      sysStage.style.backgroundColor = "#000000";
+      sysStage.style.filter = "none";
+      lightCount = 0; lightAuxA = 0; lightAuxB = 0;
+    }
+
+    function startLight(preset){
+      stopLight(true);
+      resetSysStage();
+      STATE.ui.lightPreset = preset;
+      STATE.ui.lightRunning = true;
+
+      if(preset === 1){
+        lightInterval = setInterval(()=>{
+          const curr = sysStage.style.backgroundColor || "black";
+          sysStage.style.backgroundColor = (curr === "black" || curr === "rgb(0, 0, 0)") ? "white" : "black";
+          sysStage.style.filter = "none";
+        }, 50);
+      }
+
+      if(preset === 2){
+        lightInterval = setInterval(()=>{
+          lightAuxA = (lightAuxA + 30) % 360;
+          lightAuxB += 0.5;
+          const lightness = 50 + Math.sin(lightAuxB) * 40;
+          sysStage.style.backgroundColor = `hsl(${lightAuxA}, 100%, ${lightness}%)`;
+          sysStage.style.filter = "none";
+        }, 10);
+      }
+
+      if(preset === 3){
+        lightInterval = setInterval(()=>{
+          lightCount++;
+          const beat = lightCount % 16;
+
+          if (beat === 0 || beat === 1) {
+            sysStage.style.backgroundColor = "#ffffff";
+            sysStage.style.filter = "invert(1) contrast(3) brightness(2)";
+          } else if (beat === 2) {
+            sysStage.style.backgroundColor = "#000000";
+            sysStage.style.filter = "invert(1) contrast(2)";
+          } else if (beat === 3) {
+            sysStage.style.backgroundColor = "#00ff00";
+            sysStage.style.filter = "contrast(2) saturate(3)";
+          } else if (beat === 4) {
+            sysStage.style.backgroundColor = "#ff00ff";
+            sysStage.style.filter = "invert(1) hue-rotate(90deg)";
+          } else if (beat === 5 || beat === 6) {
+            sysStage.style.backgroundColor = "#00ffff";
+            sysStage.style.filter = "invert(0.7) contrast(2)";
+          } else if (beat === 7) {
+            sysStage.style.backgroundColor = "#ffffff";
+            sysStage.style.filter = "invert(1) brightness(3)";
+          } else if (beat === 8) {
+            sysStage.style.backgroundColor = "#000000";
+            sysStage.style.filter = "invert(1) contrast(3)";
+          } else if (beat === 9 || beat === 10) {
+            sysStage.style.backgroundColor = "#00ff00";
+            sysStage.style.filter = "saturate(5) contrast(2)";
+          } else if (beat === 11) {
+            sysStage.style.backgroundColor = "#ff00ff";
+            sysStage.style.filter = "invert(1) saturate(3)";
+          } else {
+            sysStage.style.backgroundColor = "#0088ff";
+            sysStage.style.filter = "contrast(1.5) brightness(1.2)";
+          }
+        }, 30);
+      }
+
+      if(preset === 4){
+        lightInterval = setInterval(()=>{
+          lightAuxA += 0.08;
+          lightCount++;
+
+          const red = Math.abs(Math.sin(lightAuxA)) * 255;
+          const pulse = Math.abs(Math.sin(lightAuxA * 0.5));
+          const contrast = 2 + pulse * 2;
+          const saturation = 4 + pulse * 2;
+
+          if (lightCount % 8 === 0) {
+            sysStage.style.backgroundColor = "#000000";
+            sysStage.style.filter = "brightness(3) contrast(3)";
+          } else if (lightCount % 8 === 1) {
+            sysStage.style.backgroundColor = `rgb(${red}, 0, 0)`;
+            sysStage.style.filter = `contrast(${contrast + 1}) saturate(${saturation + 2}) brightness(${1.5 + pulse * 0.5})`;
+          } else {
+            sysStage.style.backgroundColor = `rgb(${red}, 0, 0)`;
+            sysStage.style.filter = `contrast(${contrast}) saturate(${saturation}) brightness(${1.2 + pulse * 0.5})`;
+          }
+        }, 20);
+      }
+
+      if(preset === 5){
+        lightInterval = setInterval(()=>{
+          lightAuxA += 15;
+          lightAuxB = (lightAuxB + 2) % 100;
+
+          const hue = 260 + Math.sin(lightAuxA * 0.1) * 40;
+          const saturation = 80 + Math.cos(lightAuxA * 0.05) * 20;
+          const lightness = 30 + Math.sin(lightAuxB * 0.1) * 30;
+
+          const spiralBrightness = 1 + Math.abs(Math.sin(lightAuxA * 0.05)) * 0.8;
+          const spiralContrast = 1.5 + Math.abs(Math.cos(lightAuxA * 0.08)) * 1;
+
+          sysStage.style.backgroundColor = `hsl(${hue}, ${saturation}%, ${lightness}%)`;
+          sysStage.style.filter = `contrast(${spiralContrast}) saturate(2) brightness(${spiralBrightness}) hue-rotate(${lightAuxA * 0.5}deg)`;
+        }, 25);
+      }
+
+      if(preset === 6){
+        lightInterval = setInterval(()=>{
+          lightCount++;
+          if (lightCount % 50 === 0) {
+            sysStage.style.backgroundColor = "#ffffff";
+            sysStage.style.filter = "brightness(5) contrast(5)";
+          } else if (lightCount % 50 === 1) {
+            sysStage.style.backgroundColor = "#000000";
+            sysStage.style.filter = "none";
+          } else if (lightCount % 50 === 2) {
+            sysStage.style.backgroundColor = "#ffffff";
+            sysStage.style.filter = "brightness(5) contrast(5)";
+          } else {
+            sysStage.style.backgroundColor = "#000000";
+            sysStage.style.filter = "none";
+          }
+        }, 30);
+      }
+
+      persist();
+    }
+
+    function stopLight(silent=false){
+      if(lightInterval){ clearInterval(lightInterval); lightInterval = null; }
+      STATE.ui.lightRunning = false;
+      resetSysStage();
+      if(!silent) persist();
+    }
+
+    function selectPreset(preset){
+      STATE.ui.lightPreset = preset;
+      if(STATE.ui.lightRunning) startLight(preset);
+      else persist();
+    }
+
+    /* =========================================================
+       SHELL8 WRAP ▸ UI HELPERS
+    ========================================================= */
+    function setSysDrawer(open){ $("sysDrawer").classList.toggle("open", !!open); }
+    function setKetaNote(open){
+      $("ketaNote").classList.toggle("open", !!open);
+      $("ketaIcon").classList.toggle("open", !!open);
+    }
+
+    let toastTimer=null;
+    function toast(msg){
+      if(STATE.ui.nullMode) return;
+      const t = $("toast");
+      t.textContent = msg;
+      t.style.display = "block";
+      if(toastTimer) clearTimeout(toastTimer);
+      toastTimer = setTimeout(()=>{ t.style.display="none"; }, 900);
+    }
+
+    function download(filename, text){
+      const blob = new Blob([text], {type:"application/json"});
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = filename;
+      a.click();
+      setTimeout(()=>URL.revokeObjectURL(a.href), 800);
+    }
+
+    async function copy(text){
+      try{ await navigator.clipboard.writeText(text); toast("COPIED"); }
+      catch(e){ toast("COPY FAILED"); }
+    }
+
+    function renderShell(){
+      root.classList.toggle("invert", !!STATE.ui.invert);
+      root.classList.toggle("null", !!STATE.ui.nullMode);
+
+      $("roomName").textContent = "PHOTOBOOTH";
+      $("ketaText").value = STATE.ketaNote || "";
+      $("universals").value = STATE.universals || "";
+
+      const s = stableSig();
+      $("sig").textContent = s;
+      $("sig2").textContent = s;
+
+      $("lightLabel").textContent = String(STATE.ui.lightPreset);
+      $("runLabel").textContent = STATE.ui.lightRunning ? "ON" : "OFF";
+      $("nullLabel").textContent = STATE.ui.nullMode ? "ON" : "OFF";
+    }
+
+    /* Shell8 UI bindings */
+    $("btnImport").addEventListener("click", ()=> $("file").click());
+    $("file").addEventListener("change", async (e)=>{
+      const f = e.target.files && e.target.files[0];
+      if(!f) return;
+      const txt = await f.text();
+      importState(txt);
+      e.target.value = "";
+      toast("STATE IMPORTED");
+    });
+
+    $("btnExport").addEventListener("click", ()=>{
+      download("KETADATA_PHOTOBOOTH_state.json", exportState());
+      toast("STATE EXPORTED");
+    });
+    $("btnCopy").addEventListener("click", ()=> copy(exportState()));
+
+    $("toggleSysDrawer").addEventListener("click", ()=>{
+      if(STATE.ui.nullMode) return;
+      setSysDrawer(!$("sysDrawer").classList.contains("open"));
+    });
+    $("btnCloseSysDrawer").addEventListener("click", ()=> setSysDrawer(false));
+    $("btnCopyUniversals").addEventListener("click", ()=> copy(STATE.universals || ""));
+    $("universals").addEventListener("input", ()=>{ STATE.universals = $("universals").value; persist(); });
+
+    $("ketaIcon").addEventListener("click", ()=>{
+      if(STATE.ui.nullMode) return;
+      const open = !$("ketaNote").classList.contains("open");
+      setKetaNote(open);
+      toast(open ? "KETA_NOTE OPEN" : "KETA_NOTE CLOSED");
+    });
+    $("btnHideNote").addEventListener("click", ()=> setKetaNote(false));
+    $("ketaText").addEventListener("input", ()=>{
+      STATE.ketaNote = $("ketaText").value;
+      saveGlobalKetaNote(STATE.ketaNote);
+      persist();
+    });
+
+    $("btnNull").addEventListener("click", ()=> toggleNullMode());
+
+    $("btnGoRoom").addEventListener("click", ()=>{ /* unused on this page */ });
+    $("btnDismissRoom").addEventListener("click", ()=>{ $("roomJump").classList.remove("show"); });
+
+    /* Drag KETA NOTE */
+    (function dragNote(){
+      const box = $("ketaNote");
+      const head = $("ketaHead");
+      let dragging=false, ox=0, oy=0;
+
+      head.addEventListener("mousedown", (e)=>{
+        if(e.target.closest("button")) return;
+        dragging=true;
+        const r = box.getBoundingClientRect();
+        ox = e.clientX - r.left;
+        oy = e.clientY - r.top;
+        box.style.left = r.left + "px";
+        box.style.top  = r.top + "px";
+        box.style.right = "auto";
+      });
+      window.addEventListener("mousemove", (e)=>{
+        if(!dragging) return;
+        box.style.left = (e.clientX - ox) + "px";
+        box.style.top  = (e.clientY - oy) + "px";
+      });
+      window.addEventListener("mouseup", ()=> dragging=false);
+    })();
+
+    /* =========================================================
+       PHOTOBOOTH ENGINE (ORIGINAL) — UNCHANGED LOGIC
+       Only additions:
+       - Shift+C toggles photobooth drawer
+       - System hotkeys are intercepted first
+    ========================================================= */
+
+    // ====== KETADATA PHOTOBOOTH (minimal booth surface / off-screen controls) ======
+    const video = document.getElementById('video');
+    const out = document.getElementById('out');
+    const octx = out.getContext('2d', { willReadFrequently: true });
+
+    const drawer = document.getElementById('drawer');
+    const ccBtn = document.getElementById('ccBtn');
+    const closeDrawer = document.getElementById('closeDrawer');
+
+    const crunchBtn = document.getElementById('crunchBtn');
+    const invertBtn = document.getElementById('invertBtn');
+
+    const pixel = document.getElementById('pixel');
+    const poster = document.getElementById('poster');
+    const noise = document.getElementById('noise');
+    const sharpen = document.getElementById('sharpen');
+    const bleed = document.getElementById('bleed');
+
+    const snapBtn = document.getElementById('snapBtn');
+    const saveBtn = document.getElementById('saveBtn');
+    const resetBtn = document.getElementById('resetBtn');
+
+    const statusEl = document.getElementById('status');
+    const msgEl = document.getElementById('msg');
+    const nodes = [...document.querySelectorAll('.node')];
+    const hud = document.getElementById('paramHUD');
+
+    // offscreen buffers
+    const buf2 = document.createElement('canvas');
+    const b2 = buf2.getContext('2d', { willReadFrequently: true });
+
+    let invertOn = false;
+    let crunchOn = true;
+
+    // hotkey-selected param + mouse intensity modulation
+    let activeKey = null; // "1".."5"
+    let lastMouseX = 0;
+
+    function clamp(n, a, b){ return Math.max(a, Math.min(b, n)); }
+
+    function showMsg(text, ms = 700){
+      msgEl.textContent = text;
+      msgEl.style.display = 'block';
+      clearTimeout(showMsg._t);
+      showMsg._t = setTimeout(()=>{ msgEl.style.display = 'none'; }, ms);
+    }
+
+    function setHUD(text){
+      if(!text){
+        hud.classList.remove('on');
+        hud.textContent = '';
+        return;
+      }
+      hud.textContent = text;
+      hud.classList.add('on');
+    }
+
+    function updateNodes(){
+      nodes.forEach(n => n.classList.toggle('on', n.dataset.key === activeKey));
+    }
+
+    function updateStatus(){
+      statusEl.textContent = `CRUNCH ${crunchOn ? 'ON' : 'OFF'} // INVERT ${invertOn ? 'ON' : 'OFF'}`;
+      invertBtn.classList.toggle('on', invertOn);
+      crunchBtn.classList.toggle('on', crunchOn);
+
+      // If a param is selected, keep HUD minimal
+      if(activeKey){
+        const map = { "1":"PIXEL", "2":"POSTER", "3":"NOISE", "4":"CRISP", "5":"CHROMA" };
+        const val =
+          activeKey==="1" ? pixel.value :
+          activeKey==="2" ? poster.value :
+          activeKey==="3" ? Number(noise.value).toFixed(2) :
+          activeKey==="4" ? Number(sharpen.value).toFixed(2) :
+          bleed.value;
+        setHUD(`${map[activeKey]} ${val}`);
+      } else {
+        setHUD('');
+      }
+    }
+
+    function toggleDrawer(force){
+      const willOpen = typeof force === 'boolean' ? force : !drawer.classList.contains('open');
+      drawer.classList.toggle('open', willOpen);
+    }
+
+    ccBtn.addEventListener('click', ()=> toggleDrawer());
+    closeDrawer.addEventListener('click', ()=> toggleDrawer(false));
+
+    // close drawer on ESC (photobooth-local; system ESC handles broader kill too)
+    window.addEventListener('keydown', (e)=>{
+      if(e.key === 'Escape' && drawer.classList.contains('open')) toggleDrawer(false);
+    });
+
+    // ===== Crunch processing =====
+    function posterizeChannel(v, levels){
+      const step = 255 / (levels - 1);
+      return Math.round(v / step) * step;
+    }
+
+    function addNoiseInvertPoster(img, levels, nAmt, doInvert){
+      const d = img.data;
+      for(let i=0; i<d.length; i+=4){
+        let r=d[i], g=d[i+1], b=d[i+2];
+
+        if(nAmt > 0){
+          const n = (Math.random()*2 - 1) * 255 * nAmt;
+          r = clamp(r + n, 0, 255);
+          g = clamp(g + n, 0, 255);
+          b = clamp(b + n, 0, 255);
+        }
+
+        if(doInvert){
+          r = 255 - r; g = 255 - g; b = 255 - b;
+        }
+
+        r = posterizeChannel(r, levels);
+        g = posterizeChannel(g, levels);
+        b = posterizeChannel(b, levels);
+
+        d[i]=r; d[i+1]=g; d[i+2]=b;
+      }
+    }
+
+    function chromaShift(data, w, h, shift){
+      if(shift <= 0) return;
+      const src = new Uint8ClampedArray(data);
+      const idx = (x,y)=> (y*w + x) * 4;
+      for(let y=0; y<h; y++){
+        for(let x=0; x<w; x++){
+          const i = idx(x,y);
+          const xr = clamp(x + shift, 0, w-1);
+          const xb = clamp(x - shift, 0, w-1);
+          data[i+0] = src[idx(xr,y)+0]; // R
+          data[i+2] = src[idx(xb,y)+2]; // B
+        }
+      }
+    }
+
+    function applySharpen(data, w, h, amount){
+      if(amount <= 0) return;
+      const src = new Uint8ClampedArray(data);
+      const a = amount;
+      const idx = (x,y)=> (y*w + x) * 4;
+      for(let y=1; y<h-1; y++){
+        for(let x=1; x<w-1; x++){
+          const i = idx(x,y);
+          for(let c=0; c<3; c++){
+            const center = src[i+c];
+            const up = src[idx(x,y-1)+c];
+            const dn = src[idx(x,y+1)+c];
+            const lf = src[idx(x-1,y)+c];
+            const rt = src[idx(x+1,y)+c];
+            const v = center*(1+4*a) - (up+dn+lf+rt)*a;
+            data[i+c] = clamp(v, 0, 255);
+          }
+        }
+      }
+    }
+
+    function pixelateInto(destCtx, srcCanvas, w, h, px){
+      buf2.width = Math.max(1, Math.floor(w / px));
+      buf2.height = Math.max(1, Math.floor(h / px));
+      b2.imageSmoothingEnabled = false;
+      destCtx.imageSmoothingEnabled = false;
+
+      b2.clearRect(0,0,buf2.width,buf2.height);
+      b2.drawImage(srcCanvas, 0,0, w,h, 0,0, buf2.width,buf2.height);
+
+      destCtx.clearRect(0,0,w,h);
+      destCtx.drawImage(buf2, 0,0, buf2.width,buf2.height, 0,0, w,h);
+    }
+
+    // working buffer = just reuse out itself as source snapshot per frame
+    const work = document.createElement('canvas');
+    const wctx = work.getContext('2d', { willReadFrequently: true });
+
+    function resize(){
+      const rect = out.getBoundingClientRect();
+      out.width = Math.max(2, Math.floor(rect.width));
+      out.height = Math.max(2, Math.floor(rect.height));
+      work.width = out.width;
+      work.height = out.height;
+      updateStatus();
+    }
+    window.addEventListener('resize', resize);
+
+    async function startCamera(){
+      try{
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: "user" },
+          audio: false
+        });
+        video.srcObject = stream;
+        await video.play();
+        showMsg('CAMERA ON', 900);
+      }catch(err){
+        showMsg('CAMERA DENIED', 1600);
+        console.error(err);
+      }
+    }
+
+    function render(){
+      const w = out.width, h = out.height;
+      if(video.readyState >= 2 && w && h){
+        // draw raw video to work canvas
+        wctx.imageSmoothingEnabled = true;
+        wctx.clearRect(0,0,w,h);
+        wctx.drawImage(video, 0,0, w,h);
+
+        if(crunchOn){
+          const px = Number(pixel.value);
+          pixelateInto(octx, work, w, h, px);
+
+          const img = octx.getImageData(0,0,w,h);
+          chromaShift(img.data, w, h, Number(bleed.value));
+          addNoiseInvertPoster(img, Number(poster.value), Number(noise.value), invertOn);
+          applySharpen(img.data, w, h, Number(sharpen.value));
+          octx.putImageData(img, 0,0);
+        } else {
+          octx.imageSmoothingEnabled = true;
+          octx.clearRect(0,0,w,h);
+          octx.drawImage(work, 0,0);
+
+          if(invertOn){
+            const img = octx.getImageData(0,0,w,h);
+            addNoiseInvertPoster(img, 12, 0, true);
+            octx.putImageData(img, 0,0);
+          }
+        }
+      }
+      requestAnimationFrame(render);
+    }
+
+    // ===== Actions =====
+    function snapshot(){ showMsg('SNAP', 450); }
+
+    function savePng(){
+      const a = document.createElement('a');
+      const ts = new Date().toISOString().replace(/[:.]/g,'-');
+      a.download = `ketadata-photobooth-${ts}.png`;
+      a.href = out.toDataURL('image/png');
+      a.click();
+      showMsg('SAVED', 650);
+    }
+
+    snapBtn.addEventListener('click', snapshot);
+    saveBtn.addEventListener('click', savePng);
+
+    function resetPreset(){
+      crunchOn = true;
+      invertOn = false;
+      pixel.value = 8;
+      poster.value = 5;
+      noise.value = 0.28;
+      sharpen.value = 1.10;
+      bleed.value = 4;
+      activeKey = null;
+      updateNodes();
+      updateStatus();
+      showMsg('RESET', 550);
+    }
+    resetBtn.addEventListener('click', resetPreset);
+
+    // mode toggles in drawer
+    crunchBtn.addEventListener('click', ()=>{
+      crunchOn = !crunchOn;
+      updateStatus();
+    });
+    invertBtn.addEventListener('click', ()=>{
+      invertOn = !invertOn;
+      updateStatus();
+      showMsg(invertOn ? 'INVERT ON' : 'INVERT OFF', 500);
+    });
+
+    // sliders update HUD value
+    [pixel, poster, noise, sharpen, bleed].forEach(el => el.addEventListener('input', updateStatus));
+
+    // ===== Hotkeys + node selection =====
+    function selectKey(k){
+      if(activeKey === k){
+        activeKey = null;
+        updateNodes();
+        updateStatus();
+        showMsg('DESELECT', 350);
+        return;
+      }
+      activeKey = k;
+      updateNodes();
+      updateStatus();
+      const map = { "1":"PIXEL", "2":"POSTER", "3":"NOISE", "4":"CRISP", "5":"CHROMA" };
+      showMsg(`SELECT ${map[k]}`, 450);
+    }
+
+    nodes.forEach(n=>{
+      n.addEventListener('click', (e)=>{
+        e.preventDefault();
+        selectKey(n.dataset.key);
+      });
+    });
+
+    function adjustByMouse(x){
+      if(!activeKey) return;
+      const dx = x - lastMouseX;
+      lastMouseX = x;
+
+      const step = dx / 240; // subtle
+      if(activeKey === "1"){
+        pixel.value = clamp(Math.round(Number(pixel.value) + step*10), 2, 16);
+      } else if(activeKey === "2"){
+        poster.value = clamp(Math.round(Number(poster.value) + step*8), 2, 12);
+      } else if(activeKey === "3"){
+        noise.value = clamp(Number(noise.value) + step*0.35, 0, 1).toFixed(2);
+      } else if(activeKey === "4"){
+        sharpen.value = clamp(Number(sharpen.value) + step*0.8, 0, 2).toFixed(2);
+      } else if(activeKey === "5"){
+        bleed.value = clamp(Math.round(Number(bleed.value) + step*12), 0, 8);
+      }
+      updateStatus();
+    }
+
+    window.addEventListener('mousedown', (e)=>{ lastMouseX = e.clientX; });
+    window.addEventListener('mousemove', (e)=> adjustByMouse(e.clientX));
+
+    /* =========================================================
+       KEYBOARD ARBITRATION:
+       - System hotkeys (Shift+I/N/B/K, 1–6) are handled in CAPTURE phase
+       - Photobooth keeps its original hotkeys (Space/I/R/1–5/h)
+       - NEW: Shift+C toggles photobooth drawer
+    ========================================================= */
+
+    // System hotkeys (capture) — prevents photobooth key handler from consuming them
+    window.addEventListener('keydown', (e)=>{
+      const tag = (e.target && e.target.tagName) ? e.target.tagName.toLowerCase() : "";
+      const typing = (tag==="textarea" || tag==="input");
+
+      if(e.shiftKey && e.key.toLowerCase()==="i"){
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        setInvert(!STATE.ui.invert);
+        toast(STATE.ui.invert ? "INVERT ON" : "INVERT OFF");
+        return;
+      }
+
+      if(e.shiftKey && e.key.toLowerCase()==="n"){
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        toggleNullMode();
+        return;
+      }
+
+      if(e.shiftKey && e.key.toLowerCase()==="b"){
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        goHome();
+        return;
+      }
+
+      if(e.shiftKey && e.key.toLowerCase()==="k"){
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        goLanding();
+        return;
+      }
+
+      // Shift+C = photobooth drawer toggle
+      if(e.shiftKey && e.key.toLowerCase()==="c"){
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        if(!STATE.ui.nullMode) toggleDrawer();
+        return;
+      }
+
+      // System lights 1–6 (do not interfere with photobooth 1–5 selection)
+      if(!typing && /^[1-6]$/.test(e.key) && e.shiftKey === false){
+        // We cannot steal 1–5 from photobooth selection, so:
+        // - 6 always goes to system light 6
+        // - 1–5 remain photobooth parameters
+        // If you want system lights 1–5 on this page later, we map them to Shift+1..Shift+5.
+        if(e.key === "6"){
+          e.preventDefault();
+          e.stopImmediatePropagation();
+          selectPreset(6);
+          toast("LIGHT 6");
+          return;
+        }
+      }
+
+      // System lights 1–6 via Shift+1..Shift+6 (non-invasive; keeps photobooth perfect)
+      if(e.shiftKey && /^[1-6]$/.test(e.key)){
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        selectPreset(parseInt(e.key,10));
+        toast(`LIGHT ${e.key}`);
+        return;
+      }
+
+      // Escape = kill switch for system layer too
+      if(e.key === "Escape"){
+        // Let photobooth close its drawer via its own listener; we also force system closures
+        setSysDrawer(false);
+        setKetaNote(false);
+        stopLight(true);
+        STATE.ui.nullMode = false;
+        root.classList.remove("null");
+        persist();
+        return;
+      }
+    }, true);
+
+    // Photobooth key handler (original; unchanged except: ignores Shift combos so system wins)
+    window.addEventListener('keydown', (e)=>{
+      if(e.shiftKey) return; // system layer owns Shift-combos
+      const k = e.key;
+      const kl = k.toLowerCase();
+
+      if(kl === ' '){
+        e.preventDefault();
+        snapshot();
+        return;
+      }
+      if(kl === 'i'){
+        e.preventDefault();
+        invertOn = !invertOn;
+        updateStatus();
+        showMsg(invertOn ? 'INVERT ON' : 'INVERT OFF', 500);
+        return;
+      }
+      if(kl === 'r'){
+        e.preventDefault();
+        resetPreset();
+        return;
+      }
+      if(['1','2','3','4','5'].includes(k)){
+        e.preventDefault();
+        selectKey(k);
+        return;
+      }
+      // Optional: keep "h" as stealth drawer toggle (not shown on UI)
+      if(kl === 'h'){
+        e.preventDefault();
+        toggleDrawer();
+        return;
+      }
+    });
+
+    /* Boot shell UI */
+    function bootShell(){
+      // bind system drawer controls
+      $("toggleSysDrawer").addEventListener("click", ()=>{
+        if(STATE.ui.nullMode) return;
+        setSysDrawer(!$("sysDrawer").classList.contains("open"));
+      });
+      $("btnCloseSysDrawer").addEventListener("click", ()=> setSysDrawer(false));
+
+      // init stage
+      resetSysStage();
+      if(STATE.ui.lightRunning) startLight(STATE.ui.lightPreset);
+
+      renderShell();
+    }
+
+    // ===== INIT (photobooth) =====
+    updateNodes();
+    updateStatus();
+    resize();
+    bootShell();
+    startCamera().then(()=>{
+      resize();
+      render();
+    });
+  </script>
+</body>
+</html>
+
+<!--
+============================================================
+KETADATA HTML SERIALIZATION STAMP
+FILE_ID: KETADATA_PHOTOBOOTH
+ROOM_ID: PHOTOBOOTH
+VERSION: photobooth.crunch.v1
+UPDATED_AT: 2025-12-24T00:00:00-05:00
+CHANGELOG:
+- WRAPPED PHOTOBOOTH INTO SHELL8 COMPLIANCE (TOP/BOTTOM BARS, KETA_NOTE, IMPORT/EXPORT)
+- NULL MODE HIDES SYSTEM + CONTROLLERS, PHOTOBOOTH SCREEN REMAINS
+- SHIFT+C ADDED FOR PHOTOBOOTH DRAWER TOGGLE
+- SYSTEM LIGHTS RUN BEHIND PHOTOBOOTH (sysStage)
+============================================================
+-->
