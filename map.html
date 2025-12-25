@@ -1,0 +1,1473 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>KETADATA // OBSERVATORY</title>
+  <style>
+    :root{
+      --bg:#000;
+      --fg:#fff;
+      --muted:rgba(255,255,255,0.58);
+      --line:rgba(255,255,255,0.14);
+      --panel:rgba(0,0,0,0.62);
+      --panel2:rgba(0,0,0,0.40);
+      --red:#ff2b2b;
+
+      --hudOpacity:1;
+      --globeOpacity:1;
+      --harshness:1; /* contrast-ish scalar */
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%;margin:0;background:var(--bg);color:var(--fg);font-family:Arial, Helvetica, sans-serif;}
+    body{overflow:hidden;}
+
+    /* Stage = background lights target (behind content) */
+    #stage{
+      position:fixed; inset:0;
+      background:#000;
+      z-index:0;
+    }
+
+    /* Content layers */
+    #content{
+      position:fixed; inset:0;
+      z-index:10;
+      pointer-events:none;
+    }
+
+    canvas{
+      position:absolute; inset:0;
+      width:100%; height:100%;
+      display:block;
+      pointer-events:auto;
+      opacity:var(--globeOpacity);
+      filter: contrast(calc(1 * var(--harshness))) brightness(calc(1 * var(--harshness)));
+    }
+
+    #fx{
+      position:fixed; inset:0;
+      z-index:12; pointer-events:none;
+      background:
+        repeating-linear-gradient(to bottom, rgba(255,255,255,0.010) 0px, rgba(255,255,255,0.00) 2px, rgba(0,0,0,0.00) 7px),
+        repeating-linear-gradient(to right, rgba(255,255,255,0.006) 0px, rgba(255,255,255,0.00) 3px, rgba(0,0,0,0.00) 13px);
+      mix-blend-mode:screen;
+      opacity:0.55;
+    }
+
+    /* System bars (NULL hides these, not the globe) */
+    .topbar, .bottombar{
+      position:fixed; left:0; right:0;
+      height:44px;
+      display:flex; align-items:center; justify-content:space-between;
+      padding:0 14px;
+      z-index:50;
+      background:linear-gradient(to bottom, rgba(0,0,0,0.70), rgba(0,0,0,0.18));
+      border-bottom:1px solid var(--line);
+      pointer-events:auto;
+      opacity:var(--hudOpacity);
+    }
+    .bottombar{
+      top:auto; bottom:0;
+      background:linear-gradient(to top, rgba(0,0,0,0.70), rgba(0,0,0,0.18));
+      border-bottom:none;
+      border-top:1px solid var(--line);
+    }
+
+    .brand{
+      display:flex; align-items:center; gap:10px;
+      font-size:11px; letter-spacing:0.18em; text-transform:uppercase;
+      color:rgba(255,255,255,0.86);
+      user-select:none;
+      pointer-events:none;
+    }
+    .whiteBox{width:10px;height:10px;background:#fff;display:inline-block;}
+
+    .mini{
+      font-size:11px;
+      letter-spacing:0.14em;
+      text-transform:uppercase;
+      color:rgba(255,255,255,0.70);
+      user-select:none;
+    }
+    .mini b{color:#fff;font-weight:600}
+
+    .btn{
+      height:28px;
+      padding:0 10px;
+      border:1px solid rgba(255,255,255,0.24);
+      background:rgba(0,0,0,0.45);
+      color:rgba(255,255,255,0.86);
+      font-size:11px;
+      letter-spacing:0.16em;
+      text-transform:uppercase;
+      cursor:pointer;
+    }
+    .btn:hover{background:rgba(255,255,255,0.06);border-color:rgba(255,255,255,0.42);}
+    .btn.on{background:rgba(255,255,255,0.10);border-color:rgba(255,255,255,0.52);}
+
+    /* Right synth-pad panel */
+    #pad{
+      position:fixed;
+      top:44px; bottom:44px; right:0;
+      width:360px;
+      z-index:60;
+      pointer-events:auto;
+      opacity:var(--hudOpacity);
+      border-left:1px solid rgba(255,255,255,0.10);
+      background:linear-gradient(to bottom, rgba(0,0,0,0.00), rgba(0,0,0,0.55));
+    }
+    #padInner{
+      position:absolute; inset:14px 14px 14px 14px;
+      background:linear-gradient(to bottom, var(--panel), rgba(0,0,0,0.40));
+      border:1px solid rgba(255,255,255,0.12);
+      padding:12px;
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+    }
+    .padTitle{
+      display:flex; align-items:center; justify-content:space-between;
+      font-size:11px; letter-spacing:0.18em; text-transform:uppercase;
+      color:rgba(255,255,255,0.82);
+      border-bottom:1px solid rgba(255,255,255,0.10);
+      padding-bottom:10px;
+    }
+    .grid{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap:8px;
+    }
+    .cell{
+      border:1px solid rgba(255,255,255,0.10);
+      background:rgba(0,0,0,0.35);
+      padding:10px;
+      min-height:60px;
+    }
+    .cell .k{
+      font-size:10px; letter-spacing:0.16em; text-transform:uppercase;
+      color:rgba(255,255,255,0.55);
+      margin-bottom:6px;
+    }
+    .cell .v{
+      font-size:18px; letter-spacing:0.08em;
+      color:#fff;
+    }
+    .cell .sub{
+      margin-top:6px;
+      font-size:10px; letter-spacing:0.12em; text-transform:uppercase;
+      color:rgba(255,255,255,0.42);
+    }
+
+    .row{
+      display:flex; align-items:center; justify-content:space-between; gap:10px;
+      border:1px solid rgba(255,255,255,0.10);
+      background:rgba(0,0,0,0.28);
+      padding:10px;
+    }
+    .row label{
+      font-size:10px; letter-spacing:0.16em; text-transform:uppercase;
+      color:rgba(255,255,255,0.62);
+      white-space:nowrap;
+    }
+    .row input[type="range"]{width:100%;}
+    .row select, .row textarea{
+      width:100%;
+      border:1px solid rgba(255,255,255,0.14);
+      background:rgba(0,0,0,0.55);
+      color:rgba(255,255,255,0.86);
+      font-family:Arial, Helvetica, sans-serif;
+      font-size:12px;
+      padding:8px;
+      outline:none;
+    }
+    .row textarea{
+      height:96px;
+      resize:none;
+    }
+
+    #hudLeft{
+      position:fixed;
+      left:14px;
+      bottom:56px;
+      z-index:55;
+      max-width:min(720px, calc(100% - 420px));
+      font-size:10px; letter-spacing:0.14em; text-transform:uppercase;
+      color:rgba(255,255,255,0.44);
+      line-height:1.45;
+      pointer-events:none;
+      opacity:var(--hudOpacity);
+    }
+    #hudLeft b{color:rgba(255,255,255,0.70);font-weight:600;}
+
+    /* KETA_NOTE (white-square anchor, draggable) */
+    .ketaNote{
+      position:fixed;
+      left:18px; top:64px;
+      width:min(420px, calc(100vw - 40px));
+      height:260px;
+      z-index:80;
+      border:1px solid rgba(255,255,255,0.14);
+      background:rgba(0,0,0,0.70);
+      display:flex;
+      flex-direction:column;
+      user-select:none;
+      box-shadow:0 0 0 1px rgba(0,0,0,0.65);
+      opacity:var(--hudOpacity);
+    }
+    .ketaHead{
+      height:34px;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      padding:0 10px;
+      border-bottom:1px solid rgba(255,255,255,0.10);
+      cursor:move;
+      font-size:11px; letter-spacing:0.18em; text-transform:uppercase;
+      color:rgba(255,255,255,0.82);
+    }
+    .ketaBody{
+      flex:1;
+      padding:10px;
+      display:flex;
+      gap:10px;
+      align-items:stretch;
+    }
+    .ketaIconCol{
+      width:18px;
+      display:flex;
+      align-items:flex-start;
+      justify-content:flex-start;
+      padding-top:2px;
+    }
+    .ketaSquare{
+      width:10px;height:10px;background:#fff;display:inline-block;
+    }
+    .ketaBody textarea{
+      flex:1;
+      border:1px solid rgba(255,255,255,0.10);
+      background:rgba(0,0,0,0.40);
+      color:rgba(255,255,255,0.88);
+      font-family:Arial, Helvetica, sans-serif;
+      font-size:12px;
+      letter-spacing:0.02em;
+      padding:10px;
+      outline:none;
+      resize:none;
+    }
+    .headBtn{
+      height:22px;
+      padding:0 8px;
+      border:1px solid rgba(255,255,255,0.18);
+      background:rgba(0,0,0,0.25);
+      color:rgba(255,255,255,0.82);
+      font-size:12px;
+      cursor:pointer;
+    }
+    .headBtn:hover{background:rgba(255,255,255,0.06);border-color:rgba(255,255,255,0.36);}
+
+    /* Drawer-lite: import/export */
+    #drawer{
+      position:fixed;
+      left:14px;
+      bottom:60px;
+      width:min(520px, calc(100vw - 420px));
+      z-index:70;
+      background:rgba(0,0,0,0.62);
+      border:1px solid rgba(255,255,255,0.12);
+      padding:10px;
+      display:none;
+      pointer-events:auto;
+      opacity:var(--hudOpacity);
+    }
+    #drawer .row2{
+      display:flex; gap:8px; flex-wrap:wrap;
+      align-items:center;
+    }
+    #drawer .row2 .btn{height:30px}
+    #toast{
+      position:fixed;
+      left:14px;
+      top:54px;
+      z-index:200;
+      padding:8px 10px;
+      font-size:11px;
+      letter-spacing:0.16em;
+      text-transform:uppercase;
+      color:rgba(255,255,255,0.86);
+      background:rgba(0,0,0,0.62);
+      border:1px solid rgba(255,255,255,0.16);
+      display:none;
+      pointer-events:none;
+    }
+
+    body.invert{
+      filter:invert(1);
+      background:#fff;
+    }
+  </style>
+</head>
+<body>
+  <div id="stage"></div>
+
+  <div id="content">
+    <canvas id="c"></canvas>
+  </div>
+  <div id="fx"></div>
+
+  <div class="topbar" id="topbar">
+    <div class="brand"><span class="whiteBox"></span><span>KETADATA // OBSERVATORY</span></div>
+    <div style="display:flex;gap:10px;align-items:center">
+      <button class="btn" id="btnDrawer" type="button">SYSTEM</button>
+      <button class="btn" id="btnNote" type="button">KETA_NOTE</button>
+      <button class="btn" id="btnPad" type="button">PANEL</button>
+    </div>
+  </div>
+
+  <div id="pad">
+    <div id="padInner">
+      <div class="padTitle">
+        <div>MARKET-WORLD SIGNALS</div>
+        <div class="mini"><span id="viewLabel">DISCOURSE</span></div>
+      </div>
+
+      <div class="grid">
+        <div class="cell">
+          <div class="k">FLOW RATE</div>
+          <div class="v" id="mFlow">0.00</div>
+          <div class="sub">Δ <span id="mFlowD">0.00</span></div>
+        </div>
+        <div class="cell">
+          <div class="k">VOLATILITY</div>
+          <div class="v" id="mVol">0.00</div>
+          <div class="sub">BAND <span id="mBand">0</span></div>
+        </div>
+        <div class="cell">
+          <div class="k">CONFLICT INDEX</div>
+          <div class="v" id="mConf">0.00</div>
+          <div class="sub">NODE TEMP <span id="mTemp">0</span></div>
+        </div>
+        <div class="cell">
+          <div class="k">CAPITAL PRESSURE</div>
+          <div class="v" id="mCap">0.00</div>
+          <div class="sub">NET <span id="mNet">0.00</span></div>
+        </div>
+      </div>
+
+      <div class="row">
+        <label>VIEW</label>
+        <select id="viewSel">
+          <option value="discourse">DISCOURSE</option>
+          <option value="conflict">CONFLICT</option>
+          <option value="capital">CAPITAL FLOWS</option>
+        </select>
+      </div>
+
+      <div class="row">
+        <label>GLOBE OPACITY</label>
+        <input id="globeOp" type="range" min="0.15" max="1" step="0.01" value="1" />
+      </div>
+
+      <div class="row">
+        <label>HARSHNESS</label>
+        <input id="harsh" type="range" min="0.60" max="1.70" step="0.01" value="1" />
+      </div>
+
+      <div class="row">
+        <label>ANALYST PANEL</label>
+        <textarea id="analyst" spellcheck="false">SIGNAL PATHS: LIVE
+ORDER-BOOK MIRAGE: ACTIVE
+LATENCY: VARIABLE
+SENTIMENT: UNSTABLE
+FEED INTEGRITY: PARTIAL
+</textarea>
+      </div>
+
+      <div class="row2" style="display:flex;gap:8px">
+        <button class="btn on" id="btnAuto" type="button">AUTO ROTATE</button>
+        <button class="btn" id="btnReset" type="button">RESET VIEW</button>
+        <button class="btn on" id="btnLinks" type="button">LINK TRACES</button>
+        <button class="btn on" id="btnLabels" type="button">MICRO LABELS</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="drawer">
+    <div class="mini" style="margin-bottom:8px">STATE / IMPORT / EXPORT</div>
+    <div class="row2">
+      <button class="btn" id="btnExport" type="button">EXPORT JSON</button>
+      <button class="btn" id="btnImport" type="button">IMPORT JSON</button>
+      <button class="btn" id="btnHome" type="button">HOME</button>
+      <button class="btn" id="btnLanding" type="button">LANDING</button>
+      <button class="btn" id="btnNull" type="button">NULL</button>
+    </div>
+    <input id="file" type="file" accept="application/json" style="display:none" />
+  </div>
+
+  <div id="hudLeft">
+    <div><b>DRAG</b> ROTATE · <b>WHEEL</b> ZOOM · <b>CLICK</b> DROP NODE</div>
+    <div><b>SPACE</b> TRANSPORT · <b>SHIFT+0</b> NULL · <b>SHIFT+I</b> INVERT</div>
+    <div><b>1–6</b> LIGHTS · <b>SHIFT+`</b> HOME · <b>SHIFT+K</b> LANDING</div>
+  </div>
+
+  <div class="bottombar" id="bottombar">
+    <div class="mini">
+      STATE: <b id="sig">∅</b> · NULL: <b id="nullLabel">OFF</b>
+    </div>
+    <div class="mini">
+      LIGHT: <b id="lightLabel">1</b> · RUN: <b id="runLabel">OFF</b> · MOTION: <b id="motionLabel">OFF</b>
+    </div>
+  </div>
+
+  <div class="ketaNote" id="ketaNote" style="display:none">
+    <div class="ketaHead" id="ketaHead">
+      <div style="display:flex;align-items:center;gap:10px">
+        <span>KETA_NOTE</span>
+      </div>
+      <button class="headBtn" id="btnHideNote" type="button">-</button>
+    </div>
+    <div class="ketaBody">
+      <div class="ketaIconCol"><span class="ketaSquare"></span></div>
+      <textarea id="ketaText" placeholder="GLOBAL NOTE" spellcheck="false"></textarea>
+    </div>
+  </div>
+
+  <div id="toast"></div>
+
+  <script>
+    /* =========================================================
+       WB ▸ SHELL HOME (match your current continuity)
+       - Your shell is system.html right now.
+       - LANDING is index11.html.
+    ========================================================= */
+    const SHELL_HOME_URL = "system.html";
+    const LANDING_URL = "index11.html";
+
+    /* =========================================================
+       WB ▸ SOVEREIGN STORAGE KEY (new namespace for OBSERVATORY)
+       - DO NOT change these unless you want a new state namespace.
+    ========================================================= */
+    const FILE_ID = "KETADATA_OBSERVATORY";
+    const ROOM_ID = "OBSERVATORY";
+    const VERSION_ID = "observatory.v1";
+    const STORAGE_KEY = `KDT::STATE::${FILE_ID}::${ROOM_ID}::${VERSION_ID}`;
+
+    /* GLOBAL NOTE continuity (must match Shell8) */
+    const GLOBAL_KETA_NOTE_KEY = "KDT_GLOBAL_KETA_NOTE_V1";
+
+    /* =========================================================
+       DEFAULT STATE (minimal, but compatible with the law)
+    ========================================================= */
+    const DEFAULT = {
+      version: "KETADATA_SHELL_KERNEL_v1",
+      updatedAt: new Date().toISOString(),
+      ketaNote: "",
+      ketaNoteMeta: {
+        version: "KETA_NOTE_META_v1",
+        noteId: "GLOBAL",
+        roomId: ROOM_ID,
+        stateId: null,
+        categoryIds: [],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      },
+      ui: {
+        invert:false,
+        nullMode:false,
+        lightPreset:1,
+        lightRunning:false,
+        motionOn:false,
+        drawer:false,
+        note:false,
+        pad:true
+      },
+      payload: {
+        view:"discourse",
+        globeOpacity:1,
+        harshness:1,
+        auto:true,
+        links:true,
+        labels:true,
+        cameraLocked:false,
+        cam:{ yaw:0.65, pitch:-0.18, zoom:1.0 }
+      }
+    };
+
+    /* ---------------------------------------------------------
+       Helpers
+    --------------------------------------------------------- */
+    const $ = (id)=>document.getElementById(id);
+    const clamp=(n,a,b)=>Math.max(a,Math.min(b,n));
+    const mix=(a,b,t)=>a+(b-a)*t;
+    const nowISO=()=>new Date().toISOString();
+
+    function toast(msg){
+      const t=$("toast");
+      t.textContent=msg;
+      t.style.display="block";
+      clearTimeout(toast._t);
+      toast._t=setTimeout(()=>t.style.display="none", 900);
+    }
+
+    function saveGlobalKetaNote(text){
+      try{ localStorage.setItem(GLOBAL_KETA_NOTE_KEY, String(text||"")); }catch(e){}
+    }
+    function loadGlobalKetaNote(){
+      try{ return localStorage.getItem(GLOBAL_KETA_NOTE_KEY)||""; }catch(e){ return ""; }
+    }
+
+    function loadLocal(){
+      try{
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if(!raw) return null;
+        return JSON.parse(raw);
+      }catch(e){ return null; }
+    }
+    function mergeDefault(obj){
+      const out = structuredClone(DEFAULT);
+      obj = obj || {};
+      // shallow merge top
+      Object.assign(out, obj);
+      // deep-ish merge for known objects
+      out.ui = Object.assign(structuredClone(DEFAULT.ui), obj.ui||{});
+      out.payload = Object.assign(structuredClone(DEFAULT.payload), obj.payload||{});
+      out.ketaNoteMeta = Object.assign(structuredClone(DEFAULT.ketaNoteMeta), obj.ketaNoteMeta||{});
+      return out;
+    }
+
+    let STATE = mergeDefault(loadLocal());
+    // enforce global note continuity
+    {
+      const g = loadGlobalKetaNote();
+      if(g) STATE.ketaNote = g;
+    }
+
+    function syncKetaNoteMeta(reason){
+      STATE.ketaNoteMeta.roomId = ROOM_ID;
+      STATE.ketaNoteMeta.updatedAt = nowISO();
+      if(reason){
+        if(!STATE.ketaNoteMeta._last) STATE.ketaNoteMeta._last = {};
+        STATE.ketaNoteMeta._last = { reason, at: STATE.ketaNoteMeta.updatedAt };
+      }
+    }
+
+    function persist(){
+      STATE.updatedAt = nowISO();
+      syncKetaNoteMeta("persist");
+      saveGlobalKetaNote(STATE.ketaNote || "");
+      try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(STATE)); }catch(e){}
+      render();
+    }
+
+    /* ---------------------------------------------------------
+       System UI: render + toggles
+    --------------------------------------------------------- */
+    function setInvert(on){
+      STATE.ui.invert = !!on;
+      document.body.classList.toggle("invert", STATE.ui.invert);
+      persist();
+    }
+    function setNullMode(on){
+      STATE.ui.nullMode = !!on;
+      // NULL hides bars/panels/note ONLY (not the globe)
+      if(STATE.ui.nullMode){
+        STATE.ui.drawer=false;
+        STATE.ui.note=false;
+        // keep pad state but hidden by hud opacity
+      }
+      persist();
+      toast(STATE.ui.nullMode ? "NULL ON" : "NULL OFF");
+    }
+    function toggleNullMode(){ setNullMode(!STATE.ui.nullMode); }
+
+    function goHome(){
+      if(!SHELL_HOME_URL) return;
+      const here = (location.pathname||"").split("/").pop();
+      const target = SHELL_HOME_URL.split("/").pop();
+      if(here === target) return;
+      window.location.href = SHELL_HOME_URL;
+    }
+    function goLanding(){
+      if(!LANDING_URL) return;
+      window.location.href = LANDING_URL;
+    }
+
+    function setDrawer(on){ STATE.ui.drawer=!!on; persist(); }
+    function setNote(on){ STATE.ui.note=!!on; persist(); }
+    function setPad(on){ STATE.ui.pad=!!on; persist(); }
+
+    function exportState(){
+      const envelope = { STORAGE_KEY, FILE_ID, ROOM_ID, VERSION_ID, STATE };
+      const blob = new Blob([JSON.stringify(envelope, null, 2)], { type:"application/json" });
+      const a=document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = `KDT_${FILE_ID}_${ROOM_ID}_${VERSION_ID}.json`;
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); }, 0);
+      toast("EXPORTED");
+    }
+
+    function importState(file){
+      const reader = new FileReader();
+      reader.onload = ()=>{
+        try{
+          const data = JSON.parse(reader.result);
+          const next = data && data.STATE ? data.STATE : data;
+          STATE = mergeDefault(next);
+          // re-enforce global note
+          { const g=loadGlobalKetaNote(); if(g) STATE.ketaNote=g; }
+          // apply UI immediately
+          document.body.classList.toggle("invert", !!STATE.ui.invert);
+          toast("IMPORTED");
+          persist();
+        }catch(e){
+          toast("IMPORT FAILED");
+        }
+      };
+      reader.readAsText(file);
+    }
+
+    function render(){
+      // hud opacity (NULL hides system chrome)
+      document.documentElement.style.setProperty("--hudOpacity", STATE.ui.nullMode ? "0" : "1");
+
+      $("drawer").style.display = (STATE.ui.drawer && !STATE.ui.nullMode) ? "block" : "none";
+      $("ketaNote").style.display = (STATE.ui.note && !STATE.ui.nullMode) ? "flex" : "none";
+      $("pad").style.display = (STATE.ui.pad && !STATE.ui.nullMode) ? "block" : "none";
+
+      $("sig").textContent = `${FILE_ID}/${ROOM_ID}/${VERSION_ID}`;
+      $("nullLabel").textContent = STATE.ui.nullMode ? "ON" : "OFF";
+      $("lightLabel").textContent = String(STATE.ui.lightPreset||1);
+      $("runLabel").textContent = STATE.ui.lightRunning ? "ON" : "OFF";
+      $("motionLabel").textContent = STATE.ui.motionOn ? "ON" : "OFF";
+
+      // bind sliders
+      document.documentElement.style.setProperty("--globeOpacity", String(STATE.payload.globeOpacity||1));
+      document.documentElement.style.setProperty("--harshness", String(STATE.payload.harshness||1));
+
+      // panel
+      $("viewLabel").textContent = String(STATE.payload.view||"DISCOURSE").toUpperCase();
+      $("viewSel").value = STATE.payload.view || "discourse";
+      $("globeOp").value = String(STATE.payload.globeOpacity||1);
+      $("harsh").value = String(STATE.payload.harshness||1);
+
+      // buttons
+      $("btnAuto").classList.toggle("on", !!STATE.payload.auto);
+      $("btnLinks").classList.toggle("on", !!STATE.payload.links);
+      $("btnLabels").classList.toggle("on", !!STATE.payload.labels);
+
+      // note text
+      $("ketaText").value = STATE.ketaNote || "";
+    }
+
+    /* ---------------------------------------------------------
+       Lights 1–6 (background stage only)
+    --------------------------------------------------------- */
+    const stage = $("stage");
+    let lightInterval=null, lightCount=0, lightAuxA=0, lightAuxB=0;
+
+    function resetStage(){
+      stage.style.backgroundColor = "#000000";
+      stage.style.filter = "none";
+      lightCount=0; lightAuxA=0; lightAuxB=0;
+    }
+    function stopLight(silent){
+      if(lightInterval) clearInterval(lightInterval);
+      lightInterval=null;
+      STATE.ui.lightRunning=false;
+      resetStage();
+      if(!silent) toast("LIGHT OFF");
+    }
+    function startLight(preset){
+      stopLight(true);
+      resetStage();
+      STATE.ui.lightPreset=preset;
+      STATE.ui.lightRunning=true;
+
+      if(preset===1){
+        lightInterval=setInterval(()=>{
+          const curr = stage.style.backgroundColor || "black";
+          stage.style.backgroundColor = (curr==="black" || curr==="rgb(0, 0, 0)") ? "white" : "black";
+          stage.style.filter="none";
+        }, 50);
+      }
+      if(preset===2){
+        lightInterval=setInterval(()=>{
+          lightAuxA=(lightAuxA+30)%360;
+          lightAuxB+=0.5;
+          const lightness = 50 + Math.sin(lightAuxB) * 40;
+          stage.style.backgroundColor = `hsl(${lightAuxA}, 100%, ${lightness}%)`;
+          stage.style.filter="none";
+        }, 10);
+      }
+      if(preset===3){
+        lightInterval=setInterval(()=>{
+          lightCount++;
+          const beat=lightCount%16;
+          if(beat===0 || beat===1){
+            stage.style.backgroundColor="#ffffff";
+            stage.style.filter="invert(1) contrast(3) brightness(2)";
+          } else if(beat===2){
+            stage.style.backgroundColor="#000000";
+            stage.style.filter="invert(1) contrast(2)";
+          } else {
+            stage.style.backgroundColor="#000000";
+            stage.style.filter="none";
+          }
+        }, 50);
+      }
+      if(preset===4){
+        lightInterval=setInterval(()=>{
+          lightAuxB += 0.08;
+          const v = 0.5 + 0.5*Math.sin(lightAuxB);
+          const a = 0.18 + 0.42*v;
+          stage.style.backgroundColor = "#000000";
+          stage.style.filter = `brightness(${1+a}) contrast(${1.2+v*1.6})`;
+        }, 16);
+      }
+      if(preset===5){
+        lightInterval=setInterval(()=>{
+          lightAuxB += 0.11;
+          const v = 0.5 + 0.5*Math.sin(lightAuxB);
+          stage.style.backgroundColor = v>0.5 ? "#ffffff" : "#000000";
+          stage.style.filter = `contrast(${2.2})`;
+        }, 90);
+      }
+      if(preset===6){
+        lightInterval=setInterval(()=>{
+          lightAuxB += 0.06;
+          const v = 0.5 + 0.5*Math.sin(lightAuxB);
+          stage.style.backgroundColor = "#000000";
+          stage.style.filter = `invert(${v}) contrast(${1.6+v*1.2}) brightness(${1.0+v*0.6})`;
+        }, 16);
+      }
+
+      toast(`LIGHT ${preset}`);
+      persist();
+    }
+
+    /* TRANSPORT (Space): toggles light + motion */
+    function toggleTransport(){
+      if(STATE.ui.lightRunning) stopLight(true);
+      else startLight(STATE.ui.lightPreset || 1);
+      STATE.ui.motionOn = !STATE.ui.motionOn;
+      toast(`TRANSPORT ${STATE.ui.lightRunning ? "ON" : "OFF"} / MOTION ${STATE.ui.motionOn ? "ON" : "OFF"}`);
+      persist();
+    }
+
+    /* ---------------------------------------------------------
+       Globe Engine (canvas) - slopstream-derived + market views
+    --------------------------------------------------------- */
+    const canvas = $("c");
+    const ctx = canvas.getContext("2d", { alpha:false });
+
+    function resize(){
+      const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+      const w = canvas.clientWidth|0;
+      const h = canvas.clientHeight|0;
+      canvas.width = Math.floor(w*dpr);
+      canvas.height = Math.floor(h*dpr);
+      ctx.setTransform(dpr,0,0,dpr,0,0);
+    }
+    window.addEventListener("resize", resize);
+
+    // noise
+    const seed = Math.random()*9999;
+    function h2(x,y){
+      const s = Math.sin(x*127.1 + y*311.7 + seed*0.01) * 43758.5453123;
+      return s - Math.floor(s);
+    }
+    function vnoise(x,y){
+      const ix=Math.floor(x), iy=Math.floor(y);
+      const fx=x-ix, fy=y-iy;
+      const a=h2(ix,iy), b=h2(ix+1,iy), c=h2(ix,iy+1), d=h2(ix+1,iy+1);
+      const ux=fx*fx*(3-2*fx), uy=fy*fy*(3-2*fy);
+      return mix(mix(a,b,ux), mix(c,d,ux), uy);
+    }
+    function fbm(x,y){
+      let v=0, a=0.5;
+      for(let i=0;i<5;i++){
+        v += a*vnoise(x,y);
+        x*=2.02; y*=2.01; a*=0.5;
+      }
+      return v;
+    }
+
+    // camera
+    const cam = {
+      yaw: STATE.payload.cam.yaw || 0.65,
+      pitch: STATE.payload.cam.pitch || -0.18,
+      yawV: 0, pitchV: 0,
+      zoom: STATE.payload.cam.zoom || 1.0,
+      auto: !!STATE.payload.auto,
+      locked: !!STATE.payload.cameraLocked
+    };
+    const base = { yaw: cam.yaw, pitch: cam.pitch, zoom: cam.zoom };
+
+    function rotY(p,a){
+      const ca=Math.cos(a), sa=Math.sin(a);
+      return { x:p.x*ca + p.z*sa, y:p.y, z:-p.x*sa + p.z*ca };
+    }
+    function rotX(p,a){
+      const ca=Math.cos(a), sa=Math.sin(a);
+      return { x:p.x, y:p.y*ca - p.z*sa, z:p.y*sa + p.z*ca };
+    }
+    function project(p,cx,cy,r){
+      const z=p.z;
+      const persp = 0.88 + 0.42*(z+1)*0.5;
+      return { x: cx + p.x*r*persp, y: cy + p.y*r*persp, z };
+    }
+
+    // toggles
+    let hyper = true;
+    let linksOn = !!STATE.payload.links;
+    let labelsOn = !!STATE.payload.labels;
+
+    // stars
+    const stars=[];
+    function seedStars(){
+      stars.length=0;
+      const N=560;
+      for(let i=0;i<N;i++){
+        stars.push({ x:Math.random(), y:Math.random(), z:Math.random(), tw:Math.random()*6.28 });
+      }
+    }
+
+    // nodes
+    const nodes=[];
+    function addNode(lat,lon,strength=1){
+      nodes.push({
+        x: Math.cos(lat)*Math.cos(lon),
+        y: Math.sin(lat),
+        z: Math.cos(lat)*Math.sin(lon),
+        t: 0,
+        strength
+      });
+    }
+    function seedNodes(){
+      nodes.length=0;
+      for(let i=0;i<220;i++){
+        const a=Math.random();
+        let lat = mix(-0.85, 0.95, Math.random());
+        let lon = mix(-Math.PI, Math.PI, Math.random());
+        if(a<0.52){ lat=mix(0.12,0.78,Math.random()); lon=mix(-0.30,1.30,Math.random()); }
+        else if(a<0.68){ lat=mix(0.10,0.55,Math.random()); lon=mix(-2.60,-0.85,Math.random()); }
+        else if(a<0.82){ lat=mix(-0.45,0.25,Math.random()); lon=mix(1.00,2.70,Math.random()); }
+        addNode(lat,lon,0.55+Math.random()*1.05);
+      }
+    }
+
+    // links
+    const links=[];
+    function addLink(a,b,life=0.9,boost=1){ links.push({a,b,t:0,life,boost}); }
+    function linkBurstFrom(p,count){
+      for(let i=0;i<count;i++){
+        const j=(Math.random()*nodes.length)|0;
+        const q=nodes[j];
+        if(!q) continue;
+        addLink(p, q, 0.6+Math.random()*1.0, 0.7+Math.random()*1.2);
+      }
+    }
+
+    // labels
+    const labels=[];
+    const glyph="0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    function makeLabel(){
+      const len=6+((Math.random()*8)|0);
+      let s=""; for(let i=0;i<len;i++) s+=glyph[(Math.random()*glyph.length)|0];
+      return s;
+    }
+    function seedLabels(){
+      labels.length=0;
+      for(let i=0;i<160;i++){
+        const lat=mix(-1.1,1.1,Math.random());
+        const lon=mix(-Math.PI,Math.PI,Math.random());
+        labels.push({
+          x:Math.cos(lat)*Math.cos(lon),
+          y:Math.sin(lat),
+          z:Math.cos(lat)*Math.sin(lon),
+          text:makeLabel(),
+          phase:Math.random()*6.28,
+          a:0.25+Math.random()*0.35
+        });
+      }
+    }
+
+    // ribbons (view-dependent)
+    const ribbons=[];
+    function cross(a,b){ return {x:a.y*b.z-a.z*b.y, y:a.z*b.x-a.x*b.z, z:a.x*b.y-a.y*b.x}; }
+    function norm(v){
+      const L=Math.hypot(v.x,v.y,v.z)||1;
+      return {x:v.x/L,y:v.y/L,z:v.z/L};
+    }
+    function spawnRibbon(n=1, mode="discourse"){
+      for(let k=0;k<n;k++){
+        const nrm = norm({x:Math.random()*2-1, y:Math.random()*2-1, z:Math.random()*2-1});
+        const baseBright = (mode==="capital") ? (0.18+Math.random()*0.42)
+                         : (mode==="conflict") ? (0.12+Math.random()*0.32)
+                         : (0.10+Math.random()*0.28);
+        ribbons.push({
+          n:nrm,
+          phase:Math.random()*Math.PI*2,
+          spd:(0.25+Math.random()*0.85) * (mode==="capital" ? 1.25 : 1.0),
+          life:0.7+Math.random()*1.8,
+          age:0,
+          bright:baseBright,
+          wob:Math.random()*6.28,
+          mode
+        });
+      }
+    }
+    function pointOnGreatCircle(nrm, ang){
+      const a = Math.abs(nrm.x) < 0.9 ? {x:1,y:0,z:0} : {x:0,y:0,z:1};
+      const u = norm(cross(nrm, a));
+      const v = norm(cross(nrm, u));
+      const ca=Math.cos(ang), sa=Math.sin(ang);
+      return { x:u.x*ca + v.x*sa, y:u.y*ca + v.y*sa, z:u.z*ca + v.z*sa };
+    }
+
+    // screen->sphere
+    function screenToSphere(mx,my,cx,cy,r){
+      const dx=(mx-cx)/r, dy=(my-cy)/r;
+      const rr=dx*dx+dy*dy;
+      if(rr>1) return null;
+      const z=Math.sqrt(1-rr);
+      let p={x:dx,y:dy,z};
+      p=rotX(p,-cam.pitch);
+      p=rotY(p,-cam.yaw);
+      const L=Math.hypot(p.x,p.y,p.z)||1;
+      return {x:p.x/L,y:p.y/L,z:p.z/L};
+    }
+
+    // interactions
+    let dragging=false, lastX=0, lastY=0;
+    window.addEventListener("mousedown", (e)=>{
+      if(cam.locked) return;
+      // ignore clicks on UI chrome
+      const t=e.target;
+      if(t.closest && (t.closest("#pad") || t.closest("#drawer") || t.closest(".topbar") || t.closest(".bottombar") || t.closest(".ketaNote"))) return;
+      dragging=true; lastX=e.clientX; lastY=e.clientY;
+    });
+    window.addEventListener("mousemove", (e)=>{
+      if(!dragging || cam.locked) return;
+      const dx=e.clientX-lastX, dy=e.clientY-lastY;
+      lastX=e.clientX; lastY=e.clientY;
+      cam.yawV += dx*0.0022;
+      cam.pitchV += dy*0.0018;
+    });
+    window.addEventListener("mouseup", ()=> dragging=false);
+
+    window.addEventListener("wheel", (e)=>{
+      e.preventDefault();
+      const z = Math.exp(-e.deltaY*0.0012);
+      cam.zoom = clamp(cam.zoom*z, 0.68, 1.75);
+      STATE.payload.cam.zoom = cam.zoom;
+      persist();
+    }, { passive:false });
+
+    window.addEventListener("click", (e)=>{
+      const t=e.target;
+      if(t.closest && (t.closest("#pad") || t.closest("#drawer") || t.closest(".topbar") || t.closest(".bottombar") || t.closest(".ketaNote"))) return;
+
+      const w=canvas.clientWidth, h=canvas.clientHeight;
+      const cx=w*0.50, cy=h*0.52;
+      const r=Math.min(w,h)*0.30*cam.zoom;
+
+      const p=screenToSphere(e.clientX,e.clientY,cx,cy,r);
+      if(!p) return;
+      nodes.push({...p,t:0,strength:1.25});
+      if(linksOn) linkBurstFrom(p, 10 + (hyper?16:10));
+    });
+
+    // metrics (random walk, view-dependent)
+    const met = {
+      flow: 42.0, flowD: 0.0,
+      vol: 18.0, band: 2,
+      conf: 12.0, temp: 48,
+      cap: 55.0, net: 1.12
+    };
+
+    function tickMetrics(mode){
+      const drift = (mode==="capital") ? 0.18 : (mode==="conflict") ? 0.10 : 0.12;
+      const noise = (Math.random()*2-1) * drift;
+
+      met.flowD = noise;
+      met.flow = clamp(met.flow + noise*3.2, 0, 100);
+
+      const vj = (Math.random()*2-1) * (mode==="conflict" ? 0.22 : 0.16);
+      met.vol = clamp(met.vol + vj*2.1, 0, 100);
+      met.band = Math.max(0, Math.min(9, Math.floor(met.vol/11)));
+
+      const cj = (Math.random()*2-1) * (mode==="conflict" ? 0.26 : 0.12);
+      met.conf = clamp(met.conf + cj*2.4, 0, 100);
+      met.temp = Math.floor(20 + met.conf*0.8);
+
+      const pj = (Math.random()*2-1) * (mode==="capital" ? 0.28 : 0.10);
+      met.cap = clamp(met.cap + pj*2.8, 0, 100);
+      met.net = clamp(met.net + pj*0.06, -9.99, 9.99);
+
+      $("mFlow").textContent = met.flow.toFixed(2);
+      $("mFlowD").textContent = met.flowD.toFixed(2);
+      $("mVol").textContent = met.vol.toFixed(2);
+      $("mBand").textContent = String(met.band);
+      $("mConf").textContent = met.conf.toFixed(2);
+      $("mTemp").textContent = String(met.temp);
+      $("mCap").textContent = met.cap.toFixed(2);
+      $("mNet").textContent = met.net.toFixed(2);
+    }
+
+    /* Draw */
+    function clearBG(w,h,now){
+      const g=ctx.createLinearGradient(0,0,0,h);
+      g.addColorStop(0.00,"rgb(0,0,0)");
+      g.addColorStop(0.45,"rgb(12,12,12)");
+      g.addColorStop(0.62,"rgb(22,22,22)");
+      g.addColorStop(1.00,"rgb(0,0,0)");
+      ctx.fillStyle=g;
+      ctx.fillRect(0,0,w,h);
+
+      // stars
+      ctx.save();
+      ctx.globalCompositeOperation="screen";
+      const driftX=Math.sin(now*0.00012)*0.02;
+      const driftY=Math.cos(now*0.00010)*0.02;
+      for(const s of stars){
+        const tw=0.5+0.5*Math.sin(now*0.0012+s.tw);
+        const a=(0.03+0.10*tw)*(0.40+0.60*s.z);
+        const x=(((s.x+driftX*s.z)%1)+1)%1*w;
+        const y=(((s.y+driftY*s.z)%1)+1)%1*h;
+        ctx.fillStyle=`rgba(255,255,255,${a})`;
+        ctx.fillRect((x|0)+0.5,(y|0)+0.5,1,1);
+      }
+      ctx.restore();
+    }
+
+    function drawGlow(cx,cy,r,modeK){
+      ctx.save();
+      ctx.globalCompositeOperation="screen";
+
+      const pulse = 0.25 + 0.75*modeK;
+      const halo=ctx.createRadialGradient(cx,cy,r*0.80,cx,cy,r*1.24);
+      halo.addColorStop(0,"rgba(255,255,255,0.00)");
+      halo.addColorStop(0.55,`rgba(255,255,255,${0.05+0.06*pulse})`);
+      halo.addColorStop(1,"rgba(255,255,255,0.00)");
+      ctx.fillStyle=halo;
+      ctx.beginPath(); ctx.arc(cx,cy,r*1.24,0,Math.PI*2); ctx.fill();
+
+      ctx.globalAlpha=0.92;
+      ctx.strokeStyle="rgba(255,255,255,0.92)";
+      ctx.lineWidth=1;
+      ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2); ctx.stroke();
+
+      ctx.restore();
+    }
+
+    function drawGraticule(cx,cy,r,yaw,pitch,modeK){
+      ctx.save();
+      ctx.globalCompositeOperation="screen";
+      ctx.strokeStyle=`rgba(255,255,255,${0.08+0.10*modeK})`;
+      ctx.lineWidth=1;
+
+      ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2); ctx.clip();
+
+      const latLines = 14;
+      const lonLines = 22;
+
+      for(let i=1;i<latLines;i++){
+        const lat=mix(-Math.PI/2,Math.PI/2,i/latLines);
+        ctx.beginPath(); let started=false;
+        for(let j=0;j<=260;j++){
+          const lon=mix(-Math.PI,Math.PI,j/260);
+          let p={x:Math.cos(lat)*Math.cos(lon), y:Math.sin(lat), z:Math.cos(lat)*Math.sin(lon)};
+          p=rotY(p,yaw); p=rotX(p,pitch);
+          if(p.z<0){started=false; continue;}
+          const s=project(p,cx,cy,r);
+          if(!started){ctx.moveTo(s.x,s.y); started=true;} else ctx.lineTo(s.x,s.y);
+        }
+        ctx.stroke();
+      }
+
+      for(let i=0;i<lonLines;i++){
+        const lon=mix(-Math.PI,Math.PI,i/lonLines);
+        ctx.beginPath(); let started=false;
+        for(let j=0;j<=260;j++){
+          const lat=mix(-Math.PI/2,Math.PI/2,j/260);
+          let p={x:Math.cos(lat)*Math.cos(lon), y:Math.sin(lat), z:Math.cos(lat)*Math.sin(lon)};
+          p=rotY(p,yaw); p=rotX(p,pitch);
+          if(p.z<0){started=false; continue;}
+          const s=project(p,cx,cy,r);
+          if(!started){ctx.moveTo(s.x,s.y); started=true;} else ctx.lineTo(s.x,s.y);
+        }
+        ctx.stroke();
+      }
+
+      ctx.restore();
+    }
+
+    function drawRibbons(cx,cy,r,yaw,pitch,t,mode){
+      ctx.save();
+      ctx.globalCompositeOperation="screen";
+      ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2); ctx.clip();
+
+      const modeK = (mode==="capital") ? 0.95 : (mode==="conflict") ? 0.75 : 0.55;
+      const baseAlpha = 0.08 + 0.18*modeK;
+      const speedBoost = hyper ? 1.45 : 1.0;
+
+      for(let i=ribbons.length-1;i>=0;i--){
+        const P=ribbons[i];
+        P.age += 0.016;
+        P.phase += P.spd*0.016*speedBoost;
+        P.wob += 0.016*(0.6+1.0*modeK);
+
+        if(P.age > P.life){ ribbons.splice(i,1); continue; }
+
+        const lifeK=1-P.age/P.life;
+        const a=baseAlpha*P.bright*(0.28+0.72*lifeK);
+
+        ctx.strokeStyle=`rgba(255,255,255,${a})`;
+        ctx.lineWidth=1;
+
+        const steps=hyper?14:10;
+        ctx.beginPath(); let started=false;
+
+        for(let k=0;k<steps;k++){
+          const ang = P.phase - (k/steps)*0.62*(1.0+1.2*modeK);
+          let q = pointOnGreatCircle(P.n, ang);
+
+          // view-dependent warp
+          const lift=(0.010+0.030*modeK)*Math.sin(t*(1.6+modeK)+P.wob+k*0.6);
+          q={x:q.x*(1+lift), y:q.y*(1+lift), z:q.z*(1+lift)};
+
+          q=rotY(q,yaw); q=rotX(q,pitch);
+          if(q.z<0){started=false; continue;}
+
+          const s=project(q,cx,cy,r);
+          if(!started){ctx.moveTo(s.x,s.y); started=true;}
+          else{
+            if((k%2)===0) ctx.lineTo(s.x,s.y);
+            else ctx.moveTo(s.x,s.y);
+          }
+        }
+        ctx.stroke();
+      }
+
+      const min = hyper ? 420 : 280;
+      if(ribbons.length < min){
+        const addN = (mode==="capital") ? 18 : (mode==="conflict") ? 14 : 12;
+        spawnRibbon(addN, mode);
+      }
+
+      ctx.restore();
+    }
+
+    function drawNodes(cx,cy,r,yaw,pitch,t,mode){
+      ctx.save();
+      ctx.globalCompositeOperation="screen";
+      const modeK = (mode==="capital") ? 0.55 : (mode==="conflict") ? 0.95 : 0.70;
+
+      for(let i=0;i<nodes.length;i++){
+        const n=nodes[i];
+        n.t += 0.016;
+
+        let p={x:n.x,y:n.y,z:n.z};
+        p=rotY(p,yaw); p=rotX(p,pitch);
+        if(p.z<0) continue;
+
+        const s=project(p,cx,cy,r);
+        const ring = 0.5+0.5*Math.sin(t*(1.6+modeK)+i*0.08);
+        const rr=(2.0+3.0*ring)*n.strength*(0.85+0.65*modeK);
+        const core=1.25*n.strength;
+
+        ctx.fillStyle=`rgba(255,43,43,${0.80+0.18*modeK})`;
+        ctx.beginPath(); ctx.arc(s.x,s.y,core,0,Math.PI*2); ctx.fill();
+
+        ctx.strokeStyle=`rgba(255,255,255,${0.08+0.22*modeK})`;
+        ctx.lineWidth=1;
+        ctx.beginPath(); ctx.arc(s.x,s.y,rr,0,Math.PI*2); ctx.stroke();
+      }
+      ctx.restore();
+    }
+
+    function drawLinks(cx,cy,r,yaw,pitch,t,mode){
+      if(!linksOn) return;
+
+      ctx.save();
+      ctx.globalCompositeOperation="screen";
+      ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2); ctx.clip();
+
+      const modeK = (mode==="capital") ? 0.85 : (mode==="conflict") ? 0.95 : 0.65;
+      const maxLinks = hyper ? 260 : 160;
+      while(links.length>maxLinks) links.shift();
+
+      for(let i=links.length-1;i>=0;i--){
+        const L=links[i];
+        L.t += 0.016;
+        if(L.t > L.life){ links.splice(i,1); continue; }
+
+        const k=1-(L.t/L.life);
+        const a=(0.04+0.20*k)*(0.55+0.85*modeK)*L.boost;
+
+        let A={x:L.a.x,y:L.a.y,z:L.a.z};
+        let B={x:L.b.x,y:L.b.y,z:L.b.z};
+
+        A=rotY(A,yaw); A=rotX(A,pitch);
+        B=rotY(B,yaw); B=rotX(B,pitch);
+
+        if(A.z<0 && B.z<0) continue;
+
+        const As=project(A,cx,cy,r);
+        const Bs=project(B,cx,cy,r);
+
+        const mx=(As.x+Bs.x)*0.5;
+        const my=(As.y+Bs.y)*0.5;
+        const dx=Bs.x-As.x, dy=Bs.y-As.y;
+        const dl=Math.hypot(dx,dy)||1;
+        const nx=-dy/dl, ny=dx/dl;
+        const bulge=(10+42*modeK)*(0.35+0.65*((i*0.618)%1))*(hyper?1.2:1.0);
+        const cx2=mx+nx*bulge, cy2=my+ny*bulge;
+
+        ctx.strokeStyle=`rgba(255,255,255,${a})`;
+        ctx.lineWidth=1;
+        ctx.beginPath();
+        ctx.moveTo(As.x,As.y);
+        ctx.quadraticCurveTo(cx2,cy2,Bs.x,Bs.y);
+        ctx.stroke();
+
+        const tt=(1-k);
+        const qx=(1-tt)*(1-tt)*As.x + 2*(1-tt)*tt*cx2 + tt*tt*Bs.x;
+        const qy=(1-tt)*(1-tt)*As.y + 2*(1-tt)*tt*cy2 + tt*tt*Bs.y;
+        ctx.fillStyle=`rgba(255,43,43,${0.08+0.24*k})`;
+        ctx.fillRect((qx|0)+0.5,(qy|0)+0.5,2,2);
+      }
+
+      ctx.restore();
+    }
+
+    function drawLabels(cx,cy,r,yaw,pitch,t,mode){
+      if(!labelsOn) return;
+
+      ctx.save();
+      ctx.globalCompositeOperation="screen";
+      ctx.font="10px Arial";
+      ctx.textBaseline="middle";
+      ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2); ctx.clip();
+
+      const modeK = (mode==="capital") ? 0.55 : (mode==="conflict") ? 0.85 : 0.70;
+      for(const L of labels){
+        let p={x:L.x,y:L.y,z:L.z};
+        p=rotY(p,yaw); p=rotX(p,pitch);
+        if(p.z<0) continue;
+        const s=project(p,cx,cy,r);
+        const tw=0.5+0.5*Math.sin(t*1.4+L.phase);
+        const a=(0.06+0.16*tw)*(0.60+0.50*modeK)*L.a;
+        ctx.fillStyle=`rgba(255,255,255,${a})`;
+        ctx.fillText(L.text, s.x+6, s.y);
+      }
+
+      ctx.restore();
+    }
+
+    function step(now){
+      const w=canvas.clientWidth, h=canvas.clientHeight;
+      const cx=w*0.50, cy=h*0.52;
+      const r=Math.min(w,h)*0.30*cam.zoom;
+
+      const t = now*0.001;
+
+      // camera dynamics
+      if(STATE.ui.motionOn && cam.auto){
+        cam.yawV += 0.00055*(hyper?1.6:1.0);
+      }
+      cam.yaw += cam.yawV;
+      cam.pitch += cam.pitchV;
+      cam.yawV *= 0.92;
+      cam.pitchV *= 0.90;
+      cam.pitch = clamp(cam.pitch, -1.2, 1.2);
+
+      // persist cam occasionally
+      if((now|0)%900 === 0){
+        STATE.payload.cam.yaw = cam.yaw;
+        STATE.payload.cam.pitch = cam.pitch;
+        persist();
+      }
+
+      clearBG(w,h,now);
+
+      const mode = STATE.payload.view || "discourse";
+      const modeK = (mode==="capital") ? 0.95 : (mode==="conflict") ? 0.85 : 0.70;
+
+      drawGlow(cx,cy,r,modeK);
+      drawGraticule(cx,cy,r,cam.yaw,cam.pitch,modeK);
+      drawRibbons(cx,cy,r,cam.yaw,cam.pitch,t,mode);
+      drawLinks(cx,cy,r,cam.yaw,cam.pitch,t,mode);
+      drawNodes(cx,cy,r,cam.yaw,cam.pitch,t,mode);
+      drawLabels(cx,cy,r,cam.yaw,cam.pitch,t,mode);
+
+      requestAnimationFrame(step);
+    }
+
+    /* ---------------------------------------------------------
+       KETA_NOTE drag
+    --------------------------------------------------------- */
+    (function bindNoteDrag(){
+      const note = $("ketaNote");
+      const head = $("ketaHead");
+      let isDrag=false, ox=0, oy=0;
+
+      head.addEventListener("mousedown", (e)=>{
+        isDrag=true;
+        const r=note.getBoundingClientRect();
+        ox=e.clientX-r.left;
+        oy=e.clientY-r.top;
+        e.preventDefault();
+      });
+      window.addEventListener("mousemove", (e)=>{
+        if(!isDrag) return;
+        note.style.left = clamp(e.clientX-ox, 6, window.innerWidth - note.offsetWidth - 6) + "px";
+        note.style.top  = clamp(e.clientY-oy, 50, window.innerHeight - note.offsetHeight - 50) + "px";
+      });
+      window.addEventListener("mouseup", ()=> isDrag=false);
+    })();
+
+    /* ---------------------------------------------------------
+       Bind UI controls
+    --------------------------------------------------------- */
+    $("btnDrawer").addEventListener("click", ()=> setDrawer(!STATE.ui.drawer));
+    $("btnNote").addEventListener("click", ()=> setNote(!STATE.ui.note));
+    $("btnPad").addEventListener("click", ()=> setPad(!STATE.ui.pad));
+
+    $("btnExport").addEventListener("click", exportState);
+    $("btnImport").addEventListener("click", ()=> $("file").click());
+    $("file").addEventListener("change", (e)=>{
+      const f=e.target.files && e.target.files[0];
+      if(f) importState(f);
+      e.target.value="";
+    });
+    $("btnHome").addEventListener("click", goHome);
+    $("btnLanding").addEventListener("click", goLanding);
+    $("btnNull").addEventListener("click", toggleNullMode);
+
+    $("btnHideNote").addEventListener("click", ()=> setNote(false));
+
+    $("ketaText").addEventListener("input", (e)=>{
+      STATE.ketaNote = e.target.value || "";
+      persist();
+    });
+
+    $("viewSel").addEventListener("change", (e)=>{
+      STATE.payload.view = e.target.value;
+      persist();
+    });
+
+    $("globeOp").addEventListener("input", (e)=>{
+      STATE.payload.globeOpacity = parseFloat(e.target.value);
+      persist();
+    });
+
+    $("harsh").addEventListener("input", (e)=>{
+      STATE.payload.harshness = parseFloat(e.target.value);
+      persist();
+    });
+
+    $("btnAuto").addEventListener("click", ()=>{
+      cam.auto = !cam.auto;
+      STATE.payload.auto = cam.auto;
+      persist();
+    });
+    $("btnReset").addEventListener("click", ()=>{
+      cam.yaw=base.yaw; cam.pitch=base.pitch; cam.zoom=base.zoom;
+      cam.yawV=0; cam.pitchV=0;
+      STATE.payload.cam = { yaw: cam.yaw, pitch: cam.pitch, zoom: cam.zoom };
+      persist();
+      toast("RESET");
+    });
+    $("btnLinks").addEventListener("click", ()=>{
+      linksOn = !linksOn;
+      STATE.payload.links = linksOn;
+      persist();
+    });
+    $("btnLabels").addEventListener("click", ()=>{
+      labelsOn = !labelsOn;
+      STATE.payload.labels = labelsOn;
+      persist();
+    });
+
+    // hotkeys (restricted to agreed universals)
+    window.addEventListener("keydown", (e)=>{
+      // ignore typing in textarea/select
+      const tag = (e.target && e.target.tagName) ? e.target.tagName.toLowerCase() : "";
+      if(tag==="textarea" || tag==="select" || tag==="input") return;
+
+      if(e.shiftKey && e.key==="I"){ setInvert(!STATE.ui.invert); }
+      if(e.shiftKey && e.key==="0"){ toggleNullMode(); }
+
+      if(e.shiftKey && e.key==="`"){ goHome(); }
+      if(e.shiftKey && (e.key==="k" || e.key==="K")){ goLanding(); }
+
+      if(e.code==="Space"){
+        e.preventDefault();
+        toggleTransport();
+      }
+
+      // lights 1–6
+      if(!e.shiftKey && !e.ctrlKey && !e.metaKey){
+        const n = parseInt(e.key, 10);
+        if(n>=1 && n<=6){
+          startLight(n);
+        }
+      }
+    });
+
+    /* ---------------------------------------------------------
+       Boot
+    --------------------------------------------------------- */
+    resize();
+    seedStars();
+    seedNodes();
+    seedLabels();
+    // spawn initial ribbons per view
+    spawnRibbon(60, STATE.payload.view || "discourse");
+
+    // apply invert
+    document.body.classList.toggle("invert", !!STATE.ui.invert);
+
+    // prime UI
+    render();
+
+    // start light if persisted on
+    resetStage();
+    if(STATE.ui.lightRunning) startLight(STATE.ui.lightPreset || 1);
+
+    // metrics loop
+    setInterval(()=> tickMetrics(STATE.payload.view || "discourse"), 160);
+
+    requestAnimationFrame(step);
+  </script>
+</body>
+</html>
+
+<!--
+============================================================
+KETADATA HTML SERIALIZATION STAMP
+FILE_ID: KETADATA_OBSERVATORY
+ROOM_ID: OBSERVATORY
+VERSION: observatory.v1
+UPDATED_AT: 2025-12-24T00:00:00-05:00
+AUTHOR: KNG / BIGGIE
+INTENT: OBSERVATORY (WORLD/BLOOMBERG TERMINAL SURFACE)
+STATUS: CANONICAL_CANDIDATE
+
+AE: SHARP BLACK/WHITE. WHITE WIREFRAME. RED NODES. NO KITSCH. DENSE SIGNAL UI.
+EE: GLOBAL KETA_NOTE CONTINUITY (KDT_GLOBAL_KETA_NOTE_V1). LIGHTS 1–6 (BACKGROUND STAGE). TRANSPORT (SPACE). NULL MODE (SHIFT+0) HIDES SYSTEM CHROME ONLY.
+WB: SOVEREIGN STORAGE KEY. EXPORT/IMPORT ENVELOPE. HOME (SHIFT+`). LANDING (SHIFT+K).
+
+LOCALSTORAGE_KEY: KDT::STATE::KETADATA_OBSERVATORY::OBSERVATORY::observatory.v1
+GLOBAL_NOTE_KEY: KDT_GLOBAL_KETA_NOTE_V1
+EXPORT_ENVELOPE: { STORAGE_KEY, FILE_ID, ROOM_ID, VERSION_ID, STATE }
+============================================================
+CHANGELOG:
+- 2025-12-24: INITIAL CONSOLIDATION (SLOPSTREAM MOTION + WIREFRAME/RED NODE TERMINAL PANEL)
+- 2025-12-24: GLOBAL NOTE CONTINUITY ENFORCED
+============================================================
+-->
