@@ -1,0 +1,908 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>KETADATA // CHAT ANCHORS (VISUAL)</title>
+<style>
+  :root{
+    --bg:#000; --fg:#fff;
+    --line:rgba(255,255,255,0.14);
+    --line2:rgba(255,255,255,0.26);
+    --muted:rgba(255,255,255,0.62);
+    --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace;
+    --sans: Arial, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+    --top:44px; --bot:34px; --radius:0px;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%; margin:0}
+  body{background:var(--bg); color:var(--fg); font-family:var(--sans); overflow:hidden}
+  #root{position:fixed; inset:0; background:#000}
+  #root.invert{filter:invert(1)}
+
+  /* NULL = NO CONSTRAINTS (chrome off, surface still alive) */
+  #root.null .topbar,
+  #root.null .bottombar,
+  #root.null .drawer,
+  #root.null .ketaNote,
+  #root.null .toast{display:none!important}
+
+  /* Lights depth: closest vs furthest */
+  #root.lightsFar .topbar,
+  #root.lightsFar .bottombar{ z-index:2; pointer-events:none; opacity:0.86; }
+  #root.lightsNear .topbar,
+  #root.lightsNear .bottombar{ z-index:10; pointer-events:auto; opacity:1; }
+
+  /* Stage */
+  #stage{position:absolute; inset:0; background:#000}
+  canvas{position:absolute; inset:0; width:100%; height:100%; display:block}
+  #grain{
+    position:absolute; inset:0;
+    pointer-events:none;
+    opacity:.10;
+    background:
+      repeating-linear-gradient(0deg, rgba(255,255,255,0.06) 0px, rgba(255,255,255,0.06) 1px, rgba(0,0,0,0) 3px, rgba(0,0,0,0) 7px),
+      repeating-linear-gradient(90deg, rgba(255,255,255,0.03) 0px, rgba(255,255,255,0.03) 1px, rgba(0,0,0,0) 4px, rgba(0,0,0,0) 10px);
+    mix-blend-mode:screen;
+  }
+
+  /* Minimal NULL mark (only in NULL) */
+  #nullMark{
+    position:absolute; left:10px; bottom:10px;
+    z-index:5;
+    font-family:var(--mono);
+    font-size:11px;
+    letter-spacing:.10em;
+    text-transform:uppercase;
+    color:rgba(255,255,255,0.22);
+    border:1px solid rgba(255,255,255,0.10);
+    padding:6px 8px;
+    background:rgba(0,0,0,0.45);
+    pointer-events:none;
+    display:none;
+  }
+  #root.null #nullMark{display:block}
+
+  /* Bars */
+  .topbar{
+    position:absolute; top:0; left:0; right:0; height:var(--top);
+    display:flex; align-items:center; justify-content:space-between;
+    padding:0 10px;
+    border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg,#080808,#000);
+  }
+  .brand{display:flex; align-items:center; gap:10px; font-family:var(--mono); font-size:12px; letter-spacing:.10em; text-transform:uppercase}
+  .sq{width:10px; height:10px; border:1px solid var(--fg); background:#000}
+  .actions{display:flex; align-items:center; gap:8px; font-family:var(--mono); font-size:12px}
+  .btn{
+    background:transparent; color:var(--fg);
+    border:1px solid var(--line2);
+    padding:6px 10px;
+    font-family:var(--mono);
+    font-size:12px;
+    letter-spacing:.08em;
+    text-transform:uppercase;
+    cursor:pointer;
+    border-radius:var(--radius);
+  }
+  .btn:hover{border-color:rgba(255,255,255,0.65)}
+  .btn:active{transform:translateY(1px)}
+  .kbd{border:1px solid var(--line2); padding:2px 6px; color:rgba(255,255,255,0.55); font-size:11px}
+
+  .bottombar{
+    position:absolute; left:0; right:0; bottom:0; height:var(--bot);
+    display:flex; align-items:center; justify-content:space-between;
+    padding:0 10px;
+    border-top:1px solid var(--line);
+    background:linear-gradient(0deg,#080808,#000);
+    font-family:var(--mono); font-size:11px; color:rgba(255,255,255,0.62);
+  }
+  .toggle{
+    border:1px solid var(--line2);
+    background:transparent; color:var(--fg);
+    padding:4px 8px;
+    font-family:var(--mono);
+    font-size:11px;
+    letter-spacing:.08em;
+    text-transform:uppercase;
+    cursor:pointer;
+    border-radius:var(--radius);
+  }
+  .toggle:hover{border-color:rgba(255,255,255,0.65)}
+
+  /* Drawer */
+  .drawer{
+    position:absolute; left:0; right:0; bottom:var(--bot);
+    height:78%; min-height:440px;
+    border-top:1px solid var(--line);
+    background:linear-gradient(180deg,#070707,#000);
+    display:none;
+    z-index:20;
+  }
+  .drawer.open{display:flex; flex-direction:column}
+  .drawerHead{
+    padding:8px 10px;
+    border-bottom:1px solid var(--line);
+    font-family:var(--mono); font-size:12px; letter-spacing:.10em; text-transform:uppercase;
+    display:flex; justify-content:space-between; align-items:center;
+  }
+  .drawerBody{padding:10px; min-height:0; flex:1; overflow:auto}
+
+  .grid{display:grid; grid-template-columns:1fr 1fr; gap:10px}
+  @media (max-width: 980px){ .grid{grid-template-columns:1fr} }
+  .panel{border:1px solid var(--line2); background:rgba(0,0,0,0.55); border-radius:var(--radius); overflow:hidden}
+  .panelHead{padding:10px; border-bottom:1px solid var(--line); display:flex; justify-content:space-between; align-items:center; gap:10px;
+    font-family:var(--mono); font-size:12px; letter-spacing:.10em; text-transform:uppercase;}
+  .panelBody{padding:10px}
+  label{font-family:var(--mono); font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:rgba(255,255,255,0.62)}
+  input,select{
+    background:#000; color:#fff;
+    border:1px solid var(--line2);
+    padding:8px 10px;
+    font-family:var(--mono);
+    font-size:12px;
+    outline:none;
+    border-radius:var(--radius);
+  }
+  .row{display:flex; gap:8px; align-items:center; flex-wrap:wrap}
+  .grow{flex:1}
+  .mini{width:200px}
+
+  /* Note */
+  .ketaIcon{width:16px; height:16px; border:2px solid #fff; background:#fff; cursor:pointer}
+  .ketaIcon.open{background:#000}
+  .ketaNote{
+    position:absolute; top:60px; right:16px;
+    width:380px; height:250px;
+    display:none;
+    z-index:30;
+    resize:both; overflow:hidden;
+    border:1px solid rgba(255,255,255,0.78);
+    background:rgba(0,0,0,0.80);
+    backdrop-filter: blur(6px);
+    border-radius:var(--radius);
+  }
+  .ketaNote.open{display:flex; flex-direction:column}
+  .ketaHead{
+    padding:8px 10px;
+    border-bottom:1px solid rgba(255,255,255,0.14);
+    font-family:var(--mono); font-size:11px;
+    letter-spacing:.14em; text-transform:uppercase;
+    display:flex; justify-content:space-between; align-items:center;
+    cursor:move; gap:10px;
+  }
+  .ketaHead .sink{color:rgba(255,255,255,0.70); font-size:10px; letter-spacing:.12em}
+  .ketaBody{padding:10px; min-height:0; flex:1}
+  .ketaNote textarea{
+    width:100%; height:100%;
+    background:#000; color:#fff;
+    border:1px solid rgba(255,255,255,0.22);
+    padding:10px;
+    font-family:var(--mono);
+    font-size:12px;
+    outline:none;
+    resize:none;
+    border-radius:var(--radius);
+  }
+  .headBtn{
+    background:transparent; color:#fff;
+    border:1px solid rgba(255,255,255,0.18);
+    padding:2px 8px;
+    font-family:var(--mono);
+    font-size:12px;
+    letter-spacing:.08em;
+    text-transform:uppercase;
+    cursor:pointer;
+    border-radius:var(--radius);
+  }
+  .headBtn:hover{border-color:rgba(255,255,255,0.6)}
+
+  .toast{
+    position:absolute; left:12px; top:calc(var(--top) + 12px);
+    padding:8px 10px;
+    border:1px solid var(--line2);
+    background:rgba(8,8,8,0.82);
+    font-family:var(--mono); font-size:11px; letter-spacing:.06em;
+    color:#fff;
+    display:none; z-index:40;
+    border-radius:var(--radius);
+  }
+</style>
+</head>
+
+<body>
+<div id="root" class="lightsNear">
+  <div id="stage">
+    <canvas id="c"></canvas>
+    <div id="grain" aria-hidden="true"></div>
+  </div>
+
+  <div id="nullMark">NULL (NO CONSTRAINTS) • SHIFT+0 • SHIFT+I • <span id="sig2">∅</span></div>
+  <div class="toast" id="toast"></div>
+
+  <div class="topbar">
+    <div class="brand">
+      <span class="sq"></span>
+      <span>KETADATA // CHAT ANCHORS</span>
+      <span style="color:rgba(255,255,255,0.55); letter-spacing:.02em; text-transform:none" id="sig">∅</span>
+    </div>
+    <div class="actions">
+      <button class="btn" id="btnExport">EXPORT</button>
+      <button class="btn" id="btnCopy">COPY</button>
+      <button class="btn" id="btnImport">IMPORT</button>
+
+      <span class="kbd">Shift+I</span>
+      <span class="kbd">Shift+0</span>
+
+      <button class="btn" id="btnNull">NULL</button>
+      <button class="btn" id="btnLights">LIGHTS</button>
+      <div class="ketaIcon" id="ketaIcon" title="KETA_NOTE"></div>
+    </div>
+  </div>
+
+  <div class="drawer" id="drawer">
+    <div class="drawerHead">
+      <div>CONTROL</div>
+      <div style="display:flex; gap:8px; align-items:center">
+        <button class="btn" id="btnCloseDrawer">CLOSE</button>
+      </div>
+    </div>
+    <div class="drawerBody">
+      <div class="grid">
+        <div class="panel">
+          <div class="panelHead">
+            <div>RENDER</div>
+            <div class="row">
+              <label>MODE</label>
+              <select id="mode" class="mini">
+                <option value="graph">GRAPH</option>
+                <option value="swarm">SWARM</option>
+                <option value="pulse">PULSE</option>
+              </select>
+            </div>
+          </div>
+          <div class="panelBody">
+            <div class="row" style="margin-bottom:8px">
+              <label>DENSITY</label><input id="density" type="range" min="14" max="140" value="64" />
+              <label>SPEED</label><input id="speed" type="range" min="1" max="100" value="42" />
+            </div>
+            <div class="row" style="margin-bottom:8px">
+              <label>LINES</label><input id="lines" type="range" min="0" max="100" value="52" />
+              <label>TYPE</label><input id="type" type="range" min="0" max="100" value="70" />
+            </div>
+            <div class="row">
+              <label>CENTER</label><input id="center" type="range" min="0" max="100" value="55" />
+              <label>NOISE</label><input id="noise" type="range" min="0" max="100" value="32" />
+            </div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panelHead">
+            <div>NOTE ROUTING</div>
+            <div class="row">
+              <label>SINK</label>
+              <select id="noteSink" class="mini">
+                <option value="STATE">STATE</option>
+                <option value="ROOM">ROOM</option>
+                <option value="OBJECT">OBJECT</option>
+              </select>
+            </div>
+          </div>
+          <div class="panelBody">
+            <div class="row" style="margin-bottom:8px">
+              <label>OBJECT_ID</label>
+              <input id="noteObj" class="grow" placeholder="ONLY IF OBJECT" />
+              <button class="btn" id="btnApplySink">APPLY</button>
+            </div>
+            <div class="row" style="margin-bottom:8px">
+              <label>EXPORT NAME</label>
+              <input id="exportName" class="grow" placeholder="KETADATA_chat_anchors_state.json" />
+            </div>
+            <div class="row">
+              <label>OPEN</label>
+              <button class="btn" id="btnDrawerNote">NOTE</button>
+              <button class="btn" id="btnDrawer">SYSTEM</button>
+            </div>
+            <div style="margin-top:10px; font-family:var(--mono); font-size:11px; color:rgba(255,255,255,0.62); letter-spacing:.02em; line-height:1.5">
+              NULL = NO CONSTRAINTS. CHROME OFF. SURFACE ON.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="bottombar">
+    <div style="display:flex; gap:10px; align-items:center">
+      <button class="toggle" id="toggleDrawer">SYSTEM</button>
+      <span>NULL: <span id="nullLabel">ON</span></span>
+      <span>MODE: <span id="modeLabel">GRAPH</span></span>
+      <span>LIGHTS: <span id="lightsLabel">NEAR</span></span>
+    </div>
+    <div style="display:flex; gap:10px; align-items:center">
+      <span>ROOM: CHAT</span>
+      <span>v1</span>
+    </div>
+  </div>
+
+  <div class="ketaNote" id="ketaNote">
+    <div class="ketaHead" id="ketaHead">
+      <div style="display:flex; gap:10px; align-items:center; min-width:0">
+        <div style="white-space:nowrap">KETA_NOTE</div>
+        <div class="sink" id="sinkLabel">WRITE→STATE</div>
+      </div>
+      <button class="headBtn" id="btnHideNote">-</button>
+    </div>
+    <div class="ketaBody">
+      <textarea id="ketaText" placeholder="DIRECTED NOTE (NO GLOBAL)"></textarea>
+    </div>
+  </div>
+
+  <input id="file" type="file" accept="application/json" style="display:none" />
+</div>
+
+<script>
+/* =========================================================
+KETADATA // CHAT ANCHORS (VISUAL)
+- Visual interpretation stays alive in NULL (NO CONSTRAINTS)
+- Fix for "runs black": canvas renders immediately regardless of chrome state
+- Universal hotkeys:
+  Shift+0 = NULL toggle (Digit0) / Shift+I = invert / ESC close
+========================================================= */
+
+const FILE_ID = "KETADATA_CHAT_ANCHORS_VISUAL";
+const ROOM_ID = "CHAT";
+const VERSION_ID = "chat.anchors.visual.v1";
+const STORAGE_KEY = `KDT::STATE::${FILE_ID}::${ROOM_ID}::${VERSION_ID}`;
+
+const DEFAULT = {
+  version: "KETADATA_SHELL_KERNEL_v1",
+  updatedAt: new Date().toISOString(),
+  room: ROOM_ID,
+  ui: {
+    invert: false,
+    nullMode: true,               // default entry can be NULL; visuals still render
+    drawerOpen: false,
+    lightsDepth: "NEAR",          // NEAR | FAR
+    mode: "graph"
+  },
+  render: { density:64, speed:42, lines:52, type:70, center:55, noise:32 },
+  noteRouting: { sink: "STATE", objectId: null },
+  ketaNote: "",
+  ketaNoteMeta: {
+    version: "KETA_NOTE_META_v1",
+    noteId: "DIRECTED",
+    roomId: ROOM_ID,
+    stateId: null,
+    sink: "STATE",
+    sinkKey: null,
+    objectId: null,
+    categoryIds: [],
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  },
+  payload: {
+    anchors: [
+      "MIND MACHINE",
+      "WEB MEMEX",
+      "STATE ENGINE",
+      "PROTOCOL APPARATUS",
+      "OUTSIDER INSTITUTION",
+      "NULL = NO CONSTRAINTS",
+      "ALL THE FUN HAPPENS ON SCREEN",
+      "SCREEN ↔ STATE ↔ PERSISTENCE",
+      "EXIT IS REQUIRED",
+      "DIRECTED NOTES",
+      "STACK COLLAPSE",
+      "BROWSER AS SOVEREIGN COMPUTER",
+      "RADICAL (ROOT-LEVEL)",
+      "OBVIOUS IN RETROSPECT"
+    ]
+  }
+};
+
+let STATE = loadLocal() || structuredClone(DEFAULT);
+
+const $ = (id)=>document.getElementById(id);
+function nowISO(){ return new Date().toISOString(); }
+
+function toast(msg){
+  if(STATE.ui.nullMode) return;
+  const t = $("toast");
+  t.textContent = msg;
+  t.style.display = "block";
+  clearTimeout(toast._t);
+  toast._t = setTimeout(()=>{ t.style.display="none"; }, 900);
+}
+
+/* signature */
+function stableSig(){
+  const core = JSON.stringify({
+    v: STATE.version,
+    room: STATE.room,
+    ui: STATE.ui,
+    render: STATE.render,
+    anchors: STATE.payload.anchors
+  });
+  let h=2166136261;
+  for(let i=0;i<core.length;i++){ h^=core.charCodeAt(i); h=Math.imul(h,16777619); }
+  return (h>>>0).toString(16).slice(0,10);
+}
+
+/* merge */
+function mergeDefault(obj){
+  const out = structuredClone(DEFAULT);
+  Object.assign(out, obj||{});
+  out.ui = Object.assign(structuredClone(DEFAULT.ui), (obj&&obj.ui)||{});
+  out.render = Object.assign(structuredClone(DEFAULT.render), (obj&&obj.render)||{});
+  out.noteRouting = Object.assign(structuredClone(DEFAULT.noteRouting), (obj&&obj.noteRouting)||{});
+  out.payload = Object.assign(structuredClone(DEFAULT.payload), (obj&&obj.payload)||{});
+  out.payload.anchors = Array.isArray(out.payload.anchors) ? out.payload.anchors : structuredClone(DEFAULT.payload.anchors);
+  if(obj && obj.ketaNoteMeta) out.ketaNoteMeta = Object.assign(structuredClone(DEFAULT.ketaNoteMeta), obj.ketaNoteMeta);
+  return out;
+}
+
+/* persistence */
+function persist(reason){
+  STATE.updatedAt = nowISO();
+  syncKetaNoteMeta(reason || "persist");
+  try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(STATE)); }catch(e){}
+  renderUI();
+}
+function loadLocal(){
+  try{
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if(!raw) return null;
+    return mergeDefault(JSON.parse(raw));
+  }catch(e){ return null; }
+}
+
+/* directed note */
+function getNoteSinkKey(){
+  const sink = (STATE.noteRouting && STATE.noteRouting.sink) || "STATE";
+  if(sink === "STATE") return `KDT::KETA_NOTE::STATE::${stableSig()}::v1`;
+  if(sink === "ROOM")  return `KDT::KETA_NOTE::ROOM::${ROOM_ID}::v1`;
+  if(sink === "OBJECT"){
+    const oid = String((STATE.noteRouting && STATE.noteRouting.objectId) || "").trim();
+    return `KDT::KETA_NOTE::OBJ::${oid || "UNSET"}::v1`;
+  }
+  return `KDT::KETA_NOTE::STATE::${stableSig()}::v1`;
+}
+function loadNote(){ try{ return localStorage.getItem(getNoteSinkKey()) || ""; }catch(e){ return ""; } }
+function saveNote(text){ try{ localStorage.setItem(getNoteSinkKey(), String(text ?? "")); }catch(e){} }
+function syncKetaNoteMeta(reason){
+  const m = STATE.ketaNoteMeta || (STATE.ketaNoteMeta = structuredClone(DEFAULT.ketaNoteMeta));
+  m.roomId = ROOM_ID;
+  m.stateId = stableSig();
+  m.sink = (STATE.noteRouting && STATE.noteRouting.sink) || "STATE";
+  m.sinkKey = getNoteSinkKey();
+  m.objectId = (STATE.noteRouting && STATE.noteRouting.objectId) || null;
+  m.updatedAt = nowISO();
+  if(!m.createdAt) m.createdAt = m.updatedAt;
+  if(reason) m._last = { reason, at: m.updatedAt };
+}
+
+/* import/export */
+function exportState(){
+  syncKetaNoteMeta("export");
+  return JSON.stringify({ STORAGE_KEY, FILE_ID, ROOM_ID, VERSION_ID, STATE }, null, 2);
+}
+function importState(text){
+  const parsed = JSON.parse(text);
+  const incoming = parsed && parsed.STATE ? parsed.STATE : parsed;
+  STATE = mergeDefault(incoming);
+  STATE.ketaNote = loadNote();
+  syncKetaNoteMeta("import");
+  persist("import");
+}
+
+/* UI helpers */
+function setDrawer(open){
+  STATE.ui.drawerOpen = !!open;
+  $("drawer").classList.toggle("open", !!open);
+  persist("drawer");
+}
+function setNull(on){
+  STATE.ui.nullMode = !!on;
+  if(STATE.ui.nullMode){
+    $("drawer").classList.remove("open");
+    $("ketaNote").classList.remove("open");
+    $("ketaIcon").classList.remove("open");
+    STATE.ui.drawerOpen = false;
+  }
+  persist("null");
+}
+function toggleNull(){ setNull(!STATE.ui.nullMode); toast(STATE.ui.nullMode ? "NULL ON" : "NULL OFF"); }
+function setInvert(on){ STATE.ui.invert = !!on; persist("invert"); toast(STATE.ui.invert ? "INVERT ON" : "INVERT OFF"); }
+function toggleLightsDepth(){
+  STATE.ui.lightsDepth = (STATE.ui.lightsDepth === "FAR") ? "NEAR" : "FAR";
+  persist("lights_depth");
+  toast("LIGHTS " + STATE.ui.lightsDepth);
+}
+function setNoteOpen(open){
+  $("ketaNote").classList.toggle("open", !!open);
+  $("ketaIcon").classList.toggle("open", !!open);
+}
+function applyNoteSink(){
+  const sink = String($("noteSink").value || "STATE").toUpperCase();
+  const oid  = String($("noteObj").value || "").trim();
+  if(sink === "OBJECT" && !oid){ toast("NEED OBJECT_ID"); return; }
+  STATE.noteRouting.sink = (sink === "ROOM" || sink === "OBJECT") ? sink : "STATE";
+  STATE.noteRouting.objectId = (STATE.noteRouting.sink === "OBJECT") ? oid : null;
+  STATE.ketaNote = loadNote();
+  syncKetaNoteMeta("sink_change");
+  persist("sink_change");
+  toast("SINK APPLIED");
+}
+function renderUI(){
+  const root = $("root");
+  root.classList.toggle("invert", !!STATE.ui.invert);
+  root.classList.toggle("null", !!STATE.ui.nullMode);
+  root.classList.toggle("lightsNear", (STATE.ui.lightsDepth||"NEAR")==="NEAR");
+  root.classList.toggle("lightsFar",  (STATE.ui.lightsDepth||"NEAR")==="FAR");
+  $("drawer").classList.toggle("open", !!STATE.ui.drawerOpen && !STATE.ui.nullMode);
+
+  $("nullLabel").textContent = STATE.ui.nullMode ? "ON" : "OFF";
+  $("modeLabel").textContent = String(STATE.ui.mode||"graph").toUpperCase();
+  $("lightsLabel").textContent = (STATE.ui.lightsDepth||"NEAR");
+  $("mode").value = STATE.ui.mode || "graph";
+
+  $("density").value = STATE.render.density;
+  $("speed").value   = STATE.render.speed;
+  $("lines").value   = STATE.render.lines;
+  $("type").value    = STATE.render.type;
+  $("center").value  = STATE.render.center;
+  $("noise").value   = STATE.render.noise;
+
+  const sig = stableSig();
+  $("sig").textContent = sig;
+  $("sig2").textContent = sig;
+
+  $("sinkLabel").textContent = "WRITE→" + ((STATE.noteRouting && STATE.noteRouting.sink) || "STATE");
+  $("noteSink").value = ((STATE.noteRouting && STATE.noteRouting.sink) || "STATE");
+  $("noteObj").value = (STATE.noteRouting && STATE.noteRouting.objectId) ? String(STATE.noteRouting.objectId) : "";
+  $("ketaText").value = STATE.ketaNote || "";
+
+  if(!$("exportName").value) $("exportName").value = "KETADATA_chat_anchors_state.json";
+}
+
+/* ======================
+   VISUAL: ANCHOR GRAPH
+   ====================== */
+const canvas = $("c");
+const ctx = canvas.getContext("2d", { alpha:false });
+let W=0,H=0, DPR=1;
+function resize(){
+  DPR = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+  W = Math.floor(canvas.clientWidth * DPR);
+  H = Math.floor(canvas.clientHeight * DPR);
+  canvas.width = W; canvas.height = H;
+}
+window.addEventListener("resize", resize);
+
+function rand(n){ return Math.random()*n; }
+function clamp(v,a,b){ return Math.max(a, Math.min(b, v)); }
+
+let nodes = [];
+function rebuildNodes(){
+  const A = STATE.payload.anchors.slice(0);
+  const target = clamp(Math.floor(STATE.render.density), 14, 140);
+  nodes = [];
+  // seed anchor nodes in a ring
+  const cx=W*0.5, cy=H*0.5;
+  const R = Math.min(W,H)*(0.22 + (STATE.render.center/100)*0.18);
+  for(let i=0;i<A.length;i++){
+    const ang = (i/A.length)*Math.PI*2;
+    nodes.push({
+      label:A[i],
+      x: cx + Math.cos(ang)*R + rand(30*DPR) - 15*DPR,
+      y: cy + Math.sin(ang)*R + rand(30*DPR) - 15*DPR,
+      vx:(rand(2)-1)*0.6*DPR,
+      vy:(rand(2)-1)*0.6*DPR,
+      a:true,
+      phase: rand(Math.PI*2)
+    });
+  }
+  // filler nodes
+  for(let i=nodes.length;i<target;i++){
+    nodes.push({
+      label:null,
+      x: rand(W), y: rand(H),
+      vx:(rand(2)-1)*1.2*DPR,
+      vy:(rand(2)-1)*1.2*DPR,
+      a:false,
+      phase: rand(Math.PI*2)
+    });
+  }
+}
+function step(t){
+  // always render even in NULL
+  const sp = (STATE.render.speed/100) * 1.6;
+  const nz = (STATE.render.noise/100) * 0.9;
+  const mode = STATE.ui.mode || "graph";
+  const linePct = clamp(STATE.render.lines/100, 0, 1);
+  const typePct = clamp(STATE.render.type/100, 0, 1);
+
+  ctx.fillStyle = "#000";
+  ctx.fillRect(0,0,W,H);
+
+  // subtle radial field
+  const cx=W*0.5, cy=H*0.5;
+  const g = ctx.createRadialGradient(cx,cy, 0, cx,cy, Math.max(W,H)*0.7);
+  g.addColorStop(0, "rgba(255,255,255,0.06)");
+  g.addColorStop(0.35, "rgba(255,255,255,0.02)");
+  g.addColorStop(1, "rgba(0,0,0,0)");
+  ctx.fillStyle = g;
+  ctx.fillRect(0,0,W,H);
+
+  // drift nodes
+  for(const n of nodes){
+    const wob = Math.sin(t*0.001 + n.phase) * nz * 0.9*DPR;
+    n.vx += (rand(2)-1) * nz * 0.03*DPR;
+    n.vy += (rand(2)-1) * nz * 0.03*DPR;
+
+    n.x += (n.vx + wob) * sp;
+    n.y += (n.vy - wob) * sp;
+
+    // wrap
+    if(n.x < -40*DPR) n.x = W + 40*DPR;
+    if(n.x > W + 40*DPR) n.x = -40*DPR;
+    if(n.y < -40*DPR) n.y = H + 40*DPR;
+    if(n.y > H + 40*DPR) n.y = -40*DPR;
+  }
+
+  // lines (graph-ish)
+  if(linePct > 0){
+    const maxLinks = Math.floor(nodes.length * (0.10 + linePct*0.35));
+    ctx.lineWidth = 1*DPR;
+    ctx.strokeStyle = "rgba(255,255,255,0.10)";
+    ctx.beginPath();
+    for(let i=0;i<maxLinks;i++){
+      const a = nodes[Math.floor(rand(nodes.length))];
+      const b = nodes[Math.floor(rand(nodes.length))];
+      const dx = a.x-b.x, dy=a.y-b.y;
+      const d2 = dx*dx+dy*dy;
+      if(d2 > (Math.min(W,H)*0.28)**2) continue;
+      ctx.moveTo(a.x,a.y);
+      ctx.lineTo(b.x,b.y);
+    }
+    ctx.stroke();
+  }
+
+  // nodes
+  for(const n of nodes){
+    const pulse = 0.6 + 0.4*Math.sin(t*0.002 + n.phase);
+    const r = n.a ? (2.4 + 2.0*pulse)*DPR : (1.0 + 0.8*pulse)*DPR;
+    ctx.fillStyle = n.a ? "rgba(255,255,255,0.85)" : "rgba(255,255,255,0.26)";
+    ctx.beginPath();
+    ctx.arc(n.x,n.y,r,0,Math.PI*2);
+    ctx.fill();
+  }
+
+  // typography
+  if(typePct > 0){
+    const show = clamp(Math.floor(STATE.payload.anchors.length * (0.35 + typePct*0.65)), 2, STATE.payload.anchors.length);
+    ctx.font = `${Math.floor(12*DPR)}px ${getComputedStyle(document.documentElement).getPropertyValue("--mono")}`;
+    ctx.textBaseline = "middle";
+    ctx.textAlign = "center";
+
+    for(let i=0;i<show;i++){
+      const n = nodes[i]; // anchor nodes are first
+      if(!n || !n.a) continue;
+      let alpha = 0.12 + 0.35 * (typePct);
+      if(mode === "pulse") alpha *= (0.55 + 0.45*Math.sin(t*0.002 + n.phase));
+      if(mode === "swarm") alpha *= 0.85;
+
+      // hard stamp boxes
+      const text = n.label;
+      const tw = ctx.measureText(text).width;
+      const padX = 8*DPR, padY = 6*DPR;
+      const bx = n.x - (tw/2) - padX;
+      const by = n.y - (padY + 6*DPR);
+      const bw = tw + padX*2;
+      const bh = (12*DPR) + padY;
+
+      ctx.strokeStyle = `rgba(255,255,255,${alpha*0.55})`;
+      ctx.lineWidth = 1*DPR;
+      ctx.strokeRect(bx, by, bw, bh);
+
+      ctx.fillStyle = `rgba(255,255,255,${alpha})`;
+      ctx.fillText(text, n.x, by + bh/2);
+    }
+  }
+
+  // ALWAYS legible center stamp (prevents "black")
+  const sig = stableSig();
+  ctx.font = `${Math.floor(11*DPR)}px ${getComputedStyle(document.documentElement).getPropertyValue("--mono")}`;
+  ctx.fillStyle = "rgba(255,255,255,0.18)";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "bottom";
+  ctx.fillText(`KETADATA // CHAT ANCHORS // ${sig}`, W*0.5, H - 10*DPR);
+
+  requestAnimationFrame(step);
+}
+
+/* Wire controls */
+function bindRange(id, key){
+  $(id).addEventListener("input", ()=>{
+    STATE.render[key] = Number($(id).value);
+    rebuildNodes();
+    persist("render");
+  });
+}
+bindRange("density","density");
+bindRange("speed","speed");
+bindRange("lines","lines");
+bindRange("type","type");
+bindRange("center","center");
+bindRange("noise","noise");
+
+$("mode").addEventListener("change", ()=>{
+  STATE.ui.mode = $("mode").value;
+  persist("mode");
+});
+
+$("toggleDrawer").addEventListener("click", ()=>{
+  if(STATE.ui.nullMode) return;
+  setDrawer(!$("drawer").classList.contains("open"));
+});
+$("btnDrawer").addEventListener("click", ()=>{
+  if(STATE.ui.nullMode) return;
+  setDrawer(true);
+});
+$("btnCloseDrawer").addEventListener("click", ()=> setDrawer(false));
+
+$("btnNull").addEventListener("click", ()=> toggleNull());
+$("btnLights").addEventListener("click", ()=> toggleLightsDepth());
+
+$("btnExport").addEventListener("click", ()=>{
+  const name = String($("exportName").value||"KETADATA_chat_anchors_state.json").trim() || "KETADATA_chat_anchors_state.json";
+  const blob = new Blob([exportState()], {type:"application/json"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href), 800);
+  toast("EXPORTED");
+});
+$("btnCopy").addEventListener("click", async ()=>{
+  try{ await navigator.clipboard.writeText(exportState()); toast("COPIED"); }
+  catch(e){ toast("COPY FAILED"); }
+});
+$("btnImport").addEventListener("click", ()=> $("file").click());
+$("file").addEventListener("change", async (e)=>{
+  const f = e.target.files && e.target.files[0];
+  if(!f) return;
+  const txt = await f.text();
+  importState(txt);
+  e.target.value = "";
+  toast("IMPORTED");
+});
+
+$("btnApplySink").addEventListener("click", applyNoteSink);
+
+$("ketaIcon").addEventListener("click", ()=>{
+  if(STATE.ui.nullMode) return;
+  const open = !$("ketaNote").classList.contains("open");
+  setNoteOpen(open);
+  toast(open ? "NOTE OPEN" : "NOTE CLOSED");
+});
+$("btnDrawerNote").addEventListener("click", ()=>{
+  if(STATE.ui.nullMode) return;
+  setNoteOpen(true);
+});
+$("btnHideNote").addEventListener("click", ()=> setNoteOpen(false));
+
+$("ketaText").addEventListener("input", ()=>{
+  STATE.ketaNote = $("ketaText").value;
+  saveNote(STATE.ketaNote);
+  persist("note_write");
+});
+
+/* Hotkeys (reliable) */
+document.addEventListener("keydown",(e)=>{
+  const tag = (e.target && e.target.tagName) ? e.target.tagName.toLowerCase() : "";
+  const typing = (tag==="textarea" || tag==="input" || tag==="select");
+
+  if(e.shiftKey && e.code === "KeyI"){
+    e.preventDefault();
+    setInvert(!STATE.ui.invert);
+    return;
+  }
+  if(e.shiftKey && e.code === "Digit0"){
+    e.preventDefault();
+    toggleNull();
+    return;
+  }
+  if(e.key === "Escape"){
+    // escape = close chrome elements (never blocks surface)
+    setDrawer(false);
+    setNoteOpen(false);
+    if(STATE.ui.nullMode){ setNull(false); }
+    persist("escape");
+    return;
+  }
+  if(!typing && e.code === "Space"){
+    // Space toggles drawer when not typing (optional utility)
+    if(STATE.ui.nullMode) return;
+    e.preventDefault();
+    setDrawer(!$("drawer").classList.contains("open"));
+    return;
+  }
+});
+
+/* Drag note */
+(function dragNote(){
+  const box = $("ketaNote");
+  const head = $("ketaHead");
+  let dragging=false, ox=0, oy=0;
+
+  head.addEventListener("mousedown",(e)=>{
+    if(e.target.closest("button") || e.target.closest("select")) return;
+    dragging=true;
+    const r = box.getBoundingClientRect();
+    ox = e.clientX - r.left;
+    oy = e.clientY - r.top;
+    box.style.left = r.left + "px";
+    box.style.top  = r.top + "px";
+    box.style.right = "auto";
+  });
+  window.addEventListener("mousemove",(e)=>{
+    if(!dragging) return;
+    box.style.left = (e.clientX - ox) + "px";
+    box.style.top  = (e.clientY - oy) + "px";
+  });
+  window.addEventListener("mouseup",()=> dragging=false);
+})();
+
+/* Boot */
+STATE = mergeDefault(STATE);
+STATE.ketaNote = loadNote();
+syncKetaNoteMeta("boot");
+renderUI();
+resize();
+rebuildNodes();
+requestAnimationFrame(step);
+
+/* Expose */
+window.KDT = {
+  exportState, importState,
+  getState: ()=>structuredClone(STATE),
+  setNull: (on)=>setNull(!!on)
+};
+</script>
+</body>
+</html>
+
+<!--
+============================================================
+KETADATA HTML SERIALIZATION STAMP
+FILE_ID: KETADATA_CHAT_ANCHORS_VISUAL
+ROOM_ID: CHAT
+VERSION: chat.anchors.visual.v1
+UPDATED_AT: 2025-12-25T14:25:00-05:00
+CHANGELOG:
+- v1: VISUAL INTERPRETATION OF CHAT ANCHORS (CANVAS GRAPH / SWARM / PULSE)
+- v1: NULL = NO CONSTRAINTS (CHROME OFF), SURFACE RENDERS ALWAYS (FIX "RUNS BLACK")
+- v1: LIGHTS DEPTH (NEAR/FAR)
+- v1: RELIABLE HOTKEYS USING e.code (SHIFT+0 Digit0, SHIFT+I KeyI)
+
+AE:
+- MONOCHROME, BRUTAL, SHARP STAMP BOXES
+- SUBTLE FIELD + GRAIN OVERLAY
+
+EE:
+- CANVAS RUNTIME ALWAYS-ON
+- STATE IO: EXPORT/COPY/IMPORT
+- DIRECTED KETA_NOTE (STATE/ROOM/OBJECT)
+- UNIVERSALS: SHIFT+0 NULL, SHIFT+I INVERT, ESC CLOSE
+
+WB:
+- LOCALSTORAGE KEY: KDT::STATE::KETADATA_CHAT_ANCHORS_VISUAL::CHAT::chat.anchors.visual.v1
+- DIRECTED NOTE KEYS:
+  - STATE:  KDT::KETA_NOTE::STATE::<STATE_SIG>::v1
+  - ROOM:   KDT::KETA_NOTE::ROOM::CHAT::v1
+  - OBJECT: KDT::KETA_NOTE::OBJ::<OBJECT_ID>::v1
+============================================================
+-->
