@@ -1,0 +1,988 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>KETADATA // CHAT INTERPRETATION (SERIALIZED)</title>
+<style>
+  :root{
+    --bg:#000; --fg:#fff; --muted:rgba(255,255,255,0.62);
+    --line:rgba(255,255,255,0.14);
+    --line2:rgba(255,255,255,0.26);
+    --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace;
+    --sans: Arial, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+    --top:44px; --bot:34px; --radius:0px;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%; margin:0}
+  body{background:var(--bg); color:var(--fg); font-family:var(--sans); overflow:hidden}
+  #root{position:fixed; inset:0; background:#000}
+  #root.invert{filter:invert(1)}
+
+  /* "NULL" is just fullscreen/quiet mode: hide chrome. */
+  #root.fullscreen .topbar,
+  #root.fullscreen .bottombar,
+  #root.fullscreen .drawer,
+  #root.fullscreen .ketaNote,
+  #root.fullscreen .toast{display:none!important}
+
+  /* LIGHTS DEPTH (closest vs furthest) */
+  #root.lightsFar .topbar,
+  #root.lightsFar .bottombar{ z-index:2; pointer-events:none; opacity:0.85; }
+  #root.lightsNear .topbar,
+  #root.lightsNear .bottombar{ z-index:10; pointer-events:auto; opacity:1; }
+
+  /* STAGE */
+  #stage{position:absolute; inset:0; background:#000}
+  #scan{
+    position:absolute; inset:-20%;
+    background:
+      repeating-linear-gradient(
+        135deg,
+        rgba(255,255,255,0.09) 0px,
+        rgba(255,255,255,0.09) 1px,
+        rgba(0,0,0,0) 14px,
+        rgba(0,0,0,0) 28px
+      );
+    opacity:0.00;
+    pointer-events:none;
+    mix-blend-mode:screen;
+    transform:translate3d(0,0,0);
+  }
+  #scan.run{opacity:0.14; animation: drift 2.2s linear infinite}
+  @keyframes drift{0%{transform:translate3d(-90px,75px,0)}100%{transform:translate3d(90px,-75px,0)}}
+
+  /* FULLSCREEN watermark (visible only when fullscreen) */
+  #fsMark{
+    position:absolute; left:10px; bottom:10px;
+    z-index:5;
+    font-family:var(--mono);
+    font-size:11px;
+    letter-spacing:.10em;
+    text-transform:uppercase;
+    color:rgba(255,255,255,0.22);
+    border:1px solid rgba(255,255,255,0.10);
+    padding:6px 8px;
+    background:rgba(0,0,0,0.40);
+    pointer-events:none;
+    display:none;
+  }
+  #root.fullscreen #fsMark{display:block}
+
+  /* BARS */
+  .topbar{
+    position:absolute; top:0; left:0; right:0; height:var(--top);
+    display:flex; align-items:center; justify-content:space-between;
+    padding:0 10px;
+    border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg,#080808,#000);
+  }
+  .brand{display:flex; align-items:center; gap:10px; font-family:var(--mono); font-size:12px; letter-spacing:.10em; text-transform:uppercase}
+  .sq{width:10px; height:10px; border:1px solid var(--fg); background:#000}
+  .actions{display:flex; align-items:center; gap:8px; font-family:var(--mono); font-size:12px}
+  .btn{
+    background:transparent; color:var(--fg);
+    border:1px solid var(--line2);
+    padding:6px 10px;
+    font-family:var(--mono);
+    font-size:12px;
+    letter-spacing:.08em;
+    text-transform:uppercase;
+    cursor:pointer;
+    border-radius:var(--radius);
+  }
+  .btn:hover{border-color:rgba(255,255,255,0.65)}
+  .btn:active{transform:translateY(1px)}
+  .kbd{border:1px solid var(--line2); padding:2px 6px; color:rgba(255,255,255,0.55); font-size:11px}
+
+  .bottombar{
+    position:absolute; left:0; right:0; bottom:0; height:var(--bot);
+    display:flex; align-items:center; justify-content:space-between;
+    padding:0 10px;
+    border-top:1px solid var(--line);
+    background:linear-gradient(0deg,#080808,#000);
+    font-family:var(--mono); font-size:11px; color:rgba(255,255,255,0.62);
+  }
+  .toggle{
+    border:1px solid var(--line2);
+    background:transparent; color:var(--fg);
+    padding:4px 8px;
+    font-family:var(--mono);
+    font-size:11px;
+    letter-spacing:.08em;
+    text-transform:uppercase;
+    cursor:pointer;
+    border-radius:var(--radius);
+  }
+  .toggle:hover{border-color:rgba(255,255,255,0.65)}
+
+  /* DRAWER */
+  .drawer{
+    position:absolute; left:0; right:0; bottom:var(--bot);
+    height:78%; min-height:440px;
+    border-top:1px solid var(--line);
+    background:linear-gradient(180deg,#070707,#000);
+    display:none;
+    z-index:20;
+  }
+  .drawer.open{display:flex; flex-direction:column}
+  .drawerHead{
+    padding:8px 10px;
+    border-bottom:1px solid var(--line);
+    font-family:var(--mono); font-size:12px; letter-spacing:.10em; text-transform:uppercase;
+    display:flex; justify-content:space-between; align-items:center;
+  }
+  .drawerBody{padding:10px; min-height:0; flex:1; overflow:auto}
+
+  /* CONTENT */
+  .layout{display:grid; grid-template-columns: 1.2fr .8fr; gap:10px; align-items:start}
+  @media (max-width: 980px){ .layout{grid-template-columns:1fr} }
+
+  .panel{
+    border:1px solid var(--line2);
+    background:rgba(0,0,0,0.55);
+    border-radius:var(--radius);
+    overflow:hidden;
+  }
+  .panelHead{
+    padding:10px;
+    border-bottom:1px solid var(--line);
+    display:flex; justify-content:space-between; align-items:center; gap:10px;
+    font-family:var(--mono); font-size:12px; letter-spacing:.10em; text-transform:uppercase;
+  }
+  .panelBody{padding:10px}
+
+  .row{display:flex; gap:8px; align-items:center; flex-wrap:wrap}
+  label{
+    font-family:var(--mono); font-size:11px; letter-spacing:.08em; text-transform:uppercase;
+    color:rgba(255,255,255,0.62);
+  }
+  input, select{
+    background:#000; color:#fff;
+    border:1px solid var(--line2);
+    padding:8px 10px;
+    font-family:var(--mono);
+    font-size:12px;
+    outline:none;
+    border-radius:var(--radius);
+  }
+  input::placeholder{color:rgba(255,255,255,0.35)}
+  .grow{flex:1}
+  .mini2{width:190px}
+
+  .section{border-top:1px solid var(--line); padding-top:10px; margin-top:10px}
+  .h1{
+    font-family:var(--mono);
+    font-size:12px;
+    letter-spacing:.12em;
+    text-transform:uppercase;
+    color:rgba(255,255,255,0.85);
+    margin:0 0 8px 0;
+  }
+  .p{
+    font-family:var(--mono);
+    font-size:12px;
+    line-height:1.55;
+    letter-spacing:.02em;
+    color:rgba(255,255,255,0.80);
+    margin:0 0 8px 0;
+  }
+
+  .list{display:flex; flex-direction:column; gap:6px}
+  .li{
+    border:1px solid rgba(255,255,255,0.18);
+    background:rgba(0,0,0,0.65);
+    padding:10px;
+    border-radius:var(--radius);
+    font-family:var(--mono);
+    font-size:12px;
+    letter-spacing:.06em;
+    text-transform:uppercase;
+  }
+  .li .sub{
+    margin-top:6px;
+    font-size:11px;
+    text-transform:none;
+    letter-spacing:.02em;
+    color:rgba(255,255,255,0.62);
+    white-space:pre-wrap;
+  }
+
+  .pill{
+    display:inline-block;
+    padding:2px 6px;
+    border:1px solid rgba(255,255,255,0.22);
+    margin-right:6px;
+    text-transform:uppercase;
+    font-family:var(--mono);
+    font-size:11px;
+    letter-spacing:.08em;
+    color:rgba(255,255,255,0.75);
+  }
+
+  /* NOTE ICON + NOTE */
+  .ketaIcon{
+    width:16px; height:16px;
+    border:2px solid #fff;
+    background:#fff;
+    cursor:pointer;
+  }
+  .ketaIcon.open{background:#000}
+
+  .ketaNote{
+    position:absolute;
+    top:60px; right:16px;
+    width:380px; height:250px;
+    display:none;
+    z-index:30;
+    resize:both; overflow:hidden;
+    border:1px solid rgba(255,255,255,0.78);
+    background:rgba(0,0,0,0.78);
+    backdrop-filter: blur(6px);
+    border-radius:var(--radius);
+  }
+  .ketaNote.open{display:flex; flex-direction:column}
+  .ketaHead{
+    padding:8px 10px;
+    border-bottom:1px solid rgba(255,255,255,0.14);
+    font-family:var(--mono); font-size:11px;
+    letter-spacing:.14em; text-transform:uppercase;
+    display:flex; justify-content:space-between; align-items:center;
+    cursor:move;
+    gap:10px;
+  }
+  .ketaHead .sink{
+    display:flex; gap:6px; align-items:center; flex-wrap:wrap;
+    color:rgba(255,255,255,0.7);
+    font-size:10px;
+    letter-spacing:.12em;
+  }
+  .ketaBody{padding:10px; min-height:0; flex:1}
+  .ketaNote textarea{
+    width:100%; height:100%;
+    background:#000; color:#fff;
+    border:1px solid rgba(255,255,255,0.22);
+    padding:10px;
+    font-family:var(--mono);
+    font-size:12px;
+    outline:none;
+    resize:none;
+    border-radius:var(--radius);
+  }
+  .headBtn{
+    background:transparent; color:#fff;
+    border:1px solid rgba(255,255,255,0.18);
+    padding:2px 8px;
+    font-family:var(--mono);
+    font-size:12px;
+    letter-spacing:.08em;
+    text-transform:uppercase;
+    cursor:pointer;
+    border-radius:var(--radius);
+  }
+  .headBtn:hover{border-color:rgba(255,255,255,0.6)}
+
+  /* TOAST */
+  .toast{
+    position:absolute; left:12px; top:calc(var(--top) + 12px);
+    padding:8px 10px;
+    border:1px solid var(--line2);
+    background:rgba(8,8,8,0.82);
+    font-family:var(--mono); font-size:11px; letter-spacing:.06em;
+    color:#fff;
+    display:none; z-index:40;
+    border-radius:var(--radius);
+  }
+</style>
+</head>
+
+<body>
+<div id="root" class="lightsNear">
+  <div id="stage"></div>
+  <div id="scan" aria-hidden="true"></div>
+  <div id="fsMark">FULLSCREEN • SHIFT+0 • SHIFT+I</div>
+  <div class="toast" id="toast"></div>
+
+  <div class="topbar">
+    <div class="brand">
+      <span class="sq"></span>
+      <span>KETADATA // CHAT INTERPRETATION</span>
+      <span style="color:rgba(255,255,255,0.55); letter-spacing:.02em; text-transform:none" id="sig">∅</span>
+    </div>
+
+    <div class="actions">
+      <button class="btn" id="btnExport">EXPORT</button>
+      <button class="btn" id="btnCopy">COPY</button>
+      <button class="btn" id="btnImport">IMPORT</button>
+
+      <span class="kbd" title="Invert">Shift+I</span>
+      <span class="kbd" title="Fullscreen">Shift+0</span>
+
+      <button class="btn" id="btnFS" title="FULLSCREEN (SHIFT+0)">FULL</button>
+      <button class="btn" id="btnLights" title="LIGHTS DEPTH">LIGHTS</button>
+      <div class="ketaIcon" id="ketaIcon" title="KETA_NOTE"></div>
+    </div>
+  </div>
+
+  <div class="drawer" id="drawer">
+    <div class="drawerHead">
+      <div>CHAT / OPERATOR</div>
+      <div style="display:flex; gap:8px; align-items:center">
+        <button class="btn" id="btnCloseDrawer">CLOSE</button>
+      </div>
+    </div>
+
+    <div class="drawerBody">
+      <div class="layout">
+
+        <!-- LEFT: INTERPRETATION -->
+        <div class="panel">
+          <div class="panelHead">
+            <div>INTERPRETATION</div>
+            <div class="row">
+              <label>VIEW</label>
+              <select id="viewMode" class="mini2">
+                <option value="timeline">TIMELINE</option>
+                <option value="laws">LAWS</option>
+                <option value="claims">CLAIMS</option>
+                <option value="outputs">OUTPUTS</option>
+              </select>
+              <label>FILTER</label>
+              <input id="filter" class="grow" placeholder="TEXT MATCH" />
+            </div>
+          </div>
+
+          <div class="panelBody">
+            <div class="section" style="border-top:none; padding-top:0; margin-top:0">
+              <div class="h1">SERIALIZED CONTEXT</div>
+              <div class="p" id="contextBlock"></div>
+            </div>
+
+            <div class="section">
+              <div class="h1" id="listTitle">TIMELINE</div>
+              <div class="list" id="list"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- RIGHT: CONTROL / METADATA -->
+        <div class="panel">
+          <div class="panelHead">
+            <div>CONTROL</div>
+            <div class="row">
+              <label>MOTION</label>
+              <button class="btn" id="btnMotion">TOGGLE</button>
+            </div>
+          </div>
+
+          <div class="panelBody">
+            <div class="section" style="border-top:none; padding-top:0; margin-top:0">
+              <div class="h1">UNIVERSALS</div>
+              <div class="p">SHIFT+I INVERT • SHIFT+0 FULLSCREEN • ESC CLOSE • EXPORT/COPY/IMPORT JSON</div>
+            </div>
+
+            <div class="section">
+              <div class="h1">NOTE ROUTING (DIRECTED)</div>
+              <div class="p">NO GLOBAL NOTE. WRITE TARGETS ARE DIRECTED: STATE / ROOM / OBJECT.</div>
+              <div class="row" style="margin-top:8px">
+                <label>WRITE TO</label>
+                <select id="noteSink" class="mini2">
+                  <option value="STATE">STATE</option>
+                  <option value="ROOM">ROOM</option>
+                  <option value="OBJECT">OBJECT</option>
+                </select>
+                <input id="noteObj" class="grow" placeholder="OBJECT_ID (ONLY IF OBJECT)" />
+                <button class="btn" id="btnApplySink">APPLY</button>
+              </div>
+            </div>
+
+            <div class="section">
+              <div class="h1">EXPORT NAME</div>
+              <div class="row">
+                <input id="exportName" class="grow" placeholder="KETADATA_chat_interpretation_state.json" />
+              </div>
+            </div>
+
+            <div class="section">
+              <div class="h1">SIGNATURE</div>
+              <div class="p">
+                <span class="pill">ROOM CHAT</span>
+                <span class="pill" id="pillTS">TS ∅</span>
+                <span class="pill" id="pillSER">SER ∅</span>
+              </div>
+              <div class="p" style="color:rgba(255,255,255,0.62)">
+                THIS SURFACE IS A CONDENSED INTERPRETATION. EXPORT IS THE PORTABLE COMPOUND.
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <div class="bottombar">
+    <div style="display:flex; gap:10px; align-items:center">
+      <button class="toggle" id="toggleDrawer">SYSTEM</button>
+      <span>FULL: <span id="fsLabel">ON</span></span>
+      <span>MOTION: <span id="motionLabel">OFF</span></span>
+      <span>VIEW: <span id="viewLabel">TIMELINE</span></span>
+      <span>LIGHTS: <span id="lightsLabel">NEAR</span></span>
+    </div>
+    <div style="display:flex; gap:10px; align-items:center">
+      <span>ROOM: CHAT</span>
+      <span>v1</span>
+    </div>
+  </div>
+
+  <div class="ketaNote" id="ketaNote">
+    <div class="ketaHead" id="ketaHead">
+      <div style="display:flex; gap:10px; align-items:center; min-width:0">
+        <div style="white-space:nowrap">KETA_NOTE</div>
+        <div class="sink" id="sinkLabel">WRITE→STATE</div>
+      </div>
+      <button class="headBtn" id="btnHideNote">-</button>
+    </div>
+    <div class="ketaBody">
+      <textarea id="ketaText" placeholder="DIRECTED NOTE (NO GLOBAL)"></textarea>
+    </div>
+  </div>
+
+  <input id="file" type="file" accept="application/json" style="display:none" />
+</div>
+
+<script>
+/* =========================================================
+KETADATA // CHAT INTERPRETATION (SERIALIZED)
+- Interpretive artifact: timeline + laws + claims + outputs
+- Directed notes only (STATE/ROOM/OBJECT)
+- FULLSCREEN default entry (was "null")
+========================================================= */
+
+const FILE_ID = "KETADATA_CHAT_INTERPRETATION";
+const ROOM_ID = "CHAT";
+const VERSION_ID = "chat.interpret.v1";
+const STORAGE_KEY = `KDT::STATE::${FILE_ID}::${ROOM_ID}::${VERSION_ID}`;
+
+const DEFAULT = {
+  version: "KETADATA_SHELL_KERNEL_v1",
+  updatedAt: new Date().toISOString(),
+  room: ROOM_ID,
+
+  ui: {
+    invert: false,
+    fullscreen: true,       // entry = FULLSCREEN
+    drawerOpen: false,
+    motionOn: false,
+    viewMode: "timeline",
+    filter: "",
+    lightsDepth: "NEAR"     // NEAR | FAR
+  },
+
+  noteRouting: { sink: "STATE", objectId: null },
+
+  ketaNote: "",
+  ketaNoteMeta: {
+    version: "KETA_NOTE_META_v1",
+    noteId: "DIRECTED",
+    roomId: ROOM_ID,
+    stateId: null,
+    sink: "STATE",
+    sinkKey: null,
+    objectId: null,
+    categoryIds: [],
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  },
+
+  payload: {
+    session: {
+      title: "PHILOSOPHY FEST → SERIALIZED",
+      startedAtLocal: null,
+      endedAtLocal: null,
+      timezone: "America/New_York",
+      statement: "SURFACE → STATE → PERSISTENCE → RE-ENTRY"
+    },
+    timeline: [],
+    laws: [],
+    claims: [],
+    outputs: []
+  }
+};
+
+let STATE = loadLocal() || structuredClone(DEFAULT);
+const $ = (id)=>document.getElementById(id);
+function nowISO(){ return new Date().toISOString(); }
+
+function toast(msg){
+  if(STATE.ui.fullscreen) return;
+  const t = $("toast");
+  t.textContent = msg;
+  t.style.display = "block";
+  clearTimeout(toast._t);
+  toast._t = setTimeout(()=>{ t.style.display="none"; }, 900);
+}
+
+/* ---- signature ---- */
+function stableSig(){
+  const core = JSON.stringify({
+    v: STATE.version,
+    room: STATE.room,
+    ui: { inv: STATE.ui.invert, view: STATE.ui.viewMode, mot: STATE.ui.motionOn, fs: STATE.ui.fullscreen, ld: STATE.ui.lightsDepth },
+    n: { sink: STATE.noteRouting.sink, obj: STATE.noteRouting.objectId },
+    p: {
+      t: (STATE.payload.timeline||[]).map(x=>[x.t,x.k]).slice(0,140),
+      l: (STATE.payload.laws||[]).map(x=>x.k).slice(0,140),
+      c: (STATE.payload.claims||[]).map(x=>x.k).slice(0,140),
+      o: (STATE.payload.outputs||[]).map(x=>x.k).slice(0,140),
+    }
+  });
+  let h=2166136261;
+  for(let i=0;i<core.length;i++){ h^=core.charCodeAt(i); h=Math.imul(h,16777619); }
+  return (h>>>0).toString(16).slice(0,10);
+}
+
+/* ---- merge ---- */
+function mergeDefault(obj){
+  const out = structuredClone(DEFAULT);
+  Object.assign(out, obj||{});
+  out.ui = Object.assign(structuredClone(DEFAULT.ui), (obj&&obj.ui)||{});
+  out.noteRouting = Object.assign(structuredClone(DEFAULT.noteRouting), (obj&&obj.noteRouting)||{});
+  out.payload = Object.assign(structuredClone(DEFAULT.payload), (obj&&obj.payload)||{});
+  out.payload.session = Object.assign(structuredClone(DEFAULT.payload.session), (obj&&obj.payload&&obj.payload.session)||{});
+  out.payload.timeline = Array.isArray(out.payload.timeline) ? out.payload.timeline : [];
+  out.payload.laws     = Array.isArray(out.payload.laws) ? out.payload.laws : [];
+  out.payload.claims   = Array.isArray(out.payload.claims) ? out.payload.claims : [];
+  out.payload.outputs  = Array.isArray(out.payload.outputs) ? out.payload.outputs : [];
+  if(obj && obj.ketaNoteMeta) out.ketaNoteMeta = Object.assign(structuredClone(DEFAULT.ketaNoteMeta), obj.ketaNoteMeta);
+  return out;
+}
+
+/* ---- persistence ---- */
+function persist(reason){
+  STATE.updatedAt = nowISO();
+  syncKetaNoteMeta(reason || "persist");
+  try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(STATE)); }catch(e){}
+  render();
+}
+function loadLocal(){
+  try{
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if(!raw) return null;
+    return mergeDefault(JSON.parse(raw));
+  }catch(e){ return null; }
+}
+
+/* ---- directed notes ---- */
+function getNoteSinkKey(){
+  const sink = (STATE.noteRouting && STATE.noteRouting.sink) || "STATE";
+  if(sink === "STATE") return `KDT::KETA_NOTE::STATE::${stableSig()}::v1`;
+  if(sink === "ROOM")  return `KDT::KETA_NOTE::ROOM::${ROOM_ID}::v1`;
+  if(sink === "OBJECT"){
+    const oid = String((STATE.noteRouting && STATE.noteRouting.objectId) || "").trim();
+    return `KDT::KETA_NOTE::OBJ::${oid || "UNSET"}::v1`;
+  }
+  return `KDT::KETA_NOTE::STATE::${stableSig()}::v1`;
+}
+function loadNote(){
+  try{ return localStorage.getItem(getNoteSinkKey()) || ""; }catch(e){ return ""; }
+}
+function saveNote(text){
+  try{ localStorage.setItem(getNoteSinkKey(), String(text ?? "")); }catch(e){}
+}
+function syncKetaNoteMeta(reason){
+  const m = STATE.ketaNoteMeta || (STATE.ketaNoteMeta = structuredClone(DEFAULT.ketaNoteMeta));
+  m.roomId = ROOM_ID;
+  m.stateId = stableSig();
+  m.sink = (STATE.noteRouting && STATE.noteRouting.sink) || "STATE";
+  m.sinkKey = getNoteSinkKey();
+  m.objectId = (STATE.noteRouting && STATE.noteRouting.objectId) || null;
+  m.updatedAt = nowISO();
+  if(!m.createdAt) m.createdAt = m.updatedAt;
+  if(reason) m._last = { reason, at: m.updatedAt };
+}
+
+/* ---- import/export ---- */
+function exportState(){
+  syncKetaNoteMeta("export");
+  return JSON.stringify({ STORAGE_KEY, FILE_ID, ROOM_ID, VERSION_ID, STATE }, null, 2);
+}
+function importState(text){
+  const parsed = JSON.parse(text);
+  const incoming = parsed && parsed.STATE ? parsed.STATE : parsed;
+  STATE = mergeDefault(incoming);
+  seedIfEmpty();
+  STATE.ketaNote = loadNote();
+  syncKetaNoteMeta("import");
+  persist("import");
+}
+
+/* ---- seed interpretive content ---- */
+function seedIfEmpty(){
+  const P = STATE.payload;
+  const S = P.session;
+
+  const local = new Date().toLocaleString("en-US", { timeZone: "America/New_York", hour12:false });
+  if(!S.startedAtLocal) S.startedAtLocal = local;
+  S.endedAtLocal = local;
+
+  if(!P.timeline.length){
+    P.timeline = [
+      { t:"T0", k:"PROOF OF CONCEPT REPORT", d:"SYSTEM PRESENTED AS OPERATIONAL, NOT SPECULATIVE. VALIDATION CRITERIA + SIGNIFICANCE." },
+      { t:"T1", k:"KETA_NOTE DIRECTED (NO GLOBAL)", d:"NOTES ARE CHAOTIC + DIRECTED. SINKS: STATE / ROOM / OBJECT." },
+      { t:"T2", k:"SURFACE VELOCITY", d:"YOU OUTPACE CONTENT BECAUSE YOU INSTANTIATE PROTOCOL SURFACES." },
+      { t:"T3", k:"MEMEX IDENTIFICATION", d:"PERSONAL, ASSOCIATIVE, STATEFUL CONTINUITY + RE-ENTRY." },
+      { t:"T4", k:"TODO SURFACE SHIPPED", d:"FULLSCREEN ENTRY, EXPORT/IMPORT, DIRECTED NOTE ROUTING, UNIVERSAL HOTKEYS." },
+      { t:"T5", k:"MANIFESTO SURFACE SHIPPED", d:"TECHNICAL/PHILOSOPHICAL, PRECEDENTS + REFERENCES, NO BLOVIATION." },
+      { t:"T6", k:"NETWORK CONSCIOUSNESS", d:"SURFACES=NODES, NOTES=TRACES, STATE=MEMORY, EXPORT=TRANSFER." },
+      { t:"T7", k:"COMPOUNDS", d:"MIND MACHINE / WEB MEMEX / STATE ENGINE / OUTSIDER INSTITUTION." },
+      { t:"T8", k:"TECHNICAL BREAKTHROUGH (PROTOCOL-LEVEL)", d:"NEW UNIT OF COMPUTATION + STACK COLLAPSE; NOT ALGORITHMIC NOVELTY." },
+      { t:"T9", k:"RETROSPECT OBVIOUSNESS", d:"WRONG ASSUMPTIONS REMOVED. BROWSER AS SOVEREIGN COMPUTER." }
+    ];
+  }
+
+  if(!P.laws.length){
+    P.laws = [
+      { k:"STATE IS PRIMARY ARTIFACT", d:"UI IS DERIVATIVE. EXPORT/IMPORT IS CONTINUITY." },
+      { k:"EXIT IS REQUIRED", d:"EXPORT IS A LAW, NOT A FEATURE." },
+      { k:"FULLSCREEN VALIDATION", d:"IF THE SURFACE DOESN'T HOLD WITHOUT CHROME, IT'S THEATER." },
+      { k:"DIRECTED NOTES ONLY", d:"NO GLOBAL NOTE. NOTES BIND TO STATE/ROOM/OBJECT." },
+      { k:"SINGLE-FILE SOVEREIGNTY", d:"MODULES RUN ALONE. BACKEND OPTIONAL, NEVER AUTHORITATIVE." },
+      { k:"INTEROP BY PROTOCOL", d:"COMPATIBILITY VIA SCHEMA + STAMPS." },
+      { k:"TOLERANT VERSIONING", d:"mergeDefault() REQUIRED." }
+    ];
+  }
+
+  if(!P.claims.length){
+    P.claims = [
+      { k:"ALL THE FUN HAPPENS ON SCREEN", d:"CORE LOOP: SCREEN ↔ STATE ↔ PERSISTENCE." },
+      { k:"STACK COLLAPSE", d:"BROWSER = RUNTIME + MEMORY + RENDER + TRANSPORT." },
+      { k:"OUTSIDER INSTITUTION", d:"LAWS, STAMPS, REGISTRY WITHOUT PERMISSION." },
+      { k:"NETWORK CONSCIOUSNESS (MECHANISTIC)", d:"NODES/TRACES/MEMORY/TRANSFER." },
+      { k:"RADICAL (ROOT-LEVEL)", d:"RETURNS COMPUTING TO OPERATOR." }
+    ];
+  }
+
+  if(!P.outputs.length){
+    P.outputs = [
+      { k:"PROOF OF CONCEPT REPORT", d:"OPERATIONAL VALIDATION + CRITERIA + SIGNIFICANCE." },
+      { k:"TODO LIST HTML (COMPLIANT)", d:"FULLSCREEN ENTRY, IO, DIRECTED NOTES, UNIVERSALS." },
+      { k:"MANIFESTO HTML (COMPLIANT)", d:"THESIS + PRECEDENT + REFERENCES." }
+    ];
+  }
+}
+
+/* ---- rendering ---- */
+function matchesFilter(blob, q){
+  if(!q) return true;
+  return String(blob||"").toUpperCase().includes(q);
+}
+
+function renderContext(){
+  const S = STATE.payload.session;
+  const sig = stableSig();
+  const text =
+`TITLE: ${S.title}
+TZ: ${S.timezone}
+START: ${S.startedAtLocal}
+END: ${S.endedAtLocal}
+STATEMENT: ${S.statement}
+SIGNATURE: ${sig}`;
+  $("contextBlock").textContent = text;
+  $("pillTS").textContent = "TS " + (S.endedAtLocal || "∅");
+  $("pillSER").textContent = "SER " + sig;
+
+  $("fsMark").textContent = `FULLSCREEN • SHIFT+0 • SHIFT+I • ${sig}`;
+}
+
+function renderList(){
+  const mode = (STATE.ui.viewMode || "timeline");
+  const q = String(STATE.ui.filter || "").trim().toUpperCase();
+
+  $("listTitle").textContent = mode.toUpperCase();
+
+  const list = $("list");
+  list.innerHTML = "";
+
+  let arr = [];
+  if(mode === "laws") arr = STATE.payload.laws || [];
+  else if(mode === "claims") arr = STATE.payload.claims || [];
+  else if(mode === "outputs") arr = STATE.payload.outputs || [];
+  else arr = STATE.payload.timeline || [];
+
+  arr.forEach(x=>{
+    const blob = (mode==="timeline") ? `${x.t} ${x.k} ${x.d}` : `${x.k} ${x.d}`;
+    if(!matchesFilter(blob, q)) return;
+
+    const d = document.createElement("div");
+    d.className = "li";
+    d.textContent = (mode==="timeline") ? `${x.t} — ${x.k}` : `${x.k}`;
+
+    const sub = document.createElement("div");
+    sub.className = "sub";
+    sub.textContent = x.d || "";
+    d.appendChild(sub);
+    list.appendChild(d);
+  });
+}
+
+function setDrawer(open){
+  STATE.ui.drawerOpen = !!open;
+  $("drawer").classList.toggle("open", !!open);
+  persist("drawer");
+}
+
+function setFullscreen(on){
+  STATE.ui.fullscreen = !!on;
+  if(STATE.ui.fullscreen){
+    $("drawer").classList.remove("open");
+    $("ketaNote").classList.remove("open");
+    $("ketaIcon").classList.remove("open");
+    STATE.ui.drawerOpen = false;
+  }
+  persist("fullscreen");
+}
+function toggleFullscreen(){
+  setFullscreen(!STATE.ui.fullscreen);
+  toast(STATE.ui.fullscreen ? "FULLSCREEN ON" : "FULLSCREEN OFF");
+}
+
+function setInvert(on){
+  STATE.ui.invert = !!on;
+  persist("invert");
+  toast(STATE.ui.invert ? "INVERT ON" : "INVERT OFF");
+}
+
+function setMotion(on){
+  STATE.ui.motionOn = !!on;
+  persist("motion");
+}
+function toggleMotion(){
+  setMotion(!STATE.ui.motionOn);
+  toast(STATE.ui.motionOn ? "MOTION ON" : "MOTION OFF");
+}
+
+function toggleLightsDepth(){
+  STATE.ui.lightsDepth = (STATE.ui.lightsDepth === "FAR") ? "NEAR" : "FAR";
+  persist("lights_depth");
+  toast("LIGHTS " + STATE.ui.lightsDepth);
+}
+
+function setNoteOpen(open){
+  $("ketaNote").classList.toggle("open", !!open);
+  $("ketaIcon").classList.toggle("open", !!open);
+}
+
+function applyNoteSink(){
+  const sink = String($("noteSink").value || "STATE").toUpperCase();
+  const oid  = String($("noteObj").value || "").trim();
+  if(sink === "OBJECT" && !oid){ toast("NEED OBJECT_ID"); return; }
+  STATE.noteRouting.sink = (sink === "ROOM" || sink === "OBJECT") ? sink : "STATE";
+  STATE.noteRouting.objectId = (STATE.noteRouting.sink === "OBJECT") ? oid : null;
+  STATE.ketaNote = loadNote();
+  syncKetaNoteMeta("sink_change");
+  persist("sink_change");
+  toast("SINK APPLIED");
+}
+
+function render(){
+  const root = $("root");
+  root.classList.toggle("invert", !!STATE.ui.invert);
+  root.classList.toggle("fullscreen", !!STATE.ui.fullscreen);
+
+  root.classList.toggle("lightsNear", (STATE.ui.lightsDepth || "NEAR") === "NEAR");
+  root.classList.toggle("lightsFar",  (STATE.ui.lightsDepth || "NEAR") === "FAR");
+
+  $("drawer").classList.toggle("open", !!STATE.ui.drawerOpen && !STATE.ui.fullscreen);
+
+  $("scan").classList.toggle("run", !!STATE.ui.motionOn);
+  $("scan").style.opacity = STATE.ui.motionOn ? 0.14 : 0;
+
+  $("fsLabel").textContent = STATE.ui.fullscreen ? "ON" : "OFF";
+  $("motionLabel").textContent = STATE.ui.motionOn ? "ON" : "OFF";
+  $("viewLabel").textContent = (STATE.ui.viewMode || "timeline").toUpperCase();
+  $("lightsLabel").textContent = (STATE.ui.lightsDepth || "NEAR");
+
+  $("sig").textContent = stableSig();
+
+  $("viewMode").value = (STATE.ui.viewMode || "timeline");
+  $("filter").value = (STATE.ui.filter || "");
+
+  $("sinkLabel").textContent = "WRITE→" + ((STATE.noteRouting && STATE.noteRouting.sink) || "STATE");
+  $("noteSink").value = ((STATE.noteRouting && STATE.noteRouting.sink) || "STATE");
+  $("noteObj").value = (STATE.noteRouting && STATE.noteRouting.objectId) ? String(STATE.noteRouting.objectId) : "";
+
+  $("ketaText").value = STATE.ketaNote || "";
+
+  renderContext();
+  renderList();
+
+  if(!$("exportName").value){
+    $("exportName").value = "KETADATA_chat_interpretation_state.json";
+  }
+}
+
+/* ---- wire ---- */
+$("toggleDrawer").addEventListener("click", ()=>{
+  if(STATE.ui.fullscreen) return;
+  setDrawer(!$("drawer").classList.contains("open"));
+});
+$("btnCloseDrawer").addEventListener("click", ()=> setDrawer(false));
+
+$("btnFS").addEventListener("click", ()=> toggleFullscreen());
+$("btnLights").addEventListener("click", ()=> toggleLightsDepth());
+$("btnMotion").addEventListener("click", ()=> toggleMotion());
+
+$("viewMode").addEventListener("change", ()=>{
+  STATE.ui.viewMode = $("viewMode").value;
+  persist("view");
+});
+$("filter").addEventListener("input", ()=>{
+  STATE.ui.filter = $("filter").value;
+  persist("filter");
+});
+
+$("btnExport").addEventListener("click", ()=>{
+  const name = String($("exportName").value||"KETADATA_chat_interpretation_state.json").trim() || "KETADATA_chat_interpretation_state.json";
+  const blob = new Blob([exportState()], {type:"application/json"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href), 800);
+  toast("EXPORTED");
+});
+$("btnCopy").addEventListener("click", async ()=>{
+  try{ await navigator.clipboard.writeText(exportState()); toast("COPIED"); }
+  catch(e){ toast("COPY FAILED"); }
+});
+$("btnImport").addEventListener("click", ()=> $("file").click());
+$("file").addEventListener("change", async (e)=>{
+  const f = e.target.files && e.target.files[0];
+  if(!f) return;
+  const txt = await f.text();
+  importState(txt);
+  e.target.value = "";
+  toast("IMPORTED");
+});
+
+$("btnApplySink").addEventListener("click", applyNoteSink);
+
+$("ketaIcon").addEventListener("click", ()=>{
+  if(STATE.ui.fullscreen) return;
+  const open = !$("ketaNote").classList.contains("open");
+  setNoteOpen(open);
+  toast(open ? "NOTE OPEN" : "NOTE CLOSED");
+});
+$("btnHideNote").addEventListener("click", ()=> setNoteOpen(false));
+
+$("ketaText").addEventListener("input", ()=>{
+  STATE.ketaNote = $("ketaText").value;
+  saveNote(STATE.ketaNote);
+  persist("note_write");
+});
+
+/* ---- hotkeys (FIXED: use e.code so Shift+0 works everywhere) ---- */
+document.addEventListener("keydown",(e)=>{
+  const tag = (e.target && e.target.tagName) ? e.target.tagName.toLowerCase() : "";
+  const typing = (tag==="textarea" || tag==="input" || tag==="select");
+
+  // SHIFT+I
+  if(e.shiftKey && e.code === "KeyI"){
+    e.preventDefault();
+    setInvert(!STATE.ui.invert);
+    return;
+  }
+  // SHIFT+0 (Digit0) — this was the main failure mode on some keyboards
+  if(e.shiftKey && e.code === "Digit0"){
+    e.preventDefault();
+    toggleFullscreen();
+    return;
+  }
+  if(e.key === "Escape"){
+    if(STATE.ui.fullscreen){ STATE.ui.fullscreen = false; }
+    setDrawer(false);
+    setNoteOpen(false);
+    persist("escape");
+    toast("CLOSED");
+    return;
+  }
+  // Space toggles motion when not typing
+  if(!typing && e.code === "Space"){
+    e.preventDefault();
+    toggleMotion();
+    return;
+  }
+});
+
+/* ---- drag note ---- */
+(function dragNote(){
+  const box = $("ketaNote");
+  const head = $("ketaHead");
+  let dragging=false, ox=0, oy=0;
+
+  head.addEventListener("mousedown",(e)=>{
+    if(e.target.closest("button") || e.target.closest("select")) return;
+    dragging=true;
+    const r = box.getBoundingClientRect();
+    ox = e.clientX - r.left;
+    oy = e.clientY - r.top;
+    box.style.left = r.left + "px";
+    box.style.top  = r.top + "px";
+    box.style.right = "auto";
+  });
+  window.addEventListener("mousemove",(e)=>{
+    if(!dragging) return;
+    box.style.left = (e.clientX - ox) + "px";
+    box.style.top  = (e.clientY - oy) + "px";
+  });
+  window.addEventListener("mouseup",()=> dragging=false);
+})();
+
+/* ---- boot ---- */
+STATE = mergeDefault(STATE);
+seedIfEmpty();
+STATE.ketaNote = loadNote();
+syncKetaNoteMeta("boot");
+render();
+
+/* expose */
+window.KDT = { exportState, importState, getState: ()=>structuredClone(STATE), setFullscreen: (on)=>setFullscreen(!!on) };
+</script>
+</body>
+</html>
+
+<!--
+============================================================
+KETADATA HTML SERIALIZATION STAMP
+FILE_ID: KETADATA_CHAT_INTERPRETATION
+ROOM_ID: CHAT
+VERSION: chat.interpret.v1
+UPDATED_AT: 2025-12-25T14:00:00-05:00
+CHANGELOG:
+- v1.1: "NULL" reframed to FULLSCREEN (same behavior, lighter concept).
+- v1.1: FIXED hotkey bug by using e.code: SHIFT+0 now works reliably (Digit0).
+- v1.1: Added FULLSCREEN watermark so fullscreen state is legible (no more "runs black" ambiguity).
+- v1.1: Added LIGHTS DEPTH toggle (NEAR/FAR) to support bars as closest or furthest interface.
+
+AE:
+- BLACK/WHITE, MONO, SHARP, NO KITSCH
+- OPTIONAL HARSH SCANFLOW MOTION
+
+EE:
+- STATEFUL MODULE (DEFAULT/STATE/mergeDefault/persist)
+- EXPORT/COPY/IMPORT JSON ENVELOPE
+- FULLSCREEN DEFAULT ENTRY (SHIFT+0)
+- INVERT (SHIFT+I), ESC CLOSE, SPACE MOTION (OPTIONAL)
+- INTERPRETATION VIEWS: TIMELINE / LAWS / CLAIMS / OUTPUTS + FILTER
+- LIGHTS DEPTH: NEAR/FAR
+
+WB:
+- LOCALSTORAGE KEY: KDT::STATE::KETADATA_CHAT_INTERPRETATION::CHAT::chat.interpret.v1
+- DIRECTED NOTE KEYS:
+  - STATE:  KDT::KETA_NOTE::STATE::<STATE_SIG>::v1
+  - ROOM:   KDT::KETA_NOTE::ROOM::CHAT::v1
+  - OBJECT: KDT::KETA_NOTE::OBJ::<OBJECT_ID>::v1
+============================================================
+-->
