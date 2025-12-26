@@ -1,0 +1,599 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>KETADATA // BACKEND VAULT</title>
+
+<style>
+  :root{
+    --bg:#070707;
+    --fg:#f2f2f2;
+    --mut:rgba(242,242,242,0.62);
+    --line:rgba(242,242,242,0.14);
+    --line2:rgba(242,242,242,0.26);
+
+    --haz:#ffd100;   /* hazard yellow (industrial) */
+    --oxide:#ff3b30; /* warning red */
+    --steel:#aeb7c2; /* steel text */
+    --tar:#000;
+
+    --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace;
+    --sans: Arial, Helvetica, sans-serif;
+  }
+
+  *{box-sizing:border-box}
+  html,body{height:100%; margin:0; background:var(--tar); color:var(--fg); overflow:hidden}
+  body{font-family:var(--mono)}
+
+  /* KETADATA NULL: no constraints (chrome off) */
+  #root.null .topbar,
+  #root.null .bottombar,
+  #root.null .drawer,
+  #root.null .ketaNote,
+  #root.null .toast{display:none!important}
+
+  /* Stage */
+  #root{position:fixed; inset:0; background:var(--tar)}
+  #root.invert{filter:invert(1)}
+  #stage{position:absolute; inset:0}
+
+  /* Industrial motion: scanlines + drifting grid + vapor */
+  .scan{
+    position:absolute; inset:0; pointer-events:none;
+    background:
+      repeating-linear-gradient(
+        0deg,
+        rgba(255,255,255,0.03) 0px,
+        rgba(255,255,255,0.03) 1px,
+        transparent 2px,
+        transparent 6px
+      );
+    mix-blend-mode:screen;
+    opacity:0.18;
+  }
+
+  .grid{
+    position:absolute; inset:-20%;
+    pointer-events:none;
+    background:
+      linear-gradient(rgba(255,255,255,0.08) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.08) 1px, transparent 1px);
+    background-size: 72px 72px;
+    opacity:0.10;
+    transform: rotate(-8deg);
+    animation: drift 14s linear infinite;
+    mix-blend-mode:screen;
+  }
+  @keyframes drift{
+    0%{ transform:translate3d(-4%, -2%, 0) rotate(-8deg); }
+    100%{ transform:translate3d(4%, 2%, 0) rotate(-8deg); }
+  }
+
+  .vapor{
+    position:absolute; inset:-10%;
+    pointer-events:none;
+    background:
+      radial-gradient(closest-side at 18% 30%, rgba(255,255,255,0.06), rgba(0,0,0,0) 62%),
+      radial-gradient(closest-side at 80% 52%, rgba(255,209,0,0.07), rgba(0,0,0,0) 70%),
+      radial-gradient(closest-side at 45% 78%, rgba(255,59,48,0.05), rgba(0,0,0,0) 70%);
+    filter: blur(18px);
+    opacity:0.85;
+    animation: breathe 7.2s ease-in-out infinite;
+  }
+  @keyframes breathe{
+    0%{ transform:translate3d(0,8px,0) scale(0.995); opacity:0.72;}
+    50%{ transform:translate3d(0,-10px,0) scale(1.01); opacity:0.92;}
+    100%{ transform:translate3d(0,8px,0) scale(0.995); opacity:0.72;}
+  }
+
+  /* Core vault block */
+  .vault{
+    position:absolute;
+    left:50%; top:50%;
+    transform:translate(-50%,-50%);
+    width:min(980px, 92vw);
+    border:1px solid var(--line2);
+    background:
+      linear-gradient(180deg, rgba(255,255,255,0.035), rgba(0,0,0,0.0)),
+      rgba(0,0,0,0.72);
+    box-shadow:
+      0 0 0 1px rgba(255,255,255,0.08) inset,
+      0 28px 70px rgba(0,0,0,0.72);
+    padding:26px;
+  }
+
+  .vaultHead{
+    display:flex;
+    align-items:flex-start;
+    justify-content:space-between;
+    gap:14px;
+    border-bottom:1px solid var(--line);
+    padding-bottom:14px;
+    margin-bottom:16px;
+  }
+
+  .title{
+    font-family:var(--sans);
+    font-weight:900;
+    letter-spacing:0.16em;
+    text-transform:uppercase;
+    font-size: clamp(22px, 3.2vw, 36px);
+    line-height:1.05;
+  }
+
+  .sub{
+    margin-top:8px;
+    font-family:var(--mono);
+    font-size:12px;
+    letter-spacing:0.10em;
+    text-transform:uppercase;
+    color:var(--mut);
+  }
+
+  .badgeRow{
+    display:flex;
+    gap:8px;
+    flex-wrap:wrap;
+    justify-content:flex-end;
+    align-items:flex-start;
+  }
+  .badge{
+    font-family:var(--mono);
+    font-size:11px;
+    letter-spacing:0.12em;
+    text-transform:uppercase;
+    border:1px solid var(--line2);
+    padding:6px 8px;
+    background:rgba(0,0,0,0.55);
+    color:rgba(255,255,255,0.78);
+  }
+  .badge.haz{border-color:rgba(255,209,0,0.55); color:rgba(255,209,0,0.95)}
+  .badge.ox{border-color:rgba(255,59,48,0.45); color:rgba(255,59,48,0.95)}
+
+  .panel{
+    border:1px solid var(--line2);
+    background:rgba(0,0,0,0.60);
+    padding:18px;
+  }
+
+  .linkLabel{
+    font-family:var(--mono);
+    font-size:11px;
+    letter-spacing:0.14em;
+    text-transform:uppercase;
+    color:rgba(255,255,255,0.62);
+    margin-bottom:10px;
+  }
+
+  .linkRow{
+    display:flex;
+    gap:10px;
+    align-items:center;
+    flex-wrap:wrap;
+  }
+
+  .link{
+    display:inline-block;
+    font-family:var(--mono);
+    font-size:14px;
+    letter-spacing:0.06em;
+    color:rgba(255,255,255,0.96);
+    text-decoration:none;
+    border:1px solid rgba(255,255,255,0.42);
+    padding:12px 14px;
+    background:rgba(0,0,0,0.72);
+    box-shadow: 0 0 0 1px rgba(0,0,0,1) inset;
+    user-select:none;
+  }
+  .link:hover{
+    border-color:rgba(255,209,0,0.75);
+    color:rgba(255,209,0,0.98);
+  }
+
+  .copy{
+    font-family:var(--mono);
+    font-size:12px;
+    letter-spacing:0.12em;
+    text-transform:uppercase;
+    color:rgba(255,255,255,0.90);
+    background:transparent;
+    border:1px solid rgba(255,255,255,0.26);
+    padding:12px 14px;
+    cursor:pointer;
+  }
+  .copy:hover{border-color:rgba(255,255,255,0.62)}
+  .copy:active{transform:translateY(1px)}
+
+  /* Brutal footer */
+  .footer{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:10px;
+    margin-top:16px;
+    padding-top:14px;
+    border-top:1px solid var(--line);
+    color:rgba(255,255,255,0.55);
+    font-size:11px;
+    letter-spacing:0.10em;
+    text-transform:uppercase;
+  }
+
+  /* Bars (minimal KETADATA chrome) */
+  .topbar{
+    position:absolute; left:0; right:0; top:0; height:44px;
+    display:flex; align-items:center; justify-content:space-between;
+    padding:0 10px;
+    border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg,#0b0b0b,#000);
+    z-index:10;
+  }
+  .brand{
+    display:flex; align-items:center; gap:10px;
+    font-family:var(--mono);
+    font-size:12px;
+    letter-spacing:.12em;
+    text-transform:uppercase;
+  }
+  .sq{
+    width:10px; height:10px;
+    border:1px solid rgba(255,255,255,0.9);
+    background:#fff;
+  }
+  .actions{display:flex; gap:8px; align-items:center}
+  .btn{
+    background:transparent;
+    color:rgba(255,255,255,0.92);
+    border:1px solid var(--line2);
+    padding:6px 10px;
+    font-family:var(--mono);
+    font-size:12px;
+    letter-spacing:.10em;
+    text-transform:uppercase;
+    cursor:pointer;
+  }
+  .btn:hover{border-color:rgba(255,255,255,0.68)}
+  .kbd{border:1px solid var(--line2); padding:2px 6px; color:rgba(255,255,255,0.55); font-size:11px}
+
+  .bottombar{
+    position:absolute; left:0; right:0; bottom:0; height:34px;
+    display:flex; align-items:center; justify-content:space-between;
+    padding:0 10px;
+    border-top:1px solid var(--line);
+    background:linear-gradient(0deg,#0b0b0b,#000);
+    z-index:10;
+    font-family:var(--mono);
+    font-size:11px;
+    letter-spacing:.08em;
+    text-transform:uppercase;
+    color:rgba(255,255,255,0.62);
+  }
+  .toast{
+    position:absolute; left:12px; top:56px;
+    padding:8px 10px;
+    border:1px solid var(--line2);
+    background:rgba(0,0,0,0.80);
+    font-family:var(--mono); font-size:11px;
+    letter-spacing:.06em;
+    text-transform:uppercase;
+    display:none;
+    z-index:20;
+  }
+
+  /* KETA_NOTE (directed, no global requirement) */
+  .ketaNote{
+    position:absolute; right:14px; top:58px;
+    width:360px; height:220px;
+    border:1px solid rgba(255,255,255,0.62);
+    background:rgba(0,0,0,0.78);
+    display:none;
+    z-index:20;
+    resize:both; overflow:hidden;
+  }
+  .ketaNote.open{display:flex; flex-direction:column}
+  .ketaHead{
+    padding:8px 10px;
+    border-bottom:1px solid rgba(255,255,255,0.14);
+    font-family:var(--mono);
+    font-size:11px;
+    letter-spacing:.14em;
+    text-transform:uppercase;
+    display:flex; justify-content:space-between; align-items:center;
+    cursor:move;
+  }
+  .ketaBody{padding:10px; flex:1; min-height:0}
+  .ketaNote textarea{
+    width:100%; height:100%;
+    background:#000;
+    color:#fff;
+    border:1px solid rgba(255,255,255,0.22);
+    padding:10px;
+    font-family:var(--mono);
+    font-size:12px;
+    outline:none;
+    resize:none;
+  }
+
+  /* Tiny signature */
+  .sig{
+    position:fixed; right:10px; bottom:10px;
+    font-family:var(--mono);
+    font-size:10px;
+    letter-spacing:.14em;
+    text-transform:uppercase;
+    color:rgba(255,255,255,0.22);
+    border:1px solid rgba(255,255,255,0.10);
+    padding:6px 8px;
+    background:rgba(0,0,0,0.35);
+    user-select:none;
+    pointer-events:none;
+  }
+</style>
+</head>
+
+<body>
+<div id="root" class="null">
+  <div id="stage">
+    <div class="grid" aria-hidden="true"></div>
+    <div class="vapor" aria-hidden="true"></div>
+    <div class="scan" aria-hidden="true"></div>
+
+    <div class="vault" role="main" aria-label="KETADATA Backend Vault">
+      <div class="vaultHead">
+        <div>
+          <div class="title">KETADATA BACKEND</div>
+          <div class="sub">VAULT ACCESS // HOLDING SPACE // BROADCAST ONLY</div>
+        </div>
+        <div class="badgeRow">
+          <div class="badge haz">INDUSTRIAL</div>
+          <div class="badge">BRUTALIST</div>
+          <div class="badge ox">NO DISCUSSION</div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="linkLabel">ENTRY LINK</div>
+        <div class="linkRow">
+          <a class="link" id="tgLink" href="https://t.me/+Slw-WUNLH60xOTky" target="_blank" rel="noreferrer noopener">
+            https://t.me/+Slw-WUNLH60xOTky
+          </a>
+          <button class="copy" id="btnCopy">COPY</button>
+        </div>
+      </div>
+
+      <div class="footer">
+        <div>NULL = NO CONSTRAINTS</div>
+        <div>SHIFT+0 NULL • SHIFT+I INVERT • ESC CLOSE</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Minimal KETADATA chrome (hidden by default via NULL) -->
+  <div class="topbar">
+    <div class="brand"><span class="sq"></span><span>KETADATA // VAULT</span></div>
+    <div class="actions">
+      <button class="btn" id="btnNull">NULL</button>
+      <button class="btn" id="btnNote">NOTE</button>
+      <span class="kbd">Shift+0</span>
+      <span class="kbd">Shift+I</span>
+    </div>
+  </div>
+
+  <div class="bottombar">
+    <div>ROOM: VAULT</div>
+    <div>v1</div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <div class="ketaNote" id="ketaNote">
+    <div class="ketaHead" id="ketaHead">
+      <div>KETA_NOTE</div>
+      <button class="btn" id="btnCloseNote">-</button>
+    </div>
+    <div class="ketaBody">
+      <textarea id="ketaText" placeholder="DIRECTED NOTE (LOCAL)"></textarea>
+    </div>
+  </div>
+
+  <div class="sig">KETADATA // BACKEND VAULT</div>
+</div>
+
+<script>
+/* =========================================================
+KETADATA BACKEND VAULT (INDUSTRIAL / BRUTALIST)
+- Default entry in NULL (chrome hidden)
+- Copy button for Telegram link
+- KETA_NOTE is local (directed, no global requirement)
+- Universal hotkeys: Shift+0 NULL, Shift+I invert, ESC close
+========================================================= */
+
+const FILE_ID = "KDT_BACKEND_VAULT";
+const ROOM_ID = "VAULT";
+const VERSION_ID = "v1";
+const STORAGE_KEY = `KDT::STATE::${FILE_ID}::${ROOM_ID}::${VERSION_ID}`;
+const NOTE_KEY = `KDT::KETA_NOTE::ROOM::${ROOM_ID}::${VERSION_ID}`;
+
+let STATE = load() || {
+  version: "KETADATA_SHELL_KERNEL_v1",
+  updatedAt: new Date().toISOString(),
+  room: ROOM_ID,
+  ui: { nullMode: true, invert: false, noteOpen: false },
+  link: "https://t.me/+Slw-WUNLH60xOTky",
+  ketaNote: ""
+};
+
+const $ = (id)=>document.getElementById(id);
+
+function persist(reason){
+  STATE.updatedAt = new Date().toISOString();
+  try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(STATE)); }catch(e){}
+  // note persisted separately
+  try{ localStorage.setItem(NOTE_KEY, STATE.ketaNote || ""); }catch(e){}
+  render();
+}
+
+function load(){
+  try{
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if(!raw) return null;
+    const obj = JSON.parse(raw);
+    // merge minimal
+    obj.ui = Object.assign({ nullMode:true, invert:false, noteOpen:false }, (obj.ui||{}));
+    obj.link = obj.link || "https://t.me/+Slw-WUNLH60xOTky";
+    try{ obj.ketaNote = localStorage.getItem(NOTE_KEY) || ""; }catch(e){ obj.ketaNote = ""; }
+    return obj;
+  }catch(e){ return null; }
+}
+
+function toast(msg){
+  if(STATE.ui.nullMode) return;
+  const t = $("toast");
+  t.textContent = msg;
+  t.style.display = "block";
+  clearTimeout(toast._t);
+  toast._t = setTimeout(()=>{ t.style.display="none"; }, 900);
+}
+
+function setNull(on){
+  STATE.ui.nullMode = !!on;
+  if(STATE.ui.nullMode){
+    STATE.ui.noteOpen = false;
+    $("ketaNote").classList.remove("open");
+  }
+  persist("null");
+}
+
+function setInvert(on){
+  STATE.ui.invert = !!on;
+  persist("invert");
+}
+
+function toggleNote(){
+  if(STATE.ui.nullMode) return;
+  STATE.ui.noteOpen = !STATE.ui.noteOpen;
+  persist("note");
+}
+
+function render(){
+  const root = $("root");
+  root.classList.toggle("null", !!STATE.ui.nullMode);
+  root.classList.toggle("invert", !!STATE.ui.invert);
+
+  $("ketaText").value = STATE.ketaNote || "";
+  $("ketaNote").classList.toggle("open", !!STATE.ui.noteOpen && !STATE.ui.nullMode);
+
+  // keep link consistent
+  const a = $("tgLink");
+  a.href = STATE.link;
+  a.textContent = STATE.link;
+}
+
+$("btnNull").addEventListener("click", ()=> setNull(!STATE.ui.nullMode));
+$("btnNote").addEventListener("click", ()=> toggleNote());
+$("btnCloseNote").addEventListener("click", ()=> { STATE.ui.noteOpen=false; persist("note_close"); });
+
+$("ketaText").addEventListener("input", ()=>{
+  STATE.ketaNote = $("ketaText").value;
+  persist("note_write");
+});
+
+$("btnCopy").addEventListener("click", async ()=>{
+  try{
+    await navigator.clipboard.writeText(STATE.link);
+    toast("COPIED");
+  }catch(e){
+    toast("COPY FAILED");
+  }
+});
+
+/* Drag note */
+(function dragNote(){
+  const box = $("ketaNote");
+  const head = $("ketaHead");
+  let dragging=false, ox=0, oy=0;
+
+  head.addEventListener("mousedown",(e)=>{
+    if(e.target.closest("button")) return;
+    dragging=true;
+    const r = box.getBoundingClientRect();
+    ox = e.clientX - r.left;
+    oy = e.clientY - r.top;
+    box.style.left = r.left + "px";
+    box.style.top  = r.top + "px";
+    box.style.right = "auto";
+  });
+  window.addEventListener("mousemove",(e)=>{
+    if(!dragging) return;
+    box.style.left = (e.clientX - ox) + "px";
+    box.style.top  = (e.clientY - oy) + "px";
+  });
+  window.addEventListener("mouseup",()=> dragging=false);
+})();
+
+/* Hotkeys */
+document.addEventListener("keydown",(e)=>{
+  const tag = (e.target && e.target.tagName) ? e.target.tagName.toLowerCase() : "";
+  const typing = (tag==="textarea" || tag==="input" || tag==="select");
+
+  if(e.shiftKey && e.code === "Digit0"){
+    e.preventDefault();
+    setNull(!STATE.ui.nullMode);
+    toast(STATE.ui.nullMode ? "NULL ON" : "NULL OFF");
+    return;
+  }
+  if(e.shiftKey && e.code === "KeyI"){
+    e.preventDefault();
+    setInvert(!STATE.ui.invert);
+    toast(STATE.ui.invert ? "INVERT ON" : "INVERT OFF");
+    return;
+  }
+  if(e.key === "Escape"){
+    // escape closes chrome elements; never blocks access
+    STATE.ui.noteOpen = false;
+    setNull(false);
+    persist("escape");
+    return;
+  }
+  if(!typing && e.code === "Space"){
+    // space toggles NULL quickly (optional)
+    e.preventDefault();
+    setNull(!STATE.ui.nullMode);
+    return;
+  }
+});
+
+/* Boot */
+render();
+</script>
+</body>
+</html>
+
+<!--
+============================================================
+KETADATA HTML SERIALIZATION STAMP
+FILE_ID: KDT_BACKEND_VAULT
+ROOM_ID: VAULT
+VERSION: v1
+UPDATED_AT: 2025-12-25
+CHANGELOG:
+- v1: Industrial brutalist vault interface
+- v1: Title "KETADATA BACKEND" + Telegram invite link (new tab) + copy
+- v1: Default NULL entry (no constraints / chrome hidden)
+- v1: Local directed KETA_NOTE (room-scoped), draggable + resizable
+- v1: Universals: SHIFT+0 NULL, SHIFT+I INVERT, ESC CLOSE
+
+AE:
+- HAZARD / STEEL / TAR BLACK
+- SCANLINES + DRIFT GRID + VAPOR
+- HARD TYPO + PLACARD LINK
+
+EE:
+- LOCAL STORAGE STATE + NOTE
+- LINK OPEN NEW TAB + COPY
+WB:
+- STORAGE_KEY: KDT::STATE::KDT_BACKEND_VAULT::VAULT::v1
+- NOTE_KEY: KDT::KETA_NOTE::ROOM::VAULT::v1
+============================================================
+-->
