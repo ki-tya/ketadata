@@ -1,0 +1,622 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>KETADATA // 16 MODULE GRID</title>
+  <style>
+    :root{
+      --bg:#050607;
+      --ink:#eaeaf0;
+      --muted:rgba(234,234,240,.55);
+      --line:rgba(234,234,240,.14);
+      --line2:rgba(234,234,240,.22);
+      --panel:rgba(12,12,14,.78);
+      --panel2:rgba(12,12,14,.55);
+      --shadow:rgba(0,0,0,.55);
+      --radius:12px; /* modernist: controlled rounding */
+      --gap:12px;
+      --cellMin:160px;
+      --snap:12px;
+    }
+
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0;
+      background:
+        radial-gradient(900px 600px at 55% 40%, rgba(255,255,255,.04), transparent 60%),
+        radial-gradient(700px 520px at 35% 60%, rgba(255,255,255,.03), transparent 60%),
+        linear-gradient(180deg, #050607 0%, #040405 100%);
+      color:var(--ink);
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+      overflow:hidden;
+    }
+
+    /* subtle grid field */
+    .field{
+      position:fixed; inset:0;
+      background:
+        linear-gradient(rgba(255,255,255,.04) 1px, transparent 1px) 0 0/48px 48px,
+        linear-gradient(90deg, rgba(255,255,255,.04) 1px, transparent 1px) 0 0/48px 48px;
+      opacity:.30;
+      pointer-events:none;
+      mask-image: radial-gradient(circle at 50% 45%, rgba(0,0,0,1) 0%, rgba(0,0,0,.8) 55%, rgba(0,0,0,.15) 100%);
+    }
+
+    /* top bar */
+    .topbar{
+      position:fixed; left:0; right:0; top:0;
+      height:54px;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      padding:0 14px;
+      border-bottom:1px solid var(--line);
+      background:linear-gradient(180deg, rgba(10,10,12,.82), rgba(10,10,12,.62));
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      z-index:50;
+    }
+    .brand{
+      display:flex; align-items:baseline; gap:10px;
+      letter-spacing:.22em;
+      text-transform:uppercase;
+      font-weight:700;
+      font-size:12px;
+      user-select:none;
+    }
+    .brand .sub{
+      color:var(--muted);
+      font-weight:600;
+      letter-spacing:.20em;
+      font-size:11px;
+    }
+    .controls{
+      display:flex; gap:8px; align-items:center;
+      font-size:11px;
+      letter-spacing:.14em;
+      text-transform:uppercase;
+      color:var(--muted);
+      user-select:none;
+      white-space:nowrap;
+    }
+    .pill{
+      border:1px solid var(--line);
+      background:rgba(0,0,0,.25);
+      padding:8px 10px;
+      border-radius:999px;
+      display:flex;
+      gap:8px;
+      align-items:center;
+    }
+    .btn{
+      border:1px solid var(--line);
+      background:rgba(255,255,255,.03);
+      color:var(--ink);
+      padding:8px 10px;
+      border-radius:999px;
+      cursor:pointer;
+      transition:transform .12s ease, border-color .12s ease, background .12s ease;
+    }
+    .btn:hover{ transform: translateY(-1px); border-color:var(--line2); background:rgba(255,255,255,.06); }
+    .btn:active{ transform: translateY(0px) scale(.99); }
+
+    /* workspace */
+    .workspace{
+      position:fixed; inset:54px 0 0 0;
+      padding: var(--gap);
+      overflow:hidden;
+    }
+
+    .grid{
+      position:relative;
+      width:100%;
+      height:100%;
+      border:1px solid var(--line);
+      background:linear-gradient(180deg, rgba(255,255,255,.02), rgba(255,255,255,.01));
+      border-radius: var(--radius);
+      box-shadow: 0 20px 80px var(--shadow);
+      overflow:hidden;
+    }
+
+    .module{
+      position:absolute;
+      border:1px solid var(--line);
+      background:linear-gradient(180deg, rgba(10,10,12,.74), rgba(10,10,12,.52));
+      border-radius: var(--radius);
+      box-shadow:
+        0 14px 40px rgba(0,0,0,.45),
+        0 0 0 1px rgba(255,255,255,.04) inset;
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      transition: box-shadow .16s ease, border-color .16s ease, transform .16s ease;
+      overflow:hidden;
+      will-change: transform, left, top, width, height;
+    }
+    .module[data-dragging="1"]{
+      border-color: rgba(255,255,255,.35);
+      box-shadow:
+        0 24px 90px rgba(0,0,0,.70),
+        0 0 0 1px rgba(255,255,255,.08) inset;
+      transition:none;
+      cursor:grabbing;
+      z-index:10;
+    }
+
+    .head{
+      height:34px;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      padding:0 10px;
+      border-bottom:1px solid rgba(255,255,255,.08);
+      user-select:none;
+      cursor:grab;
+      font-size:11px;
+      text-transform:uppercase;
+      letter-spacing:.18em;
+      color:rgba(255,255,255,.76);
+    }
+    .id{opacity:.9}
+    .tools{
+      display:flex; gap:8px; align-items:center;
+      font-size:10px;
+      letter-spacing:.16em;
+      color:rgba(255,255,255,.38);
+    }
+    .dot{
+      width:8px; height:8px; border-radius:99px;
+      border:1px solid rgba(255,255,255,.22);
+      background:rgba(255,255,255,.04);
+    }
+
+    .body{
+      height:calc(100% - 34px);
+      padding:10px;
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+    }
+
+    .note{
+      flex:1;
+      width:100%;
+      resize:none;
+      border:1px solid rgba(255,255,255,.10);
+      background:rgba(0,0,0,.22);
+      border-radius:10px;
+      color:rgba(255,255,255,.88);
+      padding:10px;
+      outline:none;
+      font-size:12px;
+      line-height:1.35;
+    }
+    .note::placeholder{ color: rgba(255,255,255,.28); }
+
+    /* resize handle */
+    .resize{
+      position:absolute;
+      right:8px; bottom:8px;
+      width:14px; height:14px;
+      border-right:2px solid rgba(255,255,255,.28);
+      border-bottom:2px solid rgba(255,255,255,.28);
+      border-radius:2px;
+      cursor:nwse-resize;
+      opacity:.55;
+      transition: opacity .12s ease;
+    }
+    .module:hover .resize{ opacity:.85; }
+
+    /* helper overlay */
+    .hint{
+      position:fixed;
+      right:14px;
+      bottom:14px;
+      border:1px solid var(--line);
+      background:rgba(0,0,0,.35);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border-radius:999px;
+      padding:10px 12px;
+      font-size:11px;
+      letter-spacing:.14em;
+      text-transform:uppercase;
+      color:rgba(255,255,255,.55);
+      user-select:none;
+      z-index:60;
+    }
+    kbd{
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      font-size:10px;
+      padding:2px 6px;
+      border:1px solid rgba(255,255,255,.18);
+      border-bottom-color: rgba(255,255,255,.10);
+      border-radius:7px;
+      background:rgba(255,255,255,.06);
+      color:rgba(255,255,255,.72);
+      margin:0 4px;
+    }
+
+    /* accessibility focus */
+    .btn:focus, .note:focus{
+      outline: 2px solid rgba(255,255,255,.18);
+      outline-offset: 2px;
+    }
+  </style>
+</head>
+<body>
+  <div class="field"></div>
+
+  <header class="topbar">
+    <div class="brand">
+      <div>KETADATA</div>
+      <div class="sub">16 MODULE GRID</div>
+    </div>
+
+    <div class="controls">
+      <div class="pill">
+        <span>SNAP</span>
+        <span id="snapVal" style="color:rgba(255,255,255,.78)">12</span>
+      </div>
+      <button class="btn" id="resetBtn">RESET</button>
+      <button class="btn" id="tileBtn">TILE</button>
+      <button class="btn" id="exportBtn">EXPORT</button>
+      <button class="btn" id="importBtn">IMPORT</button>
+    </div>
+  </header>
+
+  <main class="workspace">
+    <section class="grid" id="grid"></section>
+  </main>
+
+  <div class="hint">
+    DRAG HEADER • RESIZE CORNER • <kbd>SHIFT</kbd> = NO SNAP • <kbd>⌘/CTRL</kbd> + <kbd>S</kbd> EXPORT
+  </div>
+
+  <script>
+    // KETADATA 16 MODULE GRID — malleable, movable, smooth
+    // No dependencies.
+
+    const grid = document.getElementById('grid');
+    const resetBtn = document.getElementById('resetBtn');
+    const tileBtn  = document.getElementById('tileBtn');
+    const exportBtn= document.getElementById('exportBtn');
+    const importBtn= document.getElementById('importBtn');
+    const snapVal  = document.getElementById('snapVal');
+
+    const STATE_KEY = "KETADATA_GRID16_STATE_V1";
+
+    const cfg = {
+      modules: 16,
+      snap: 12,
+      minW: 180,
+      minH: 140,
+      padding: 12,
+      headerH: 34
+    };
+
+    function clamp(v,min,max){ return Math.max(min, Math.min(max, v)); }
+    function snap(v, s){ return Math.round(v / s) * s; }
+
+    function gridRect(){
+      return grid.getBoundingClientRect();
+    }
+
+    function makeModule(i, rect){
+      const el = document.createElement('div');
+      el.className = 'module';
+      el.dataset.id = String(i).padStart(2,'0');
+
+      el.innerHTML = `
+        <div class="head" data-role="drag">
+          <div class="id">MODULE ${String(i).padStart(2,'0')}</div>
+          <div class="tools">
+            <div class="dot"></div><div class="dot"></div><div class="dot"></div>
+          </div>
+        </div>
+        <div class="body">
+          <textarea class="note" placeholder="NOTE / PAYLOAD"></textarea>
+        </div>
+        <div class="resize" data-role="resize" title="resize"></div>
+      `;
+
+      // initial position is set after creation
+      grid.appendChild(el);
+      return el;
+    }
+
+    function tileLayout(){
+      const r = gridRect();
+      const pad = cfg.padding;
+      const gap = 12;
+
+      const cols = 4;
+      const rows = 4;
+
+      const innerW = r.width - pad*2;
+      const innerH = r.height - pad*2;
+
+      const cellW = (innerW - gap*(cols-1)) / cols;
+      const cellH = (innerH - gap*(rows-1)) / rows;
+
+      const items = [...grid.querySelectorAll('.module')];
+      items.forEach((el, idx)=>{
+        const c = idx % cols;
+        const row = Math.floor(idx / cols);
+        const left = pad + c*(cellW+gap);
+        const top  = pad + row*(cellH+gap);
+
+        setBox(el, { left, top, width: cellW, height: cellH }, true);
+      });
+      saveState();
+    }
+
+    function setBox(el, box, animate=false){
+      if(!animate) el.style.transition = 'none';
+      else el.style.transition = 'box-shadow .16s ease, border-color .16s ease, transform .16s ease, left .16s ease, top .16s ease, width .16s ease, height .16s ease';
+
+      el.style.left   = box.left + 'px';
+      el.style.top    = box.top + 'px';
+      el.style.width  = box.width + 'px';
+      el.style.height = box.height + 'px';
+
+      if(!animate){
+        requestAnimationFrame(()=> el.style.transition = '');
+      }
+    }
+
+    function defaultState(){
+      // just tile by default
+      return null;
+    }
+
+    function captureState(){
+      const items = [...grid.querySelectorAll('.module')];
+      const state = {
+        v: 1,
+        snap: cfg.snap,
+        modules: items.map(el => {
+          const note = el.querySelector('.note')?.value ?? "";
+          return {
+            id: el.dataset.id,
+            left: parseFloat(el.style.left) || 0,
+            top: parseFloat(el.style.top) || 0,
+            width: parseFloat(el.style.width) || 200,
+            height: parseFloat(el.style.height) || 160,
+            note
+          };
+        })
+      };
+      return state;
+    }
+
+    function applyState(state){
+      if(!state || !state.modules) return false;
+
+      if(typeof state.snap === 'number'){
+        cfg.snap = state.snap;
+        snapVal.textContent = String(cfg.snap);
+      }
+
+      const byId = new Map(state.modules.map(m => [m.id, m]));
+      const items = [...grid.querySelectorAll('.module')];
+
+      items.forEach(el=>{
+        const m = byId.get(el.dataset.id);
+        if(!m) return;
+
+        const note = el.querySelector('.note');
+        if(note) note.value = m.note || "";
+
+        setBox(el, {
+          left: m.left ?? 0,
+          top: m.top ?? 0,
+          width: m.width ?? 220,
+          height: m.height ?? 180
+        }, true);
+      });
+
+      return true;
+    }
+
+    function saveState(){
+      try{
+        localStorage.setItem(STATE_KEY, JSON.stringify(captureState()));
+      }catch(e){}
+    }
+
+    function loadState(){
+      try{
+        const raw = localStorage.getItem(STATE_KEY);
+        if(!raw) return null;
+        return JSON.parse(raw);
+      }catch(e){ return null; }
+    }
+
+    // Interaction: drag + resize with snap
+    let active = null;
+
+    function startDrag(el, mode, e){
+      const r = gridRect();
+      const box = el.getBoundingClientRect();
+      const start = {
+        mode,
+        el,
+        pointerId: e.pointerId,
+        gridLeft: r.left,
+        gridTop: r.top,
+        startX: e.clientX,
+        startY: e.clientY,
+        left: parseFloat(el.style.left) || (box.left - r.left),
+        top: parseFloat(el.style.top) || (box.top - r.top),
+        width: parseFloat(el.style.width) || box.width,
+        height: parseFloat(el.style.height) || box.height,
+        shift: e.shiftKey,
+      };
+
+      el.dataset.dragging = "1";
+      el.setPointerCapture(e.pointerId);
+      active = start;
+    }
+
+    function move(e){
+      if(!active) return;
+      const { el, mode } = active;
+      const r = gridRect();
+
+      const dx = e.clientX - active.startX;
+      const dy = e.clientY - active.startY;
+
+      const noSnap = e.shiftKey;
+      const s = cfg.snap;
+
+      if(mode === 'drag'){
+        let left = active.left + dx;
+        let top  = active.top + dy;
+
+        // clamp inside grid
+        left = clamp(left, 0, r.width - active.width);
+        top  = clamp(top, 0, r.height - active.height);
+
+        if(!noSnap){
+          left = snap(left, s);
+          top  = snap(top, s);
+        }
+
+        setBox(el, { left, top, width: active.width, height: active.height }, false);
+      }else if(mode === 'resize'){
+        let w = active.width + dx;
+        let h = active.height + dy;
+
+        w = Math.max(cfg.minW, w);
+        h = Math.max(cfg.minH, h);
+
+        // clamp to bounds
+        w = Math.min(w, r.width - active.left);
+        h = Math.min(h, r.height - active.top);
+
+        if(!noSnap){
+          w = snap(w, s);
+          h = snap(h, s);
+        }
+
+        setBox(el, { left: active.left, top: active.top, width: w, height: h }, false);
+      }
+    }
+
+    function end(e){
+      if(!active) return;
+      const el = active.el;
+      el.dataset.dragging = "0";
+      try{ el.releasePointerCapture(active.pointerId); }catch(_){}
+      active = null;
+      saveState();
+    }
+
+    // Event delegation
+    grid.addEventListener('pointerdown', (e)=>{
+      const t = e.target;
+      const mod = t.closest('.module');
+      if(!mod) return;
+
+      const role = t.getAttribute('data-role') || t.closest('[data-role]')?.getAttribute('data-role');
+
+      if(role === 'drag'){
+        startDrag(mod, 'drag', e);
+      }else if(role === 'resize'){
+        startDrag(mod, 'resize', e);
+      }
+    });
+
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', end);
+    window.addEventListener('pointercancel', end);
+
+    // Save notes on input
+    grid.addEventListener('input', (e)=>{
+      if(e.target && e.target.classList.contains('note')) saveState();
+    });
+
+    // Buttons
+    resetBtn.addEventListener('click', ()=>{
+      localStorage.removeItem(STATE_KEY);
+      tileLayout();
+    });
+
+    tileBtn.addEventListener('click', ()=>{
+      tileLayout();
+    });
+
+    exportBtn.addEventListener('click', ()=>{
+      const data = JSON.stringify(captureState(), null, 2);
+      navigator.clipboard?.writeText(data).catch(()=>{});
+      alert("STATE COPIED TO CLIPBOARD.");
+    });
+
+    importBtn.addEventListener('click', ()=>{
+      const raw = prompt("PASTE STATE JSON:");
+      if(!raw) return;
+      try{
+        const state = JSON.parse(raw);
+        applyState(state);
+        saveState();
+        alert("STATE LOADED.");
+      }catch(e){
+        alert("INVALID JSON.");
+      }
+    });
+
+    // Keyboard: cmd/ctrl+s export
+    window.addEventListener('keydown', (e)=>{
+      const key = e.key.toLowerCase();
+      if((e.ctrlKey || e.metaKey) && key === 's'){
+        e.preventDefault();
+        exportBtn.click();
+      }
+    });
+
+    // Initialize
+    (function init(){
+      const r = gridRect();
+      // create modules
+      for(let i=1;i<=cfg.modules;i++){
+        makeModule(i);
+      }
+
+      // layout
+      const saved = loadState();
+      if(saved && applyState(saved)){
+        // ok
+      }else{
+        tileLayout();
+      }
+
+      // adapt on resize (keeps positions but clamps inside)
+      let resizeTO = null;
+      window.addEventListener('resize', ()=>{
+        clearTimeout(resizeTO);
+        resizeTO = setTimeout(()=>{
+          const r = gridRect();
+          const items = [...grid.querySelectorAll('.module')];
+          items.forEach(el=>{
+            const left = parseFloat(el.style.left)||0;
+            const top = parseFloat(el.style.top)||0;
+            const w = parseFloat(el.style.width)||220;
+            const h = parseFloat(el.style.height)||180;
+
+            const newLeft = clamp(left, 0, r.width - w);
+            const newTop  = clamp(top, 0, r.height - h);
+
+            setBox(el, { left:newLeft, top:newTop, width:w, height:h }, true);
+          });
+          saveState();
+        }, 120);
+      });
+    })();
+  </script>
+
+  <!-- KETADATA SERIALIZATION STAMP (RULE) -->
+  <!-- AE/WB/EE: AE — FILE_ID:GRID16_MODERNIST_001 — ROOM_ID:NULL — VERSION:v1 — UPDATED_AT:2025-12-26 — CHANGELOG:INIT_16_MOVABLE_MODULES+SNAP+STATE_IO -->
+</body>
+</html>
