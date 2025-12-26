@@ -1,0 +1,650 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>BLACK LOTUS // DYNAMIC</title>
+  <style>
+    :root{
+      --bg:#000;
+      --ink:rgba(255,255,255,.92);
+      --muted:rgba(255,255,255,.60);
+      --line:rgba(255,255,255,.10);
+      --line2:rgba(255,255,255,.18);
+      --r:0px;
+      --font: Arial, Helvetica, sans-serif;
+    }
+    *{ box-sizing:border-box; font-family: var(--font) !important; }
+    html,body{ height:100%; }
+    body{
+      margin:0;
+      background: var(--bg);
+      color: var(--ink);
+      overflow:hidden;
+    }
+
+    /* Canvas */
+    #c{ position:fixed; inset:0; display:block; }
+
+    /* Minimal controls (brutalist) */
+    .ui{
+      position:fixed;
+      left:12px;
+      top:12px;
+      z-index:10;
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+      width:min(420px, calc(100vw - 24px));
+      pointer-events:none;
+    }
+    .panel{
+      pointer-events:auto;
+      border:1px solid var(--line);
+      background: rgba(255,255,255,.03);
+      border-radius: var(--r);
+      padding:10px;
+      user-select:none;
+    }
+    .title{
+      display:flex;
+      align-items:baseline;
+      justify-content:space-between;
+      gap:10px;
+      text-transform:uppercase;
+      letter-spacing:.12em;
+      font-weight:700;
+      font-size:12px;
+      margin-bottom:8px;
+      cursor:pointer; /* allow click-to-expand */
+    }
+    .hint{
+      font-size:11px;
+      color:var(--muted);
+      letter-spacing:.02em;
+      text-transform:none;
+      font-weight:400;
+      max-width: 240px;
+      text-align:right;
+    }
+    .grid{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap:8px;
+    }
+    label{
+      display:block;
+      font-size:11px;
+      color:var(--muted);
+      text-transform:lowercase;
+      margin-bottom:4px;
+    }
+    input[type="range"]{
+      width:100%;
+      accent-color: rgba(220,220,220,.95);
+    }
+    .row{
+      display:flex;
+      gap:8px;
+      align-items:center;
+      flex-wrap:wrap;
+    }
+    .btn{
+      appearance:none;
+      border:1px solid var(--line);
+      background: rgba(255,255,255,.04);
+      color:var(--ink);
+      padding:8px 10px;
+      font-size:12px;
+      cursor:pointer;
+      border-radius: var(--r);
+      text-transform:lowercase;
+    }
+    .btn:hover{ border-color: var(--line2); }
+    .pill{
+      border:1px solid var(--line);
+      background: rgba(255,255,255,.02);
+      padding:6px 8px;
+      font-size:11px;
+      color:var(--muted);
+      border-radius: var(--r);
+      text-transform:lowercase;
+      white-space:nowrap;
+    }
+
+    /* Controls hidden by default (collapsed panel) */
+    .panel.collapsed .grid,
+    .panel.collapsed .row,
+    .panel.collapsed .spacer{
+      display:none !important;
+    }
+    .panel.collapsed .title{
+      margin-bottom:0;
+    }
+
+    /* Entry hints overlay */
+    .entryHints{
+      position:fixed;
+      inset:0;
+      z-index:9;
+      pointer-events:none;
+    }
+    .hintShiftI{
+      position:absolute;
+      right:14px;
+      bottom:14px;
+      font-size:12px;
+      letter-spacing:.16em;
+      text-transform:uppercase;
+      color:rgba(255,255,255,.22); /* faint grey on black */
+      mix-blend-mode:normal;
+    }
+    /* These are intentionally black-on-black; they "appear" only after invert (bg goes white). */
+    .hintHiddenBlack{
+      position:absolute;
+      left:14px;
+      bottom:14px;
+      display:flex;
+      gap:14px;
+      font-size:12px;
+      letter-spacing:.16em;
+      text-transform:uppercase;
+      color:rgba(0,0,0,.78);
+    }
+
+    /* Bottom micro legend (disabled for entry screen) */
+    .legend{ display:none !important; }
+  </style>
+</head>
+<body>
+  <canvas id="c"></canvas>
+
+  <!-- Entry order: lotus + collapsed panel + SHIFT I; after invert, SHIFT K / SHIFT B become visible -->
+  <div class="entryHints" aria-hidden="true">
+    <div class="hintShiftI">SHIFT&nbsp;I</div>
+    <div class="hintHiddenBlack">
+      <div>SHIFT&nbsp;K</div>
+      <div>SHIFT&nbsp;B</div>
+    </div>
+  </div>
+
+  <div class="ui">
+    <div class="panel collapsed" id="panel">
+      <div class="title" id="panelTitle">
+        <div>BLACK LOTUS</div>
+        <div class="hint">drag = warp · wheel = zoom · space = pulse · r = re-seed</div>
+      </div>
+
+      <div class="grid">
+        <div>
+          <label>petals</label>
+          <input id="petals" type="range" min="6" max="24" value="12" />
+        </div>
+        <div>
+          <label>layers</label>
+          <input id="layers" type="range" min="2" max="10" value="6" />
+        </div>
+        <div>
+          <label>spin</label>
+          <input id="spin" type="range" min="0" max="100" value="42" />
+        </div>
+        <div>
+          <label>breath</label>
+          <input id="breath" type="range" min="0" max="100" value="55" />
+        </div>
+        <div>
+          <label>grain</label>
+          <input id="grain" type="range" min="0" max="100" value="35" />
+        </div>
+        <div>
+          <label>contrast</label>
+          <input id="contrast" type="range" min="0" max="100" value="65" />
+        </div>
+      </div>
+
+      <div class="spacer" style="height:10px"></div>
+      <div class="row">
+        <button class="btn" id="toggle">pause</button>
+        <button class="btn" id="invert">invert</button>
+        <button class="btn" id="snap">screenshot</button>
+        <span class="pill" id="stat">ready</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="legend">
+    <b>mode:</b> lotus-field generator · monochrome · procedural petals · adaptive turbulence
+  </div>
+
+<script>
+(() => {
+  const canvas = document.getElementById("c");
+  const ctx = canvas.getContext("2d", { alpha: false });
+
+  const ui = {
+    petals: document.getElementById("petals"),
+    layers: document.getElementById("layers"),
+    spin: document.getElementById("spin"),
+    breath: document.getElementById("breath"),
+    grain: document.getElementById("grain"),
+    contrast: document.getElementById("contrast"),
+    toggle: document.getElementById("toggle"),
+    invert: document.getElementById("invert"),
+    snap: document.getElementById("snap"),
+    stat: document.getElementById("stat"),
+    panel: document.getElementById("panel"),
+    panelTitle: document.getElementById("panelTitle"),
+  };
+
+  // Navigation targets (edit if you want different filenames)
+  const NAV = {
+    BASE: "system.html",
+    LANDING: "index.html",
+  };
+
+  let W=0, H=0, DPR=1;
+  function resize(){
+    DPR = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+    W = Math.floor(window.innerWidth * DPR);
+    H = Math.floor(window.innerHeight * DPR);
+    canvas.width = W;
+    canvas.height = H;
+    canvas.style.width = window.innerWidth + "px";
+    canvas.style.height = window.innerHeight + "px";
+    ctx.setTransform(1,0,0,1,0,0);
+  }
+  window.addEventListener("resize", resize, { passive:true });
+  resize();
+
+  // State
+  let running = true;
+  let invert = false;
+
+  // Interaction / camera
+  let zoom = 1.0;
+  let targetZoom = 1.0;
+  let panX = 0;
+  let panY = 0;
+  let targetPanX = 0;
+  let targetPanY = 0;
+
+  // Mouse warp
+  let mouseX = 0, mouseY = 0;
+  let drag = false;
+  let lastX = 0, lastY = 0;
+
+  // Pulse
+  let pulse = 0;
+  let pulseKick = 0;
+
+  // Seeded randomness
+  let seed = (Math.random()*1e9)>>>0;
+  function rnd(){
+    // xorshift32
+    seed ^= seed << 13; seed >>>= 0;
+    seed ^= seed >> 17; seed >>>= 0;
+    seed ^= seed << 5;  seed >>>= 0;
+    return (seed >>> 0) / 4294967296;
+  }
+  function reseed(){
+    seed = (Math.random()*1e9)>>>0;
+    // shift the internal noise fields a bit
+    noisePhase = rnd()*1000;
+    ui.stat.textContent = "re-seeded";
+  }
+
+  // Tiny value noise (no libs)
+  // 2D hash -> smooth interpolation
+  function hash2(ix, iy){
+    // integer hash
+    let h = ix * 374761393 + iy * 668265263; // big primes
+    h = (h ^ (h >> 13)) >>> 0;
+    h = (h * 1274126177) >>> 0;
+    return (h ^ (h >> 16)) >>> 0;
+  }
+  function smoothstep(t){ return t*t*(3-2*t); }
+  function lerp(a,b,t){ return a + (b-a)*t; }
+  function vnoise(x, y){
+    const ix = Math.floor(x), iy = Math.floor(y);
+    const fx = x - ix, fy = y - iy;
+    const a = (hash2(ix,iy) & 1023)/1023;
+    const b = (hash2(ix+1,iy) & 1023)/1023;
+    const c = (hash2(ix,iy+1) & 1023)/1023;
+    const d = (hash2(ix+1,iy+1) & 1023)/1023;
+    const ux = smoothstep(fx), uy = smoothstep(fy);
+    return lerp(lerp(a,b,ux), lerp(c,d,ux), uy);
+  }
+
+  // Draw helpers
+  function setStat(s){ ui.stat.textContent = s; }
+
+  function toggleInvert(){
+    invert = !invert;
+    setStat(invert ? "inverted" : "normal");
+  }
+
+  // Controls (functionality unchanged)
+  ui.toggle.onclick = () => {
+    running = !running;
+    ui.toggle.textContent = running ? "pause" : "run";
+    if(running) requestAnimationFrame(frame);
+  };
+  ui.invert.onclick = () => { toggleInvert(); };
+  ui.snap.onclick = () => {
+    try{
+      const a = document.createElement("a");
+      a.download = "black_lotus.png";
+      a.href = canvas.toDataURL("image/png");
+      a.click();
+      setStat("screenshot saved");
+    }catch(e){
+      setStat("screenshot blocked");
+    }
+  };
+
+  // Collapsed by default; click header to expand/collapse
+  ui.panelTitle.addEventListener("click", () => {
+    ui.panel.classList.toggle("collapsed");
+  });
+
+  // Interaction
+  window.addEventListener("mousemove", (e) => {
+    mouseX = (e.clientX / window.innerWidth) * 2 - 1;
+    mouseY = (e.clientY / window.innerHeight) * 2 - 1;
+    if(drag){
+      const dx = e.clientX - lastX;
+      const dy = e.clientY - lastY;
+      lastX = e.clientX; lastY = e.clientY;
+      targetPanX += dx * DPR;
+      targetPanY += dy * DPR;
+    }
+  }, { passive:true });
+
+  window.addEventListener("mousedown", (e) => {
+    drag = true;
+    lastX = e.clientX;
+    lastY = e.clientY;
+  }, { passive:true });
+
+  window.addEventListener("mouseup", () => { drag = false; }, { passive:true });
+
+  window.addEventListener("wheel", (e) => {
+    e.preventDefault();
+    const k = Math.exp(-e.deltaY * 0.0012);
+    targetZoom = clamp(targetZoom * k, 0.45, 3.2);
+  }, { passive:false });
+
+  window.addEventListener("keydown", (e) => {
+    // SHIFT+I = invert (LOCKED)
+    if(e.shiftKey && e.key.toLowerCase() === "i"){
+      e.preventDefault();
+      toggleInvert();
+      return;
+    }
+
+    // SHIFT+B = base (LOCKED)
+    if(e.shiftKey && e.key.toLowerCase() === "b"){
+      e.preventDefault();
+      window.location.href = NAV.BASE;
+      return;
+    }
+
+    // SHIFT+K = landing (LOCKED)
+    if(e.shiftKey && e.key.toLowerCase() === "k"){
+      e.preventDefault();
+      window.location.href = NAV.LANDING;
+      return;
+    }
+
+    // Existing keys (unchanged)
+    if(e.key === " "){
+      e.preventDefault();
+      pulseKick = 1.0;
+      setStat("pulse");
+    }
+    if(e.key.toLowerCase() === "r"){
+      reseed();
+    }
+  });
+
+  function clamp(x,a,b){ return Math.max(a, Math.min(b, x)); }
+
+  // Procedural lotus renderer
+  let t0 = performance.now();
+  let noisePhase = Math.random()*1000;
+
+  function lotusIntensity(x, y, t, petals, layers, spinAmt, breathAmt){
+    // x,y in -1..1 space (after pan/zoom)
+    const r = Math.hypot(x,y);
+    const a = Math.atan2(y,x);
+
+    // Breathing radial warp
+    const breathe = 1.0 + 0.08 * breathAmt * Math.sin(t*0.8 + r*7.0);
+
+    // Core "lotus" profile: layered petals via polar modulation
+    // Petal modulation gets more complex with layers.
+    let mod = 0;
+    let amp = 0.42;
+    let freq = petals;
+    let phase = t*0.6*spinAmt;
+
+    for(let i=0;i<layers;i++){
+      mod += amp * Math.cos(freq*a + phase + i*0.65);
+      amp *= 0.62;
+      freq += petals * 0.35;
+      phase *= 1.02;
+    }
+
+    // Add subtle turbulence with value noise
+    const nx = x*2.0 + 1.7*Math.sin(t*0.3);
+    const ny = y*2.0 + 1.7*Math.cos(t*0.27);
+    const n = vnoise(nx + noisePhase, ny + noisePhase) - 0.5;
+
+    // Petal boundary curve
+    const boundary = 0.48 * breathe + 0.22*mod + 0.08*n;
+
+    // Signed distance-ish: inside petals = higher intensity
+    const d = boundary - r;
+
+    // Edge shaping: sharper at the petal tips, softer at core
+    const edge = smoothstep(clamp((d + 0.02) / 0.08, 0, 1));
+
+    // Inner veining (radial lines) (subtle)
+    const veins = 0.06 * Math.cos((petals*2.0)*a - t*0.9) * Math.exp(-r*2.2);
+
+    // Central "seed pod"
+    const core = Math.exp(-r*r*18.0);
+
+    // Combine
+    let I = edge + 0.65*core + veins;
+
+    // Outer haze
+    I += 0.08 * Math.exp(-Math.max(0, r-0.45)*10.0);
+
+    return clamp(I, 0, 1);
+  }
+
+  function frame(now){
+    if(!running) return;
+
+    const dt = (now - t0) / 1000;
+    t0 = now;
+
+    // Ease camera
+    zoom = lerp(zoom, targetZoom, 0.10);
+    panX = lerp(panX, targetPanX, 0.10);
+    panY = lerp(panY, targetPanY, 0.10);
+
+    // Pulse dynamics
+    pulseKick = lerp(pulseKick, 0, 0.08);
+    pulse = lerp(pulse, 0, 0.06) + pulseKick * 0.18;
+
+    // Read UI
+    const petals = parseInt(ui.petals.value, 10);
+    const layers = parseInt(ui.layers.value, 10);
+    const spinAmt = parseInt(ui.spin.value, 10) / 100;   // 0..1
+    const breathAmt = parseInt(ui.breath.value, 10) / 100;
+    const grain = parseInt(ui.grain.value, 10) / 100;
+    const contrast = parseInt(ui.contrast.value, 10) / 100;
+
+    // Time driver
+    const t = performance.now()/1000;
+
+    // Clear
+    ctx.fillStyle = invert ? "#fff" : "#000";
+    ctx.fillRect(0,0,W,H);
+
+    // Render lotus field
+    const cx = W*0.5 + panX;
+    const cy = H*0.5 + panY;
+
+    const baseR = Math.min(W,H) * 0.42 * zoom * (1 + 0.35*pulse);
+    const strokeCount = Math.floor(900 + petals*60);
+    const ringCount = Math.floor(240 + layers*20);
+
+    ctx.save();
+    ctx.translate(cx, cy);
+
+    const ink = invert ? "rgba(0,0,0," : "rgba(255,255,255,";
+    const alphaBase = 0.10 + 0.22*contrast;
+
+    for(let i=0;i<strokeCount;i++){
+      const u = i / strokeCount;
+      const a = u * Math.PI*2;
+
+      const warp = 0.18 * (mouseX*Math.cos(a) + mouseY*Math.sin(a));
+      const rr = baseR * (0.78 + 0.22*Math.sin(a*petals + t*0.8*spinAmt) + warp);
+      const thick = 0.8 + 1.6 * (0.5 + 0.5*Math.sin(t*1.2 + a*3.0));
+
+      const steps = 28;
+
+      const aStroke = alphaBase * (0.25 + 0.75*Math.pow(Math.sin(a*0.5 + t*0.4)*0.5+0.5, 1.8));
+
+      ctx.lineWidth = thick * DPR;
+      ctx.beginPath();
+
+      for(let s=0;s<=steps;s++){
+        const v = s/steps;
+        const r = v * rr;
+
+        const lx = (Math.cos(a)*r) / baseR;
+        const ly = (Math.sin(a)*r) / baseR;
+
+        const I = lotusIntensity(lx, ly, t, petals, layers, spinAmt, breathAmt);
+
+        const jitter = grain * 0.012 * (vnoise(lx*12 + t*0.7, ly*12 - t*0.6)-0.5);
+
+        const bend = (0.18*I + 0.06*Math.sin(t + v*8 + a*2)) * (0.5 + 0.5*v);
+
+        const x = Math.cos(a + bend + jitter) * r;
+        const y = Math.sin(a + bend + jitter) * r;
+
+        if(s === 0){ ctx.moveTo(x,y); }
+        else{ ctx.lineTo(x,y); }
+      }
+
+      ctx.strokeStyle = ink + (aStroke) + ")";
+      ctx.stroke();
+    }
+
+    for(let j=0;j<ringCount;j++){
+      const v = j/(ringCount-1);
+      const r = baseR * v;
+
+      const segs = Math.floor(40 + petals*3);
+      const off = t*0.35*spinAmt + v*0.9;
+      ctx.beginPath();
+      for(let k=0;k<=segs;k++){
+        const u = k/segs;
+        const a = u*Math.PI*2;
+
+        const lx = (Math.cos(a)*r)/baseR;
+        const ly = (Math.sin(a)*r)/baseR;
+        const I = lotusIntensity(lx, ly, t, petals, layers, spinAmt, breathAmt);
+
+        const warp = 0.10*(mouseX*Math.cos(a) + mouseY*Math.sin(a));
+        const rr = r * (0.92 + 0.12*I + warp);
+
+        const bend = 0.10*I*Math.sin(a*petals + off);
+        const x = Math.cos(a + bend) * rr;
+        const y = Math.sin(a + bend) * rr;
+
+        if(k===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+      }
+
+      const aRing = (0.02 + 0.14*contrast) * (1-v) * (0.3 + 0.7*Math.sin(t*0.5 + v*6)*0.5 + 0.35);
+      ctx.lineWidth = (0.7 + 1.2*(1-v)) * DPR;
+      ctx.strokeStyle = ink + aRing + ")";
+      ctx.stroke();
+    }
+
+    ctx.beginPath();
+    ctx.arc(0,0, baseR*0.08, 0, Math.PI*2);
+    ctx.strokeStyle = ink + (0.25 + 0.35*contrast) + ")";
+    ctx.lineWidth = 1.2 * DPR;
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(-baseR*0.02,0); ctx.lineTo(baseR*0.02,0);
+    ctx.moveTo(0,-baseR*0.02); ctx.lineTo(0,baseR*0.02);
+    ctx.strokeStyle = ink + (0.16 + 0.20*contrast) + ")";
+    ctx.lineWidth = 1.0 * DPR;
+    ctx.stroke();
+
+    ctx.restore();
+
+    const grd = ctx.createRadialGradient(W*0.5, H*0.5, 0, W*0.5, H*0.5, Math.max(W,H)*0.65);
+    if(!invert){
+      grd.addColorStop(0, "rgba(0,0,0,0)");
+      grd.addColorStop(1, "rgba(0,0,0,0.65)");
+    }else{
+      grd.addColorStop(0, "rgba(255,255,255,0)");
+      grd.addColorStop(1, "rgba(255,255,255,0.75)");
+    }
+    ctx.fillStyle = grd;
+    ctx.fillRect(0,0,W,H);
+
+    requestAnimationFrame(frame);
+  }
+
+  requestAnimationFrame(frame);
+  setTimeout(() => { ui.stat.textContent = "live"; }, 250);
+
+})();
+</script>
+</body>
+</html>
+
+<!-- =========================================================
+KETADATA :: SERIALIZATION
+-------------------------------------------------------------
+AE  FILE_ID     : KDT_BLACK_LOTUS_ENTRY
+AE  ROOM_ID     : LOBBY
+AE  ROLE        : ENTRY_SURFACE
+AE  VERSION     : v1.0
+AE  UPDATED_AT  : 2025-12-26T00:00:00-05:00
+AE  AUTHORSHIP  : K N G  ×  BIGGIE
+
+EE  ENGINE      : KETADATA_SHELL_KERNEL_v1
+EE  STATE_MODE  : EPHEMERAL
+EE  BARS        : DISABLED
+EE  CONTROLS    : COLLAPSED_BY_DEFAULT
+
+WB  HOTKEYS
+    SHIFT+I     : INVERT
+    SHIFT+B     : BASE (system.html)
+    SHIFT+K     : LANDING (index.html)
+
+WB  DISCOVERY_ORDER
+    1. LOTUS FIELD + COLLAPSED PANEL
+    2. SHIFT+I (FAINT GREY)
+    3. INVERT
+    4. SHIFT+K / SHIFT+B (BLACK ON BLACK → REVEALED)
+
+CHANGELOG
+- ENTRY SCREEN EXCEPTION (NO TOP/BOTTOM BARS)
+- HOTKEY DISCOVERY SEQUENCED
+- SERIALIZATION ENFORCED
+
+STATUS : LOCKED
+========================================================== -->
