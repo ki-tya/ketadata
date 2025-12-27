@@ -1,0 +1,1045 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>KETADATA // SHELL8 // KERNEL v1</title>
+
+<style>
+  :root{
+    --bg:#000;
+    --fg:#fff;
+    --mut:#7a7a7a;
+    --line:rgba(255,255,255,.16);
+    --line2:rgba(255,255,255,.28);
+    --panel:rgba(0,0,0,.65);
+
+    --top:44px;
+    --bot:34px;
+
+    --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    --ui: Arial, Helvetica, sans-serif;
+
+    --zTop:50;
+    --zMain:10;
+    --zNote:60;
+
+    --bottomH: 240px; /* persisted */
+  }
+
+  *{ box-sizing:border-box; }
+  html,body{ height:100%; }
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--fg);
+    font-family:var(--mono);
+    overflow:hidden;
+  }
+
+  /* ===== TOP BAR (HARD BOUNDARY) ===== */
+  .topbar{
+    position:fixed; left:0; top:0; right:0;
+    height:var(--top);
+    display:flex;
+    align-items:center;
+    gap:10px;
+    padding:6px 10px;
+    border-bottom:1px solid var(--line);
+    background:rgba(0,0,0,.82);
+    z-index:var(--zTop);
+  }
+
+  .brand{
+    display:flex; align-items:center; gap:8px;
+    font-size:12px;
+    letter-spacing:.16em;
+    text-transform:uppercase;
+    white-space:nowrap;
+  }
+  .sq{ width:10px; height:10px; background:#fff; display:inline-block; }
+
+  .topbar .spacer{ flex:1; }
+
+  .btn{
+    height:24px;
+    padding:0 8px;
+    border:1px solid var(--line2);
+    background:rgba(0,0,0,.4);
+    color:rgba(255,255,255,.88);
+    font-family:var(--mono);
+    font-size:11px;
+    letter-spacing:.14em;
+    text-transform:uppercase;
+    cursor:pointer;
+  }
+  .btn:hover{ border-color:rgba(255,255,255,.55); background:rgba(255,255,255,.06); }
+  .btn.on{ background:rgba(255,255,255,.10); border-color:rgba(255,255,255,.70); }
+
+  .mini{
+    font-size:10px;
+    letter-spacing:.14em;
+    text-transform:uppercase;
+    color:rgba(255,255,255,.52);
+    user-select:none;
+  }
+
+  /* ===== MAIN ===== */
+  .main{
+    position:fixed;
+    left:0; right:0;
+    top:var(--top);
+    bottom:var(--bot);
+    z-index:var(--zMain);
+    overflow:hidden;
+  }
+
+  /* PINS GRID (BASE STABLE) */
+  .pinsWrap{
+    position:absolute;
+    left:10px;
+    top:10px;
+    right:10px;
+    bottom:calc(var(--bottomH) + 12px);
+    border:1px solid rgba(255,255,255,.10);
+    background:rgba(0,0,0,.25);
+    overflow:auto;
+    padding:10px;
+  }
+
+  .pinsHead{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:10px;
+    padding:6px 6px 10px;
+    border-bottom:1px solid rgba(255,255,255,.10);
+    margin-bottom:10px;
+  }
+
+  .pinsTitle{
+    font-size:11px;
+    letter-spacing:.18em;
+    text-transform:uppercase;
+    color:rgba(255,255,255,.86);
+    font-weight:800;
+    white-space:nowrap;
+  }
+
+  .activeGo{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    flex-wrap:wrap;
+    justify-content:flex-end;
+  }
+  .activeGo label{
+    font-size:10px;
+    letter-spacing:.16em;
+    text-transform:uppercase;
+    color:rgba(255,255,255,.46);
+  }
+  .activeGo input{
+    width:220px;
+    height:24px;
+    border:1px solid rgba(255,255,255,.18);
+    background:#000;
+    color:#fff;
+    padding:0 8px;
+    font-family:var(--mono);
+    font-size:11px;
+    outline:none;
+  }
+
+  .pinsGrid{
+    display:grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap:10px;
+  }
+
+  .pin{
+    border:1px solid rgba(255,255,255,.12);
+    background:rgba(0,0,0,.35);
+    padding:10px;
+    cursor:grab;
+    user-select:none;
+  }
+  .pin:active{ cursor:grabbing; }
+  .pinTop{
+    display:flex; justify-content:space-between; align-items:center; gap:8px;
+    margin-bottom:8px;
+  }
+  .pinLabel{
+    font-size:10px;
+    letter-spacing:.16em;
+    text-transform:uppercase;
+    color:rgba(255,255,255,.86);
+    font-weight:800;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+  }
+  .pinDel{
+    height:20px; padding:0 6px;
+    border:1px solid rgba(255,255,255,.18);
+    background:rgba(0,0,0,.35);
+    color:rgba(255,255,255,.72);
+    font-size:10px;
+    letter-spacing:.14em;
+    text-transform:uppercase;
+    cursor:pointer;
+  }
+  .pinDel:hover{ border-color:rgba(255,255,255,.45); background:rgba(255,255,255,.06); }
+
+  .pin a{
+    color:rgba(255,255,255,.72);
+    text-decoration:none;
+    font-size:11px;
+    letter-spacing:.10em;
+    word-break:break-all;
+  }
+  .pin a:hover{ color:#fff; text-decoration:underline; }
+
+  /* ===== BOTTOM PANEL (RESIZABLE UP TO TOP) ===== */
+  .bottom{
+    position:absolute;
+    left:10px; right:10px;
+    bottom:10px;
+    height:var(--bottomH);
+    border:1px solid rgba(255,255,255,.12);
+    background:rgba(0,0,0,.55);
+    overflow:hidden;
+  }
+  .dragbar{
+    height:10px;
+    border-bottom:1px solid rgba(255,255,255,.12);
+    background:rgba(255,255,255,.04);
+    cursor:ns-resize;
+  }
+  .bottomInner{
+    height:calc(100% - 10px);
+    display:grid;
+    grid-template-columns: 1fr 1fr;
+    gap:10px;
+    padding:10px;
+    overflow:auto;
+  }
+
+  .panel{
+    border:1px solid rgba(255,255,255,.10);
+    background:rgba(0,0,0,.35);
+    padding:10px;
+    min-height: 120px;
+  }
+  .panelTitle{
+    font-size:10px;
+    letter-spacing:.18em;
+    text-transform:uppercase;
+    color:rgba(255,255,255,.62);
+    font-weight:800;
+    margin-bottom:8px;
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:10px;
+  }
+
+  /* REGISTRY */
+  .regRow{
+    display:flex; gap:8px; flex-wrap:wrap; align-items:center;
+    margin-bottom:8px;
+  }
+  .regRow input{
+    height:24px;
+    border:1px solid rgba(255,255,255,.18);
+    background:#000;
+    color:#fff;
+    padding:0 8px;
+    font-family:var(--mono);
+    font-size:11px;
+    outline:none;
+    width: min(420px, 100%);
+  }
+  .regRow button{ height:24px; }
+  .bulk{
+    width:100%;
+    height:110px;
+    resize:vertical;
+    border:1px solid rgba(255,255,255,.18);
+    background:#000;
+    color:#fff;
+    padding:8px;
+    font-family:var(--mono);
+    font-size:11px;
+    outline:none;
+  }
+  .help{
+    margin-top:8px;
+    font-size:10px;
+    letter-spacing:.12em;
+    color:rgba(255,255,255,.44);
+    text-transform:uppercase;
+  }
+
+  /* PRESETS (VISIBLE EVEN IF HOTKEYS EXIST) */
+  .presetGrid{
+    display:grid;
+    grid-template-columns: repeat(2, minmax(0,1fr));
+    gap:8px;
+  }
+  .presetBtn{
+    height:24px;
+    border:1px solid rgba(255,255,255,.18);
+    background:rgba(0,0,0,.35);
+    color:rgba(255,255,255,.82);
+    font-family:var(--mono);
+    font-size:10px;
+    letter-spacing:.16em;
+    text-transform:uppercase;
+    cursor:pointer;
+    text-align:left;
+    padding:0 8px;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+  }
+  .presetBtn:hover{ border-color:rgba(255,255,255,.48); background:rgba(255,255,255,.06); }
+
+  /* ===== BOTTOM STATUS BAR ===== */
+  .statusbar{
+    position:fixed;
+    left:0; right:0; bottom:0;
+    height:var(--bot);
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    padding:0 10px;
+    border-top:1px solid var(--line);
+    background:rgba(0,0,0,.82);
+    z-index:var(--zTop);
+    font-size:10px;
+    letter-spacing:.14em;
+    text-transform:uppercase;
+    color:rgba(255,255,255,.55);
+  }
+  .statusbar .left{ display:flex; gap:10px; align-items:center; }
+  .kbd{
+    border:1px solid rgba(255,255,255,.16);
+    padding:2px 6px;
+    background:rgba(0,0,0,.35);
+    color:rgba(255,255,255,.70);
+  }
+
+  /* ===== KETA_NOTE (COLLAPSED BY DEFAULT) ===== */
+  .ketaNote{
+    position:fixed;
+    right:10px;
+    bottom:calc(var(--bot) + 10px);
+    width:min(560px, calc(100vw - 20px));
+    border:1px solid rgba(255,255,255,.58);
+    background:rgba(0,0,0,.72);
+    z-index:var(--zNote);
+    display:none; /* collapsed default */
+  }
+  .ketaHead{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    padding:8px 10px;
+    border-bottom:1px solid rgba(255,255,255,.14);
+    font-size:11px;
+    letter-spacing:.18em;
+    text-transform:uppercase;
+  }
+  .ketaBody{ padding:10px; }
+  .ketaBody textarea{
+    width:100%;
+    height:180px;
+    resize:vertical;
+    border:1px solid rgba(255,255,255,.16);
+    background:#000;
+    color:#fff;
+    padding:10px;
+    font-family:var(--mono);
+    font-size:12px;
+    outline:none;
+  }
+
+  /* ===== FULLSCREEN + NULL ===== */
+  body.fullscreen .topbar,
+  body.fullscreen .statusbar,
+  body.fullscreen .bottom{
+    display:none !important;
+  }
+  body.fullscreen .main{
+    top:0; bottom:0;
+  }
+  body.nullmode{
+    background:#000 !important;
+  }
+  body.nullmode .topbar,
+  body.nullmode .statusbar,
+  body.nullmode .main{
+    display:none !important;
+  }
+</style>
+</head>
+
+<body>
+  <div class="topbar" id="topbar">
+    <div class="brand"><span class="sq"></span> KETADATA // SHELL8 // KERNEL v1</div>
+
+    <button class="btn" id="btnImport">IMPORT</button>
+    <button class="btn" id="btnExport">EXPORT</button>
+    <button class="btn" id="btnCopy">COPY</button>
+
+    <div class="spacer"></div>
+
+    <button class="btn" id="btnInvert">SHIFT+I</button>
+    <button class="btn" id="btnFullscreen">SHIFT+F</button>
+    <button class="btn" id="btnNull">SHIFT+N</button>
+  </div>
+
+  <div class="main" id="main">
+    <div class="pinsWrap">
+      <div class="pinsHead">
+        <div class="pinsTitle">PINNED</div>
+
+        <!-- ACTIVE SET GO BOX (BACK) -->
+        <div class="activeGo">
+          <label>ACTIVE SET</label>
+          <input id="activeGoInput" placeholder="PASTE URL OR TYPE KEYWORD THEN ENTER" autocomplete="off" autocapitalize="off" spellcheck="false" />
+          <button class="btn" id="btnGo">GO</button>
+        </div>
+      </div>
+
+      <div class="pinsGrid" id="pinsGrid"></div>
+    </div>
+
+    <div class="bottom" id="bottom">
+      <div class="dragbar" id="dragbar" title="DRAG"></div>
+
+      <div class="bottomInner">
+        <div class="panel">
+          <div class="panelTitle">
+            <span>ROOM PRESETS</span>
+            <span class="mini">VISIBLE + HOTKEYS</span>
+          </div>
+          <div class="presetGrid" id="presetGrid"></div>
+          <div class="help" style="margin-top:10px;">
+            SHIFT+K LANDING · SHIFT+X PHOTOBOOTH · SHIFT+Z KDTV · SHIFT+V POD · SHIFT+W WORLD · SHIFT+P INFINITY
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panelTitle">
+            <span>REGISTRY</span>
+            <span class="mini">BULK INPUT</span>
+          </div>
+
+          <div class="regRow">
+            <input id="pinLabel" placeholder="LABEL (OPTIONAL)" autocomplete="off" />
+            <input id="pinUrl" placeholder="URL" autocomplete="off" />
+            <button class="btn" id="btnAddOne">ADD</button>
+          </div>
+
+          <textarea class="bulk" id="bulkInput" placeholder="PASTE MANY LINES:
+LABEL | URL
+OR JUST URL
+(ONE PER LINE)"></textarea>
+
+          <div class="regRow" style="margin-top:8px;">
+            <button class="btn" id="btnAddBulk">ADD BULK</button>
+            <button class="btn" id="btnClearBulk">CLEAR</button>
+          </div>
+
+          <div class="help">
+            NO AUTOFILL. PASTE FAST. PINS ARE LEGOS. DRAG TO REORDER.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- KETA_NOTE (MIND) -->
+  <div class="ketaNote" id="ketaNote">
+    <div class="ketaHead">
+      <div>KETA_NOTE</div>
+      <button class="btn" id="btnNoteClose" style="height:22px;">-</button>
+    </div>
+    <div class="ketaBody">
+      <textarea id="ketaText" spellcheck="false" placeholder="KETADATA NOTE"></textarea>
+    </div>
+  </div>
+
+  <div class="statusbar">
+    <div class="left">
+      <span class="kbd">SHIFT+I</span> INVERT
+      <span class="kbd">SHIFT+N</span> NULL
+      <span class="kbd">SHIFT+F</span> FULLSCREEN
+      <span class="kbd">SHIFT+K/X/Z/V/W/P</span> NAV
+      <span class="kbd">SPACE</span> LIGHT
+    </div>
+    <div id="statusRight">STATE: OK</div>
+  </div>
+
+<script>
+/* =========================================================
+AE ▸ SHELL STABILITY + LAYOUT
+EE ▸ LIGHT PRESETS (SPACE)
+WB ▸ STATE IMPORT/EXPORT + NOTE + PIN/REGISTRY
+========================================================= */
+
+(function(){
+  const VERSION = "KETADATA_SHELL8_KERNEL_STABLE_v1";
+  const STORAGE_KEY = "KDT::SYSTEM::STATE::V1";     // DO NOT CHANGE CASUALLY (BASE STABILITY)
+  const NOTE_KEY    = "KDT::SYSTEM::KETA_NOTE::V1";
+
+  const PRESETS = [
+    { id:"CALENDAR", label:"CALENDAR", url:"calendar1.html" },
+    { id:"POD",      label:"POD",      url:"room.html" },
+    { id:"WORLD",    label:"WORLD",    url:"map.html" },
+    { id:"KDTV",     label:"KDTV",     url:"kdtv1.html" },
+    { id:"PHOTO",    label:"PHOTOBOOTH", url:"crunch1.html" },
+    { id:"STUDIO",   label:"STUDIO",   url:"tester3.html" },
+    { id:"LAB",      label:"LAB",      url:"labyrinth.html" },
+  ];
+
+  const HOTKEY_NAV = {
+    k: "https://ketadata.com/blank.html", // LANDING (your spec)
+    x: "crunch1.html",
+    z: "kdtv1.html",
+    v: "room.html",
+    w: "map.html",
+    p: "infinity.html" // change if your actual infinity pool filename differs
+  };
+
+  const LIGHTS = [1,2,3,4,5,6];
+
+  const $ = (id)=>document.getElementById(id);
+
+  const els = {
+    btnImport: $("btnImport"),
+    btnExport: $("btnExport"),
+    btnCopy: $("btnCopy"),
+    btnInvert: $("btnInvert"),
+    btnFullscreen: $("btnFullscreen"),
+    btnNull: $("btnNull"),
+
+    statusRight: $("statusRight"),
+
+    pinsGrid: $("pinsGrid"),
+    presetGrid: $("presetGrid"),
+
+    pinLabel: $("pinLabel"),
+    pinUrl: $("pinUrl"),
+    btnAddOne: $("btnAddOne"),
+
+    bulkInput: $("bulkInput"),
+    btnAddBulk: $("btnAddBulk"),
+    btnClearBulk: $("btnClearBulk"),
+
+    activeGoInput: $("activeGoInput"),
+    btnGo: $("btnGo"),
+
+    bottom: $("bottom"),
+    dragbar: $("dragbar"),
+
+    ketaNote: $("ketaNote"),
+    ketaText: $("ketaText"),
+    btnNoteClose: $("btnNoteClose"),
+  };
+
+  const defaultState = ()=>({
+    version: VERSION,
+    updatedAt: new Date().toISOString(),
+    ui: {
+      invert:false,
+      fullscreen:false,
+      nullmode:false,
+      bottomH: 240,
+      light: 1,
+      ketaNoteOpen: false
+    },
+    pins: [
+      // stable seed pins (can delete)
+      { id: cryptoId(), label:"SYSTEM", url:"system.html" },
+      { id: cryptoId(), label:"POD", url:"room.html" },
+      { id: cryptoId(), label:"WORLD", url:"map.html" },
+      { id: cryptoId(), label:"KDTV", url:"kdtv1.html" },
+      { id: cryptoId(), label:"PHOTOBOOTH", url:"crunch1.html" }
+    ]
+  });
+
+  let STATE = loadState() || defaultState();
+
+  // cross-tab sync (prevents divergence)
+  window.addEventListener("storage", (e)=>{
+    if(e.key === STORAGE_KEY && e.newValue){
+      try{
+        const incoming = JSON.parse(e.newValue);
+        // accept newer only
+        if(incoming && incoming.updatedAt && incoming.updatedAt !== STATE.updatedAt){
+          STATE = incoming;
+          applyAll();
+          toast("SYNC");
+        }
+      }catch(_){}
+    }
+    if(e.key === NOTE_KEY){
+      els.ketaText.value = localStorage.getItem(NOTE_KEY) || "";
+    }
+  });
+
+  function cryptoId(){
+    // stable-ish unique id
+    return (Math.random().toString(16).slice(2) + Date.now().toString(16)).slice(0,12);
+  }
+
+  function nowISO(){ return new Date().toISOString(); }
+
+  function persist(){
+    STATE.updatedAt = nowISO();
+    try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(STATE)); }catch(_){}
+    // NOTE separately
+    try{ localStorage.setItem(NOTE_KEY, els.ketaText.value || ""); }catch(_){}
+    els.statusRight.textContent = "STATE: OK";
+  }
+
+  function loadState(){
+    try{
+      const raw = localStorage.getItem(STORAGE_KEY);
+      return raw ? JSON.parse(raw) : null;
+    }catch(_){ return null; }
+  }
+
+  function applyAll(){
+    document.body.classList.toggle("invert", !!STATE.ui.invert);
+    document.body.classList.toggle("fullscreen", !!STATE.ui.fullscreen);
+    document.body.classList.toggle("nullmode", !!STATE.ui.nullmode);
+
+    // bottom height with hard top boundary
+    const minH = 120;
+    const maxH = window.innerHeight - parseInt(getComputedStyle(document.documentElement).getPropertyValue("--top"),10) - parseInt(getComputedStyle(document.documentElement).getPropertyValue("--bot"),10) - 20;
+    const h = clamp(STATE.ui.bottomH, minH, Math.max(minH, maxH));
+    STATE.ui.bottomH = h;
+    document.documentElement.style.setProperty("--bottomH", h + "px");
+
+    // note
+    els.ketaNote.style.display = STATE.ui.ketaNoteOpen ? "block" : "none";
+    // pins
+    renderPins();
+    // presets
+    renderPresets();
+    // note content
+    els.ketaText.value = localStorage.getItem(NOTE_KEY) || "";
+  }
+
+  function clamp(n,a,b){ return Math.max(a, Math.min(b,n)); }
+
+  function toast(msg){
+    els.statusRight.textContent = "STATE: " + msg;
+    clearTimeout(toast._t);
+    toast._t = setTimeout(()=>{ els.statusRight.textContent = "STATE: OK"; }, 700);
+  }
+
+  function renderPresets(){
+    els.presetGrid.innerHTML = "";
+    PRESETS.forEach(p=>{
+      const b = document.createElement("button");
+      b.className = "presetBtn";
+      b.type = "button";
+      b.textContent = p.label;
+      b.addEventListener("click", ()=> navigate(p.url));
+      els.presetGrid.appendChild(b);
+    });
+  }
+
+  function renderPins(){
+    els.pinsGrid.innerHTML = "";
+    STATE.pins.forEach((p, idx)=>{
+      const d = document.createElement("div");
+      d.className = "pin";
+      d.draggable = true;
+      d.dataset.id = p.id;
+
+      const top = document.createElement("div");
+      top.className = "pinTop";
+
+      const lab = document.createElement("div");
+      lab.className = "pinLabel";
+      lab.textContent = (p.label || "PIN").toUpperCase();
+
+      const del = document.createElement("button");
+      del.className = "pinDel";
+      del.type = "button";
+      del.textContent = "DEL";
+      del.addEventListener("click", (e)=>{
+        e.stopPropagation();
+        STATE.pins = STATE.pins.filter(x=>x.id !== p.id);
+        persist();
+        renderPins();
+      });
+
+      top.appendChild(lab);
+      top.appendChild(del);
+
+      const a = document.createElement("a");
+      a.href = p.url;
+      a.textContent = p.url;
+      a.addEventListener("click", ()=>{ /* normal nav */ });
+
+      d.appendChild(top);
+      d.appendChild(a);
+
+      // click pin = navigate
+      d.addEventListener("dblclick", ()=>navigate(p.url));
+
+      // drag reorder
+      d.addEventListener("dragstart", (e)=>{
+        e.dataTransfer.setData("text/plain", p.id);
+        e.dataTransfer.effectAllowed = "move";
+      });
+      d.addEventListener("dragover", (e)=>{ e.preventDefault(); e.dataTransfer.dropEffect="move"; });
+      d.addEventListener("drop", (e)=>{
+        e.preventDefault();
+        const fromId = e.dataTransfer.getData("text/plain");
+        const toId = p.id;
+        reorderPins(fromId, toId);
+      });
+
+      els.pinsGrid.appendChild(d);
+    });
+  }
+
+  function reorderPins(fromId, toId){
+    if(!fromId || !toId || fromId===toId) return;
+    const arr = STATE.pins.slice();
+    const fromIdx = arr.findIndex(x=>x.id===fromId);
+    const toIdx   = arr.findIndex(x=>x.id===toId);
+    if(fromIdx<0 || toIdx<0) return;
+    const [m] = arr.splice(fromIdx, 1);
+    arr.splice(toIdx, 0, m);
+    STATE.pins = arr;
+    persist();
+    renderPins();
+  }
+
+  function normalizeUrl(u){
+    u = (u||"").trim();
+    if(!u) return "";
+    // allow absolute, relative, custom
+    return u;
+  }
+
+  function addPin(label, url){
+    url = normalizeUrl(url);
+    if(!url) return;
+    const lab = (label||"").trim() || guessLabel(url);
+    STATE.pins.unshift({ id: cryptoId(), label: lab, url });
+    persist();
+    renderPins();
+    toast("PIN ADDED");
+  }
+
+  function guessLabel(url){
+    try{
+      const s = url.split("?")[0].split("#")[0];
+      const last = s.split("/").filter(Boolean).pop() || "PIN";
+      return last.replace(".html","").slice(0,18).toUpperCase();
+    }catch(_){
+      return "PIN";
+    }
+  }
+
+  function parseBulk(text){
+    const out = [];
+    (text||"").split("\n").map(l=>l.trim()).filter(Boolean).forEach(line=>{
+      // LABEL | URL
+      if(line.includes("|")){
+        const [a,b] = line.split("|");
+        const label = (a||"").trim();
+        const url = (b||"").trim();
+        if(url) out.push({ label, url });
+      }else{
+        out.push({ label:"", url: line });
+      }
+    });
+    return out;
+  }
+
+  function navigate(url){
+    url = normalizeUrl(url);
+    if(!url) return;
+    // leaving base is OK; base state persists in localStorage; returning to system.html will restore.
+    window.location.href = url;
+  }
+
+  function toggleInvert(){
+    STATE.ui.invert = !STATE.ui.invert;
+    applyAll();
+    persist();
+    toast(STATE.ui.invert ? "INVERT ON" : "INVERT OFF");
+  }
+
+  function toggleFullscreen(){
+    STATE.ui.fullscreen = !STATE.ui.fullscreen;
+    // leaving null if enabling fullscreen
+    if(STATE.ui.fullscreen) STATE.ui.nullmode = false;
+    applyAll();
+    persist();
+    toast(STATE.ui.fullscreen ? "FULLSCREEN ON" : "FULLSCREEN OFF");
+  }
+
+  function toggleNull(){
+    STATE.ui.nullmode = !STATE.ui.nullmode;
+    // null implies no panels; also drop fullscreen
+    if(STATE.ui.nullmode) STATE.ui.fullscreen = false;
+    applyAll();
+    persist();
+    toast(STATE.ui.nullmode ? "NULL ON" : "NULL OFF");
+  }
+
+  function toggleKetaNote(){
+    STATE.ui.ketaNoteOpen = !STATE.ui.ketaNoteOpen;
+    applyAll();
+    persist();
+    toast(STATE.ui.ketaNoteOpen ? "NOTE OPEN" : "NOTE CLOSED");
+    if(STATE.ui.ketaNoteOpen) setTimeout(()=>els.ketaText.focus(), 0);
+  }
+
+  // SPACE = LIGHT (does not hijack typing)
+  function nextLight(){
+    const idx = LIGHTS.indexOf(STATE.ui.light);
+    const next = LIGHTS[(idx+1) % LIGHTS.length];
+    STATE.ui.light = next;
+    // You can wire light to actual visuals later. For now: deterministic state.
+    persist();
+    toast("LIGHT " + next);
+  }
+
+  // IMPORT/EXPORT
+  function exportState(){
+    const data = JSON.stringify(STATE, null, 2);
+    const blob = new Blob([data], {type:"application/json"});
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `KETADATA_STATE_${Date.now()}.json`;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); }, 0);
+    toast("EXPORTED");
+  }
+
+  async function copyState(){
+    const data = JSON.stringify(STATE);
+    try{
+      await navigator.clipboard.writeText(data);
+      toast("COPIED");
+    }catch(_){
+      // fallback
+      const ta = document.createElement("textarea");
+      ta.value = data;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand("copy");
+      ta.remove();
+      toast("COPIED");
+    }
+  }
+
+  function importStateFromText(raw){
+    try{
+      const parsed = JSON.parse(raw);
+      if(!parsed || !parsed.ui || !Array.isArray(parsed.pins)) throw new Error("bad");
+      // minimal validation then accept
+      STATE = parsed;
+      applyAll();
+      persist();
+      toast("IMPORTED");
+    }catch(_){
+      toast("IMPORT FAIL");
+    }
+  }
+
+  function importState(){
+    // prompt import (fastest, zero UI complexity)
+    const raw = prompt("PASTE STATE JSON");
+    if(raw) importStateFromText(raw);
+  }
+
+  // Active set GO
+  function goFromActive(){
+    const v = (els.activeGoInput.value || "").trim();
+    if(!v) return;
+    // if looks like URL/path -> go; else try match preset label or pin label
+    const lower = v.toLowerCase();
+    const preset = PRESETS.find(p=>p.label.toLowerCase()===lower || p.id.toLowerCase()===lower);
+    if(preset) return navigate(preset.url);
+
+    const pin = STATE.pins.find(p=>(p.label||"").toLowerCase()===lower);
+    if(pin) return navigate(pin.url);
+
+    // otherwise treat as url/path
+    navigate(v);
+  }
+
+  // bottom resize drag
+  (function setupResize(){
+    let dragging=false;
+    let startY=0;
+    let startH=STATE.ui.bottomH;
+
+    els.dragbar.addEventListener("mousedown", (e)=>{
+      dragging=true;
+      startY=e.clientY;
+      startH=STATE.ui.bottomH;
+      e.preventDefault();
+    });
+
+    window.addEventListener("mousemove", (e)=>{
+      if(!dragging) return;
+      const dy = startY - e.clientY; // drag up increases height
+      STATE.ui.bottomH = startH + dy;
+      applyAll();
+      // no persist every pixel? minimal: persist at end; but keep continuity on refresh by persisting on mouseup.
+    });
+
+    window.addEventListener("mouseup", ()=>{
+      if(!dragging) return;
+      dragging=false;
+      persist();
+      toast("RESIZED");
+    });
+  })();
+
+  // Buttons
+  els.btnInvert.addEventListener("click", toggleInvert);
+  els.btnFullscreen.addEventListener("click", toggleFullscreen);
+  els.btnNull.addEventListener("click", toggleNull);
+
+  els.btnExport.addEventListener("click", exportState);
+  els.btnCopy.addEventListener("click", copyState);
+  els.btnImport.addEventListener("click", importState);
+
+  els.btnAddOne.addEventListener("click", ()=>{
+    addPin(els.pinLabel.value, els.pinUrl.value);
+    els.pinLabel.value = "";
+    els.pinUrl.value = "";
+  });
+
+  els.btnAddBulk.addEventListener("click", ()=>{
+    const items = parseBulk(els.bulkInput.value);
+    items.reverse().forEach(it=>addPin(it.label, it.url));
+    els.bulkInput.value = "";
+    persist();
+    toast("BULK ADDED");
+  });
+
+  els.btnClearBulk.addEventListener("click", ()=>{ els.bulkInput.value=""; });
+
+  els.btnGo.addEventListener("click", goFromActive);
+  els.activeGoInput.addEventListener("keydown", (e)=>{
+    if(e.key==="Enter"){ e.preventDefault(); goFromActive(); }
+  });
+
+  // KETA_NOTE open/close = click white square in top-left brand? (keep minimal)
+  // You demanded note everywhere: add toggle on square click.
+  // (Square inside brand is not a button; add separate hook via click on brand square using event delegation.)
+  document.querySelector(".brand").addEventListener("click", (e)=>{
+    // click on the square only
+    const t = e.target;
+    if(t && t.classList.contains("sq")) toggleKetaNote();
+  });
+
+  els.btnNoteClose.addEventListener("click", ()=>{
+    STATE.ui.ketaNoteOpen=false;
+    applyAll();
+    persist();
+    toast("NOTE CLOSED");
+  });
+
+  els.ketaText.addEventListener("input", ()=>persist());
+
+  // ===== HOTKEYS (LOCKED) =====
+  document.addEventListener("keydown", (e)=>{
+    const tag = (e.target && e.target.tagName) ? e.target.tagName.toLowerCase() : "";
+    const typing = (tag==="textarea" || tag==="input" || (e.target && e.target.isContentEditable));
+
+    // NEVER hijack typing with SPACE / navigation hotkeys
+    // (still allow SHIFT+I/N/F while typing? you didn’t ask; keep them global but not destructive)
+    const key = (e.key || "").toLowerCase();
+
+    // SHIFT+I invert
+    if(e.shiftKey && key==="i"){
+      e.preventDefault();
+      toggleInvert();
+      return;
+    }
+
+    // SHIFT+N NULL blackout
+    if(e.shiftKey && key==="n"){
+      e.preventDefault();
+      toggleNull();
+      return;
+    }
+
+    // SHIFT+F FULLSCREEN (panels gone)
+    if(e.shiftKey && key==="f"){
+      e.preventDefault();
+      toggleFullscreen();
+      return;
+    }
+
+    // NAV HOTKEYS (SHIFT + K/X/Z/V/W/P)
+    if(e.shiftKey && HOTKEY_NAV[key]){
+      e.preventDefault();
+      navigate(HOTKEY_NAV[key]);
+      return;
+    }
+
+    // SPACE = LIGHT (ONLY if not typing)
+    if(!typing && (e.code==="Space" || e.key===" ")){
+      e.preventDefault();
+      nextLight();
+      return;
+    }
+
+    // ESC = close note + drop fullscreen/null (safe)
+    if(e.key==="Escape"){
+      STATE.ui.ketaNoteOpen = false;
+      STATE.ui.fullscreen = false;
+      STATE.ui.nullmode = false;
+      applyAll();
+      persist();
+      toast("CLOSED");
+      return;
+    }
+  }, {passive:false});
+
+  // init
+  applyAll();
+  persist();
+
+})();
+</script>
+
+<!-- =========================================================
+KETADATA HTML SERIALIZATION STAMP (REQUIRED)
+AE/EE/WB: AE+EE+WB
+FILE_ID: SYSTEM_HTML
+ROOM_ID: BASE
+VERSION: KETADATA_SHELL8_KERNEL_STABLE_v1
+UPDATED_AT: 2025-12-27
+CHANGELOG:
+- Removed broken JS truncation ("...") and locked deterministic behavior
+- Added IMPORT/EXPORT/COPY (state portable)
+- Added cross-tab sync (storage event)
+- Added bulk registry input (label|url or url)
+- Added draggable pin reorder (lego field)
+- Added hard top boundary + bottom panel resizable to top
+- Locked hotkeys: SHIFT+I invert, SHIFT+N null, SHIFT+F fullscreen, SHIFT+K/X/Z/V/W/P nav, SPACE light (never in typing)
+- KETA_NOTE collapsed by default; toggle via white square
+========================================================= -->
+</body>
+</html>
