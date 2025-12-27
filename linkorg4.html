@@ -1,0 +1,1012 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>KETADATA // LINK TRIAGE (GRID)</title>
+  <style>
+    :root { color-scheme: dark; }
+    html, body { margin:0; background:#000; color:#fff; font:12px/1.35 Arial, Helvetica, sans-serif; }
+    * { box-sizing:border-box; }
+
+    /* Top bar */
+    .topbar{
+      position:fixed; top:0; left:0; right:0;
+      display:flex; align-items:center; gap:10px; flex-wrap:wrap;
+      padding:10px 12px;
+      background:#000;
+      border-bottom:1px solid rgba(255,255,255,.16);
+      z-index:50;
+    }
+    .title{ font-weight:700; letter-spacing:.14em; }
+    .meta{ opacity:.65; letter-spacing:.06em; }
+    .sp{ flex:1; }
+
+    .btn{
+      background:transparent; color:#fff;
+      border:1px solid rgba(255,255,255,.22);
+      padding:6px 8px;
+      letter-spacing:.08em;
+      cursor:pointer;
+    }
+    .btn:hover{ border-color:rgba(255,255,255,.5); }
+    .btn.danger{ opacity:.85; }
+    .btn.danger:hover{ opacity:1; }
+
+    .inp, .sel, .ta{
+      background:#000; color:#fff;
+      border:1px solid rgba(255,255,255,.22);
+      padding:6px 8px;
+      outline:none;
+      width:100%;
+    }
+    .inp:focus, .sel:focus, .ta:focus{ border-color: rgba(255,255,255,.55); }
+    .ta{ min-height:74px; resize:vertical; }
+    .ta.small{ min-height:54px; }
+
+    .main{
+      padding-top:56px;
+      display:grid;
+      grid-template-columns: 380px 1fr;
+      min-height:100vh;
+    }
+    @media (max-width: 980px){
+      .main{ grid-template-columns: 1fr; }
+      .left{ border-right:none; border-bottom:1px solid rgba(255,255,255,.16); }
+    }
+    .left, .right{ padding:12px; }
+    .left{ border-right:1px solid rgba(255,255,255,.16); }
+
+    .sec{
+      border:1px solid rgba(255,255,255,.16);
+      padding:10px;
+      margin-bottom:10px;
+    }
+    .secHd{
+      display:flex; align-items:baseline; gap:10px; flex-wrap:wrap;
+      margin-bottom:10px;
+    }
+    .h{ font-weight:700; letter-spacing:.14em; }
+    .sub{ opacity:.65; letter-spacing:.06em; }
+    .row{ display:flex; gap:8px; }
+    .row > *{ flex:1; }
+    .hint{ opacity:.65; letter-spacing:.06em; }
+
+    /* Grid */
+    .grid{
+      display:grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap:10px;
+    }
+    .card{
+      border:1px solid rgba(255,255,255,.14);
+      padding:10px;
+      background:#000;
+      min-height:180px;
+      display:flex;
+      flex-direction:column;
+      gap:8px;
+    }
+    .card.depr{ opacity:.55; }
+    .card.missing{ opacity:.55; border-style:dashed; }
+
+    .cTop{
+      display:flex;
+      gap:8px;
+      align-items:baseline;
+      flex-wrap:wrap;
+      border-bottom:1px solid rgba(255,255,255,.12);
+      padding-bottom:8px;
+      margin-bottom:2px;
+    }
+    .hash{
+      opacity:.6;
+      letter-spacing:.14em;
+      border:1px solid rgba(255,255,255,.16);
+      padding:2px 6px;
+      min-width:86px;
+      text-align:left;
+    }
+    .path{
+      flex:1;
+      font-weight:700;
+      letter-spacing:.08em;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      white-space:nowrap;
+    }
+    .open{
+      color:#fff;
+      text-decoration:none;
+      border-bottom:1px solid rgba(255,255,255,.22);
+      letter-spacing:.08em;
+    }
+    .open:hover{ border-bottom-color:rgba(255,255,255,.6); }
+
+    .cGrid{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap:8px;
+    }
+    .cGrid3{
+      display:grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap:8px;
+    }
+    @media (max-width: 1200px){
+      .cGrid3{ grid-template-columns: 1fr 1fr; }
+    }
+    @media (max-width: 540px){
+      .cGrid, .cGrid3{ grid-template-columns: 1fr; }
+    }
+
+    /* Cluster bar (triage lanes) */
+    .lanes{
+      display:flex;
+      gap:8px;
+      flex-wrap:wrap;
+    }
+    .laneBtn{
+      background:transparent; color:#fff;
+      border:1px solid rgba(255,255,255,.16);
+      padding:6px 8px;
+      letter-spacing:.08em;
+      cursor:pointer;
+      opacity:.85;
+      white-space:nowrap;
+    }
+    .laneBtn:hover{ border-color:rgba(255,255,255,.5); opacity:1; }
+    .laneBtn.active{ border-color:rgba(255,255,255,.55); opacity:1; }
+    .laneBtn.depr{ opacity:.55; }
+
+    /* Modal */
+    .modal{
+      position:fixed; inset:0;
+      background:rgba(0,0,0,.78);
+      display:none;
+      align-items:center;
+      justify-content:center;
+      padding:12px;
+      z-index:100;
+    }
+    .modal.show{ display:flex; }
+    .panel{
+      width:min(980px, 100%);
+      background:#000;
+      border:1px solid rgba(255,255,255,.18);
+      padding:12px;
+    }
+    .panelHd{
+      display:flex; align-items:baseline; gap:10px; flex-wrap:wrap;
+      margin-bottom:10px;
+    }
+    .panelHd .hh{ font-weight:700; letter-spacing:.14em; }
+    .panelHd .ss{ opacity:.65; letter-spacing:.06em; }
+    .panelActions{ display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
+    .hr{ border-top:1px solid rgba(255,255,255,.12); margin:10px 0; }
+  </style>
+</head>
+<body>
+
+  <div class="topbar">
+    <div class="title">KETADATA // LINK TRIAGE</div>
+    <div class="meta" id="meta">BOOT</div>
+    <div class="sp"></div>
+
+    <button class="btn" id="btnSync">SYNC REPO</button>
+    <button class="btn" id="btnAddLane">ADD LANE</button>
+    <button class="btn" id="btnExportState">EXPORT STATE</button>
+    <button class="btn" id="btnImportState">IMPORT STATE</button>
+    <button class="btn" id="btnExportPrompt">PROMPT EXPORT</button>
+    <button class="btn danger" id="btnNew">NEW</button>
+  </div>
+
+  <div class="main">
+    <div class="left">
+
+      <div class="sec">
+        <div class="secHd">
+          <div class="h">REPO</div>
+          <div class="sub">TREE API / AUTO URLS / HTML-ONLY</div>
+        </div>
+
+        <div class="row">
+          <input class="inp" id="repoOwner" placeholder="OWNER" />
+          <input class="inp" id="repoName" placeholder="REPO" />
+        </div>
+        <div style="height:8px"></div>
+        <div class="row">
+          <input class="inp" id="repoBranch" placeholder="BRANCH" />
+          <input class="inp" id="pagesBase" placeholder="PAGES BASE URL" />
+        </div>
+
+        <div style="height:8px"></div>
+        <div class="hint">
+          SYNC uses: <span style="opacity:.85">/git/trees/&lt;branch&gt;?recursive=1</span> (one call).<br/>
+          INVENTORY = <b>.html pages only</b>. EXCLUDES content/, images/, assets/, static/, media/, docs/ by default.<br/>
+          URL is always derived: <span style="opacity:.85">PAGES_BASE + path</span> (no URL input field).
+        </div>
+      </div>
+
+      <div class="sec">
+        <div class="secHd">
+          <div class="h">KETA_NOTE</div>
+          <div class="sub">OPTIONAL / NON-INTERFERING</div>
+        </div>
+        <textarea class="ta" id="ketaNote" placeholder="KETA_NOTE (GLOBAL)"></textarea>
+      </div>
+
+      <div class="sec">
+        <div class="secHd">
+          <div class="h">FILTER</div>
+          <div class="sub">LANE / TAG / STATUS</div>
+        </div>
+
+        <div class="row">
+          <select class="sel" id="fltLane"></select>
+          <select class="sel" id="fltStatus">
+            <option value="active">ACTIVE ONLY</option>
+            <option value="all">ALL</option>
+            <option value="deprecated">DEPRECATED ONLY</option>
+          </select>
+        </div>
+
+        <div style="height:8px"></div>
+        <input class="inp" id="fltTag" placeholder="TAG CONTAINS (comma/space ok)" />
+        <div style="height:8px"></div>
+        <input class="inp" id="fltSearch" placeholder="SEARCH (path / note / tags)" />
+        <div style="height:8px"></div>
+        <button class="btn" id="btnClearFilters" style="width:100%;">CLEAR FILTERS</button>
+      </div>
+
+      <div class="sec">
+        <div class="secHd">
+          <div class="h">STATE</div>
+          <div class="sub">LABEL + VERSION</div>
+        </div>
+        <input class="inp" id="exportLabel" placeholder="EXPORT LABEL (HUMAN)" />
+        <div style="height:8px"></div>
+        <input class="inp" id="exportTag" placeholder="VERSION TAG (e.g. LINK_TRIAGE_v1)" />
+      </div>
+
+    </div>
+
+    <div class="right">
+      <div class="sec">
+        <div class="secHd">
+          <div class="h">LANES</div>
+          <div class="sub" id="counts">0 LINKS</div>
+        </div>
+        <div class="lanes" id="lanes"></div>
+        <div style="height:10px"></div>
+        <div class="grid" id="grid"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal -->
+  <div class="modal" id="modal">
+    <div class="panel">
+      <div class="panelHd">
+        <div class="hh" id="modalTitle">EXPORT</div>
+        <div class="ss" id="modalSub">STATE</div>
+        <div style="flex:1"></div>
+        <button class="btn" id="modalClose">CLOSE</button>
+      </div>
+      <div class="hr"></div>
+      <textarea class="ta" id="modalText" placeholder="JSON OR PROMPT OUTPUT"></textarea>
+      <div class="panelActions">
+        <button class="btn" id="modalCopy">COPY</button>
+        <button class="btn" id="modalApply">APPLY / IMPORT</button>
+      </div>
+      <div class="hr"></div>
+      <div class="hint" id="modalHint"></div>
+    </div>
+  </div>
+
+<script>
+(() => {
+  // -------------------------
+  // Defaults
+  // -------------------------
+  const DEFAULT_REPO = {
+    owner: "ki-tya",
+    repo: "ketadata",
+    branch: "main",
+    pagesBase: "https://ki-tya.github.io/ketadata/"
+  };
+
+  const DEFAULT_LANES = () => ([
+    { id: "L0", name: "INBOX", deprecated:false },
+    { id: "L1", name: "CORE", deprecated:false },
+    { id: "L2", name: "EXPERIMENTS", deprecated:false },
+    { id: "L3", name: "DEPRECATED", deprecated:true }
+  ]);
+
+  const DEFAULT_STATE = () => ({
+    version: "KETADATA_LINK_TRIAGE_GRID_v2_TREE_API",
+    updatedAt: new Date().toISOString(),
+    exportLabel: "",
+    exportTag: "",
+    ketaNote: "",
+    repo: { ...DEFAULT_REPO },
+    ui: {
+      laneId: "L0",
+      filterStatus: "active",
+      filterTag: "",
+      filterSearch: ""
+    },
+    lanes: DEFAULT_LANES(),
+    // links keyed by path (stable identity)
+    links: {} // path -> {path, url, laneId, tags, version, status, note, missing}
+  });
+
+  const nowISO = () => new Date().toISOString();
+
+  // stable 10-hex hash (FNV-1a)
+  function hash10(str){
+    let h = 0x811c9dc5;
+    for (let i=0;i<str.length;i++){
+      h ^= str.charCodeAt(i);
+      h = (h * 0x01000193) >>> 0;
+    }
+    let x = h.toString(16).padStart(8,"0");
+    let h2 = (h ^ (h>>>16)) >>> 0;
+    let y = h2.toString(16).padStart(8,"0");
+    return (x+y).slice(0,10);
+  }
+
+  // -------------------------
+  // DOM
+  // -------------------------
+  const $meta = document.getElementById("meta");
+  const $counts = document.getElementById("counts");
+  const $lanes = document.getElementById("lanes");
+  const $grid = document.getElementById("grid");
+
+  const $repoOwner  = document.getElementById("repoOwner");
+  const $repoName   = document.getElementById("repoName");
+  const $repoBranch = document.getElementById("repoBranch");
+  const $pagesBase  = document.getElementById("pagesBase");
+
+  const $ketaNote = document.getElementById("ketaNote");
+  const $exportLabel = document.getElementById("exportLabel");
+  const $exportTag = document.getElementById("exportTag");
+
+  const $fltLane = document.getElementById("fltLane");
+  const $fltStatus = document.getElementById("fltStatus");
+  const $fltTag = document.getElementById("fltTag");
+  const $fltSearch = document.getElementById("fltSearch");
+
+  const $btnSync = document.getElementById("btnSync");
+  const $btnAddLane = document.getElementById("btnAddLane");
+  const $btnExportState = document.getElementById("btnExportState");
+  const $btnImportState = document.getElementById("btnImportState");
+  const $btnExportPrompt = document.getElementById("btnExportPrompt");
+  const $btnNew = document.getElementById("btnNew");
+  const $btnClearFilters = document.getElementById("btnClearFilters");
+
+  const $modal = document.getElementById("modal");
+  const $modalTitle = document.getElementById("modalTitle");
+  const $modalSub = document.getElementById("modalSub");
+  const $modalText = document.getElementById("modalText");
+  const $modalClose = document.getElementById("modalClose");
+  const $modalCopy = document.getElementById("modalCopy");
+  const $modalApply = document.getElementById("modalApply");
+  const $modalHint = document.getElementById("modalHint");
+
+  const LS_KEY = "KETADATA_LINK_TRIAGE_GRID_STATE_v2";
+  let state = loadLocal() || DEFAULT_STATE();
+  let modalMode = "export_state";
+
+  // -------------------------
+  // Persistence
+  // -------------------------
+  function loadLocal(){
+    try{
+      const raw = localStorage.getItem(LS_KEY);
+      if (!raw) return null;
+      return normalizeState(JSON.parse(raw));
+    }catch{return null;}
+  }
+  function saveLocal(){
+    try{ localStorage.setItem(LS_KEY, JSON.stringify(state)); }catch{}
+  }
+
+  function normLane(l){
+    return {
+      id: typeof l.id === "string" ? l.id : ("L" + Math.random().toString(16).slice(2,6)),
+      name: typeof l.name === "string" ? l.name : "LANE",
+      deprecated: !!l.deprecated
+    };
+  }
+
+  function normalizeState(s){
+    const base = DEFAULT_STATE();
+    if (!s || typeof s !== "object") return base;
+
+    const out = {
+      ...base,
+      version: typeof s.version === "string" ? s.version : base.version,
+      updatedAt: typeof s.updatedAt === "string" ? s.updatedAt : nowISO(),
+      exportLabel: typeof s.exportLabel === "string" ? s.exportLabel : "",
+      exportTag: typeof s.exportTag === "string" ? s.exportTag : "",
+      ketaNote: typeof s.ketaNote === "string" ? s.ketaNote : "",
+      repo: { ...base.repo, ...(s.repo && typeof s.repo === "object" ? s.repo : {}) },
+      ui: { ...base.ui, ...(s.ui && typeof s.ui === "object" ? s.ui : {}) },
+      lanes: Array.isArray(s.lanes) ? s.lanes.map(normLane) : base.lanes,
+      links: (s.links && typeof s.links === "object") ? s.links : {}
+    };
+
+    // harden repo
+    out.repo.owner = (out.repo.owner || DEFAULT_REPO.owner).trim();
+    out.repo.repo = (out.repo.repo || DEFAULT_REPO.repo).trim();
+    out.repo.branch = (out.repo.branch || DEFAULT_REPO.branch).trim();
+    out.repo.pagesBase = (out.repo.pagesBase || DEFAULT_REPO.pagesBase).trim();
+    if (!out.repo.pagesBase.endsWith("/")) out.repo.pagesBase += "/";
+
+    // harden ui lane
+    if (!out.lanes.some(l => l.id === out.ui.laneId)) out.ui.laneId = out.lanes[0].id;
+
+    // normalize links entries
+    const fixed = {};
+    for (const [path, v] of Object.entries(out.links)){
+      const p = String(path || "").trim();
+      if (!p) continue;
+      fixed[p] = {
+        path: p,
+        url: (v && v.url ? String(v.url) : ""), // will be forced on sync
+        laneId: (v && typeof v.laneId === "string") ? v.laneId : out.ui.laneId,
+        tags: (v && v.tags ? String(v.tags) : ""),
+        version: (v && v.version ? String(v.version) : ""),
+        status: (v && v.status === "deprecated") ? "deprecated" : "active",
+        note: (v && v.note ? String(v.note) : ""),
+        missing: !!(v && v.missing)
+      };
+    }
+    out.links = fixed;
+    return out;
+  }
+
+  // -------------------------
+  // Repo Sync (TREE API: 1 call)
+  // -------------------------
+  async function ghJSON(url){
+    const res = await fetch(url, { headers: { "Accept": "application/vnd.github+json" } });
+    if (!res.ok){
+      const txt = await res.text().catch(() => "");
+      throw new Error(`GITHUB API ${res.status} ${res.statusText}\n${url}\n${txt}`);
+    }
+    return res.json();
+  }
+
+  async function fetchRepoTree(owner, repo, branch){
+    const u = `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/git/trees/${encodeURIComponent(branch)}?recursive=1`;
+    const data = await ghJSON(u);
+    if (!data || !Array.isArray(data.tree)) return [];
+    return data.tree; // [{path,type,sha,size,url}, ...]
+  }
+
+  function derivedUrl(path){
+    const base = state.repo.pagesBase;
+    return (base.endsWith("/") ? base : base + "/") + path.replace(/^\/+/, "");
+  }
+
+  function isPageHtml(path){
+    const p = (path || "").toLowerCase();
+    if (!p.endsWith(".html")) return false;
+
+    // exclude content/asset directories (edit this list if needed)
+    const denyPrefixes = [
+      "content/",
+      "images/",
+      "img/",
+      "assets/",
+      "static/",
+      "media/",
+      "docs/"
+    ];
+    return !denyPrefixes.some(pref => p.startsWith(pref));
+  }
+
+  async function syncRepo(){
+    // persist inputs
+    state.repo.owner = ($repoOwner.value || DEFAULT_REPO.owner).trim();
+    state.repo.repo = ($repoName.value || DEFAULT_REPO.repo).trim();
+    state.repo.branch = ($repoBranch.value || DEFAULT_REPO.branch).trim();
+    state.repo.pagesBase = ($pagesBase.value || DEFAULT_REPO.pagesBase).trim();
+    if (!state.repo.pagesBase.endsWith("/")) state.repo.pagesBase += "/";
+
+    setMeta(`SYNCING ${state.repo.owner}/${state.repo.repo}@${state.repo.branch} ...`);
+
+    // mark existing as missing
+    for (const k of Object.keys(state.links)){
+      state.links[k].missing = true;
+    }
+
+    const tree = await fetchRepoTree(state.repo.owner, state.repo.repo, state.repo.branch);
+
+    const htmls = tree
+      .filter(x => x.type === "blob")
+      .map(x => x.path)
+      .filter(isPageHtml)
+      .sort((a,b)=>a.localeCompare(b));
+
+    let added = 0, kept = 0;
+
+    for (const p of htmls){
+      const hit = state.links[p];
+      if (hit){
+        hit.missing = false;
+        hit.url = derivedUrl(p); // FORCE AUTO URL ALWAYS
+        kept++;
+      } else {
+        state.links[p] = {
+          path: p,
+          url: derivedUrl(p),     // FORCE AUTO URL ALWAYS
+          laneId: state.ui.laneId || state.lanes[0].id,
+          tags: "",
+          version: "",
+          status: "active",
+          note: "",
+          missing: false
+        };
+        added++;
+      }
+    }
+
+    state.updatedAt = nowISO();
+    saveLocal();
+    render();
+    setMeta(`SYNC DONE // ${htmls.length} HTML PAGES // +${added} NEW // ${kept} KEPT`);
+  }
+
+  // -------------------------
+  // Filtering
+  // -------------------------
+  function currentFilters(){
+    return {
+      laneId: $fltLane.value || state.ui.laneId,
+      status: $fltStatus.value || "active",
+      tag: ($fltTag.value || "").trim().toLowerCase(),
+      search: ($fltSearch.value || "").trim().toLowerCase()
+    };
+  }
+
+  function tagsMatch(needle, tags){
+    if (!needle) return true;
+    const need = needle.split(/[, ]+/).filter(Boolean);
+    const have = (tags || "").toLowerCase().split(/[, ]+/).filter(Boolean);
+    return need.every(n => have.includes(n));
+  }
+
+  function searchMatch(needle, fields){
+    if (!needle) return true;
+    const blob = fields.join(" ").toLowerCase();
+    return blob.includes(needle);
+  }
+
+  // -------------------------
+  // Rendering
+  // -------------------------
+  function setMeta(s){ $meta.textContent = s; }
+
+  function refreshLaneSelect(){
+    $fltLane.innerHTML = "";
+    for (const l of state.lanes){
+      const opt = document.createElement("option");
+      opt.value = l.id;
+      opt.textContent = l.name;
+      $fltLane.appendChild(opt);
+    }
+    $fltLane.value = state.ui.laneId || state.lanes[0].id;
+  }
+
+  function renderLanesBar(){
+    $lanes.innerHTML = "";
+    for (const l of state.lanes){
+      const b = document.createElement("button");
+      b.className = "laneBtn" + (l.id === state.ui.laneId ? " active" : "") + (l.deprecated ? " depr" : "");
+      b.textContent = l.name;
+      b.title = "CLICK TO SET CURRENT LANE";
+      b.addEventListener("click", () => {
+        state.ui.laneId = l.id;
+        $fltLane.value = l.id;
+        state.updatedAt = nowISO();
+        saveLocal();
+        render();
+      });
+      // right-click rename lane (fast, no extra UI)
+      b.addEventListener("contextmenu", (e) => {
+        e.preventDefault();
+        const nn = prompt("RENAME LANE:", l.name);
+        if (nn === null) return;
+        l.name = (nn || "").trim() || l.name;
+        saveLocal();
+        render();
+      });
+      $lanes.appendChild(b);
+    }
+  }
+
+  function renderGrid(){
+    const f = currentFilters();
+
+    const totalLinks = Object.keys(state.links).length;
+    const laneCount = Object.values(state.links).filter(x => x.laneId === f.laneId).length;
+    $counts.textContent = `${totalLinks} LINKS // ${laneCount} IN LANE`;
+
+    $grid.innerHTML = "";
+
+    const all = Object.values(state.links)
+      .sort((a,b) => a.path.localeCompare(b.path));
+
+    for (const it of all){
+      if (f.laneId && it.laneId !== f.laneId) continue;
+
+      if (f.status === "active" && it.status === "deprecated") continue;
+      if (f.status === "deprecated" && it.status !== "deprecated") continue;
+
+      if (!tagsMatch(f.tag, it.tags)) continue;
+      if (!searchMatch(f.search, [it.path, it.tags, it.note, it.version])) continue;
+
+      const card = document.createElement("div");
+      card.className = "card" + (it.status === "deprecated" ? " depr" : "") + (it.missing ? " missing" : "");
+
+      const top = document.createElement("div");
+      top.className = "cTop";
+
+      const hs = document.createElement("div");
+      hs.className = "hash";
+      hs.textContent = hash10(it.path);
+
+      const path = document.createElement("div");
+      path.className = "path";
+      path.textContent = it.path;
+
+      const open = document.createElement("a");
+      open.className = "open";
+      open.href = it.url;
+      open.target = "_blank";
+      open.rel = "noopener";
+      open.textContent = it.missing ? "OPEN (MISSING)" : "OPEN";
+
+      top.appendChild(hs);
+      top.appendChild(path);
+      top.appendChild(open);
+
+      const row1 = document.createElement("div");
+      row1.className = "cGrid3";
+
+      const laneSel = document.createElement("select");
+      laneSel.className = "sel";
+      for (const l of state.lanes){
+        const opt = document.createElement("option");
+        opt.value = l.id;
+        opt.textContent = l.name;
+        laneSel.appendChild(opt);
+      }
+      laneSel.value = it.laneId;
+      laneSel.addEventListener("change", () => {
+        it.laneId = laneSel.value;
+        state.updatedAt = nowISO();
+        saveLocal();
+        render();
+      });
+
+      const statusSel = document.createElement("select");
+      statusSel.className = "sel";
+      statusSel.innerHTML = `
+        <option value="active">ACTIVE</option>
+        <option value="deprecated">DEPRECATED</option>
+      `;
+      statusSel.value = it.status;
+      statusSel.addEventListener("change", () => {
+        it.status = statusSel.value;
+        state.updatedAt = nowISO();
+        saveLocal();
+        render();
+      });
+
+      const verInp = document.createElement("input");
+      verInp.className = "inp";
+      verInp.placeholder = "VERSION";
+      verInp.value = it.version || "";
+      verInp.addEventListener("input", () => {
+        it.version = verInp.value;
+        state.updatedAt = nowISO();
+        saveLocal();
+      });
+
+      row1.appendChild(laneSel);
+      row1.appendChild(statusSel);
+      row1.appendChild(verInp);
+
+      const row2 = document.createElement("div");
+      row2.className = "cGrid";
+
+      const tagsInp = document.createElement("input");
+      tagsInp.className = "inp";
+      tagsInp.placeholder = "TAGS (comma/space)";
+      tagsInp.value = it.tags || "";
+      tagsInp.addEventListener("input", () => {
+        it.tags = tagsInp.value;
+        state.updatedAt = nowISO();
+        saveLocal();
+      });
+
+      const noteTa = document.createElement("textarea");
+      noteTa.className = "ta small";
+      noteTa.placeholder = "NOTE";
+      noteTa.value = it.note || "";
+      noteTa.addEventListener("input", () => {
+        it.note = noteTa.value;
+        state.updatedAt = nowISO();
+        saveLocal();
+      });
+
+      row2.appendChild(tagsInp);
+      row2.appendChild(noteTa);
+
+      card.appendChild(top);
+      card.appendChild(row1);
+      card.appendChild(row2);
+
+      $grid.appendChild(card);
+    }
+  }
+
+  function render(){
+    // sync inputs from state
+    $repoOwner.value = state.repo.owner;
+    $repoName.value = state.repo.repo;
+    $repoBranch.value = state.repo.branch;
+    $pagesBase.value = state.repo.pagesBase;
+
+    $ketaNote.value = state.ketaNote || "";
+    $exportLabel.value = state.exportLabel || "";
+    $exportTag.value = state.exportTag || "";
+
+    // sync filters UI
+    refreshLaneSelect();
+    $fltLane.value = state.ui.laneId || state.lanes[0].id;
+    $fltStatus.value = state.ui.filterStatus || "active";
+    $fltTag.value = state.ui.filterTag || "";
+    $fltSearch.value = state.ui.filterSearch || "";
+
+    renderLanesBar();
+    renderGrid();
+
+    state.updatedAt = nowISO();
+    saveLocal();
+  }
+
+  // -------------------------
+  // Export / Import / Prompt
+  // -------------------------
+  function exportStateJSON(){
+    const out = normalizeState({
+      ...state,
+      updatedAt: nowISO(),
+      exportLabel: ($exportLabel.value || "").trim(),
+      exportTag: ($exportTag.value || "").trim(),
+      ketaNote: ($ketaNote.value || "").trim(),
+      repo: {
+        owner: ($repoOwner.value || DEFAULT_REPO.owner).trim(),
+        repo: ($repoName.value || DEFAULT_REPO.repo).trim(),
+        branch: ($repoBranch.value || DEFAULT_REPO.branch).trim(),
+        pagesBase: normalizePagesBase($pagesBase.value || DEFAULT_REPO.pagesBase)
+      },
+      ui: {
+        laneId: $fltLane.value || state.ui.laneId,
+        filterStatus: $fltStatus.value || "active",
+        filterTag: $fltTag.value || "",
+        filterSearch: $fltSearch.value || ""
+      }
+    });
+    return JSON.stringify(out, null, 2);
+  }
+
+  function normalizePagesBase(s){
+    let x = (s || DEFAULT_REPO.pagesBase).trim();
+    if (!x.endsWith("/")) x += "/";
+    return x;
+  }
+
+  function exportPromptText(){
+    const label = (($exportLabel.value || state.exportLabel || "").trim());
+    const tag = (($exportTag.value || state.exportTag || "").trim());
+    const stamp = nowISO();
+
+    const lines = [];
+    lines.push(`KETADATA LINK TRIAGE PROMPT`);
+    if (label) lines.push(`EXPORT_LABEL: ${label}`);
+    if (tag) lines.push(`VERSION_TAG: ${tag}`);
+    lines.push(`UPDATED_AT: ${stamp}`);
+    lines.push(`REPO: ${state.repo.owner}/${state.repo.repo}@${state.repo.branch}`);
+    lines.push(`PAGES_BASE: ${state.repo.pagesBase}`);
+    lines.push("");
+
+    const gnote = ($ketaNote.value || state.ketaNote || "").trim();
+    if (gnote){
+      lines.push(`GLOBAL_KETA_NOTE:`);
+      lines.push(gnote);
+      lines.push("");
+    }
+
+    for (const lane of state.lanes){
+      lines.push(`LANE: ${lane.name}${lane.deprecated ? " [LANE_DEPRECATED]" : ""}`);
+      const laneLinks = Object.values(state.links)
+        .filter(x => x.laneId === lane.id)
+        .sort((a,b) => a.path.localeCompare(b.path));
+
+      for (const it of laneLinks){
+        const flags = [];
+        if (it.status === "deprecated") flags.push("DEPRECATED");
+        if (it.missing) flags.push("MISSING");
+        if (it.version) flags.push("VER:" + it.version);
+        if (it.tags) flags.push("TAGS:" + it.tags);
+
+        lines.push(`- ${it.url}  (${it.path})${flags.length ? "  ["+flags.join(" | ")+"]" : ""}`);
+        if (it.note) lines.push(`  NOTE: ${it.note}`);
+      }
+      lines.push("");
+    }
+
+    lines.push(`INSTRUCTIONS:`);
+    lines.push(`- KEEP CORE CLEAN`);
+    lines.push(`- EXPERIMENTS OK`);
+    lines.push(`- DEPRECATED = HISTORICAL`);
+    lines.push(`- MISSING = FILE REMOVED BUT NOTES PRESERVED`);
+    return lines.join("\n");
+  }
+
+  function openModal(title, sub, text, hint, showApply){
+    $modalTitle.textContent = title;
+    $modalSub.textContent = sub;
+    $modalText.value = text || "";
+    $modalHint.textContent = hint || "";
+    $modalApply.style.display = showApply ? "inline-block" : "none";
+    $modal.classList.add("show");
+    $modalText.focus();
+  }
+  function closeModal(){ $modal.classList.remove("show"); }
+
+  // -------------------------
+  // Wiring
+  // -------------------------
+  $ketaNote.addEventListener("input", () => { state.ketaNote = $ketaNote.value || ""; saveLocal(); });
+  $exportLabel.addEventListener("input", () => { state.exportLabel = $exportLabel.value || ""; saveLocal(); });
+  $exportTag.addEventListener("input", () => { state.exportTag = $exportTag.value || ""; saveLocal(); });
+
+  $repoOwner.addEventListener("input", () => { state.repo.owner = $repoOwner.value; saveLocal(); });
+  $repoName.addEventListener("input", () => { state.repo.repo = $repoName.value; saveLocal(); });
+  $repoBranch.addEventListener("input", () => { state.repo.branch = $repoBranch.value; saveLocal(); });
+  $pagesBase.addEventListener("input", () => { state.repo.pagesBase = $pagesBase.value; saveLocal(); });
+
+  $fltLane.addEventListener("change", () => { state.ui.laneId = $fltLane.value; saveLocal(); render(); });
+  $fltStatus.addEventListener("change", () => { state.ui.filterStatus = $fltStatus.value; saveLocal(); render(); });
+  $fltTag.addEventListener("input", () => { state.ui.filterTag = $fltTag.value; saveLocal(); render(); });
+  $fltSearch.addEventListener("input", () => { state.ui.filterSearch = $fltSearch.value; saveLocal(); render(); });
+
+  $btnClearFilters.addEventListener("click", () => {
+    state.ui.filterStatus = "active";
+    state.ui.filterTag = "";
+    state.ui.filterSearch = "";
+    $fltStatus.value = "active";
+    $fltTag.value = "";
+    $fltSearch.value = "";
+    saveLocal();
+    render();
+    setMeta("FILTERS CLEARED");
+  });
+
+  $btnAddLane.addEventListener("click", () => {
+    const id = "L" + Math.random().toString(16).slice(2,6).toUpperCase();
+    state.lanes.push({ id, name:"LANE", deprecated:false });
+    state.ui.laneId = id;
+    saveLocal();
+    render();
+    setMeta("LANE ADDED");
+  });
+
+  $btnNew.addEventListener("click", () => {
+    if (!confirm("RESET TO NEW? (local state will be replaced)")) return;
+    state = DEFAULT_STATE();
+    saveLocal();
+    render();
+    setMeta("NEW");
+    setTimeout(() => syncRepo().catch(()=>{}), 80);
+  });
+
+  $btnSync.addEventListener("click", () => {
+    syncRepo().catch(e => {
+      setMeta("SYNC FAILED");
+      openModal("ERROR", "SYNC", String(e && e.message ? e.message : e),
+        "GITHUB API RATE LIMITS APPLY WITHOUT AUTH. TREE API IS ONE CALL, BUT YOU CAN STILL HIT LIMITS IF IP IS SHARED/HEAVY.",
+        false
+      );
+    });
+  });
+
+  $btnExportState.addEventListener("click", () => {
+    modalMode = "export_state";
+    openModal("EXPORT", "STATE", exportStateJSON(), "COPY JSON OR SAVE IT. IMPORT PASTES JSON BACK IN. (LOCAL AUTOSAVE ALSO ACTIVE)", true);
+  });
+
+  $btnImportState.addEventListener("click", () => {
+    modalMode = "import_state";
+    openModal("IMPORT", "STATE", "", "PASTE JSON STATE THEN APPLY.", true);
+  });
+
+  $btnExportPrompt.addEventListener("click", () => {
+    modalMode = "export_prompt";
+    openModal("EXPORT", "PROMPT", exportPromptText(), "PASTE INTO MODEL/WORKFLOW. GROUPED BY LANES.", true);
+  });
+
+  $modalClose.addEventListener("click", closeModal);
+  $modal.addEventListener("click", (e) => { if (e.target === $modal) closeModal(); });
+
+  $modalCopy.addEventListener("click", async () => {
+    try{ await navigator.clipboard.writeText($modalText.value || ""); setMeta("COPIED"); }
+    catch{ setMeta("COPY FAILED"); }
+  });
+
+  $modalApply.addEventListener("click", () => {
+    if (modalMode !== "import_state") return closeModal();
+    try{
+      state = normalizeState(JSON.parse($modalText.value || ""));
+      saveLocal();
+      render();
+      setMeta("IMPORTED");
+      closeModal();
+    } catch {
+      setMeta("IMPORT FAILED");
+      $modalHint.textContent = "INVALID JSON. FIX THEN APPLY.";
+    }
+  });
+
+  // -------------------------
+  // Init
+  // -------------------------
+  function init(){
+    // hydrate UI inputs
+    $repoOwner.value = state.repo.owner;
+    $repoName.value = state.repo.repo;
+    $repoBranch.value = state.repo.branch;
+    $pagesBase.value = state.repo.pagesBase;
+
+    $ketaNote.value = state.ketaNote;
+    $exportLabel.value = state.exportLabel;
+    $exportTag.value = state.exportTag;
+
+    refreshLaneSelect();
+    $fltLane.value = state.ui.laneId || state.lanes[0].id;
+    $fltStatus.value = state.ui.filterStatus || "active";
+    $fltTag.value = state.ui.filterTag || "";
+    $fltSearch.value = state.ui.filterSearch || "";
+
+    render();
+    setMeta("READY");
+    // Auto-sync once on load
+    setTimeout(() => syncRepo().catch(()=>{}), 120);
+  }
+
+  init();
+})();
+</script>
+
+<!--
+AE/EE/WB SERIALIZATION STAMP (MANDATORY)
+FILE_ID: link_triage
+ROOM_ID: BASE
+VERSION: KETADATA_LINK_TRIAGE_GRID_v2_TREE_API
+UPDATED_AT: 2025-12-27T00:00:00Z
+CHANGELOG:
+- v2: SWITCHED TO GITHUB TREE API (single call) https://api.github.com/repos/<owner>/<repo>/git/trees/<branch>?recursive=1
+- v2: FILTER = .html pages only + excludes content/, images/, assets/, static/, media/, docs/
+- v2: URL ALWAYS AUTO-DERIVED (PAGES_BASE + path)
+- v2: GRID CARDS + LANES + EXPORT/IMPORT STATE + PROMPT EXPORT
+-->
+</body>
+</html>
