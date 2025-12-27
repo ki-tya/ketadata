@@ -1,0 +1,987 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>KETADATA // CONVERSATION TRACE // TIME-SERIAL</title>
+  <style>
+    :root{
+      --bg:#0b0b0c;
+      --fg:#f2f2f2;
+      --mut:#a9a9ad;
+      --line:#2a2a2e;
+      --panel:#101012;
+      --panel2:#0f0f11;
+      --accent:#ffffff;
+      --inv:0;
+      --blur:0px;
+      --grain:0.06;
+      --scan:0.12;
+      --pulse:0.0;
+      --strobe:0.0;
+      --zoom:1;
+      --density:0.85;
+      --glow:0;
+      --ring:0;
+      --shake:0;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      --sans: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
+    }
+    html,body{height:100%; background:var(--bg); color:var(--fg); margin:0;}
+    body{
+      font-family:var(--mono);
+      letter-spacing:0.2px;
+      overflow:hidden;
+      filter: invert(var(--inv)) blur(var(--blur));
+      transform: scale(var(--zoom));
+      transform-origin: 50% 50%;
+    }
+
+    /* BACKDROP: wire rings + scan + grain */
+    .backdrop{
+      position:fixed; inset:0;
+      background: radial-gradient(circle at 50% 40%, #16161a 0%, #0b0b0c 55%, #050506 100%);
+      z-index:0;
+    }
+    .rings{
+      position:fixed; inset:-30vmax;
+      opacity: calc(0.15 + var(--ring)*0.12);
+      background:
+        repeating-radial-gradient(circle at 50% 45%,
+          rgba(255,255,255,0.10) 0px,
+          rgba(255,255,255,0.10) 1px,
+          rgba(255,255,255,0.00) 1px,
+          rgba(255,255,255,0.00) 18px);
+      mix-blend-mode: screen;
+      transform: rotate(0deg);
+      animation: slowturn 28s linear infinite;
+      pointer-events:none;
+      z-index:0;
+    }
+    @keyframes slowturn{ from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
+
+    .scan{
+      position:fixed; inset:0;
+      background:
+        repeating-linear-gradient(180deg,
+          rgba(255,255,255,var(--scan)) 0px,
+          rgba(255,255,255,0) 1px,
+          rgba(255,255,255,0) 6px);
+      mix-blend-mode: overlay;
+      opacity: calc(0.08 + var(--scan));
+      pointer-events:none;
+      z-index:1;
+    }
+    .grain{
+      position:fixed; inset:0;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)' opacity='.45'/%3E%3C/svg%3E");
+      mix-blend-mode: soft-light;
+      opacity: var(--grain);
+      pointer-events:none;
+      z-index:2;
+    }
+
+    /* UI LAYOUT */
+    .frame{
+      position:fixed; inset:0;
+      display:grid;
+      grid-template-rows: 56px 1fr 46px;
+      z-index:3;
+    }
+    .topbar, .bottombar{
+      display:flex; align-items:center; gap:10px;
+      padding:0 12px;
+      border-bottom:1px solid var(--line);
+      background: linear-gradient(180deg, rgba(16,16,18,0.95), rgba(12,12,14,0.92));
+      user-select:none;
+    }
+    .bottombar{
+      border-top:1px solid var(--line);
+      border-bottom:none;
+      background: linear-gradient(0deg, rgba(16,16,18,0.95), rgba(12,12,14,0.92));
+    }
+    .brand{
+      display:flex; align-items:center; gap:10px; min-width: 260px;
+    }
+    .sig{
+      width:14px; height:14px; border:1px solid var(--fg);
+      background: transparent;
+    }
+    .brand .t1{font-size:12px; color:var(--mut)}
+    .brand .t2{font-size:12px; color:var(--fg)}
+    .pill{
+      border:1px solid var(--line);
+      padding:6px 10px;
+      font-size:11px;
+      color:var(--mut);
+      background: rgba(8,8,10,0.35);
+      display:flex; align-items:center; gap:8px;
+    }
+    .pill b{color:var(--fg); font-weight:600}
+    .spacer{flex:1}
+    .btn{
+      border:1px solid var(--line);
+      background: rgba(8,8,10,0.35);
+      color:var(--fg);
+      padding:7px 10px;
+      font-size:11px;
+      cursor:pointer;
+    }
+    .btn:hover{border-color: rgba(255,255,255,0.35)}
+    .btn:active{transform: translateY(1px)}
+    .hint{color:var(--mut); font-size:11px}
+
+    .main{
+      position:relative;
+      overflow:hidden;
+      display:grid;
+      grid-template-columns: 360px 1fr 360px;
+      gap:10px;
+      padding:10px;
+    }
+
+    .panel{
+      background: rgba(10,10,12,0.55);
+      border:1px solid var(--line);
+      box-shadow: 0 0 0 1px rgba(255,255,255,0.02) inset;
+      min-height: 0;
+      display:flex;
+      flex-direction:column;
+    }
+    .panelhead{
+      padding:10px 10px 8px;
+      border-bottom:1px solid var(--line);
+      display:flex; align-items:center; gap:10px;
+      background: rgba(12,12,14,0.55);
+    }
+    .panelhead .title{
+      font-size:11px; color:var(--fg);
+      letter-spacing:0.6px;
+    }
+    .panelhead .sub{
+      margin-left:auto;
+      font-size:10px; color:var(--mut);
+    }
+    .panelbody{
+      padding:10px;
+      overflow:auto;
+      min-height:0;
+    }
+
+    /* KETA_NOTE block */
+    .ketaNoteWrap{
+      display:flex; gap:10px; align-items:flex-start;
+      border:1px solid var(--line);
+      padding:10px;
+      background: rgba(8,8,10,0.35);
+    }
+    .ketaNoteIcon{
+      width:14px; height:14px;
+      border:1px solid var(--fg);
+      background: var(--fg); /* WHITE SQUARE = MIND */
+      flex:0 0 auto;
+      margin-top:2px;
+    }
+    .ketaNote{
+      flex:1;
+    }
+    .ketaNote .label{
+      font-size:10px; color:var(--mut); letter-spacing:0.8px;
+    }
+    .ketaNote textarea{
+      width:100%;
+      min-height: 170px;
+      resize:vertical;
+      border:1px solid var(--line);
+      background: rgba(0,0,0,0.35);
+      color:var(--fg);
+      padding:10px;
+      font-family:var(--mono);
+      font-size:12px;
+      line-height:1.35;
+      outline:none;
+    }
+
+    /* TIMELINE */
+    .timeline{
+      display:flex;
+      flex-direction:column;
+      gap:8px;
+    }
+    .event{
+      border:1px solid var(--line);
+      background: rgba(8,8,10,0.35);
+      padding:10px;
+    }
+    .event .meta{
+      display:flex; gap:10px; align-items:baseline; flex-wrap:wrap;
+      margin-bottom:8px;
+    }
+    .event .ts{
+      color:var(--mut);
+      font-size:10px;
+    }
+    .event .tag{
+      border:1px solid var(--line);
+      padding:2px 6px;
+      font-size:10px;
+      color:var(--mut);
+      background: rgba(0,0,0,0.28);
+    }
+    .event .hdr{
+      font-size:12px;
+      color:var(--fg);
+      letter-spacing:0.6px;
+      margin-bottom:6px;
+    }
+    .event .txt{
+      font-size:11px;
+      line-height:1.35;
+      color: rgba(242,242,242,0.88);
+      white-space:pre-wrap;
+    }
+    .event .bul{
+      margin:8px 0 0;
+      padding-left:16px;
+      color: rgba(242,242,242,0.82);
+      font-size:11px;
+    }
+    .event .bul li{margin:4px 0}
+    .event .rule{
+      margin-top:8px;
+      font-size:11px;
+      color: var(--mut);
+    }
+
+    /* INTENSITY CONTROLS */
+    .lights{
+      display:flex; gap:6px; align-items:center;
+      padding:8px 10px;
+      border-top:1px solid var(--line);
+      background: rgba(12,12,14,0.45);
+      user-select:none;
+    }
+    .light{
+      width:18px; height:18px;
+      border:1px solid var(--line);
+      background: rgba(0,0,0,0.25);
+      cursor:pointer;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      font-size:10px;
+      color: var(--mut);
+    }
+    .light.on{
+      border-color: rgba(255,255,255,0.45);
+      background: rgba(255,255,255,0.16);
+      color: var(--fg);
+      box-shadow: 0 0 0 1px rgba(255,255,255,0.04) inset;
+    }
+
+    .sliders{
+      display:grid;
+      grid-template-columns: 1fr;
+      gap:10px;
+    }
+    .row{
+      display:grid;
+      grid-template-columns: 110px 1fr 46px;
+      gap:10px;
+      align-items:center;
+    }
+    .row .k{
+      font-size:10px;
+      color: var(--mut);
+      letter-spacing:0.7px;
+    }
+    input[type="range"]{
+      width:100%;
+      accent-color: #ffffff;
+    }
+    .row .v{
+      font-size:10px;
+      color: var(--fg);
+      text-align:right;
+    }
+
+    /* floating micro status */
+    .toast{
+      position:fixed;
+      left:10px;
+      bottom:56px;
+      padding:8px 10px;
+      border:1px solid var(--line);
+      background: rgba(8,8,10,0.55);
+      color:var(--mut);
+      font-size:11px;
+      z-index:999;
+      display:none;
+      max-width: 60ch;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+
+    /* scrollbar */
+    .panelbody::-webkit-scrollbar{ width:10px; }
+    .panelbody::-webkit-scrollbar-track{ background: rgba(0,0,0,0.2); }
+    .panelbody::-webkit-scrollbar-thumb{ background: rgba(255,255,255,0.12); border:1px solid rgba(255,255,255,0.08); }
+
+    /* strobe */
+    .strobeLayer{
+      position:fixed; inset:0;
+      pointer-events:none;
+      opacity: var(--strobe);
+      background: rgba(255,255,255,0.9);
+      mix-blend-mode: difference;
+      animation: strobe 120ms steps(1) infinite;
+      z-index:4;
+    }
+    @keyframes strobe{
+      0%{opacity:var(--strobe)}
+      50%{opacity:0}
+      100%{opacity:var(--strobe)}
+    }
+
+    /* pulse */
+    .pulse{
+      position:fixed; inset:0;
+      pointer-events:none;
+      opacity: calc(0.02 + var(--pulse)*0.18);
+      background: radial-gradient(circle at 50% 45%, rgba(255,255,255,0.12), rgba(255,255,255,0));
+      mix-blend-mode: screen;
+      animation: pulse 1.8s ease-in-out infinite;
+      z-index:1;
+    }
+    @keyframes pulse{
+      0%,100%{transform:scale(1)}
+      50%{transform:scale(1.03)}
+    }
+
+    /* tiny shake (kept subtle) */
+    .shake{
+      animation: shake 300ms linear infinite;
+      animation-play-state: paused;
+    }
+    .shake.on{ animation-play-state: running; }
+    @keyframes shake{
+      0%{transform:translate(0,0)}
+      25%{transform:translate(0.5px,-0.5px)}
+      50%{transform:translate(-0.5px,0.5px)}
+      75%{transform:translate(0.5px,0.3px)}
+      100%{transform:translate(0,0)}
+    }
+
+    /* bottom stamp */
+    .stamp{
+      display:flex; gap:10px; flex-wrap:wrap; align-items:center;
+      font-size:10px; color:var(--mut);
+    }
+    .stamp b{color:var(--fg); font-weight:600}
+  </style>
+</head>
+
+<body>
+  <div class="backdrop"></div>
+  <div class="rings"></div>
+  <div class="pulse"></div>
+  <div class="scan"></div>
+  <div class="grain"></div>
+  <div class="strobeLayer" aria-hidden="true"></div>
+
+  <div class="frame" id="frame">
+    <!-- TOP BAR -->
+    <div class="topbar">
+      <div class="brand">
+        <div class="sig" title="KETADATA SIG"></div>
+        <div>
+          <div class="t1">KETADATA // CONVERSATION TRACE</div>
+          <div class="t2">WHITE/BLACK/GREY · INTENSITY MODULATORS · TIME-SERIAL</div>
+        </div>
+      </div>
+
+      <div class="pill"><b>SHIFT+I</b> INVERT</div>
+      <div class="pill"><b>1–6</b> LIGHTS</div>
+      <div class="pill"><b>H</b> HIDE/SHOW PANELS</div>
+      <div class="pill"><b>R</b> RESET</div>
+      <div class="spacer"></div>
+
+      <button class="btn" id="exportBtn">EXPORT STATE</button>
+      <button class="btn" id="importBtn">IMPORT STATE</button>
+      <button class="btn" id="copyNoteBtn">COPY KETA_NOTE</button>
+    </div>
+
+    <!-- MAIN -->
+    <div class="main" id="main">
+      <!-- LEFT: KETA_NOTE -->
+      <div class="panel">
+        <div class="panelhead">
+          <div class="title">KETA_NOTE</div>
+          <div class="sub">WHITE SQUARE = MIND</div>
+        </div>
+        <div class="panelbody">
+          <div class="ketaNoteWrap">
+            <div class="ketaNoteIcon" title="WHITE SQUARE MIND"></div>
+            <div class="ketaNote">
+              <div class="label">META · CONTINUITY · CAPTURE EVERYWHERE · ROUTING INTENTIONAL</div>
+              <textarea id="ketaNoteText">
+KETA_NOTE (WHITE SQUARE) — CONVERSATION TRACE
+
+THROUGH-LINE (LOCKED):
+- DO NOT MAKE ME BE SOMEONE.
+- FUN = FRICTIONLESS AGENCY / UNINTERRUPTED SELFHOOD.
+- TIGHT CIRCUIT MUST FEEL EFFORTLESS.
+- WIDE FIELD CAN BE LOOSE / AMBIENT / UNCATEGORIZABLE.
+- REGISTRY = EQUAL ACCESS WITHOUT TAXONOMY.
+- CAPTURE THOUGHT EVERYWHERE.
+- RECORDING ≠ ROUTING.
+- BRUTAL MINIMALISM + HACKER IMAGINATION.
+- NO BUREAUCRACY. NO MORALIZATION. NO WORKFLOW TYRANNY.
+- BASE MOSTLY BARE (HOME), FAST SUMMONING (BAM BAM BAM).
+- POD / WORLD ARE LAYERS, BUT NOTE IS CORE CORE (MIND).
+
+PLANNING NEXT:
+- TIGHT LOOP PAGES VS BASE ITERATIONS (OPEN QUESTION).
+              </textarea>
+            </div>
+          </div>
+
+          <div style="height:12px"></div>
+
+          <div class="event">
+            <div class="meta">
+              <div class="ts" id="nowTs">NOW</div>
+              <div class="tag">STATE</div>
+              <div class="tag">TRACE</div>
+            </div>
+            <div class="hdr">CURRENT STATE FEEL</div>
+            <div class="txt" id="stateFeel">
+BASE: MOSTLY BARE VISUALLY · HOME · TRUST · FAST SUMMONING.
+CIRCUIT: TIGHT FOR LIFE LOOP · EVERYTHING ELSE LOOSE.
+NOTE: CORE CORE MIND · CAPTURE EVERYWHERE.
+REGISTRY: EQUAL ACCESS · CLUSTER WITHOUT FASCISM.
+              </div>
+          </div>
+        </div>
+
+        <div class="lights" id="lightsLeft">
+          <div class="hint">LIGHTS:</div>
+          <div class="light" data-n="1">1</div>
+          <div class="light" data-n="2">2</div>
+          <div class="light" data-n="3">3</div>
+          <div class="light" data-n="4">4</div>
+          <div class="light" data-n="5">5</div>
+          <div class="light" data-n="6">6</div>
+          <div class="spacer"></div>
+          <div class="hint" id="lightLabel">L0</div>
+        </div>
+      </div>
+
+      <!-- CENTER: TIMELINE -->
+      <div class="panel">
+        <div class="panelhead">
+          <div class="title">TIME-SERIAL TRACE</div>
+          <div class="sub">CONDENSED EVENTS · NO ONTOLOGY POLICING</div>
+        </div>
+        <div class="panelbody">
+          <div class="timeline" id="timeline"></div>
+        </div>
+        <div class="lights" id="lightsCenter">
+          <div class="hint">INTENSITY MODULATORS:</div>
+          <div class="spacer"></div>
+          <div class="hint">EDIT WITH SLIDERS (RIGHT)</div>
+        </div>
+      </div>
+
+      <!-- RIGHT: INTENSITY MODULATORS -->
+      <div class="panel">
+        <div class="panelhead">
+          <div class="title">INTENSITY MODULATORS</div>
+          <div class="sub">WHITE/BLACK/GREY ONLY</div>
+        </div>
+        <div class="panelbody">
+          <div class="sliders">
+            <div class="row">
+              <div class="k">GRAIN</div>
+              <input id="grain" type="range" min="0" max="0.18" step="0.01" value="0.06" />
+              <div class="v" id="grainV">0.06</div>
+            </div>
+
+            <div class="row">
+              <div class="k">SCAN</div>
+              <input id="scan" type="range" min="0" max="0.22" step="0.01" value="0.12" />
+              <div class="v" id="scanV">0.12</div>
+            </div>
+
+            <div class="row">
+              <div class="k">RING</div>
+              <input id="ring" type="range" min="0" max="1" step="0.01" value="0.00" />
+              <div class="v" id="ringV">0.00</div>
+            </div>
+
+            <div class="row">
+              <div class="k">PULSE</div>
+              <input id="pulse" type="range" min="0" max="1" step="0.01" value="0.00" />
+              <div class="v" id="pulseV">0.00</div>
+            </div>
+
+            <div class="row">
+              <div class="k">STROBE</div>
+              <input id="strobe" type="range" min="0" max="0.85" step="0.01" value="0.00" />
+              <div class="v" id="strobeV">0.00</div>
+            </div>
+
+            <div class="row">
+              <div class="k">BLUR</div>
+              <input id="blur" type="range" min="0" max="2.5" step="0.1" value="0" />
+              <div class="v" id="blurV">0.0</div>
+            </div>
+
+            <div class="row">
+              <div class="k">ZOOM</div>
+              <input id="zoom" type="range" min="0.9" max="1.15" step="0.01" value="1" />
+              <div class="v" id="zoomV">1.00</div>
+            </div>
+
+            <div class="row">
+              <div class="k">SHAKE</div>
+              <input id="shake" type="range" min="0" max="1" step="1" value="0" />
+              <div class="v" id="shakeV">0</div>
+            </div>
+
+            <div class="event">
+              <div class="meta">
+                <div class="ts">KEYS</div>
+                <div class="tag">SHIFT+I</div>
+                <div class="tag">H</div>
+                <div class="tag">R</div>
+              </div>
+              <div class="hdr">OPERATORS</div>
+              <div class="txt">
+SHIFT+I: INVERT
+H: HIDE/SHOW ALL PANELS
+R: RESET MODULATORS
+1–6: LIGHT LEVEL (CONTINUOUS)
+              </div>
+            </div>
+
+            <div class="event">
+              <div class="meta">
+                <div class="ts">PLANNING</div>
+                <div class="tag">OPEN</div>
+              </div>
+              <div class="hdr">NEXT DECISION NODE</div>
+              <div class="txt">
+CHOICE A: PROCESS TIGHT-LOOP PAGES FIRST → THEN CROWN WITH BASE
+CHOICE B: ITERATE BASE (FUNCTION) UNTIL CIRCUIT FEELS PERFECT → THEN INPUT OTHERS
+
+(THIS FILE IS AN INTERPRETIVE TRACE, NOT A PLAN.)
+              </div>
+              <div class="rule">RULE: NO FAKE “NON-AI PERSON” ASSUMPTIONS. PLAN FOR AI-ASSISTED EXECUTION.</div>
+            </div>
+
+          </div>
+        </div>
+
+        <div class="lights" id="lightsRight">
+          <div class="hint">STATE IO:</div>
+          <button class="btn" id="saveBtn">SAVE LOCAL</button>
+          <button class="btn" id="loadBtn">LOAD LOCAL</button>
+          <div class="spacer"></div>
+          <div class="hint" id="ioLabel">LOCAL: OFF</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- BOTTOM BAR -->
+    <div class="bottombar">
+      <div class="stamp" id="stamp">
+        <span><b>AE</b> KETA_TRACE_UI</span>
+        <span>|</span>
+        <span><b>EE</b> TIME_SERIAL_ENGINE</span>
+        <span>|</span>
+        <span><b>WB</b> STATE_IO</span>
+        <span>|</span>
+        <span>FILE_ID: <b id="fileId">KETA_TRACE_0001</b></span>
+        <span>ROOM_ID: <b id="roomId">BASE</b></span>
+        <span>VERSION: <b id="ver">v1</b></span>
+        <span>UPDATED_AT: <b id="updatedAt">—</b></span>
+      </div>
+      <div class="spacer"></div>
+      <div class="hint">KETADATA // WHITE-BLACK-GREY // INTENSITY</div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    // ===== KETADATA TRACE DATA (condensed, timestamped entries) =====
+    const trace = [
+      {
+        ts: "2025-12-27T23:xx:xx-05:00",
+        tag: ["DOCTRINE","INTEROP"],
+        hdr: "SOVEREIGN BUT POROUS",
+        txt: "KETADATA = own thing, not shut off.\nInteroperability via loose edges.\nImport as raw material; export as artifact.\nNever co-own state. Core stays light."
+      },
+      {
+        ts: "2025-12-27T23:xx:xx-05:00",
+        tag: ["MODE","DEFAULT"],
+        hdr: "BRUTAL MINIMALISM + HACKER AFFORDANCES",
+        txt: "Minimal rigidity. Aesthetic/semantic/symbolic regime.\nNo bureaucracy unless disproportionate value.\nAlways flag continuity + privacy threats."
+      },
+      {
+        ts: "2025-12-27T23:xx:xx-05:00",
+        tag: ["PRIMITIVE","PRESENCE"],
+        hdr: "RENDER / PRESENCE (SHADOW PUPPET MODEL)",
+        txt: "Hands = substrate (screen/code).\nShadow = object rendered.\nWall = lens.\nPlace has no authority; presence matters.\nNot final ontology — used to cut bureaucracy."
+      },
+      {
+        ts: "2025-12-27T23:xx:xx-05:00",
+        tag: ["TEMPO","TRUST"],
+        hdr: "TEMPORAL CONTRACT",
+        txt: "Stop finality language. Concepts provisional until ratified.\nAsk temperature questions. No design guidance unless asked.\nTrust requires: 'exactly where I left it.'"
+      },
+      {
+        ts: "2025-12-27T23:xx:xx-05:00",
+        tag: ["INVENTORY","DESK"],
+        hdr: "DESK LOGIC / INVENTORY FEEL",
+        txt: "See many things small; decide.\nTop-level unchanged = trust.\nLatency = accessible like photos (zoom out/in).\nSystem never says no; holds without punishing."
+      },
+      {
+        ts: "2025-12-27T23:xx:xx-05:00",
+        tag: ["LAYERS","BASE/POD/WORLD"],
+        hdr: "LAYERING WITHOUT SEVERANCE",
+        txt: "Base: mostly bare, home, fast summoning.\nPod: solitary, bunkerlike, industrial sublime.\nWorld: observational, large-scale systems.\nCinema = content player in Base."
+      },
+      {
+        ts: "2025-12-27T23:xx:xx-05:00",
+        tag: ["SPECTRUM","REGISTRY"],
+        hdr: "SPECTRUM ACCEPTED",
+        txt: "Everything accessible via Registry.\nTight circuit must be right.\nWide field can be ambient/experimental/uncategorizable.\nNo fascist taxonomy."
+      },
+      {
+        ts: "2025-12-27T23:xx:xx-05:00",
+        tag: ["FUN","METRIC"],
+        hdr: "FUN = FRICTIONLESS AGENCY",
+        txt: "Success metric is FUN.\nCircuit right → fun emerges.\nCircuit wrong → heavy, irritated.\nPrioritize ease, speed, return."
+      },
+      {
+        ts: "2025-12-27T23:xx:xx-05:00",
+        tag: ["ANTI-IDENTITY","HARD RULE"],
+        hdr: "DO NOT MAKE ME BE SOMEONE",
+        txt: "Any structure that makes you be anyone at all is violence.\nNo roles, modes, personas, workflows.\nUninterrupted selfhood."
+      },
+      {
+        ts: "2025-12-27T23:xx:xx-05:00",
+        tag: ["KETA_NOTE","WHITE SQUARE"],
+        hdr: "KETA_NOTE = MIND (WHITE SQUARE)",
+        txt: "This is all about KETADATA.\nKETA_NOTE is the mind primitive.\nCapture everywhere.\nRecording ≠ routing."
+      }
+    ];
+
+    // ===== Utilities =====
+    const $ = (q)=>document.querySelector(q);
+    const toast = (msg)=>{
+      const t = $("#toast");
+      t.textContent = msg;
+      t.style.display = "block";
+      clearTimeout(toast._t);
+      toast._t = setTimeout(()=>t.style.display="none", 1400);
+    };
+
+    // Timestamp
+    const isoNow = new Date().toISOString();
+    $("#updatedAt").textContent = isoNow;
+    $("#nowTs").textContent = isoNow;
+
+    // Build timeline
+    const timeline = $("#timeline");
+    trace.forEach((e, idx)=>{
+      const div = document.createElement("div");
+      div.className = "event";
+      div.dataset.idx = idx;
+
+      const meta = document.createElement("div");
+      meta.className = "meta";
+
+      const ts = document.createElement("div");
+      ts.className = "ts";
+      ts.textContent = e.ts;
+
+      meta.appendChild(ts);
+
+      (e.tag||[]).forEach(t=>{
+        const tag = document.createElement("div");
+        tag.className = "tag";
+        tag.textContent = t;
+        meta.appendChild(tag);
+      });
+
+      const hdr = document.createElement("div");
+      hdr.className = "hdr";
+      hdr.textContent = e.hdr;
+
+      const txt = document.createElement("div");
+      txt.className = "txt";
+      txt.textContent = e.txt;
+
+      div.appendChild(meta);
+      div.appendChild(hdr);
+      div.appendChild(txt);
+
+      timeline.appendChild(div);
+    });
+
+    // ===== Intensity Modulators =====
+    const setVar = (k,v)=>document.documentElement.style.setProperty(k, v);
+
+    function bindRange(id, cssVar, fmt=(x)=>x){
+      const el = $("#"+id);
+      const out = $("#"+id+"V");
+      const upd = ()=>{
+        const v = el.value;
+        out.textContent = fmt(v);
+        setVar(cssVar, id==="blur" ? v+"px" : v);
+      };
+      el.addEventListener("input", upd);
+      upd();
+    }
+
+    bindRange("grain","--grain", (v)=>Number(v).toFixed(2));
+    bindRange("scan","--scan", (v)=>Number(v).toFixed(2));
+    bindRange("ring","--ring", (v)=>Number(v).toFixed(2));
+    bindRange("pulse","--pulse", (v)=>Number(v).toFixed(2));
+    bindRange("strobe","--strobe", (v)=>Number(v).toFixed(2));
+    bindRange("blur","--blur", (v)=>Number(v).toFixed(1));
+    bindRange("zoom","--zoom", (v)=>Number(v).toFixed(2));
+
+    // shake (0/1)
+    const shakeEl = $("#shake");
+    const shakeV = $("#shakeV");
+    const frame = $("#frame");
+    function updShake(){
+      const v = Number(shakeEl.value);
+      shakeV.textContent = String(v);
+      frame.classList.toggle("shake", true);
+      frame.classList.toggle("on", v===1);
+    }
+    shakeEl.addEventListener("input", updShake);
+    updShake();
+
+    // ===== Lights 1-6 continuous =====
+    let lightLevel = 0; // 0-6
+    const lights = [...document.querySelectorAll(".light")];
+    function paintLights(){
+      lights.forEach(l=>{
+        const n = Number(l.dataset.n);
+        l.classList.toggle("on", n <= lightLevel && lightLevel>0);
+      });
+      $("#lightLabel").textContent = "L" + lightLevel;
+
+      // Map light level to subtle intensity palette (kept white/black/grey)
+      // L0 = calm; L6 = vivid
+      const ring = (lightLevel/6)*0.75;
+      const pulse = (lightLevel>=4) ? (lightLevel-3)/3 * 0.55 : 0.0;
+      const scan = 0.08 + (lightLevel/6)*0.12;
+      const grain = 0.04 + (lightLevel/6)*0.08;
+
+      $("#ring").value = ring.toFixed(2); $("#ringV").textContent = ring.toFixed(2); setVar("--ring", ring);
+      $("#pulse").value = pulse.toFixed(2); $("#pulseV").textContent = pulse.toFixed(2); setVar("--pulse", pulse);
+      $("#scan").value = scan.toFixed(2); $("#scanV").textContent = scan.toFixed(2); setVar("--scan", scan);
+      $("#grain").value = grain.toFixed(2); $("#grainV").textContent = grain.toFixed(2); setVar("--grain", grain);
+
+      toast("LIGHT LEVEL → L" + lightLevel);
+    }
+    lights.forEach(l=>{
+      l.addEventListener("click", ()=>{
+        const n = Number(l.dataset.n);
+        lightLevel = (lightLevel===n) ? 0 : n;
+        paintLights();
+      });
+    });
+
+    document.addEventListener("keydown", (e)=>{
+      // SHIFT+I invert
+      if(e.shiftKey && (e.key==="I" || e.key==="i")){
+        const cur = getComputedStyle(document.documentElement).getPropertyValue("--inv").trim();
+        const next = (cur === "1") ? "0" : "1";
+        setVar("--inv", next);
+        toast("INVERT → " + (next==="1" ? "ON" : "OFF"));
+        e.preventDefault();
+        return;
+      }
+      // H hide panels
+      if(e.key==="h" || e.key==="H"){
+        const main = $("#main");
+        const isHidden = main.style.display === "none";
+        main.style.display = isHidden ? "grid" : "none";
+        toast(isHidden ? "PANELS → SHOW" : "PANELS → HIDE");
+        e.preventDefault();
+        return;
+      }
+      // R reset
+      if(e.key==="r" || e.key==="R"){
+        setVar("--inv", "0");
+        setVar("--blur", "0px");
+        setVar("--zoom", "1");
+        setVar("--strobe", "0");
+        setVar("--pulse", "0");
+        setVar("--ring", "0");
+        setVar("--scan", "0.12");
+        setVar("--grain", "0.06");
+        lightLevel = 0; paintLights();
+        $("#strobe").value = "0"; $("#strobeV").textContent = "0.00";
+        $("#pulse").value = "0"; $("#pulseV").textContent = "0.00";
+        $("#ring").value = "0"; $("#ringV").textContent = "0.00";
+        $("#scan").value = "0.12"; $("#scanV").textContent = "0.12";
+        $("#grain").value = "0.06"; $("#grainV").textContent = "0.06";
+        $("#blur").value = "0"; $("#blurV").textContent = "0.0";
+        $("#zoom").value = "1"; $("#zoomV").textContent = "1.00";
+        $("#shake").value = "0"; $("#shakeV").textContent = "0"; frame.classList.remove("on");
+        toast("RESET");
+        e.preventDefault();
+        return;
+      }
+      // 1-6 lights
+      if(["1","2","3","4","5","6"].includes(e.key)){
+        lightLevel = Number(e.key);
+        paintLights();
+        e.preventDefault();
+        return;
+      }
+    });
+
+    // ===== State IO =====
+    const STATE_KEY = "KETA_TRACE_STATE_v1";
+    const getState = ()=>({
+      version: "KETA_TRACE_v1",
+      updatedAt: new Date().toISOString(),
+      inv: getComputedStyle(document.documentElement).getPropertyValue("--inv").trim(),
+      vars: {
+        grain: $("#grain").value,
+        scan: $("#scan").value,
+        ring: $("#ring").value,
+        pulse: $("#pulse").value,
+        strobe: $("#strobe").value,
+        blur: $("#blur").value,
+        zoom: $("#zoom").value,
+        shake: $("#shake").value
+      },
+      lightLevel,
+      ketaNote: $("#ketaNoteText").value
+    });
+
+    const applyState = (s)=>{
+      if(!s || !s.vars) return;
+
+      $("#ketaNoteText").value = s.ketaNote ?? $("#ketaNoteText").value;
+
+      $("#grain").value = s.vars.grain ?? "0.06";
+      $("#scan").value = s.vars.scan ?? "0.12";
+      $("#ring").value = s.vars.ring ?? "0";
+      $("#pulse").value = s.vars.pulse ?? "0";
+      $("#strobe").value = s.vars.strobe ?? "0";
+      $("#blur").value = s.vars.blur ?? "0";
+      $("#zoom").value = s.vars.zoom ?? "1";
+      $("#shake").value = s.vars.shake ?? "0";
+
+      // Force update displays/vars by dispatching input
+      ["grain","scan","ring","pulse","strobe","blur","zoom","shake"].forEach(id=>{
+        $("#"+id).dispatchEvent(new Event("input"));
+      });
+
+      setVar("--inv", (s.inv==="1") ? "1" : "0");
+      lightLevel = Number(s.lightLevel ?? 0);
+      paintLights();
+      $("#updatedAt").textContent = new Date().toISOString();
+      toast("STATE APPLIED");
+    };
+
+    $("#saveBtn").addEventListener("click", ()=>{
+      try{
+        localStorage.setItem(STATE_KEY, JSON.stringify(getState()));
+        $("#ioLabel").textContent = "LOCAL: ON";
+        toast("SAVED LOCAL");
+      }catch(err){
+        toast("SAVE FAILED");
+      }
+    });
+
+    $("#loadBtn").addEventListener("click", ()=>{
+      try{
+        const raw = localStorage.getItem(STATE_KEY);
+        if(!raw){ toast("NO LOCAL STATE"); return; }
+        applyState(JSON.parse(raw));
+        $("#ioLabel").textContent = "LOCAL: ON";
+      }catch(err){
+        toast("LOAD FAILED");
+      }
+    });
+
+    $("#exportBtn").addEventListener("click", async ()=>{
+      const s = getState();
+      const blob = new Blob([JSON.stringify(s, null, 2)], {type:"application/json"});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "KETA_TRACE_STATE_v1.json";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      toast("EXPORTED JSON");
+    });
+
+    $("#importBtn").addEventListener("click", ()=>{
+      const input = document.createElement("input");
+      input.type = "file";
+      input.accept = "application/json";
+      input.onchange = async ()=>{
+        const file = input.files?.[0];
+        if(!file) return;
+        const txt = await file.text();
+        try{
+          const s = JSON.parse(txt);
+          applyState(s);
+          toast("IMPORTED JSON");
+        }catch(e){
+          toast("IMPORT FAILED");
+        }
+      };
+      input.click();
+    });
+
+    $("#copyNoteBtn").addEventListener("click", async ()=>{
+      try{
+        await navigator.clipboard.writeText($("#ketaNoteText").value);
+        toast("COPIED KETA_NOTE");
+      }catch(e){
+        toast("COPY FAILED");
+      }
+    });
+
+    // Initialize
+    paintLights();
+    $("#ioLabel").textContent = localStorage.getItem(STATE_KEY) ? "LOCAL: ON" : "LOCAL: OFF";
+  </script>
+
+  <!--
+  ===========================
+  KETADATA HTML SERIALIZATION STAMP
+  ===========================
+  AE: KETA_TRACE_UI
+  EE: TIME_SERIAL_ENGINE
+  WB: STATE_IO
+
+  FILE_ID: KETA_TRACE_0001
+  ROOM_ID: BASE
+  VERSION: v1
+  UPDATED_AT: 2025-12-27T23:59:59-05:00
+
+  CHANGELOG:
+  - v1: INTERPRETIVE TRACE FOR CONVERSATION THROUGH-LINE (WHITE/BLACK/GREY).
+  - Includes KETA_NOTE (WHITE SQUARE MIND), TIME-SERIAL TRACE, INTENSITY MODULATORS, SHIFT+I INVERT, LIGHTS 1–6, STATE IO.
+  -->
+</body>
+</html>
