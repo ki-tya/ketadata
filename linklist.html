@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>KETADATA // LINK LIST</title>
+  <style>
+    :root { color-scheme: dark; }
+    html, body { margin:0; background:#000; color:#fff; font:12px/1.35 Arial, Helvetica, sans-serif; }
+    .wrap { padding:14px 16px; max-width:1100px; }
+    .top { display:flex; gap:14px; flex-wrap:wrap; align-items:baseline; }
+    .t { font-weight:700; letter-spacing:.14em; }
+    .m { opacity:.65; letter-spacing:.06em; }
+    .list { margin-top:14px; display:flex; flex-direction:column; gap:6px; }
+    a.l { color:#fff; text-decoration:none; display:flex; gap:10px; align-items:baseline; }
+    a.l:hover { text-decoration:underline; }
+    .h { opacity:.55; min-width:96px; display:inline-block; letter-spacing:.14em; }
+    .p { opacity:.95; }
+    .err { opacity:.75; white-space:pre-wrap; }
+    .foot { margin-top:18px; opacity:.55; letter-spacing:.08em; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="top">
+      <div class="t">KETADATA // LINK LIST</div>
+      <div class="m" id="meta">LOADING</div>
+    </div>
+
+    <div class="list" id="list"></div>
+    <div class="foot" id="foot"></div>
+  </div>
+
+<script>
+(() => {
+  const OWNER = "ki-tya";
+  const REPO  = "ketadata";
+  const BRANCH = "main";
+  const PAGES_BASE = "https://ki-tya.github.io/ketadata/";
+  const API_BASE = "https://api.github.com";
+
+  const $meta = document.getElementById("meta");
+  const $list = document.getElementById("list");
+  const $foot = document.getElementById("foot");
+
+  // tiny stable hash -> 10 hex chars (FNV-1a)
+  function hash10(str) {
+    let h = 0x811c9dc5;
+    for (let i = 0; i < str.length; i++) {
+      h ^= str.charCodeAt(i);
+      h = (h * 0x01000193) >>> 0;
+    }
+    // expand to 10 hex by chaining
+    let x = h.toString(16).padStart(8, "0");
+    let h2 = (h ^ (h >>> 16)) >>> 0;
+    let y = h2.toString(16).padStart(8, "0");
+    return (x + y).slice(0, 10);
+  }
+
+  function esc(s) {
+    return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  async function ghJSON(url) {
+    const res = await fetch(url, {
+      headers: {
+        "Accept": "application/vnd.github+json"
+      }
+    });
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      throw new Error(`GITHUB API ERROR ${res.status} ${res.statusText}\n${url}\n${text}`);
+    }
+    return res.json();
+  }
+
+  async function walk(path = "") {
+    // GitHub Contents API: not truly recursive; we recurse.
+    const url = `${API_BASE}/repos/${OWNER}/${REPO}/contents/${encodeURIComponent(path)}?ref=${encodeURIComponent(BRANCH)}`;
+    const data = await ghJSON(url);
+
+    let files = [];
+    for (const item of data) {
+      if (item.type === "dir") {
+        // skip obvious heavy dirs if you want; currently none skipped.
+        const sub = await walk(item.path);
+        files = files.concat(sub);
+      } else if (item.type === "file") {
+        files.push(item.path);
+      }
+    }
+    return files;
+  }
+
+  function render(paths) {
+    // keep it stark: sort, filter .html, exclude common non-pages if desired
+    const htmls = paths
+      .filter(p => p.toLowerCase().endsWith(".html"))
+      .sort((a,b) => a.localeCompare(b));
+
+    $meta.textContent = `${htmls.length} PAGES // ${OWNER}/${REPO} // ${BRANCH}`;
+
+    const frag = document.createDocumentFragment();
+    for (const p of htmls) {
+      const a = document.createElement("a");
+      a.className = "l";
+      a.href = PAGES_BASE + p;
+      a.target = "_self";
+      a.rel = "noopener";
+
+      const h = document.createElement("span");
+      h.className = "h";
+      h.textContent = hash10(p);
+
+      const t = document.createElement("span");
+      t.className = "p";
+      t.textContent = p;
+
+      a.appendChild(h);
+      a.appendChild(t);
+      frag.appendChild(a);
+    }
+    $list.innerHTML = "";
+    $list.appendChild(frag);
+
+    const now = new Date().toISOString();
+    $foot.textContent = `UPDATED ${now} // STARK INDEX // HASH+PATH`;
+  }
+
+  function errorOut(err) {
+    $meta.textContent = "ERROR";
+    $list.innerHTML = `<div class="err">${esc(String(err && err.message ? err.message : err))}</div>`;
+    $foot.textContent = "NOTE: GITHUB API RATE LIMITS APPLY WITHOUT AUTH";
+  }
+
+  (async () => {
+    try {
+      const all = await walk("");
+      render(all);
+    } catch (e) {
+      errorOut(e);
+    }
+  })();
+})();
+</script>
+
+<!--
+AE/WB/EE SERIALIZATION STAMP (MANDATORY)
+FILE_ID: directory
+ROOM_ID: BASE
+VERSION: KETADATA_LINK_LIST_v1
+UPDATED_AT: 2025-12-27T00:00:00Z
+CHANGELOG:
+- v1: stark recursive GitHub API index (hash + path -> pages URL)
+-->
+</body>
+</html>
