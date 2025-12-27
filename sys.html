@@ -1,0 +1,1588 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>KETADATA_SHELL8_KERNEL_v1.html</title>
+
+<style>
+:root{
+  --bg:#000; --fg:#fff; --muted:#8a8a8a; --line:#222; --line2:#333;
+  --top:44px; --bot:34px;
+
+  --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  --sans: Arial, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+
+  --ctl-radius:0px;
+  --ctl-alpha:0.80;
+  --ctl-bg: rgba(0,0,0,var(--ctl-alpha));
+  --note-border: rgba(255,255,255,0.78);
+
+  --snap: 20px; /* lego grid */
+}
+
+*{box-sizing:border-box}
+html,body{height:100%; margin:0}
+body{
+  background:var(--bg);
+  color:var(--fg);
+  font-family:var(--sans);
+  overflow:hidden;
+  user-select:none;
+}
+
+#root{
+  position:fixed;
+  inset:0;
+  background:#000;
+}
+#root.invert{ filter: invert(1); }
+
+/* NULL MODE */
+#root.null .topbar,
+#root.null .bottombar,
+#root.null .drawer,
+#root.null .ketaNote,
+#root.null #roomJump,
+#root.null #pinnedPanel,
+#root.null #pinsStage,
+#root.null .toast{
+  display:none !important;
+}
+
+/* Stage */
+#stage{
+  position:absolute;
+  inset:0;
+  background:#000;
+  filter:none;
+}
+
+/* Motion layer */
+#motion{
+  position:absolute;
+  inset:0;
+  pointer-events:none;
+  opacity:0;
+  background:
+    repeating-linear-gradient(
+      135deg,
+      rgba(255,255,255,0.06) 0px,
+      rgba(255,255,255,0.06) 1px,
+      rgba(0,0,0,0) 12px,
+      rgba(0,0,0,0) 22px
+    );
+  mix-blend-mode: screen;
+  transform: translate3d(0,0,0);
+}
+#motion.run{
+  opacity:0.12;
+  animation: scanflow 2.2s linear infinite;
+}
+@keyframes scanflow{
+  0%   { transform: translate3d(-80px, 60px, 0); }
+  100% { transform: translate3d(80px, -60px, 0); }
+}
+
+/* TOP BAR */
+.topbar{
+  position:absolute;
+  top:0; left:0; right:0;
+  height:var(--top);
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  padding:0 10px;
+  border-bottom:1px solid var(--line);
+  background:linear-gradient(180deg,#070707,#000);
+  z-index:10;
+}
+.brand{
+  display:flex; align-items:center; gap:10px;
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:.10em;
+  text-transform:uppercase;
+}
+.brand .sq{
+  width:10px; height:10px;
+  border:1px solid var(--fg);
+  background:#000;
+}
+.roomBadge{
+  display:flex; gap:8px; align-items:center;
+  font-family:var(--mono);
+  font-size:11px;
+  letter-spacing:.10em;
+  text-transform:uppercase;
+  color:var(--muted);
+  border:1px solid var(--line2);
+  padding:4px 8px;
+}
+.actions{
+  display:flex; align-items:center; gap:8px;
+  font-family:var(--mono);
+  font-size:12px;
+}
+.btn{
+  background:transparent;
+  color:var(--fg);
+  border:1px solid var(--line2);
+  padding:6px 10px;
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  cursor:pointer;
+}
+.btn:hover{border-color:var(--fg)}
+.btn:active{transform:translateY(1px)}
+.kbd{border:1px solid var(--line2); padding:2px 6px; color:var(--muted); font-size:11px}
+
+.ketaIcon{
+  width:16px; height:16px;
+  border:2px solid var(--fg);
+  background:var(--fg);
+  cursor:pointer;
+}
+.ketaIcon.open{ background:#000; }
+
+/* BOTTOM BAR + DRAWER */
+.bottombar{
+  position:absolute;
+  left:0; right:0; bottom:0;
+  height:var(--bot);
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  padding:0 10px;
+  border-top:1px solid var(--line);
+  background:linear-gradient(0deg,#070707,#000);
+  z-index:10;
+  font-family:var(--mono);
+  font-size:11px;
+  color:var(--muted);
+}
+.toggle{
+  border:1px solid var(--line2);
+  background:transparent;
+  color:var(--fg);
+  padding:4px 8px;
+  font-family:var(--mono);
+  font-size:11px;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  cursor:pointer;
+}
+.toggle:hover{border-color:var(--fg)}
+
+.drawer{
+  position:absolute;
+  left:0; right:0;
+  bottom:var(--bot);
+  height:42%;
+  min-height:180px;
+  border-top:1px solid var(--line);
+  background:linear-gradient(180deg,#060606,#000);
+  display:none;
+  z-index:20;
+}
+.drawer.open{display:flex; flex-direction:column}
+.drawerHead{
+  padding:8px 10px;
+  border-bottom:1px solid var(--line);
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:.10em;
+  text-transform:uppercase;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+}
+.drawerBody{padding:10px; min-height:0; flex:1; overflow:auto}
+
+/* resizer handle (drag this to raise drawer to topbar) */
+.drawerResizer{
+  height:10px;
+  cursor:ns-resize;
+  border-bottom:1px solid var(--line);
+  background:linear-gradient(180deg, rgba(255,255,255,0.05), rgba(0,0,0,0));
+}
+.drawerResizer:active{ background:rgba(255,255,255,0.06); }
+
+textarea{
+  width:100%;
+  border:1px solid var(--line2);
+  background:#050505;
+  color:var(--fg);
+  font-family:var(--mono);
+  font-size:12px;
+  padding:10px;
+  line-height:1.35;
+  outline:none;
+  resize:vertical;
+  min-height:140px;
+}
+.kInput{
+  flex:1;
+  background:#000;
+  color:#fff;
+  border:1px solid var(--line2);
+  padding:6px 8px;
+  font-family:var(--mono);
+  outline:none;
+}
+.kRow{
+  margin-top:8px;
+  display:flex;
+  gap:8px;
+  align-items:center;
+  font-family:var(--mono);
+  font-size:11px;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  color:var(--muted);
+}
+.kSmall{
+  color:var(--muted);
+  font-family:var(--mono);
+  font-size:11px;
+}
+
+/* KETA NOTE */
+.ketaNote{
+  position:absolute;
+  top:60px; right:16px;
+  width:340px; height:220px;
+  display:none;
+  z-index:30;
+  resize:both;
+  overflow:hidden;
+  border-radius:var(--ctl-radius);
+  background:var(--ctl-bg);
+  border:1px solid var(--note-border);
+  backdrop-filter: blur(6px);
+}
+.ketaNote.open{display:flex; flex-direction:column}
+.ketaHead{
+  padding:8px 10px;
+  border-bottom:1px solid rgba(255,255,255,0.14);
+  font-family:var(--mono);
+  font-size:11px;
+  letter-spacing:.14em;
+  text-transform:uppercase;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  cursor:move;
+}
+.ketaBody{padding:10px; min-height:0; flex:1}
+.ketaNote textarea{
+  background:#000;
+  color:#fff;
+  border:1px solid rgba(255,255,255,0.22);
+  width:100%;
+  height:100%;
+  resize:none;
+  padding:10px;
+  outline:none;
+}
+.headBtn{
+  background:transparent;
+  color:var(--fg);
+  border:1px solid rgba(255,255,255,0.18);
+  padding:2px 8px;
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  cursor:pointer;
+}
+.headBtn:hover{border-color:rgba(255,255,255,0.6)}
+
+/* Toast */
+.toast{
+  position:absolute;
+  left:12px;
+  top:calc(var(--top) + 12px);
+  padding:8px 10px;
+  border:1px solid var(--line2);
+  background:rgba(8,8,8,0.82);
+  font-family:var(--mono);
+  font-size:11px;
+  letter-spacing:.06em;
+  color:var(--fg);
+  display:none;
+  z-index:40;
+}
+
+/* RoomUrl banner */
+#roomJump{
+  position:absolute;
+  left:10px;
+  top:calc(var(--top) + 10px);
+  display:none;
+  align-items:center;
+  gap:10px;
+  padding:8px 10px;
+  border:1px solid var(--line2);
+  background:rgba(0,0,0,0.82);
+  z-index:25;
+  font-family:var(--mono);
+  font-size:11px;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+}
+#roomJump.show{display:flex}
+
+/* Pins stage: draggable tiles live here (hard top boundary) */
+#pinsStage{
+  position:absolute;
+  left:0; right:0;
+  top:var(--top);
+  bottom:var(--bot);
+  pointer-events:none; /* tiles enable pointer */
+  z-index:24;
+}
+.pinTile{
+  position:absolute;
+  pointer-events:auto;
+  min-width:160px;
+  min-height:40px;
+  border:1px solid var(--line2);
+  background:rgba(0,0,0,0.82);
+  color:var(--fg);
+  font-family:var(--mono);
+  font-size:11px;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  padding:8px 10px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+}
+.pinTile:hover{ border-color: var(--fg); }
+.pinTitle{
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  max-width:260px;
+}
+.pinBtns{
+  display:flex;
+  gap:6px;
+  align-items:center;
+}
+.pinMini{
+  border:1px solid var(--line2);
+  background:transparent;
+  color:var(--fg);
+  font-family:var(--mono);
+  font-size:11px;
+  padding:2px 6px;
+  cursor:pointer;
+}
+.pinMini:hover{ border-color: var(--fg); }
+
+/* legacy pinnedPanel kept (now shows a compact legend only) */
+#pinnedPanel{
+  position:absolute;
+  left:10px;
+  top:calc(var(--top) + 54px);
+  z-index:26;
+  display:none;
+  gap:8px;
+  flex-wrap:wrap;
+  align-items:center;
+  padding:8px 10px;
+  border:1px solid var(--line2);
+  background:rgba(0,0,0,0.82);
+  font-family:var(--mono);
+  font-size:11px;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+}
+</style>
+</head>
+
+<body>
+<div id="root">
+  <div id="stage" aria-label="KETADATA STAGE"></div>
+  <div id="motion" aria-hidden="true"></div>
+
+  <div id="roomJump">
+    <span id="roomJumpTxt">ROOM LINK DETECTED</span>
+    <button class="btn" id="btnGoRoom">GO</button>
+    <button class="btn" id="btnDismissRoom">DISMISS</button>
+  </div>
+
+  <!-- Pins live here (draggable/rearrangeable) -->
+  <div id="pinsStage" aria-hidden="false"></div>
+
+  <!-- legacy compact panel (optional) -->
+  <div id="pinnedPanel"></div>
+
+  <div class="toast" id="toast"></div>
+
+  <div class="topbar">
+    <div style="display:flex; gap:10px; align-items:center">
+      <div class="brand">
+        <span class="sq"></span>
+        <span>KETADATA // SHELL8 // KERNEL</span>
+        <span style="color:var(--muted); letter-spacing:.02em; text-transform:none">v1</span>
+      </div>
+      <div class="roomBadge" title="Room in state">
+        <span>ROOM</span>
+        <span id="roomName">BASE</span>
+      </div>
+    </div>
+    <div class="actions">
+      <button class="btn" id="btnImport">IMPORT</button>
+      <button class="btn" id="btnExport">EXPORT</button>
+      <button class="btn" id="btnCopy">COPY</button>
+
+      <span class="kbd" title="Invert all colors">Shift+I</span>
+      <span class="kbd" title="Null the system (hide all UI)">Shift+0</span>
+      <span class="kbd" title="Home to Shell (for compliant pages)">Shift+`</span>
+      <span class="kbd" title="Select light preset">1–6</span>
+      <span class="kbd" title="Toggle light on/off + motion transport">Space</span>
+
+      <button class="btn" id="btnNull" title="NULL MODE (SHIFT+0)">NULL</button>
+      <div id="ketaIcon" class="ketaIcon" title="KETA_NOTE"></div>
+    </div>
+  </div>
+
+  <div class="drawer" id="drawer">
+    <div class="drawerHead">
+      <div>SYSTEM UNIVERSALS</div>
+      <div style="display:flex; gap:8px; align-items:center">
+        <span id="sig" style="color:var(--muted); font-family:var(--mono); font-size:11px">∅</span>
+        <button class="btn" id="btnCopyUniversals">COPY</button>
+        <button class="btn" id="btnCloseDrawer">CLOSE</button>
+      </div>
+    </div>
+
+    <div class="drawerResizer" id="drawerResizer" title="DRAG"></div>
+
+    <div class="drawerBody">
+      <textarea id="universals" placeholder="LAWS / CONSTRAINTS / REFERENCES"></textarea>
+      <div class="kSmall" style="margin-top:8px">
+        EE: axiom → KETADATA ⇒ KETA_NOTE ⇒ EXPORTABLE STATE
+      </div>
+
+      <!-- EXPORT LABEL (minimal, optional) -->
+      <div class="kRow" style="margin-top:12px; border-top:1px solid var(--line); padding-top:10px">
+        <span>EXPORT LABEL</span>
+        <input id="exportLabel" class="kInput" placeholder="e.g. BASE_STABLE / LOOP_TWEAK / TEST_01" />
+      </div>
+
+      <!-- NAV QUICK -->
+      <div style="margin-top:12px; border-top:1px solid var(--line); padding-top:10px">
+        <div style="font-family:var(--mono); font-size:12px; letter-spacing:.10em; text-transform:uppercase; color:var(--muted); margin-bottom:8px">
+          NAV (PRESETS)
+        </div>
+        <div id="navQuick" style="display:flex; flex-wrap:wrap; gap:8px"></div>
+        <div class="kSmall" style="margin-top:8px">CLICK = SET ACTIVE + GO</div>
+      </div>
+
+      <!-- ROOM REGISTRY -->
+      <div style="margin-top:12px; border-top:1px solid var(--line); padding-top:10px">
+        <div style="font-family:var(--mono); font-size:12px; letter-spacing:.10em; text-transform:uppercase; color:var(--muted); margin-bottom:8px">
+          ROOM REGISTRY
+        </div>
+
+        <div class="kRow">
+          <span>SEARCH</span>
+          <input id="roomSearch" class="kInput" placeholder="filter presets..." />
+        </div>
+
+        <div class="kRow">
+          <span>ROOM</span>
+          <input id="roomInput" class="kInput" placeholder="e.g. ROOM / WORLD / STUDIO / LAB" />
+        </div>
+
+        <div class="kRow">
+          <span>ROOM URL</span>
+          <input id="roomUrlInput" class="kInput" placeholder="e.g. blank.html / map.html / studio.html" />
+        </div>
+
+        <div style="margin-top:8px; display:flex; gap:8px; align-items:center">
+          <button class="btn" id="btnSaveRoom" title="Add/Update preset for this ROOM">SAVE PRESET</button>
+          <button class="btn" id="btnSetActiveRoom" title="Set this ROOM as active (ROOM + ROOM URL)">SET ACTIVE</button>
+          <button class="btn" id="btnDeleteRoom" title="Delete preset for this ROOM">DELETE</button>
+        </div>
+
+        <!-- BULK ADD -->
+        <div style="margin-top:10px; border-top:1px solid var(--line); padding-top:10px">
+          <div style="font-family:var(--mono); font-size:12px; letter-spacing:.10em; text-transform:uppercase; color:var(--muted); margin-bottom:8px">
+            MULTI-LINK INPUT
+          </div>
+          <textarea id="bulkPresets" style="min-height:110px" placeholder="PASTE MANY (ONE PER LINE)
+FORMAT:
+ROOM | URL
+ROOM, URL
+ROOM URL
+
+EX:
+WORLD | map.html
+POD | blank.html
+VIDEO | kdtv1.html"></textarea>
+          <div style="margin-top:8px; display:flex; gap:8px; align-items:center">
+            <button class="btn" id="btnBulkAdd">BULK ADD PRESETS</button>
+            <button class="btn" id="btnBulkReplace" title="Replace all presets with the parsed list">BULK REPLACE</button>
+          </div>
+          <div class="kSmall" style="margin-top:8px">DEFAULT URL = blank.html</div>
+        </div>
+
+        <div style="margin-top:10px; border-top:1px solid var(--line); padding-top:10px">
+          <div style="font-family:var(--mono); font-size:12px; letter-spacing:.10em; text-transform:uppercase; color:var(--muted); margin-bottom:8px">
+            ROOM PRESETS
+          </div>
+          <div id="roomList" style="display:flex; flex-direction:column; gap:6px"></div>
+          <div class="kSmall" style="margin-top:8px">CLICK = LOAD. DOUBLE CLICK = SET ACTIVE. ↑↓ REORDER.</div>
+        </div>
+      </div>
+
+      <!-- PINS -->
+      <div style="margin-top:12px; border-top:1px solid var(--line); padding-top:10px">
+        <div style="font-family:var(--mono); font-size:12px; letter-spacing:.10em; text-transform:uppercase; color:var(--muted); margin-bottom:8px">
+          PIN ANY LINK (LEGO GRID)
+        </div>
+
+        <div class="kRow">
+          <span>TITLE</span>
+          <input id="pinTitle" class="kInput" placeholder="e.g. TWITTER / NOTES / MAP / ANYTHING" />
+        </div>
+        <div class="kRow">
+          <span>URL</span>
+          <input id="pinUrl" class="kInput" placeholder="e.g. blank.html OR https://..." />
+        </div>
+        <div style="margin-top:8px; display:flex; gap:8px; align-items:center">
+          <button class="btn" id="btnAddPin">ADD PIN</button>
+          <button class="btn" id="btnClearPins" title="Remove all pins (cannot undo)">CLEAR PINS</button>
+        </div>
+
+        <div style="margin-top:10px; border-top:1px solid var(--line); padding-top:10px">
+          <div style="font-family:var(--mono); font-size:12px; letter-spacing:.10em; text-transform:uppercase; color:var(--muted); margin-bottom:8px">
+            BULK PIN
+          </div>
+          <textarea id="bulkPins" style="min-height:110px" placeholder="PASTE MANY (ONE PER LINE)
+FORMAT:
+TITLE | URL
+OR URL ONLY (TITLE AUTO FROM HOST/FILENAME)
+
+EX:
+TWITTER | https://twitter.com
+BLANK | blank.html
+NYT | https://nytimes.com"></textarea>
+          <div style="margin-top:8px; display:flex; gap:8px; align-items:center">
+            <button class="btn" id="btnBulkPins">BULK ADD PINS</button>
+          </div>
+        </div>
+      </div>
+
+      <div style="height:18px"></div>
+    </div>
+  </div>
+
+  <div class="bottombar">
+    <div style="display:flex; gap:10px; align-items:center">
+      <button class="toggle" id="toggleDrawer">SYSTEM</button>
+      <span>STATE: <span id="sig2">∅</span></span>
+      <span style="margin-left:8px">NULL: <span id="nullLabel">OFF</span></span>
+    </div>
+    <div style="display:flex; gap:12px; align-items:center">
+      <span>LIGHT: <span id="lightLabel">1</span></span>
+      <span>RUN: <span id="runLabel">OFF</span></span>
+      <span>MOTION: <span id="motionLabel">OFF</span></span>
+    </div>
+  </div>
+
+  <div class="ketaNote" id="ketaNote">
+    <div class="ketaHead" id="ketaHead">
+      <div>KETA_NOTE</div>
+      <button class="headBtn" id="btnHideNote">-</button>
+    </div>
+    <div class="ketaBody">
+      <textarea id="ketaText" placeholder="GLOBAL NOTE"></textarea>
+    </div>
+  </div>
+
+  <input id="file" type="file" accept="application/json" style="display:none" />
+</div>
+
+<script>
+/* =========================================================
+EE ▸ ENGINE ▸ BASE STABILITY + PORTABLE STATE + LIVE SYNC
+========================================================= */
+
+const SHELL_HOME_URL = "system.html";
+const DEFAULT_ROOM_URL = "blank.html";
+
+/* === BASE MUST BE ALWAYS BASE ===
+   We use ONE stable key for base, and migrate from old versioned keys. */
+const BASE_KEY = "KDT::STATE::KETADATA_SHELL8::BASE::STABLE_V1";
+const MIGRATE_KEYS = [
+  "KDT::STATE::KETADATA_SHELL8::BASE::shell8.base.v1", // your pasted key
+  "KDT::STATE::KETADATA_SHELL8::BASE::shell8.base.v2",
+  "KDT::STATE::KETADATA_SHELL8::BASE::STABLE"
+];
+
+// global note (intentional global)
+const GLOBAL_KETA_NOTE_KEY = "KDT_GLOBAL_KETA_NOTE_V1";
+
+/* tab identity (for broadcast) */
+const TAB_ID = Math.random().toString(16).slice(2);
+const BC_NAME = "KDT::BASE::BUS";
+let bc = null;
+try { bc = new BroadcastChannel(BC_NAME); } catch(e){ bc = null; }
+
+/* DOM */
+const $ = (id)=>document.getElementById(id);
+const root = $("root");
+const stage = $("stage");
+const motion = $("motion");
+const pinsStage = $("pinsStage");
+
+function nowISO(){ return new Date().toISOString(); }
+function snap(n, s){ s = s || pxVar("--snap", 20); return Math.round(n/s)*s; }
+function clamp(n, a, b){ return Math.max(a, Math.min(b, n)); }
+function pxVar(name, fallback){
+  const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  const n = parseFloat(v);
+  return Number.isFinite(n) ? n : fallback;
+}
+function topH(){ return pxVar("--top", 44); }
+function botH(){ return pxVar("--bot", 34); }
+
+/* DEFAULT STATE (kept tight; everything else can be chill) */
+const DEFAULT = {
+  version: "KETADATA_SHELL_KERNEL_v1",
+  updatedAt: nowISO(),
+
+  ketaNote: "",
+  universals: "",
+
+  room: "BASE",
+  roomUrl: "",
+
+  ketaNoteMeta: {
+    version: "KETA_NOTE_META_v1",
+    noteId: "GLOBAL",
+    roomId: "BASE",
+    stateId: null,
+    categoryIds: [],
+    createdAt: nowISO(),
+    updatedAt: nowISO()
+  },
+
+  ui: {
+    invert:false,
+    nullMode:false,
+    lightPreset: 1,
+    lightRunning: false,
+    motionOn: false,
+
+    drawerOpen: false,
+    drawerHeightPx: null,  // resizable; can go to topbar
+
+    // pins: draggable lego tiles
+    pins: [] // {id,title,url,x,y,w,h}
+  },
+
+  payload: {
+    roomPresets: [
+      { room:"ROOM",       roomUrl:"room.html",      createdAt:nowISO(), updatedAt:nowISO() },
+      { room:"WORLD",      roomUrl:"map.html",       createdAt:nowISO(), updatedAt:nowISO() },
+      { room:"STUDIO",     roomUrl:"tester3.html",   createdAt:nowISO(), updatedAt:nowISO() },
+      { room:"LAB",        roomUrl:"labyrinth.html", createdAt:nowISO(), updatedAt:nowISO() },
+      { room:"PHOTOBOOTH", roomUrl:"crunch1.html",   createdAt:nowISO(), updatedAt:nowISO() },
+      { room:"KDTV",       roomUrl:"kdtv1.html",     createdAt:nowISO(), updatedAt:nowISO() },
+      { room:"SHOP",       roomUrl:"shop.html",      createdAt:nowISO(), updatedAt:nowISO() }
+    ],
+    exportLabel: ""
+  }
+};
+
+let STATE = loadBase() || structuredClone(DEFAULT);
+
+/* global note continuity */
+{ const g = loadGlobalKetaNote(); if(typeof g === "string") STATE.ketaNote = g; }
+
+/* --- storage IO --- */
+function loadAnyKey(keys){
+  for(const k of keys){
+    try{
+      const raw = localStorage.getItem(k);
+      if(raw){
+        const obj = JSON.parse(raw);
+        if(obj && typeof obj === "object") return { key:k, obj };
+      }
+    }catch(e){}
+  }
+  return null;
+}
+
+function mergeDefault(obj){
+  const out = structuredClone(DEFAULT);
+  Object.assign(out, obj||{});
+  out.ui = Object.assign(structuredClone(DEFAULT.ui), (obj&&obj.ui)||{});
+  out.payload = Object.assign({}, structuredClone(DEFAULT.payload), (obj&&obj.payload)||{});
+
+  if(obj && obj.ketaNoteMeta){
+    out.ketaNoteMeta = Object.assign(structuredClone(DEFAULT.ketaNoteMeta), obj.ketaNoteMeta);
+  }
+
+  // hygiene
+  if(!Array.isArray(out.payload.roomPresets)) out.payload.roomPresets = structuredClone(DEFAULT.payload.roomPresets);
+  if(!Array.isArray(out.ui.pins)) out.ui.pins = [];
+  return out;
+}
+
+function loadBase(){
+  // Prefer stable base key
+  try{
+    const raw = localStorage.getItem(BASE_KEY);
+    if(raw) return mergeDefault(JSON.parse(raw));
+  }catch(e){}
+
+  // Migrate if needed
+  const hit = loadAnyKey(MIGRATE_KEYS);
+  if(hit && hit.obj){
+    const migrated = mergeDefault(hit.obj);
+    try{ localStorage.setItem(BASE_KEY, JSON.stringify(migrated)); }catch(e){}
+    // do not delete old key automatically (precedent preservation)
+    return migrated;
+  }
+  return null;
+}
+
+function saveBase(opts){
+  STATE.updatedAt = nowISO();
+  syncKetaNoteMeta("persist");
+  saveGlobalKetaNote(STATE.ketaNote || "");
+
+  try{ localStorage.setItem(BASE_KEY, JSON.stringify(STATE)); }catch(e){}
+
+  // broadcast (live sync)
+  if(bc){
+    try{
+      bc.postMessage({ type:"STATE", key:BASE_KEY, from:TAB_ID, state: STATE });
+    }catch(e){}
+  }
+  if(opts && opts.skipRender) return;
+  render();
+}
+
+/* global note */
+function loadGlobalKetaNote(){
+  try{ return localStorage.getItem(GLOBAL_KETA_NOTE_KEY) ?? ""; }catch(e){ return ""; }
+}
+function saveGlobalKetaNote(text){
+  try{ localStorage.setItem(GLOBAL_KETA_NOTE_KEY, String(text ?? "")); }catch(e){}
+}
+
+/* stable signature */
+function stableSig(){
+  const core = JSON.stringify({
+    v:STATE.version,
+    room:STATE.room,
+    i:STATE.ui.invert,
+    n:STATE.ui.nullMode,
+    p:STATE.ui.lightPreset,
+    r:STATE.ui.lightRunning,
+    m:STATE.ui.motionOn,
+    k:(STATE.ketaNote||"").length,
+    u:(STATE.universals||"").length,
+    pins:(STATE.ui.pins||[]).length,
+    presets:(STATE.payload.roomPresets||[]).length
+  });
+  let h=2166136261;
+  for(let i=0;i<core.length;i++){ h^=core.charCodeAt(i); h=Math.imul(h,16777619); }
+  return (h>>>0).toString(16).slice(0,8);
+}
+
+/* KETA NOTE META */
+function ensureKetaNoteMeta(){
+  if(!STATE.ketaNoteMeta || typeof STATE.ketaNoteMeta !== "object"){
+    STATE.ketaNoteMeta = structuredClone(DEFAULT.ketaNoteMeta);
+  }else{
+    STATE.ketaNoteMeta = Object.assign(structuredClone(DEFAULT.ketaNoteMeta), STATE.ketaNoteMeta);
+  }
+}
+function syncKetaNoteMeta(reason){
+  ensureKetaNoteMeta();
+  const room = (STATE.room || "BASE").trim();
+  const roomId = room.toUpperCase();
+  const stateId = stableSig();
+
+  STATE.ketaNoteMeta.roomId = roomId;
+  STATE.ketaNoteMeta.stateId = stateId;
+  STATE.ketaNoteMeta.updatedAt = nowISO();
+
+  if(reason){
+    if(!STATE.ketaNoteMeta._last) STATE.ketaNoteMeta._last = {};
+    STATE.ketaNoteMeta._last = { reason, at: STATE.ketaNoteMeta.updatedAt };
+  }
+}
+
+/* === LIVE SYNC (storage + broadcast) === */
+window.addEventListener("storage", (ev)=>{
+  if(ev.key !== BASE_KEY) return;
+  if(!ev.newValue) return;
+  try{
+    const obj = JSON.parse(ev.newValue);
+    const incoming = mergeDefault(obj);
+    // accept only if newer (temporal sanity)
+    if(!STATE.updatedAt || (incoming.updatedAt && incoming.updatedAt >= STATE.updatedAt)){
+      STATE = incoming;
+      render();
+    }
+  }catch(e){}
+});
+
+if(bc){
+  bc.onmessage = (ev)=>{
+    const msg = ev.data;
+    if(!msg || msg.type !== "STATE" || msg.key !== BASE_KEY) return;
+    if(msg.from === TAB_ID) return;
+    try{
+      const incoming = mergeDefault(msg.state);
+      if(!STATE.updatedAt || (incoming.updatedAt && incoming.updatedAt >= STATE.updatedAt)){
+        STATE = incoming;
+        render();
+      }
+    }catch(e){}
+  };
+}
+
+/* === UI: drawer resizing (up to topbar) === */
+function setDrawerHeight(px){
+  const min = 120;
+  const max = window.innerHeight - topH(); // can go to topbar
+  const clamped = clamp(px, min, max);
+  $("drawer").style.height = clamped + "px";
+  STATE.ui.drawerHeightPx = clamped;
+}
+function applyDrawerHeight(){
+  if(STATE.ui.drawerHeightPx && Number.isFinite(STATE.ui.drawerHeightPx)){
+    setDrawerHeight(STATE.ui.drawerHeightPx);
+  }else{
+    // default: 42% like before
+    const px = Math.round(window.innerHeight * 0.42);
+    setDrawerHeight(px);
+  }
+}
+function openDrawer(on){
+  STATE.ui.drawerOpen = !!on;
+  $("drawer").classList.toggle("open", STATE.ui.drawerOpen);
+  if(STATE.ui.drawerOpen) applyDrawerHeight();
+  saveBase();
+}
+(function initDrawerResizer(){
+  const h = $("drawerResizer");
+  let dragging = false;
+  h.addEventListener("pointerdown", (e)=>{
+    dragging = true;
+    h.setPointerCapture(e.pointerId);
+    e.preventDefault();
+  });
+  h.addEventListener("pointermove", (e)=>{
+    if(!dragging) return;
+    const bottom = botH();
+    const desired = (window.innerHeight - bottom) - e.clientY; // height from bottombar line
+    setDrawerHeight(desired);
+    // do not spam save on every move; but keep UI live
+    $("sig").textContent = stableSig();
+    $("sig2").textContent = stableSig();
+  });
+  h.addEventListener("pointerup", ()=>{
+    if(!dragging) return;
+    dragging = false;
+    saveBase(); // commit new height
+  });
+})();
+
+/* === KETA NOTE: drag with hard top boundary === */
+(function initKetaNoteDrag(){
+  const note = $("ketaNote");
+  const head = $("ketaHead");
+  let dragging=false, ox=0, oy=0;
+
+  function bounds(){
+    const pad = 8;
+    const t = topH() + pad; // hard top boundary
+    const b = window.innerHeight - botH() - pad;
+    const l = pad;
+    const r = window.innerWidth - pad;
+    return {t,b,l,r};
+  }
+
+  head.addEventListener("pointerdown", (e)=>{
+    dragging=true;
+    head.setPointerCapture(e.pointerId);
+    const rect = note.getBoundingClientRect();
+    ox = e.clientX - rect.left;
+    oy = e.clientY - rect.top;
+    e.preventDefault();
+  });
+  head.addEventListener("pointermove", (e)=>{
+    if(!dragging) return;
+    const rect = note.getBoundingClientRect();
+    const w = rect.width, h = rect.height;
+    const b = bounds();
+    let x = e.clientX - ox;
+    let y = e.clientY - oy;
+    x = clamp(x, b.l, b.r - w);
+    y = clamp(y, b.t, b.b - h);
+    note.style.left = x + "px";
+    note.style.top  = y + "px";
+  });
+  head.addEventListener("pointerup", ()=>{
+    if(!dragging) return;
+    dragging=false;
+    // store note position (optional but consistent with “exactly where I left it”)
+    const rect = note.getBoundingClientRect();
+    STATE.ui.noteXY = { x: rect.left, y: rect.top, w: rect.width, h: rect.height };
+    saveBase();
+  });
+})();
+
+/* === Pins (draggable lego tiles, rearrangeable, persistent) === */
+function genId(){ return "PIN_" + Math.random().toString(16).slice(2) + "_" + Date.now().toString(16); }
+
+function defaultPinPlacement(){
+  // place under top bar with some margin
+  const x = 12;
+  const y = topH() + 12 + (STATE.ui.pins.length * 52);
+  return { x:snap(x), y:snap(y) };
+}
+
+function pinBounds(tileW, tileH){
+  const pad = 10;
+  const t = topH() + pad;     // hard top boundary
+  const b = window.innerHeight - botH() - pad;
+  const l = pad;
+  const r = window.innerWidth - pad;
+
+  // If drawer is open and tall, pins can still exist behind; we do NOT clamp to drawer top
+  // because you explicitly want “no strict limits.” Base stays stable; user decides.
+
+  return { t, b, l, r, maxX: r - tileW, maxY: b - tileH };
+}
+
+function addPin(title, url, placement){
+  const t = String(title || "").trim() || autoTitle(url);
+  const u = String(url || "").trim() || DEFAULT_ROOM_URL;
+  const p = placement || defaultPinPlacement();
+  const id = genId();
+  STATE.ui.pins.push({
+    id,
+    title: t.toUpperCase(),
+    url: u,
+    x: p.x,
+    y: p.y,
+    w: 280,
+    h: 44
+  });
+  saveBase();
+}
+
+function autoTitle(url){
+  try{
+    const u = String(url || "").trim();
+    if(!u) return "PIN";
+    if(u.startsWith("http")){
+      const x = new URL(u);
+      return (x.hostname || "LINK").replace(/^www\./,"");
+    }
+    // filename
+    const parts = u.split("/").filter(Boolean);
+    const last = parts[parts.length-1] || u;
+    return last.replace(/\.[a-z0-9]+$/i,"") || "LINK";
+  }catch(e){
+    return "LINK";
+  }
+}
+
+function removePin(id){
+  STATE.ui.pins = (STATE.ui.pins||[]).filter(p=>p.id!==id);
+  saveBase();
+}
+
+function renderPins(){
+  pinsStage.innerHTML = "";
+  const pins = STATE.ui.pins || [];
+  for(const p of pins){
+    const el = document.createElement("div");
+    el.className = "pinTile";
+    el.dataset.id = p.id;
+    el.style.left = (p.x||0) + "px";
+    el.style.top  = (p.y||0) + "px";
+    el.style.width = (p.w||280) + "px";
+    el.style.height= (p.h||44) + "px";
+
+    const title = document.createElement("div");
+    title.className = "pinTitle";
+    title.textContent = p.title || "PIN";
+
+    const btns = document.createElement("div");
+    btns.className = "pinBtns";
+
+    const go = document.createElement("button");
+    go.className = "pinMini";
+    go.textContent = "GO";
+    go.title = "GO";
+    go.addEventListener("click", (e)=>{
+      e.stopPropagation();
+      goToUrl(p.url);
+    });
+
+    const x = document.createElement("button");
+    x.className = "pinMini";
+    x.textContent = "×";
+    x.title = "REMOVE";
+    x.addEventListener("click", (e)=>{
+      e.stopPropagation();
+      removePin(p.id);
+    });
+
+    btns.appendChild(go);
+    btns.appendChild(x);
+
+    el.appendChild(title);
+    el.appendChild(btns);
+
+    // drag (lego snap)
+    let dragging=false, ox=0, oy=0;
+    el.addEventListener("pointerdown", (e)=>{
+      dragging = true;
+      el.setPointerCapture(e.pointerId);
+      const rect = el.getBoundingClientRect();
+      ox = e.clientX - rect.left;
+      oy = e.clientY - rect.top;
+      e.preventDefault();
+    });
+    el.addEventListener("pointermove", (e)=>{
+      if(!dragging) return;
+      const rect = el.getBoundingClientRect();
+      const w = rect.width, h = rect.height;
+      const b = pinBounds(w,h);
+      let nx = e.clientX - ox;
+      let ny = e.clientY - oy;
+      nx = snap(clamp(nx, b.l, b.maxX));
+      ny = snap(clamp(ny, b.t, b.maxY));
+      el.style.left = nx + "px";
+      el.style.top  = ny + "px";
+    });
+    el.addEventListener("pointerup", ()=>{
+      if(!dragging) return;
+      dragging=false;
+      const id = el.dataset.id;
+      const rect = el.getBoundingClientRect();
+      const pin = (STATE.ui.pins||[]).find(q=>q.id===id);
+      if(pin){
+        pin.x = snap(rect.left);
+        pin.y = snap(rect.top);
+        pin.w = rect.width;
+        pin.h = rect.height;
+      }
+      saveBase();
+    });
+
+    pinsStage.appendChild(el);
+  }
+}
+
+/* === Registry / Presets === */
+function canonRoom(s){ return String(s||"").trim().toUpperCase(); }
+function canonUrl(s){ return String(s||"").trim() || DEFAULT_ROOM_URL; }
+
+function getPresets(){
+  const arr = Array.isArray(STATE.payload.roomPresets) ? STATE.payload.roomPresets : [];
+  // normalize
+  return arr
+    .map(p=>({
+      room: canonRoom(p.room),
+      roomUrl: canonUrl(p.roomUrl),
+      createdAt: p.createdAt || nowISO(),
+      updatedAt: p.updatedAt || nowISO()
+    }))
+    .filter(p=>p.room);
+}
+
+function setPresets(list){
+  STATE.payload.roomPresets = list;
+}
+
+function upsertPreset(room, url){
+  room = canonRoom(room);
+  url = canonUrl(url);
+  if(!room) return;
+  const list = getPresets();
+  const i = list.findIndex(p=>p.room===room);
+  if(i>=0){
+    list[i].roomUrl = url;
+    list[i].updatedAt = nowISO();
+  }else{
+    list.push({ room, roomUrl:url, createdAt: nowISO(), updatedAt: nowISO() });
+  }
+  setPresets(list);
+  saveBase();
+}
+
+function deletePreset(room){
+  room = canonRoom(room);
+  const list = getPresets().filter(p=>p.room!==room);
+  setPresets(list);
+  saveBase();
+}
+
+function parseBulkLines(text){
+  const lines = String(text||"").split("\n").map(s=>s.trim()).filter(Boolean);
+  const out = [];
+  for(const line of lines){
+    // split on | or , first, else whitespace
+    let room="", url="";
+    if(line.includes("|")){
+      const parts = line.split("|");
+      room = parts[0].trim();
+      url  = parts.slice(1).join("|").trim();
+    }else if(line.includes(",")){
+      const parts = line.split(",");
+      room = parts[0].trim();
+      url  = parts.slice(1).join(",").trim();
+    }else{
+      const parts = line.split(/\s+/);
+      room = parts[0] || "";
+      url  = parts.slice(1).join(" ").trim();
+    }
+    room = canonRoom(room);
+    url  = canonUrl(url);
+    if(room) out.push({ room, roomUrl:url, createdAt: nowISO(), updatedAt: nowISO() });
+  }
+  return out;
+}
+
+function parseBulkPins(text){
+  const lines = String(text||"").split("\n").map(s=>s.trim()).filter(Boolean);
+  const out = [];
+  for(const line of lines){
+    let title="", url="";
+    if(line.includes("|")){
+      const parts = line.split("|");
+      title = parts[0].trim();
+      url = parts.slice(1).join("|").trim();
+    }else if(line.includes(",")){
+      const parts = line.split(",");
+      title = parts[0].trim();
+      url = parts.slice(1).join(",").trim();
+    }else{
+      // url only
+      url = line.trim();
+      title = autoTitle(url);
+    }
+    title = String(title||"").trim() || autoTitle(url);
+    url = String(url||"").trim() || DEFAULT_ROOM_URL;
+    if(url) out.push({ title, url });
+  }
+  return out;
+}
+
+function goToUrl(url){
+  const u = String(url||"").trim() || DEFAULT_ROOM_URL;
+  // If it's a relative page and you want HOME behavior, you can keep Shift+` as return.
+  window.location.href = u;
+}
+
+/* === Lights === */
+function applyLight(preset){
+  // Keep it simple: preset affects stage filter intensity only.
+  // You can expand later without changing the primitive.
+  const p = clamp(Number(preset)||1, 1, 6);
+  const map = {
+    1: "none",
+    2: "contrast(1.05) brightness(1.02)",
+    3: "contrast(1.10) brightness(1.04)",
+    4: "contrast(1.15) brightness(1.06)",
+    5: "contrast(1.20) brightness(1.08)",
+    6: "contrast(1.25) brightness(1.10)"
+  };
+  stage.style.filter = map[p] || "none";
+}
+
+/* === Toast === */
+let toastTimer = null;
+function toast(msg){
+  const t = $("toast");
+  t.textContent = String(msg||"");
+  t.style.display = "block";
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=>{ t.style.display="none"; }, 900);
+}
+
+/* === Render === */
+function render(){
+  // root modes
+  root.classList.toggle("invert", !!STATE.ui.invert);
+  root.classList.toggle("null", !!STATE.ui.nullMode);
+
+  // labels
+  $("roomName").textContent = canonRoom(STATE.room || "BASE") || "BASE";
+  $("sig").textContent  = stableSig();
+  $("sig2").textContent = stableSig();
+  $("nullLabel").textContent = STATE.ui.nullMode ? "ON" : "OFF";
+  $("lightLabel").textContent = String(STATE.ui.lightPreset || 1);
+  $("runLabel").textContent = STATE.ui.lightRunning ? "ON" : "OFF";
+  $("motionLabel").textContent = STATE.ui.motionOn ? "ON" : "OFF";
+
+  // drawer + height
+  $("drawer").classList.toggle("open", !!STATE.ui.drawerOpen);
+  if(STATE.ui.drawerOpen) applyDrawerHeight();
+
+  // fields
+  $("universals").value = STATE.universals || "";
+  $("ketaText").value = STATE.ketaNote || "";
+  $("exportLabel").value = STATE.payload.exportLabel || "";
+
+  // note position restore
+  if(STATE.ui.noteXY && $("ketaNote").classList.contains("open")){
+    const n = $("ketaNote");
+    const bTop = topH() + 8;
+    const bLeft = 8;
+    n.style.left = clamp(STATE.ui.noteXY.x||16, bLeft, window.innerWidth - 120) + "px";
+    n.style.top  = clamp(STATE.ui.noteXY.y||60, bTop, window.innerHeight - botH() - 80) + "px";
+  }
+
+  // lights + motion
+  applyLight(STATE.ui.lightPreset);
+  motion.classList.toggle("run", !!(STATE.ui.motionOn && STATE.ui.lightRunning));
+
+  // nav quick
+  const nav = $("navQuick");
+  nav.innerHTML = "";
+  for(const p of getPresets()){
+    const b = document.createElement("button");
+    b.className = "btn";
+    b.textContent = p.room;
+    b.title = p.roomUrl;
+    b.addEventListener("click", ()=>{
+      STATE.room = p.room;
+      STATE.roomUrl = p.roomUrl;
+      saveBase();
+      goToUrl(p.roomUrl);
+    });
+    nav.appendChild(b);
+  }
+
+  // room list
+  renderRoomList();
+
+  // pins
+  renderPins();
+}
+
+/* === Room list with reorder === */
+function renderRoomList(){
+  const listEl = $("roomList");
+  const q = String($("roomSearch").value||"").trim().toUpperCase();
+  let presets = getPresets();
+  if(q){
+    presets = presets.filter(p => p.room.includes(q) || p.roomUrl.toUpperCase().includes(q));
+  }
+
+  listEl.innerHTML = "";
+  const all = getPresets(); // for reorder indices
+
+  function move(room, dir){
+    const idx = all.findIndex(p=>p.room===room);
+    if(idx<0) return;
+    const j = idx + dir;
+    if(j<0 || j>=all.length) return;
+    const tmp = all[idx]; all[idx]=all[j]; all[j]=tmp;
+    setPresets(all);
+    saveBase();
+  }
+
+  for(const p of presets){
+    const row = document.createElement("div");
+    row.style.display = "flex";
+    row.style.gap = "8px";
+    row.style.alignItems = "center";
+    row.style.border = "1px solid var(--line2)";
+    row.style.padding = "6px 8px";
+    row.style.background = "rgba(0,0,0,0.55)";
+    row.style.fontFamily = "var(--mono)";
+    row.style.fontSize = "11px";
+    row.style.letterSpacing = ".08em";
+    row.style.textTransform = "uppercase";
+
+    const left = document.createElement("div");
+    left.style.flex = "1";
+    left.style.color = "var(--fg)";
+    left.textContent = `${p.room}  ▸  ${p.roomUrl}`;
+
+    const up = document.createElement("button");
+    up.className = "pinMini";
+    up.textContent = "↑";
+    up.title = "MOVE UP";
+    up.addEventListener("click",(e)=>{ e.stopPropagation(); move(p.room, -1); });
+
+    const down = document.createElement("button");
+    down.className = "pinMini";
+    down.textContent = "↓";
+    down.title = "MOVE DOWN";
+    down.addEventListener("click",(e)=>{ e.stopPropagation(); move(p.room, +1); });
+
+    row.addEventListener("click", ()=>{
+      $("roomInput").value = p.room;
+      $("roomUrlInput").value = p.roomUrl;
+    });
+    row.addEventListener("dblclick", ()=>{
+      STATE.room = p.room;
+      STATE.roomUrl = p.roomUrl;
+      saveBase();
+      goToUrl(p.roomUrl);
+    });
+
+    row.appendChild(left);
+    row.appendChild(up);
+    row.appendChild(down);
+    listEl.appendChild(row);
+  }
+}
+
+/* === Controls === */
+$("toggleDrawer").addEventListener("click", ()=>openDrawer(!STATE.ui.drawerOpen));
+$("btnCloseDrawer").addEventListener("click", ()=>openDrawer(false));
+
+$("btnNull").addEventListener("click", ()=>{
+  STATE.ui.nullMode = !STATE.ui.nullMode;
+  saveBase();
+});
+
+$("ketaIcon").addEventListener("click", ()=>{
+  const note = $("ketaNote");
+  note.classList.toggle("open");
+  $("ketaIcon").classList.toggle("open", note.classList.contains("open"));
+  // ensure boundary at open
+  if(note.classList.contains("open")){
+    const rect = note.getBoundingClientRect();
+    if(!rect.left || !rect.top){
+      note.style.left = (window.innerWidth - rect.width - 16) + "px";
+      note.style.top = Math.max(topH()+16, 60) + "px";
+    }
+  }
+  saveBase();
+});
+
+$("btnHideNote").addEventListener("click", ()=>{
+  $("ketaNote").classList.remove("open");
+  $("ketaIcon").classList.remove("open");
+  saveBase();
+});
+
+$("ketaText").addEventListener("input", ()=>{
+  STATE.ketaNote = $("ketaText").value;
+  saveGlobalKetaNote(STATE.ketaNote);
+  saveBase({skipRender:true});
+  $("sig").textContent = stableSig();
+  $("sig2").textContent = stableSig();
+});
+
+$("universals").addEventListener("input", ()=>{
+  STATE.universals = $("universals").value;
+  saveBase({skipRender:true});
+  $("sig").textContent = stableSig();
+  $("sig2").textContent = stableSig();
+});
+
+$("exportLabel").addEventListener("input", ()=>{
+  STATE.payload.exportLabel = $("exportLabel").value;
+  saveBase({skipRender:true});
+});
+
+/* Registry buttons */
+$("btnSaveRoom").addEventListener("click", ()=>{
+  upsertPreset($("roomInput").value, $("roomUrlInput").value);
+  toast("SAVED");
+});
+$("btnSetActiveRoom").addEventListener("click", ()=>{
+  const r = canonRoom($("roomInput").value);
+  const u = canonUrl($("roomUrlInput").value);
+  if(!r) return toast("NO ROOM");
+  STATE.room = r;
+  STATE.roomUrl = u;
+  saveBase();
+  toast("ACTIVE");
+});
+$("btnDeleteRoom").addEventListener("click", ()=>{
+  deletePreset($("roomInput").value);
+  toast("DELETED");
+});
+$("roomSearch").addEventListener("input", render);
+
+$("btnBulkAdd").addEventListener("click", ()=>{
+  const parsed = parseBulkLines($("bulkPresets").value);
+  if(!parsed.length) return toast("EMPTY");
+  const list = getPresets();
+  // upsert all
+  for(const p of parsed){
+    const i = list.findIndex(x=>x.room===p.room);
+    if(i>=0){
+      list[i].roomUrl = p.roomUrl;
+      list[i].updatedAt = nowISO();
+    }else{
+      list.push(p);
+    }
+  }
+  setPresets(list);
+  saveBase();
+  toast("BULK ADD");
+});
+$("btnBulkReplace").addEventListener("click", ()=>{
+  const parsed = parseBulkLines($("bulkPresets").value);
+  if(!parsed.length) return toast("EMPTY");
+  setPresets(parsed);
+  saveBase();
+  toast("BULK REPLACE");
+});
+
+/* Pins buttons */
+$("btnAddPin").addEventListener("click", ()=>{
+  addPin($("pinTitle").value, $("pinUrl").value);
+  $("pinTitle").value = "";
+  $("pinUrl").value = "";
+  toast("PINNED");
+});
+$("btnClearPins").addEventListener("click", ()=>{
+  STATE.ui.pins = [];
+  saveBase();
+  toast("PINS CLEARED");
+});
+$("btnBulkPins").addEventListener("click", ()=>{
+  const parsed = parseBulkPins($("bulkPins").value);
+  if(!parsed.length) return toast("EMPTY");
+  for(const p of parsed){
+    addPin(p.title, p.url);
+  }
+  toast("BULK PIN");
+});
+
+/* Copy universals */
+$("btnCopyUniversals").addEventListener("click", async ()=>{
+  try{
+    await navigator.clipboard.writeText($("universals").value || "");
+    toast("COPIED");
+  }catch(e){ toast("COPY FAIL"); }
+});
+
+/* Export / Import / Copy state */
+$("btnExport").addEventListener("click", ()=>{
+  const pack = {
+    ...STATE,
+    exportedAt: nowISO(),
+    label: String(STATE.payload.exportLabel||"").trim() || "BASE_EXPORT",
+    key: BASE_KEY
+  };
+  const blob = new Blob([JSON.stringify(pack, null, 2)], {type:"application/json"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `KETADATA_BASE_${(pack.label||"EXPORT").replace(/\s+/g,"_")}_${stableSig()}.json`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+  toast("EXPORTED");
+});
+$("btnCopy").addEventListener("click", async ()=>{
+  try{
+    await navigator.clipboard.writeText(JSON.stringify(STATE, null, 2));
+    toast("COPIED");
+  }catch(e){ toast("COPY FAIL"); }
+});
+$("btnImport").addEventListener("click", ()=> $("file").click());
+$("file").addEventListener("change", async ()=>{
+  const f = $("file").files && $("file").files[0];
+  if(!f) return;
+  try{
+    const text = await f.text();
+    const obj = JSON.parse(text);
+    STATE = mergeDefault(obj);
+    // commit to stable base
+    saveBase();
+    toast("IMPORTED");
+  }catch(e){
+    toast("IMPORT FAIL");
+  }finally{
+    $("file").value = "";
+  }
+});
+
+/* Keys / Hotkeys */
+window.addEventListener("keydown", (e)=>{
+  // Shift+I invert
+  if(e.shiftKey && (e.key==="I" || e.key==="i")){
+    STATE.ui.invert = !STATE.ui.invert;
+    saveBase();
+    return;
+  }
+  // Shift+0 null mode
+  if(e.shiftKey && (e.key==="0")){
+    STATE.ui.nullMode = !STATE.ui.nullMode;
+    saveBase();
+    return;
+  }
+  // Shift+` home
+  if(e.shiftKey && e.key==="`"){
+    window.location.href = SHELL_HOME_URL;
+    return;
+  }
+  // 1-6 light preset
+  if(!e.shiftKey && /^[1-6]$/.test(e.key)){
+    STATE.ui.lightPreset = Number(e.key);
+    saveBase();
+    return;
+  }
+  // Space: toggle run + motion transport
+  if(e.code === "Space"){
+    e.preventDefault();
+    STATE.ui.lightRunning = !STATE.ui.lightRunning;
+    // keep motion as a separate toggle but space acts like transport impulse
+    STATE.ui.motionOn = STATE.ui.lightRunning ? true : STATE.ui.motionOn;
+    saveBase();
+    return;
+  }
+});
+
+/* Resize */
+window.addEventListener("resize", ()=>{
+  if(STATE.ui.drawerOpen) applyDrawerHeight();
+  renderPins(); // clamp visually (persist on next drag)
+});
+
+/* INIT */
+(function init(){
+  // open note icon state if note already open
+  $("ketaIcon").classList.toggle("open", $("ketaNote").classList.contains("open"));
+  render();
+})();
+
+/* =========================================================
+AE/EE/WB SERIALIZATION STAMP (MANDATORY)
+AE: UI / AESTHETIC LAYER
+EE: ENGINE / STATE / IO
+WB: WIRING BRIDGE / HOTKEYS / NAV
+FILE_ID: KETADATA_SHELL8_BASE
+ROOM_ID: BASE
+VERSION: STABLE_V1_DRAWER_RESIZE_PINS_BULK_REGISTRY
+UPDATED_AT: 2025-12-27
+CHANGELOG:
+- BASE_KEY stabilized + migration from versioned key
+- cross-tab sync (storage + BroadcastChannel)
+- drawer resizable to topbar
+- registry: search + bulk add + reorder
+- pins: draggable lego grid, any URL, persistent positions
+========================================================= */
+</script>
+</body>
+</html>
