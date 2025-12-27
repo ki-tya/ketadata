@@ -1,0 +1,1232 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>KETADATA_BASE_SYSTEM.html</title>
+
+<!-- =========================================================
+AE ▸ AESTHETIC LAYER
+KETADATA BASE — BLACK / WHITE / GREY — SHARP / INDUSTRIAL
+========================================================= -->
+<style>
+:root{
+  --bg:#000; --fg:#fff; --muted:#8a8a8a; --line:#222; --line2:#333;
+  --top:44px; --bot:34px;
+
+  --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace;
+  --sans: Arial, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+
+  --ctl-radius:0px;
+  --ctl-alpha:0.80;
+  --ctl-bg: rgba(0,0,0,var(--ctl-alpha));
+  --note-border: rgba(255,255,255,0.78);
+
+  /* drawer: adjustable height (0.18–0.92 of viewport) */
+  --drawer-h: 0.42;
+}
+*{box-sizing:border-box}
+html,body{height:100%; margin:0}
+body{background:var(--bg); color:var(--fg); font-family:var(--sans); overflow:hidden; user-select:none}
+#root{position:fixed; inset:0; background:#000}
+#root.invert{filter:invert(1)}
+
+/* =========================================================
+AE ▸ MODES
+- FULLSCREEN: hides panels, keeps visuals alive
+- BLACKOUT: hard black screen, kills visuals + panels
+========================================================= */
+#root.fs .topbar,
+#root.fs .bottombar,
+#root.fs .drawer,
+#root.fs #roomJump,
+#root.fs #pinnedPanel,
+#root.fs .toast,
+#root.fs .ketaNote{display:none !important}
+
+#root.blackout .topbar,
+#root.blackout .bottombar,
+#root.blackout .drawer,
+#root.blackout #roomJump,
+#root.blackout #pinnedPanel,
+#root.blackout .toast,
+#root.blackout .ketaNote{display:none !important}
+
+#root.blackout #stage{background:#000 !important; filter:none !important}
+#root.blackout #motion{display:none !important}
+
+/* =========================================================
+AE ▸ STAGE + MOTION
+========================================================= */
+#stage{position:absolute; inset:0; background:#000}
+#motion{
+  position:absolute; inset:0; pointer-events:none; opacity:0;
+  background:repeating-linear-gradient(135deg, rgba(255,255,255,0.06) 0px, rgba(255,255,255,0.06) 1px, rgba(0,0,0,0) 12px, rgba(0,0,0,0) 22px);
+  mix-blend-mode:screen;
+  transform:translate3d(0,0,0);
+}
+#motion.run{opacity:0.12; animation:scanflow 2.2s linear infinite}
+@keyframes scanflow{0%{transform:translate3d(-80px,60px,0)}100%{transform:translate3d(80px,-60px,0)}}
+
+/* =========================================================
+AE ▸ TOP BAR
+========================================================= */
+.topbar{
+  position:absolute; top:0; left:0; right:0; height:var(--top);
+  display:flex; align-items:center; justify-content:space-between;
+  padding:0 10px; border-bottom:1px solid var(--line);
+  background:linear-gradient(180deg,#070707,#000);
+  z-index:10;
+}
+.brand{display:flex; align-items:center; gap:10px; font-family:var(--mono); font-size:12px; letter-spacing:.10em; text-transform:uppercase}
+.brand .sq{width:10px; height:10px; border:1px solid var(--fg); background:#000}
+.roomBadge{display:flex; gap:8px; align-items:center; font-family:var(--mono); font-size:11px; letter-spacing:.10em; text-transform:uppercase; color:var(--muted); border:1px solid var(--line2); padding:4px 8px}
+.actions{display:flex; align-items:center; gap:8px; font-family:var(--mono); font-size:12px}
+.btn{
+  background:transparent; color:var(--fg);
+  border:1px solid var(--line2);
+  padding:6px 10px;
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  cursor:pointer;
+}
+.btn:hover{border-color:var(--fg)}
+.btn:active{transform:translateY(1px)}
+.kbd{border:1px solid var(--line2); padding:2px 6px; color:var(--muted); font-size:11px}
+
+.ketaIcon{
+  width:16px; height:16px;
+  border:2px solid var(--fg);
+  background:var(--fg);
+  cursor:pointer;
+}
+.ketaIcon.open{background:#000}
+
+/* =========================================================
+AE ▸ BOTTOM BAR + DRAWER
+========================================================= */
+.bottombar{
+  position:absolute; left:0; right:0; bottom:0; height:var(--bot);
+  display:flex; align-items:center; justify-content:space-between;
+  padding:0 10px; border-top:1px solid var(--line);
+  background:linear-gradient(0deg,#070707,#000);
+  z-index:10;
+  font-family:var(--mono); font-size:11px; color:var(--muted);
+}
+.toggle{
+  border:1px solid var(--line2);
+  background:transparent;
+  color:var(--fg);
+  padding:4px 8px;
+  font-family:var(--mono);
+  font-size:11px;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  cursor:pointer;
+}
+.toggle:hover{border-color:var(--fg)}
+
+.drawer{
+  position:absolute; left:0; right:0;
+  bottom:var(--bot);
+  height:calc((100vh - var(--top) - var(--bot)) * var(--drawer-h));
+  min-height:200px;
+  border-top:1px solid var(--line);
+  background:linear-gradient(180deg,#060606,#000);
+  display:none;
+  z-index:20;
+}
+.drawer.open{display:flex; flex-direction:column}
+
+/* Drawer resizer (hard top boundary honored) */
+.drawerSizer{
+  height:10px;
+  cursor:ns-resize;
+  border-bottom:1px solid var(--line);
+  background:linear-gradient(180deg,#0a0a0a,#050505);
+}
+.drawerHead{
+  padding:8px 10px;
+  border-bottom:1px solid var(--line);
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:.10em;
+  text-transform:uppercase;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+}
+.drawerBody{padding:10px; min-height:0; flex:1; overflow:auto}
+textarea{
+  width:100%;
+  border:1px solid var(--line2);
+  background:#050505;
+  color:var(--fg);
+  font-family:var(--mono);
+  font-size:12px;
+  padding:10px;
+  line-height:1.35;
+  outline:none;
+  resize:vertical;
+  min-height:140px;
+}
+input{
+  outline:none;
+}
+
+/* =========================================================
+AE ▸ KETA NOTE (GLOBAL)
+========================================================= */
+.ketaNote{
+  position:absolute; top:60px; right:16px;
+  width:340px; height:220px;
+  display:none;
+  z-index:30;
+  resize:both;
+  overflow:hidden;
+  border-radius:var(--ctl-radius);
+  background:var(--ctl-bg);
+  border:1px solid var(--note-border);
+  backdrop-filter:blur(6px);
+}
+.ketaNote.open{display:flex; flex-direction:column}
+.ketaHead{
+  padding:8px 10px;
+  border-bottom:1px solid rgba(255,255,255,0.14);
+  font-family:var(--mono);
+  font-size:11px;
+  letter-spacing:.14em;
+  text-transform:uppercase;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  cursor:move;
+}
+.ketaBody{padding:10px; min-height:0; flex:1}
+.ketaNote textarea{
+  background:#000;
+  color:#fff;
+  border:1px solid rgba(255,255,255,0.22);
+  width:100%;
+  height:100%;
+  resize:none;
+  padding:10px;
+  outline:none;
+}
+.headBtn{
+  background:transparent;
+  color:var(--fg);
+  border:1px solid rgba(255,255,255,0.18);
+  padding:2px 8px;
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  cursor:pointer;
+}
+.headBtn:hover{border-color:rgba(255,255,255,0.6)}
+
+/* Toast */
+.toast{
+  position:absolute;
+  left:12px;
+  top:calc(var(--top) + 12px);
+  padding:8px 10px;
+  border:1px solid var(--line2);
+  background:rgba(8,8,8,0.82);
+  font-family:var(--mono);
+  font-size:11px;
+  letter-spacing:.06em;
+  color:var(--fg);
+  display:none;
+  z-index:40;
+}
+
+/* RoomJump */
+#roomJump{
+  position:absolute;
+  left:10px;
+  top:calc(var(--top) + 10px);
+  display:none;
+  align-items:center;
+  gap:10px;
+  padding:8px 10px;
+  border:1px solid var(--line2);
+  background:rgba(0,0,0,0.82);
+  z-index:25;
+  font-family:var(--mono);
+  font-size:11px;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+}
+#roomJump.show{display:flex}
+</style>
+</head>
+
+<body>
+<div id="root">
+  <div id="stage" aria-label="KETADATA STAGE"></div>
+  <div id="motion" aria-hidden="true"></div>
+
+  <div id="roomJump">
+    <span id="roomJumpTxt">ROOM LINK DETECTED</span>
+    <button class="btn" id="btnGoRoom">GO</button>
+    <button class="btn" id="btnDismissRoom">DISMISS</button>
+  </div>
+
+  <!-- pinned -->
+  <div id="pinnedPanel" style="
+    position:absolute; left:10px; top:calc(var(--top) + 54px);
+    z-index:26; display:none; gap:8px; flex-wrap:wrap; align-items:center;
+    padding:8px 10px; border:1px solid var(--line2);
+    background:rgba(0,0,0,0.82);
+    font-family:var(--mono); font-size:11px; letter-spacing:.08em; text-transform:uppercase;">
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <!-- =========================================================
+  WB ▸ WIRING BRIDGE ▸ TOPBAR
+  ========================================================= -->
+  <div class="topbar">
+    <div style="display:flex; gap:10px; align-items:center">
+      <div class="brand">
+        <span class="sq"></span>
+        <span>KETADATA // BASE</span>
+        <span style="color:var(--muted); letter-spacing:.02em; text-transform:none">v1</span>
+      </div>
+      <div class="roomBadge">
+        <span>ROOM</span>
+        <span id="roomName">BASE</span>
+      </div>
+    </div>
+    <div class="actions">
+      <button class="btn" id="btnImport">IMPORT</button>
+      <button class="btn" id="btnExport">EXPORT</button>
+      <button class="btn" id="btnCopy">COPY</button>
+
+      <span class="kbd" title="Invert">Shift+I</span>
+      <span class="kbd" title="Blackout">Shift+N</span>
+      <span class="kbd" title="Fullscreen">Shift+F</span>
+      <span class="kbd" title="Landing">Shift+K</span>
+
+      <div id="ketaIcon" class="ketaIcon" title="KETA_NOTE"></div>
+    </div>
+  </div>
+
+  <!-- =========================================================
+  WB ▸ WIRING BRIDGE ▸ SYSTEM DRAWER
+  ========================================================= -->
+  <div class="drawer" id="drawer">
+    <div class="drawerSizer" id="drawerSizer" title="DRAG"></div>
+    <div class="drawerHead">
+      <div>SYSTEM</div>
+      <div style="display:flex; gap:8px; align-items:center">
+        <span id="sig" style="color:var(--muted); font-family:var(--mono); font-size:11px">∅</span>
+        <button class="btn" id="btnCopyUniversals">COPY</button>
+        <button class="btn" id="btnCloseDrawer">CLOSE</button>
+      </div>
+    </div>
+
+    <div class="drawerBody">
+      <textarea id="universals" spellcheck="false" autocomplete="off" placeholder="LAWS / REFERENCES"></textarea>
+
+      <!-- registry -->
+      <div style="margin-top:12px; border-top:1px solid var(--line); padding-top:10px">
+        <div style="font-family:var(--mono); font-size:12px; letter-spacing:.10em; text-transform:uppercase; color:var(--muted); margin-bottom:8px">
+          ROOM REGISTRY
+        </div>
+
+        <div style="margin-top:8px; display:flex; gap:8px; align-items:center; font-family:var(--mono); font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted)">
+          <span>ROOM</span>
+          <input id="roomInput" spellcheck="false" autocomplete="off"
+            style="flex:1; background:#000; color:#fff; border:1px solid var(--line2); padding:6px 8px; font-family:var(--mono);"
+            placeholder="NAME" />
+        </div>
+
+        <div style="margin-top:8px; display:flex; gap:8px; align-items:center; font-family:var(--mono); font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted)">
+          <span>URL</span>
+          <input id="roomUrlInput" spellcheck="false" autocomplete="off"
+            style="flex:1; background:#000; color:#fff; border:1px solid var(--line2); padding:6px 8px; font-family:var(--mono);"
+            placeholder="ANY LINK / PATH" />
+        </div>
+
+        <div style="margin-top:8px; display:flex; gap:8px; align-items:center">
+          <button class="btn" id="btnSaveRoom">SAVE</button>
+          <button class="btn" id="btnSetActiveRoom">SET ACTIVE</button>
+          <button class="btn" id="btnDeleteRoom">DELETE</button>
+        </div>
+
+        <div style="margin-top:10px; border-top:1px solid var(--line); padding-top:10px">
+          <div style="font-family:var(--mono); font-size:12px; letter-spacing:.10em; text-transform:uppercase; color:var(--muted); margin-bottom:8px">
+            BULK INPUT
+          </div>
+
+          <textarea id="bulkRoomInput" spellcheck="false" autocomplete="off" style="min-height:110px"
+            placeholder="ONE PER LINE:
+NAME | URL
+OR URL
+
+# lines starting with # are ignored"></textarea>
+
+          <div style="margin-top:8px; display:flex; gap:8px; align-items:center">
+            <button class="btn" id="btnBulkAdd">BULK ADD</button>
+            <button class="btn" id="btnBulkClear">CLEAR</button>
+          </div>
+
+          <div style="margin-top:8px; color:var(--muted); font-family:var(--mono); font-size:11px">
+            NO AUTOFILL. OVERWRITE FAST.
+          </div>
+        </div>
+
+        <div style="margin-top:10px; border-top:1px solid var(--line); padding-top:10px">
+          <div style="font-family:var(--mono); font-size:12px; letter-spacing:.10em; text-transform:uppercase; color:var(--muted); margin-bottom:8px">
+            PRESETS
+          </div>
+          <div id="roomList" style="display:flex; flex-direction:column; gap:6px"></div>
+          <div style="margin-top:8px; color:var(--muted); font-family:var(--mono); font-size:11px">
+            CLICK = LOAD. DOUBLE CLICK = GO. PIN = LEGO ORDER ABOVE.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- =========================================================
+  WB ▸ WIRING BRIDGE ▸ BOTTOM BAR
+  ========================================================= -->
+  <div class="bottombar">
+    <div style="display:flex; gap:10px; align-items:center">
+      <button class="toggle" id="toggleDrawer">SYSTEM</button>
+      <button class="toggle" id="toggleRun">RUN</button>
+      <span>STATE: <span id="sig2">∅</span></span>
+      <span style="margin-left:8px">FS: <span id="fsLabel">OFF</span></span>
+      <span style="margin-left:8px">BLK: <span id="blkLabel">OFF</span></span>
+    </div>
+    <div style="display:flex; gap:12px; align-items:center">
+      <span>LIGHT: <span id="lightLabel">1</span></span>
+      <span>RUN: <span id="runLabel">OFF</span></span>
+      <span>MOTION: <span id="motionLabel">OFF</span></span>
+    </div>
+  </div>
+
+  <!-- =========================================================
+  WB ▸ WIRING BRIDGE ▸ KETA NOTE
+  ========================================================= -->
+  <div class="ketaNote" id="ketaNote">
+    <div class="ketaHead" id="ketaHead">
+      <div>KETA_NOTE</div>
+      <button class="headBtn" id="btnHideNote">-</button>
+    </div>
+    <div class="ketaBody">
+      <textarea id="ketaText" spellcheck="false" autocomplete="off" placeholder="GLOBAL NOTE"></textarea>
+    </div>
+  </div>
+
+  <input id="file" type="file" accept="application/json" style="display:none" />
+</div>
+
+<!-- =========================================================
+EE ▸ ENGINE LAYER
+State / Import / Export / Sync / Hotkeys / Lights
+========================================================= -->
+<script>
+/* =========================================================
+EE ▸ CONFIG (EDIT THESE PATHS IF YOU WANT)
+========================================================= */
+const URLS = {
+  LANDING: "index11.html",      // Shift+K
+  PHOTOBOOTH: "crunch1.html",   // Shift+X
+  KDTV: "kdtv1.html",           // Shift+Z
+  POD: "room.html",             // Shift+V
+  WORLD: "map.html",            // Shift+W
+  INFINITY: "infinity.html"     // Shift+P  (set to your actual infinity-pool page)
+};
+
+/* =========================================================
+EE ▸ STORAGE KEYS
+========================================================= */
+const FILE_ID="KETADATA_SHELL8";
+const ROOM_ID="BASE";
+const VERSION_ID="base.hotkeys.v1";
+const STORAGE_KEY=`KDT::STATE::${FILE_ID}::${ROOM_ID}::${VERSION_ID}`;
+const GLOBAL_KETA_NOTE_KEY="KDT_GLOBAL_KETA_NOTE_V1";
+
+/* =========================================================
+EE ▸ DEFAULT STATE
+========================================================= */
+function nowISO(){return new Date().toISOString();}
+const DEFAULT={
+  version:"KETADATA_SHELL_KERNEL_v1",
+  updatedAt:nowISO(),
+  ketaNote:"",
+  universals:"",
+  room:"BASE",
+  roomUrl:"",
+  ketaNoteMeta:{
+    version:"KETA_NOTE_META_v1",
+    noteId:"GLOBAL",
+    roomId:"BASE",
+    stateId:null,
+    categoryIds:[],
+    createdAt:nowISO(),
+    updatedAt:nowISO()
+  },
+  ui:{
+    invert:false,
+    blackout:false,     // Shift+N
+    fullscreen:false,   // Shift+F
+    drawerOpen:false,
+    drawerH:0.42,       // adjustable
+    lightPreset:1,
+    lightRunning:false,
+    motionOn:false,
+    pinnedRooms:[]
+  },
+  payload:{ roomPresets:[] }
+};
+
+const $=(id)=>document.getElementById(id);
+const stage=$("stage");
+const root=$("root");
+const motion=$("motion");
+
+/* =========================================================
+EE ▸ UTIL
+========================================================= */
+function canonRoomName(name){return String(name||"").trim().toUpperCase();}
+function stableSig(){
+  const core=JSON.stringify({
+    v:STATE.version,
+    room:STATE.room,
+    i:STATE.ui.invert,
+    f:STATE.ui.fullscreen,
+    b:STATE.ui.blackout,
+    p:STATE.ui.lightPreset,
+    r:STATE.ui.lightRunning,
+    m:STATE.ui.motionOn,
+    dh:STATE.ui.drawerH,
+    k:(STATE.ketaNote||"").length,
+    u:(STATE.universals||"").length
+  });
+  let h=2166136261;
+  for(let i=0;i<core.length;i++){h^=core.charCodeAt(i);h=Math.imul(h,16777619);}
+  return (h>>>0).toString(16).slice(0,8);
+}
+async function copy(text){
+  try{await navigator.clipboard.writeText(text); toast("COPIED");}
+  catch(e){toast("COPY FAILED");}
+}
+let toastTimer=null;
+function toast(msg){
+  if(STATE.ui.blackout || STATE.ui.fullscreen) return;
+  const t=$("toast");
+  t.textContent=msg;
+  t.style.display="block";
+  if(toastTimer) clearTimeout(toastTimer);
+  toastTimer=setTimeout(()=>{t.style.display="none";},900);
+}
+
+/* =========================================================
+EE ▸ GLOBAL NOTE IO
+========================================================= */
+function loadGlobalKetaNote(){
+  try{return localStorage.getItem(GLOBAL_KETA_NOTE_KEY)??""}catch(e){return""}
+}
+function saveGlobalKetaNote(t){
+  try{localStorage.setItem(GLOBAL_KETA_NOTE_KEY,String(t??""))}catch(e){}
+}
+
+/* =========================================================
+EE ▸ STATE IO
+========================================================= */
+function mergeDefault(obj){
+  const out=structuredClone(DEFAULT);
+  Object.assign(out,obj||{});
+  out.ui=Object.assign(structuredClone(DEFAULT.ui),(obj&&obj.ui)||{});
+  out.payload=Object.assign({},structuredClone(DEFAULT.payload),(obj&&obj.payload)||{});
+  if(obj && obj.ketaNoteMeta) out.ketaNoteMeta=Object.assign(structuredClone(DEFAULT.ketaNoteMeta),obj.ketaNoteMeta);
+
+  // normalize
+  if(!Array.isArray(out.payload.roomPresets)) out.payload.roomPresets=[];
+  out.ui.pinnedRooms=(out.ui.pinnedRooms||[]).map(canonRoomName).filter(Boolean);
+
+  return out;
+}
+function loadLocal(){
+  try{
+    const raw=localStorage.getItem(STORAGE_KEY);
+    if(!raw) return null;
+    return mergeDefault(JSON.parse(raw));
+  }catch(e){return null}
+}
+function ensureKetaNoteMeta(){
+  if(!STATE.ketaNoteMeta||typeof STATE.ketaNoteMeta!=="object") STATE.ketaNoteMeta=structuredClone(DEFAULT.ketaNoteMeta);
+  else STATE.ketaNoteMeta=Object.assign(structuredClone(DEFAULT.ketaNoteMeta),STATE.ketaNoteMeta);
+}
+function syncKetaNoteMeta(reason){
+  ensureKetaNoteMeta();
+  STATE.ketaNoteMeta.roomId=canonRoomName(STATE.room||"BASE")||"BASE";
+  STATE.ketaNoteMeta.stateId=stableSig();
+  STATE.ketaNoteMeta.updatedAt=nowISO();
+  if(reason) STATE.ketaNoteMeta._last={reason,at:STATE.ketaNoteMeta.updatedAt};
+}
+function persist(){
+  // apply drawer height to css var
+  root.style.setProperty("--drawer-h", String(STATE.ui.drawerH));
+  STATE.updatedAt=nowISO();
+  syncKetaNoteMeta("persist");
+  saveGlobalKetaNote(STATE.ketaNote||"");
+  try{localStorage.setItem(STORAGE_KEY,JSON.stringify(STATE));}catch(e){}
+  render();
+}
+function exportState(){
+  syncKetaNoteMeta("export");
+  return JSON.stringify({ STORAGE_KEY, FILE_ID, ROOM_ID, VERSION_ID, STATE }, null, 2);
+}
+function importState(text){
+  const parsed=JSON.parse(text);
+  const incoming=(parsed && parsed.STATE) ? parsed.STATE : parsed;
+  STATE=mergeDefault(incoming);
+  // global note remains global
+  saveGlobalKetaNote(STATE.ketaNote||"");
+  stopLight(true);
+  if(STATE.ui.lightRunning && !STATE.ui.blackout) startLight(STATE.ui.lightPreset);
+  render();
+  persist();
+}
+
+/* =========================================================
+EE ▸ INITIALIZE STATE
+========================================================= */
+let STATE=loadLocal()||structuredClone(DEFAULT);
+{
+  const g=loadGlobalKetaNote();
+  if(g) STATE.ketaNote=g;
+}
+root.style.setProperty("--drawer-h", String(STATE.ui.drawerH));
+
+/* =========================================================
+EE ▸ LIGHTS (1–6) + RUN TOGGLE
+========================================================= */
+let lightInterval=null;
+let lightCount=0, lightAuxA=0, lightAuxB=0;
+
+function resetStage(){
+  stage.style.backgroundColor="#000";
+  stage.style.filter="none";
+  lightCount=0; lightAuxA=0; lightAuxB=0;
+}
+function stopLight(silent=false){
+  if(lightInterval){clearInterval(lightInterval); lightInterval=null;}
+  STATE.ui.lightRunning=false;
+  resetStage();
+  if(!silent) persist();
+}
+function startLight(preset){
+  stopLight(true);
+  resetStage();
+  STATE.ui.lightPreset=preset;
+  STATE.ui.lightRunning=true;
+
+  if(preset===1){
+    lightInterval=setInterval(()=>{
+      const curr=stage.style.backgroundColor||"black";
+      stage.style.backgroundColor=(curr==="black"||curr==="rgb(0, 0, 0)")?"white":"black";
+      stage.style.filter="none";
+    },50);
+  }else if(preset===2){
+    lightInterval=setInterval(()=>{
+      lightAuxA=(lightAuxA+30)%360; lightAuxB+=0.5;
+      const l=50+Math.sin(lightAuxB)*40;
+      stage.style.backgroundColor=`hsl(${lightAuxA},100%,${l}%)`;
+      stage.style.filter="none";
+    },10);
+  }else if(preset===3){
+    lightInterval=setInterval(()=>{
+      lightCount++;
+      const beat=lightCount%16;
+      if(beat===0||beat===1){stage.style.backgroundColor="#fff";stage.style.filter="invert(1) contrast(3) brightness(2)";}
+      else if(beat===2){stage.style.backgroundColor="#000";stage.style.filter="invert(1) contrast(2)";}
+      else if(beat===3){stage.style.backgroundColor="#0f0";stage.style.filter="contrast(2) saturate(3)";}
+      else if(beat===4){stage.style.backgroundColor="#f0f";stage.style.filter="invert(1) hue-rotate(90deg)";}
+      else if(beat===5||beat===6){stage.style.backgroundColor="#0ff";stage.style.filter="invert(0.7) contrast(2)";}
+      else if(beat===7){stage.style.backgroundColor="#fff";stage.style.filter="invert(1) brightness(3)";}
+      else if(beat===8){stage.style.backgroundColor="#000";stage.style.filter="invert(1) contrast(3)";}
+      else if(beat===9||beat===10){stage.style.backgroundColor="#0f0";stage.style.filter="saturate(5) contrast(2)";}
+      else if(beat===11){stage.style.backgroundColor="#f0f";stage.style.filter="invert(1) saturate(3)";}
+      else {stage.style.backgroundColor="#08f";stage.style.filter="contrast(1.5) brightness(1.2)";}
+    },30);
+  }else if(preset===4){
+    lightInterval=setInterval(()=>{
+      lightAuxA+=0.08; lightCount++;
+      const red=Math.abs(Math.sin(lightAuxA))*255;
+      const pulse=Math.abs(Math.sin(lightAuxA*0.5));
+      const contrast=2+pulse*2;
+      const saturation=4+pulse*2;
+      if(lightCount%8===0){stage.style.backgroundColor="#000";stage.style.filter="brightness(3) contrast(3)";}
+      else if(lightCount%8===1){
+        stage.style.backgroundColor=`rgb(${red},0,0)`;
+        stage.style.filter=`contrast(${contrast+1}) saturate(${saturation+2}) brightness(${1.5+pulse*0.5})`;
+      }else{
+        stage.style.backgroundColor=`rgb(${red},0,0)`;
+        stage.style.filter=`contrast(${contrast}) saturate(${saturation}) brightness(${1.2+pulse*0.5})`;
+      }
+    },20);
+  }else if(preset===5){
+    lightInterval=setInterval(()=>{
+      lightAuxA+=15; lightAuxB=(lightAuxB+2)%100;
+      const hue=260+Math.sin(lightAuxA*0.1)*40;
+      const saturation=80+Math.cos(lightAuxA*0.05)*20;
+      const lightness=30+Math.sin(lightAuxB*0.1)*30;
+      const spiralBrightness=1+Math.abs(Math.sin(lightAuxA*0.05))*0.8;
+      const spiralContrast=1.5+Math.abs(Math.cos(lightAuxA*0.08))*1;
+      stage.style.backgroundColor=`hsl(${hue},${saturation}%,${lightness}%)`;
+      stage.style.filter=`contrast(${spiralContrast}) saturate(2) brightness(${spiralBrightness}) hue-rotate(${lightAuxA*0.5}deg)`;
+    },25);
+  }else if(preset===6){
+    lightInterval=setInterval(()=>{
+      lightCount++;
+      if(lightCount%50===0||lightCount%50===2){stage.style.backgroundColor="#fff";stage.style.filter="brightness(5) contrast(5)";}
+      else{stage.style.backgroundColor="#000";stage.style.filter="none";}
+    },30);
+  }
+
+  persist();
+}
+function selectPreset(p){
+  STATE.ui.lightPreset=p;
+  if(STATE.ui.lightRunning) startLight(p);
+  else persist();
+}
+function toggleRun(){
+  if(STATE.ui.blackout) return;
+  if(STATE.ui.lightRunning){ stopLight(false); }
+  else { startLight(STATE.ui.lightPreset||1); }
+}
+
+/* motion */
+function syncMotion(){
+  if(STATE.ui.motionOn) motion.classList.add("run");
+  else motion.classList.remove("run");
+}
+
+/* =========================================================
+EE ▸ REGISTRY + PINS
+========================================================= */
+function ensurePinnedRooms(){
+  if(!Array.isArray(STATE.ui.pinnedRooms)) STATE.ui.pinnedRooms=[];
+  STATE.ui.pinnedRooms=STATE.ui.pinnedRooms.map(canonRoomName).filter(Boolean);
+}
+function isPinned(roomName){
+  ensurePinnedRooms();
+  const r=canonRoomName(roomName);
+  return STATE.ui.pinnedRooms.includes(r);
+}
+function togglePin(roomName){
+  ensurePinnedRooms();
+  const r=canonRoomName(roomName);
+  const i=STATE.ui.pinnedRooms.indexOf(r);
+  if(i>=0) STATE.ui.pinnedRooms.splice(i,1);
+  else STATE.ui.pinnedRooms.push(r);
+}
+
+function upsertRoomPreset(roomName,url){
+  const room=canonRoomName(roomName)||"LINK";
+  const roomUrl=String(url||"").trim();
+  const idx=STATE.payload.roomPresets.findIndex(r=>canonRoomName(r.room)===room);
+  const preset={room,roomUrl,updatedAt:nowISO()};
+  if(idx>=0) STATE.payload.roomPresets[idx]=Object.assign({},STATE.payload.roomPresets[idx],preset);
+  else STATE.payload.roomPresets.unshift(Object.assign({createdAt:nowISO()},preset));
+  return preset;
+}
+function deleteRoomPreset(roomName){
+  const room=canonRoomName(roomName);
+  if(!room) return;
+  STATE.payload.roomPresets=STATE.payload.roomPresets.filter(r=>canonRoomName(r.room)!==room);
+}
+function loadPresetToFields(roomName){
+  const room=canonRoomName(roomName);
+  const preset=STATE.payload.roomPresets.find(r=>canonRoomName(r.room)===room);
+  if(!preset) return;
+  $("roomInput").value=preset.room||"";
+  $("roomUrlInput").value=preset.roomUrl||"";
+}
+function setActiveRoom(roomName,url){
+  STATE.room=(canonRoomName(roomName)||"BASE").trim();
+  STATE.roomUrl=String(url||"").trim();
+}
+
+function deriveNameFromUrl(url){
+  try{
+    const u=new URL(url, location.href);
+    const path=(u.pathname||"").split("/").filter(Boolean);
+    const last=path.length?path[path.length-1]:(u.hostname||"LINK");
+    return String(last).replace(/\.(html?|php|aspx|jsp)$/i,"").replace(/[-_]+/g," ").trim().toUpperCase()||"LINK";
+  }catch(e){
+    return String(url||"LINK").trim().slice(0,28).toUpperCase()||"LINK";
+  }
+}
+function parseBulkLines(text){
+  return String(text||"").split(/\r?\n/).map(l=>l.trim()).filter(l=>l && !l.startsWith("#")).map(l=>{
+    let name="", url="";
+    if(l.includes("|")){
+      const parts=l.split("|");
+      name=(parts[0]||"").trim();
+      url=(parts.slice(1).join("|")||"").trim();
+    }else url=l.trim();
+    if(!url && name){ url=name; name=""; }
+    if(!name) name=deriveNameFromUrl(url);
+    return {name,url};
+  }).filter(x=>x.url);
+}
+
+/* =========================================================
+EE ▸ MODES (BLACKOUT / FULLSCREEN / INVERT)
+========================================================= */
+function setInvert(on){ STATE.ui.invert=!!on; persist(); }
+
+function setBlackout(on){
+  STATE.ui.blackout=!!on;
+  if(STATE.ui.blackout){
+    STATE.ui.motionOn=false;
+    stopLight(true);
+    resetStage();
+    motion.classList.remove("run");
+    STATE.ui.drawerOpen=false;
+  }
+  persist();
+}
+function toggleBlackout(){ setBlackout(!STATE.ui.blackout); }
+
+function setFullscreen(on){
+  STATE.ui.fullscreen=!!on;
+  persist();
+}
+function toggleFullscreen(){ setFullscreen(!STATE.ui.fullscreen); }
+
+/* =========================================================
+WB ▸ HOTKEY ROUTES (ONLY WHAT YOU SAID)
+========================================================= */
+function go(url){ if(!url) return; window.location.href=url; }
+
+function bindHotkeys(){
+  window.addEventListener("keydown",(ev)=>{
+    if(ev.repeat) return;
+
+    if(ev.shiftKey && (ev.key==="I"||ev.key==="i")){
+      ev.preventDefault();
+      setInvert(!STATE.ui.invert);
+      toast(STATE.ui.invert ? "INVERT ON" : "INVERT OFF");
+      return;
+    }
+
+    if(ev.shiftKey && (ev.key==="N"||ev.key==="n")){
+      ev.preventDefault();
+      toggleBlackout();
+      return;
+    }
+
+    if(ev.shiftKey && (ev.key==="F"||ev.key==="f")){
+      ev.preventDefault();
+      toggleFullscreen();
+      return;
+    }
+
+    if(ev.shiftKey && (ev.key==="K"||ev.key==="k")){
+      ev.preventDefault();
+      go(URLS.LANDING);
+      return;
+    }
+
+    if(ev.shiftKey && (ev.key==="X"||ev.key==="x")){
+      ev.preventDefault();
+      go(URLS.PHOTOBOOTH);
+      return;
+    }
+
+    if(ev.shiftKey && (ev.key==="Z"||ev.key==="z")){
+      ev.preventDefault();
+      go(URLS.KDTV);
+      return;
+    }
+
+    if(ev.shiftKey && (ev.key==="V"||ev.key==="v")){
+      ev.preventDefault();
+      go(URLS.POD);
+      return;
+    }
+
+    if(ev.shiftKey && (ev.key==="W"||ev.key==="w")){
+      ev.preventDefault();
+      go(URLS.WORLD);
+      return;
+    }
+
+    if(ev.shiftKey && (ev.key==="P"||ev.key==="p")){
+      ev.preventDefault();
+      go(URLS.INFINITY);
+      return;
+    }
+
+    if(!ev.shiftKey && !ev.altKey && !ev.metaKey && !ev.ctrlKey){
+      const n=Number(ev.key);
+      if(n>=1 && n<=6){
+        ev.preventDefault();
+        selectPreset(n);
+        toast(`LIGHT ${n}`);
+        return;
+      }
+    }
+  });
+}
+
+/* =========================================================
+WB ▸ UI: drawer + note
+========================================================= */
+function setDrawer(on){
+  STATE.ui.drawerOpen=!!on;
+  persist();
+}
+function setKetaNote(on){
+  const k=$("ketaNote");
+  const icon=$("ketaIcon");
+  if(on){k.classList.add("open"); icon.classList.add("open");}
+  else {k.classList.remove("open"); icon.classList.remove("open");}
+}
+
+/* =========================================================
+WB ▸ RENDER
+========================================================= */
+function renderRoomList(){
+  const el=$("roomList");
+  el.innerHTML="";
+  const presets=(STATE.payload.roomPresets||[]).slice().sort((a,b)=>Date.parse(b.updatedAt||b.createdAt||0)-Date.parse(a.updatedAt||a.createdAt||0));
+  presets.forEach(p=>{
+    const row=document.createElement("div");
+    row.style.display="flex";
+    row.style.gap="8px";
+    row.style.alignItems="center";
+    row.style.border="1px solid var(--line2)";
+    row.style.padding="8px 10px";
+    row.style.fontFamily="var(--mono)";
+    row.style.fontSize="11px";
+    row.style.letterSpacing=".06em";
+    row.style.textTransform="uppercase";
+    row.style.cursor="pointer";
+
+    const left=document.createElement("div");
+    left.style.flex="1";
+    left.textContent=p.room||"—";
+
+    const right=document.createElement("div");
+    right.style.color="var(--muted)";
+    right.textContent=(p.roomUrl||"—").replace(/^https?:\/\//,"");
+
+    const pin=document.createElement("button");
+    pin.className="btn";
+    pin.style.padding="4px 8px";
+    pin.style.fontSize="11px";
+    pin.textContent=isPinned(p.room)?"UNPIN":"PIN";
+    pin.addEventListener("click",(ev)=>{
+      ev.stopPropagation();
+      togglePin(p.room);
+      toast(isPinned(p.room)?"PINNED":"UNPINNED");
+      persist();
+    });
+
+    row.addEventListener("click",()=>{ loadPresetToFields(p.room); toast("LOADED"); });
+    row.addEventListener("dblclick",()=>{
+      setActiveRoom(p.room,p.roomUrl);
+      persist();
+      if(STATE.roomUrl) go(STATE.roomUrl);
+    });
+
+    if(canonRoomName(STATE.room)===canonRoomName(p.room)) row.style.borderColor="var(--fg)";
+
+    row.appendChild(left); row.appendChild(right); row.appendChild(pin);
+    el.appendChild(row);
+  });
+}
+
+function renderPinnedPanel(){
+  const el=$("pinnedPanel");
+  ensurePinnedRooms();
+
+  if(STATE.ui.blackout || STATE.ui.fullscreen || STATE.ui.pinnedRooms.length===0){
+    el.style.display="none";
+    el.innerHTML="";
+    return;
+  }
+
+  el.style.display="flex";
+  el.innerHTML="";
+
+  const by=new Map((STATE.payload.roomPresets||[]).map(p=>[canonRoomName(p.room),p]));
+  STATE.ui.pinnedRooms.forEach(name=>{
+    const p=by.get(name);
+    if(!p) return;
+
+    const chip=document.createElement("button");
+    chip.className="btn";
+    chip.textContent=name;
+    chip.draggable=true;
+
+    chip.addEventListener("dragstart",(ev)=>{
+      try{ev.dataTransfer.setData("text/plain",name); ev.dataTransfer.effectAllowed="move";}catch(e){}
+    });
+    chip.addEventListener("dragover",(ev)=>ev.preventDefault());
+    chip.addEventListener("drop",(ev)=>{
+      ev.preventDefault();
+      const from=(ev.dataTransfer&&ev.dataTransfer.getData("text/plain"))||"";
+      const to=name;
+      if(!from||from===to) return;
+      const a=STATE.ui.pinnedRooms;
+      const fi=a.indexOf(from), ti=a.indexOf(to);
+      if(fi<0||ti<0) return;
+      a.splice(ti,0,a.splice(fi,1)[0]);
+      toast("PIN ORDER SET");
+      persist();
+    });
+
+    chip.addEventListener("click",()=>{
+      setActiveRoom(p.room,p.roomUrl);
+      toast("ACTIVE SET");
+      persist();
+    });
+
+    chip.addEventListener("contextmenu",(ev)=>{
+      ev.preventDefault();
+      setActiveRoom(p.room,p.roomUrl);
+      persist();
+      go(STATE.roomUrl);
+    });
+
+    if(canonRoomName(STATE.room)===name) chip.style.borderColor="var(--fg)";
+    el.appendChild(chip);
+  });
+}
+
+function render(){
+  root.classList.toggle("invert", !!STATE.ui.invert);
+  root.classList.toggle("blackout", !!STATE.ui.blackout);
+  root.classList.toggle("fs", !!STATE.ui.fullscreen);
+
+  const drawer=$("drawer");
+  if(STATE.ui.drawerOpen && !STATE.ui.blackout && !STATE.ui.fullscreen) drawer.classList.add("open");
+  else drawer.classList.remove("open");
+
+  syncMotion();
+
+  $("roomName").textContent=canonRoomName(STATE.room)||"BASE";
+  $("sig").textContent=stableSig();
+  $("sig2").textContent=stableSig();
+  $("fsLabel").textContent=STATE.ui.fullscreen ? "ON" : "OFF";
+  $("blkLabel").textContent=STATE.ui.blackout ? "ON" : "OFF";
+  $("lightLabel").textContent=String(STATE.ui.lightPreset||1);
+  $("runLabel").textContent=STATE.ui.lightRunning ? "ON" : "OFF";
+  $("motionLabel").textContent=STATE.ui.motionOn ? "ON" : "OFF";
+
+  $("universals").value=STATE.universals||"";
+  $("ketaText").value=STATE.ketaNote||"";
+
+  renderRoomList();
+  renderPinnedPanel();
+}
+
+/* =========================================================
+WB ▸ EVENT WIRING
+========================================================= */
+$("btnExport").addEventListener("click", ()=> copy(exportState()));
+$("btnCopy").addEventListener("click", ()=> copy(exportState()));
+$("btnImport").addEventListener("click", ()=> $("file").click());
+$("file").addEventListener("change", async (ev)=>{
+  const f=ev.target.files && ev.target.files[0];
+  if(!f) return;
+  const text=await f.text();
+  importState(text);
+  ev.target.value="";
+});
+$("btnCopyUniversals").addEventListener("click", ()=> copy($("universals").value||""));
+$("btnCloseDrawer").addEventListener("click", ()=> setDrawer(false));
+
+$("toggleDrawer").addEventListener("click", ()=>{
+  if(STATE.ui.blackout || STATE.ui.fullscreen) return;
+  setDrawer(!STATE.ui.drawerOpen);
+});
+$("toggleRun").addEventListener("click", ()=> toggleRun());
+
+$("universals").addEventListener("input", ()=>{ STATE.universals=$("universals").value||""; persist(); });
+$("ketaText").addEventListener("input", ()=>{ STATE.ketaNote=$("ketaText").value||""; saveGlobalKetaNote(STATE.ketaNote||""); persist(); });
+
+$("ketaIcon").addEventListener("click", ()=>{
+  if(STATE.ui.blackout || STATE.ui.fullscreen) return;
+  const k=$("ketaNote");
+  setKetaNote(!k.classList.contains("open"));
+});
+$("btnHideNote").addEventListener("click", ()=> setKetaNote(false));
+
+$("btnSaveRoom").addEventListener("click", ()=>{
+  upsertRoomPreset($("roomInput").value||"LINK", $("roomUrlInput").value||"");
+  toast("SAVED");
+  persist();
+});
+$("btnSetActiveRoom").addEventListener("click", ()=>{
+  const r=$("roomInput").value||"BASE";
+  const u=$("roomUrlInput").value||"";
+  upsertRoomPreset(r,u);
+  setActiveRoom(r,u);
+  toast("ACTIVE SET");
+  persist();
+});
+$("btnDeleteRoom").addEventListener("click", ()=>{
+  const r=$("roomInput").value||"";
+  if(!r.trim()){ toast("NO ROOM"); return; }
+  deleteRoomPreset(r);
+  toast("DELETED");
+  persist();
+});
+
+$("btnBulkAdd").addEventListener("click", ()=>{
+  const items=parseBulkLines($("bulkRoomInput").value||"");
+  if(!items.length){ toast("NO BULK"); return; }
+  items.forEach(({name,url})=> upsertRoomPreset(name,url));
+  toast(`BULK ${items.length}`);
+  persist();
+});
+$("btnBulkClear").addEventListener("click", ()=>{ $("bulkRoomInput").value=""; toast("CLEARED"); });
+
+["roomInput","roomUrlInput","bulkRoomInput"].forEach(id=>{
+  const el=$(id);
+  el.addEventListener("focus", ()=>{ try{el.select && el.select();}catch(e){} });
+});
+
+/* Drawer height resize */
+(function bindDrawerSizer(){
+  const s=$("drawerSizer");
+  let dragging=false;
+
+  function clamp(v,min,max){ return Math.max(min, Math.min(max, v)); }
+
+  s.addEventListener("mousedown",(ev)=>{
+    if(!STATE.ui.drawerOpen) return;
+    dragging=true;
+    ev.preventDefault();
+  });
+  window.addEventListener("mousemove",(ev)=>{
+    if(!dragging) return;
+    const usable = window.innerHeight - 44 - 34;
+    const drawerTop = 44;
+    const y = ev.clientY;
+    const topBound = drawerTop;
+    const bottomBound = window.innerHeight - 34;
+    const desiredHeight = clamp(bottomBound - y, usable*0.18, usable*0.92);
+    const ratio = desiredHeight / usable;
+    STATE.ui.drawerH = Number(ratio.toFixed(3));
+    root.style.setProperty("--drawer-h", String(STATE.ui.drawerH));
+    render();
+  });
+  window.addEventListener("mouseup",()=>{
+    if(!dragging) return;
+    dragging=false;
+    persist();
+  });
+})();
+
+/* Note drag */
+(function initDragNote(){
+  const note=$("ketaNote"), head=$("ketaHead");
+  let dragging=false, ox=0, oy=0;
+  head.addEventListener("mousedown",(ev)=>{
+    if(STATE.ui.blackout || STATE.ui.fullscreen) return;
+    dragging=true;
+    const r=note.getBoundingClientRect();
+    ox=ev.clientX-r.left; oy=ev.clientY-r.top;
+  });
+  window.addEventListener("mousemove",(ev)=>{
+    if(!dragging) return;
+    note.style.left=(ev.clientX-ox)+"px";
+    note.style.top=(ev.clientY-oy)+"px";
+    note.style.right="auto";
+  });
+  window.addEventListener("mouseup",()=> dragging=false);
+})();
+
+/* Cross-tab sync */
+let PENDING_REMOTE_STATE=null;
+function isTyping(){
+  const ae=document.activeElement;
+  if(!ae) return false;
+  return ["ketaText","universals","roomInput","roomUrlInput","bulkRoomInput"].includes(ae.id||"");
+}
+function applyRemoteState(next){
+  STATE=mergeDefault(next);
+  saveGlobalKetaNote(STATE.ketaNote||"");
+  stopLight(true);
+  if(STATE.ui.lightRunning && !STATE.ui.blackout) startLight(STATE.ui.lightPreset);
+  render();
+}
+window.addEventListener("storage",(ev)=>{
+  try{
+    if(ev.key===STORAGE_KEY && ev.newValue){
+      const incoming=JSON.parse(ev.newValue);
+      const inAt=Date.parse(incoming.updatedAt||0);
+      const curAt=Date.parse(STATE.updatedAt||0);
+      if(!inAt || inAt<=curAt) return;
+      if(isTyping()){ PENDING_REMOTE_STATE=incoming; toast("REMOTE PENDING"); return; }
+      applyRemoteState(incoming);
+      toast("SYNCED");
+      return;
+    }
+    if(ev.key===GLOBAL_KETA_NOTE_KEY){
+      const g=ev.newValue??"";
+      if(String(g)!==String(STATE.ketaNote||"")){
+        if(isTyping()){ PENDING_REMOTE_STATE=Object.assign({},STATE,{ketaNote:String(g)}); toast("NOTE PENDING"); return; }
+        STATE.ketaNote=String(g);
+        render();
+      }
+    }
+  }catch(e){}
+});
+["ketaText","universals","roomInput","roomUrlInput","bulkRoomInput"].forEach(id=>{
+  const el=$(id);
+  el.addEventListener("blur",()=>{
+    if(PENDING_REMOTE_STATE && !isTyping()){
+      const next=PENDING_REMOTE_STATE; PENDING_REMOTE_STATE=null;
+      applyRemoteState(next);
+      toast("SYNCED");
+    }
+  });
+});
+
+/* INIT */
+bindHotkeys();
+render();
+if(STATE.ui.lightRunning && !STATE.ui.blackout) startLight(STATE.ui.lightPreset||1);
+</script>
+
+<!-- =========================================================
+AE/EE/WB SERIALIZATION STAMP (MANDATORY)
+FILE_ID: KETADATA_SHELL8
+ROOM_ID: BASE
+VERSION: base.hotkeys.v1
+UPDATED_AT: 2025-12-27T00:00:00-05:00
+CHANGELOG:
+- HOTKEYS LOCKED:
+  Shift+N = BLACKOUT (hard black, hides panels, stops visuals)
+  Shift+F = FULLSCREEN (hides panels, keeps visuals)
+  Shift+I = INVERT
+  1–6 = LIGHT PRESETS
+  Shift+K = LANDING (index11.html)
+  Shift+X = PHOTOBOOTH (crunch1.html)
+  Shift+Z = KDTV (kdtv1.html)
+  Shift+V = POD (room.html)
+  Shift+W = WORLD (map.html)
+  Shift+P = INFINITY (infinity.html)  // set URLS.INFINITY if different
+- DRAWER: adjustable height via top sizer; hard top boundary respected; persisted (ui.drawerH).
+- STATE: import/export preserved; global KETA_NOTE preserved; cross-tab sync preserved.
+========================================================= -->
+</body>
+</html>
