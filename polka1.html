@@ -1,0 +1,779 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>KETADATA — POLKA DOT ENGINE</title>
+  <style>
+    :root{
+      /* CORE PALETTE (defaults = “normal KETADATA”) */
+      --bg:#000000;
+      --fg:#ffffff;
+
+      /* DOT COLORS */
+      --dotA:#ffffff;
+      --dotB:#000000;
+
+      /* GEOMETRY */
+      --dotSize: 120px;   /* BIG */
+      --gap: 70px;        /* BIG */
+      --angle: 18deg;
+
+      /* MOTION */
+      --speedA: 12s;
+      --speedB: 15s;
+      --shiftX: 720px;
+      --shiftY: -540px;
+
+      /* DEPTH / LOOK */
+      --alphaA: 0.96;
+      --alphaB: 0.82;
+      --contrast: 1.15;
+      --grain: 0.00;      /* 0..0.12 */
+      --light: 3;         /* 1..6 */
+
+      /* ARRANGEMENT (set by JS) */
+      --arrX: 0px;
+      --arrY: 0px;
+      --arrX2: 0px;
+      --arrY2: 0px;
+
+      /* “Normal KETADATA” accent (optional use in UI only) */
+      --uiLine: var(--fg);
+      --uiBg: rgba(0,0,0,0.65);
+    }
+
+    *{ box-sizing:border-box; }
+    html,body{ height:100%; }
+    body{
+      margin:0;
+      background:var(--bg);
+      color:var(--fg);
+      font-family: Arial, Helvetica, sans-serif;
+      overflow:hidden;
+    }
+
+    /* ---------- POLKA FIELD (2 LAYERS) ---------- */
+    .field{
+      position:fixed;
+      inset:-25%;
+      transform-origin:center;
+      will-change: transform, background-position, filter;
+      pointer-events:none;
+      filter: contrast(var(--contrast));
+    }
+
+    /* Layer A */
+    .field.a{
+      opacity: var(--alphaA);
+      transform: rotate(var(--angle));
+      background-size: calc(var(--dotSize) + var(--gap)) calc(var(--dotSize) + var(--gap));
+      background-position: var(--arrX) var(--arrY);
+      animation: driftA var(--speedA) linear infinite;
+    }
+
+    /* Layer B */
+    .field.b{
+      opacity: var(--alphaB);
+      transform: rotate(calc(var(--angle) * -1));
+      background-size: calc(var(--dotSize) + var(--gap)) calc(var(--dotSize) + var(--gap));
+      background-position: var(--arrX2) var(--arrY2);
+      animation: driftB var(--speedB) linear infinite;
+      mix-blend-mode: difference;
+    }
+
+    @keyframes driftA{
+      0%   { background-position: var(--arrX) var(--arrY); transform: rotate(var(--angle)) translate3d(0,0,0); }
+      100% { background-position: calc(var(--arrX) + var(--shiftX)) calc(var(--arrY) + var(--shiftY)); transform: rotate(var(--angle)) translate3d(-40px, 20px, 0); }
+    }
+    @keyframes driftB{
+      0%   { background-position: var(--arrX2) var(--arrY2); transform: rotate(calc(var(--angle) * -1)) translate3d(0,0,0); }
+      100% { background-position: calc(var(--arrX2) - var(--shiftX)) calc(var(--arrY2) - var(--shiftY)); transform: rotate(calc(var(--angle) * -1)) translate3d(30px, -25px, 0); }
+    }
+
+    /* Optional “grain” overlay (still B/W) */
+    .grain{
+      position:fixed;
+      inset:0;
+      pointer-events:none;
+      opacity: var(--grain);
+      mix-blend-mode: overlay;
+      background-image:
+        repeating-linear-gradient(0deg, rgba(255,255,255,.12) 0 1px, transparent 1px 2px),
+        repeating-linear-gradient(90deg, rgba(255,255,255,.10) 0 1px, transparent 1px 3px);
+      z-index:3;
+    }
+
+    /* ---------- KETADATA HUD ---------- */
+    .hud{
+      position:fixed;
+      top:0; left:0; right:0;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:12px;
+      padding:10px 12px;
+      border-bottom:2px solid var(--uiLine);
+      background: var(--uiBg);
+      backdrop-filter: blur(2px);
+      z-index:10;
+    }
+    .hud .left, .hud .right{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+
+    .tag{
+      display:inline-block;
+      padding:6px 10px;
+      border:2px solid var(--uiLine);
+      letter-spacing:0.08em;
+      font-weight:900;
+      font-size:12px;
+      text-transform:uppercase;
+      background:transparent;
+      user-select:none;
+      line-height:1;
+      border-radius:0;
+    }
+    .btn, select, input[type="range"], input[type="color"]{
+      font: 800 12px/1 Arial, Helvetica, sans-serif;
+      letter-spacing:0.08em;
+      text-transform:uppercase;
+    }
+    .btn{
+      appearance:none;
+      border-radius:0;
+      border:2px solid var(--uiLine);
+      background:transparent;
+      color:var(--fg);
+      padding:6px 10px;
+      cursor:pointer;
+    }
+    .btn:active{ transform: translateY(1px); }
+    .btn[aria-pressed="true"]{
+      background: var(--fg);
+      color: var(--bg);
+    }
+
+    .drawer{
+      position:fixed;
+      top:54px;
+      right:12px;
+      width:min(520px, calc(100vw - 24px));
+      border:2px solid var(--uiLine);
+      background: rgba(0,0,0,0.72);
+      z-index:11;
+      padding:10px;
+      display:none;
+    }
+    body.invert .drawer{ background: rgba(255,255,255,0.72); }
+    .drawer.open{ display:block; }
+
+    .grid{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap:10px;
+    }
+    .row{
+      border:1px solid rgba(255,255,255,0.25);
+      padding:10px;
+    }
+    body.invert .row{ border-color: rgba(0,0,0,0.25); }
+
+    .row h3{
+      margin:0 0 10px 0;
+      font-size:12px;
+      letter-spacing:0.10em;
+      font-weight:900;
+      text-transform:uppercase;
+    }
+    .control{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      margin:8px 0;
+    }
+    .control label{
+      font-size:11px;
+      font-weight:900;
+      letter-spacing:0.10em;
+      text-transform:uppercase;
+      opacity:0.9;
+      user-select:none;
+    }
+    select, input[type="range"], input[type="color"]{
+      width: 58%;
+      border:2px solid var(--uiLine);
+      background: transparent;
+      color: var(--fg);
+      padding:6px 8px;
+      border-radius:0;
+      outline:none;
+    }
+    input[type="color"]{
+      padding:0;
+      height:28px;
+    }
+    input[type="range"]{
+      padding:0;
+      height:28px;
+    }
+    option{
+      background:#000;
+      color:#fff;
+    }
+    body.invert option{
+      background:#fff;
+      color:#000;
+    }
+
+    .centerMark{
+      position:fixed;
+      inset:0;
+      display:grid;
+      place-items:center;
+      z-index:5;
+      pointer-events:none;
+      text-align:center;
+      padding:24px;
+    }
+    .centerMark .title{
+      font-weight:900;
+      letter-spacing:0.22em;
+      text-transform:uppercase;
+      font-size: clamp(18px, 3.5vw, 38px);
+      line-height:1.05;
+      mix-blend-mode: difference;
+      user-select:none;
+    }
+    .centerMark .sub{
+      margin-top:10px;
+      font-weight:800;
+      letter-spacing:0.10em;
+      text-transform:uppercase;
+      font-size:12px;
+      opacity:0.85;
+      mix-blend-mode: difference;
+      user-select:none;
+    }
+
+    /* LIGHTS (1–6) = pure intensity bias (no extra colors) */
+    .lights{
+      display:flex;
+      gap:6px;
+      align-items:center;
+    }
+    .lights .lamp{
+      width:18px; height:18px;
+      border:2px solid var(--uiLine);
+      background: transparent;
+      display:inline-block;
+    }
+    .lights .lamp.on{
+      background: var(--fg);
+    }
+
+    /* Reduced motion respect */
+    @media (prefers-reduced-motion: reduce){
+      .field.a, .field.b{ animation:none !important; }
+    }
+
+    /* Bottom stamp */
+    .stamp{
+      position:fixed;
+      left:12px;
+      right:12px;
+      bottom:10px;
+      z-index:10;
+      font: 800 10px/1.25 Arial, Helvetica, sans-serif;
+      letter-spacing:0.08em;
+      text-transform:uppercase;
+      opacity:0.85;
+      mix-blend-mode: difference;
+      user-select:text;
+      white-space:pre-wrap;
+      pointer-events:auto;
+    }
+
+    /* Invert mode */
+    body.invert{
+      --bg:#ffffff;
+      --fg:#000000;
+      --dotA:#000000;
+      --dotB:#ffffff;
+      --uiBg: rgba(255,255,255,0.65);
+      background: var(--bg);
+      color: var(--fg);
+    }
+  </style>
+</head>
+<body>
+  <div class="field a" id="fieldA" aria-hidden="true"></div>
+  <div class="field b" id="fieldB" aria-hidden="true"></div>
+  <div class="grain" aria-hidden="true"></div>
+
+  <div class="hud">
+    <div class="left">
+      <div class="tag">KETADATA</div>
+      <div class="tag">DOT ENGINE</div>
+
+      <div class="lights" id="lights" title="LIGHTS 1–6 (hotkeys 1..6)">
+        <span class="lamp" data-l="1"></span>
+        <span class="lamp" data-l="2"></span>
+        <span class="lamp" data-l="3"></span>
+        <span class="lamp" data-l="4"></span>
+        <span class="lamp" data-l="5"></span>
+        <span class="lamp" data-l="6"></span>
+      </div>
+    </div>
+
+    <div class="right">
+      <button class="btn" id="drawerBtn" type="button" aria-pressed="false" title="Controls (K)">Controls</button>
+      <button class="btn" id="invertBtn" type="button" aria-pressed="false" title="Invert (Shift+I)">Invert</button>
+      <button class="btn" id="motionBtn" type="button" aria-pressed="false" title="Toggle Motion (M)">Motion</button>
+    </div>
+  </div>
+
+  <div class="drawer" id="drawer">
+    <div class="grid">
+      <div class="row">
+        <h3>Arrangement</h3>
+
+        <div class="control">
+          <label for="arrPreset">Preset</label>
+          <select id="arrPreset">
+            <option value="grid">Grid (Default)</option>
+            <option value="offset">Offset (Half-Step)</option>
+            <option value="diagonal">Diagonal Sweep</option>
+            <option value="wave">Wave Drift</option>
+            <option value="checker">Checker Pulse</option>
+            <option value="halftone">Halftone Tight</option>
+          </select>
+        </div>
+
+        <div class="control">
+          <label for="angle">Angle</label>
+          <input id="angle" type="range" min="-45" max="45" value="18" />
+        </div>
+
+        <div class="control">
+          <label for="dotSize">Dot Size</label>
+          <input id="dotSize" type="range" min="40" max="240" value="120" />
+        </div>
+
+        <div class="control">
+          <label for="gap">Gap</label>
+          <input id="gap" type="range" min="10" max="200" value="70" />
+        </div>
+      </div>
+
+      <div class="row">
+        <h3>Motion</h3>
+
+        <div class="control">
+          <label for="speedA">Speed A</label>
+          <input id="speedA" type="range" min="3" max="40" value="12" />
+        </div>
+
+        <div class="control">
+          <label for="speedB">Speed B</label>
+          <input id="speedB" type="range" min="3" max="50" value="15" />
+        </div>
+
+        <div class="control">
+          <label for="shiftX">Shift X</label>
+          <input id="shiftX" type="range" min="-1200" max="1200" value="720" />
+        </div>
+
+        <div class="control">
+          <label for="shiftY">Shift Y</label>
+          <input id="shiftY" type="range" min="-1200" max="1200" value="-540" />
+        </div>
+      </div>
+
+      <div class="row">
+        <h3>Look</h3>
+
+        <div class="control">
+          <label for="contrast">Contrast</label>
+          <input id="contrast" type="range" min="0.8" max="1.8" step="0.01" value="1.15" />
+        </div>
+
+        <div class="control">
+          <label for="grain">Grain</label>
+          <input id="grain" type="range" min="0" max="0.12" step="0.01" value="0" />
+        </div>
+
+        <div class="control">
+          <label for="alphaA">Alpha A</label>
+          <input id="alphaA" type="range" min="0.2" max="1" step="0.01" value="0.96" />
+        </div>
+
+        <div class="control">
+          <label for="alphaB">Alpha B</label>
+          <input id="alphaB" type="range" min="0.2" max="1" step="0.01" value="0.82" />
+        </div>
+      </div>
+
+      <div class="row">
+        <h3>Color</h3>
+
+        <div class="control">
+          <label for="colorPreset">Preset</label>
+          <select id="colorPreset">
+            <!-- “Normal KETADATA” first -->
+            <option value="keta_mono">KETA — MONO (Default)</option>
+            <option value="keta_gray">KETA — GRAY</option>
+            <option value="keta_silver">KETA — SILVER/CHROME</option>
+            <option value="keta_pink">KETA — PINK ACCENT</option>
+            <option value="keta_red">KETA — WARNING RED</option>
+            <option value="custom">CUSTOM</option>
+          </select>
+        </div>
+
+        <div class="control">
+          <label for="bg">BG</label>
+          <input id="bg" type="color" value="#000000" />
+        </div>
+
+        <div class="control">
+          <label for="fg">FG</label>
+          <input id="fg" type="color" value="#ffffff" />
+        </div>
+
+        <div class="control">
+          <label for="dotA">Dot A</label>
+          <input id="dotA" type="color" value="#ffffff" />
+        </div>
+
+        <div class="control">
+          <label for="dotB">Dot B</label>
+          <input id="dotB" type="color" value="#000000" />
+        </div>
+
+        <div class="control">
+          <label for="reset">Reset</label>
+          <button class="btn" id="resetBtn" type="button">Default</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="centerMark" aria-hidden="true">
+    <div>
+      <div class="title">KETADATA<br/>DOT ENGINE</div>
+      <div class="sub">ARRANGEMENTS • CONTROLS • PRESETS</div>
+    </div>
+  </div>
+
+  <div class="stamp" id="stamp">
+AE: POLKA_DOT_ENGINE
+EE: ARR_PRESETS + COLOR_PRESETS + LIGHTS_1_6 + INVERT + MOTION + DRAWER
+WB: SINGLE_FILE_HTML
+
+FILE_ID: "KETA_POLKA_ENGINE"
+ROOM_ID: "NULL"
+VERSION_ID: "V2"
+UPDATED_AT: "2025-12-28T00:00:00.000Z"
+CHANGELOG: "V2 — ARRANGEMENTS + CONTROL DRAWER + KETA COLOR PRESETS + LIGHTS 1–6"
+  </div>
+
+  <script>
+    (function(){
+      const root = document.documentElement;
+      const body = document.body;
+
+      const fieldA = document.getElementById('fieldA');
+      const fieldB = document.getElementById('fieldB');
+
+      const drawer = document.getElementById('drawer');
+      const drawerBtn = document.getElementById('drawerBtn');
+      const invertBtn = document.getElementById('invertBtn');
+      const motionBtn = document.getElementById('motionBtn');
+
+      const arrPreset = document.getElementById('arrPreset');
+      const angle = document.getElementById('angle');
+      const dotSize = document.getElementById('dotSize');
+      const gap = document.getElementById('gap');
+
+      const speedA = document.getElementById('speedA');
+      const speedB = document.getElementById('speedB');
+      const shiftX = document.getElementById('shiftX');
+      const shiftY = document.getElementById('shiftY');
+
+      const contrast = document.getElementById('contrast');
+      const grain = document.getElementById('grain');
+      const alphaA = document.getElementById('alphaA');
+      const alphaB = document.getElementById('alphaB');
+
+      const colorPreset = document.getElementById('colorPreset');
+      const bg = document.getElementById('bg');
+      const fg = document.getElementById('fg');
+      const dotA = document.getElementById('dotA');
+      const dotB = document.getElementById('dotB');
+      const resetBtn = document.getElementById('resetBtn');
+
+      const lightsEl = document.getElementById('lights');
+      const lamps = Array.from(lightsEl.querySelectorAll('.lamp'));
+
+      let inverted = false;
+      let motionOff = false;
+      let lightLevel = 3; // 1..6
+
+      // ---------- DOT ARRANGEMENTS ----------
+      function setArrangement(preset){
+        // We keep everything in straight-line math. No bezier nonsense.
+        const step = (parseInt(dotSize.value,10) + parseInt(gap.value,10));
+        const half = Math.round(step / 2);
+
+        let ax=0, ay=0, bx=half, by=half;
+
+        if(preset === 'grid'){
+          ax = 0; ay = 0;
+          bx = half; by = half;
+        } else if(preset === 'offset'){
+          ax = 0; ay = 0;
+          bx = half; by = 0;
+        } else if(preset === 'diagonal'){
+          ax = 0; ay = 0;
+          bx = half; by = -half;
+        } else if(preset === 'wave'){
+          // “Wave” here = alternating offsets; still straight-line positions.
+          ax = 0; ay = 0;
+          bx = half; by = (Math.round(step * 0.25));
+        } else if(preset === 'checker'){
+          ax = 0; ay = 0;
+          bx = step; by = step;
+        } else if(preset === 'halftone'){
+          // tighter dot lattice effect
+          ax = Math.round(step * 0.15); ay = Math.round(step * 0.10);
+          bx = Math.round(step * 0.65); by = Math.round(step * 0.55);
+        }
+
+        root.style.setProperty('--arrX', ax + 'px');
+        root.style.setProperty('--arrY', ay + 'px');
+        root.style.setProperty('--arrX2', bx + 'px');
+        root.style.setProperty('--arrY2', by + 'px');
+
+        // Also update pattern type (radial) via CSS background-image assignment:
+        // We keep dot as a crisp radial circle, but allow “ring” variants per arrangement.
+        if(preset === 'halftone'){
+          fieldA.style.backgroundImage =
+            `radial-gradient(circle at center, var(--dotA) 0 42%, transparent 44% 100%)`;
+          fieldB.style.backgroundImage =
+            `radial-gradient(circle at center, var(--dotB) 0 40%, transparent 43% 100%)`;
+        } else if(preset === 'checker'){
+          fieldA.style.backgroundImage =
+            `radial-gradient(circle at center, var(--dotA) 0 46%, transparent 48% 100%)`;
+          fieldB.style.backgroundImage =
+            `radial-gradient(circle at center, var(--dotB) 0 46%, transparent 49% 100%)`;
+        } else if(preset === 'wave'){
+          // slight “ring” vibe without adding colors
+          fieldA.style.backgroundImage =
+            `radial-gradient(circle at center, var(--dotA) 0 36%, transparent 38% 54%, var(--dotA) 56% 58%, transparent 60% 100%)`;
+          fieldB.style.backgroundImage =
+            `radial-gradient(circle at center, var(--dotB) 0 34%, transparent 36% 52%, var(--dotB) 54% 56%, transparent 58% 100%)`;
+        } else {
+          fieldA.style.backgroundImage =
+            `radial-gradient(circle at center, var(--dotA) 0 48%, transparent 50% 100%)`;
+          fieldB.style.backgroundImage =
+            `radial-gradient(circle at center, var(--dotB) 0 46%, transparent 49% 100%)`;
+        }
+      }
+
+      // ---------- “NORMAL KETADATA” COLOR PRESETS ----------
+      const PRESETS = {
+        keta_mono: { bg:'#000000', fg:'#ffffff', a:'#ffffff', b:'#000000' },
+        keta_gray: { bg:'#0b0b0b', fg:'#f2f2f2', a:'#cfcfcf', b:'#0b0b0b' },
+        keta_silver:{ bg:'#000000', fg:'#f7f7f7', a:'#d9d9d9', b:'#000000' },
+        keta_pink: { bg:'#000000', fg:'#ffffff', a:'#ffffff', b:'#ff2bd6' }, // accent in dotB
+        keta_red:  { bg:'#000000', fg:'#ffffff', a:'#ffffff', b:'#ff2a2a' }, // warning accent in dotB
+      };
+
+      function applyColors(p){
+        root.style.setProperty('--bg', p.bg);
+        root.style.setProperty('--fg', p.fg);
+        root.style.setProperty('--dotA', p.a);
+        root.style.setProperty('--dotB', p.b);
+
+        bg.value = p.bg;
+        fg.value = p.fg;
+        dotA.value = p.a;
+        dotB.value = p.b;
+
+        // If we are in invert mode, we keep the invert flag but override variables.
+        // (Invert is about swapping; custom color is allowed per your request.)
+      }
+
+      // ---------- LIGHTS (1–6) ----------
+      function applyLight(level){
+        lightLevel = Math.max(1, Math.min(6, level));
+        root.style.setProperty('--light', String(lightLevel));
+
+        // Map lights to intensity only (contrast + alpha bias). No new “modes.”
+        const c = 1.02 + (lightLevel * 0.12); // 1.14..1.74
+        const aA = 0.70 + (lightLevel * 0.05); // 0.75..1.00
+        const aB = 0.60 + (lightLevel * 0.04); // 0.64..0.84
+
+        root.style.setProperty('--contrast', c.toFixed(2));
+        root.style.setProperty('--alphaA', aA.toFixed(2));
+        root.style.setProperty('--alphaB', aB.toFixed(2));
+
+        // Reflect in sliders without fighting user when they intentionally change them.
+        contrast.value = root.style.getPropertyValue('--contrast') || contrast.value;
+        alphaA.value = root.style.getPropertyValue('--alphaA') || alphaA.value;
+        alphaB.value = root.style.getPropertyValue('--alphaB') || alphaB.value;
+
+        lamps.forEach(l => {
+          const n = parseInt(l.getAttribute('data-l'),10);
+          l.classList.toggle('on', n <= lightLevel);
+        });
+      }
+
+      // ---------- Invert / Motion / Drawer ----------
+      function toggleInvert(){
+        inverted = !inverted;
+        invertBtn.setAttribute('aria-pressed', String(inverted));
+        body.classList.toggle('invert', inverted);
+      }
+
+      function toggleMotion(){
+        motionOff = !motionOff;
+        motionBtn.setAttribute('aria-pressed', String(motionOff));
+        [fieldA, fieldB].forEach(el => {
+          el.style.animationPlayState = motionOff ? 'paused' : 'running';
+        });
+      }
+
+      function toggleDrawer(){
+        const open = !drawer.classList.contains('open');
+        drawer.classList.toggle('open', open);
+        drawerBtn.setAttribute('aria-pressed', String(open));
+      }
+
+      // ---------- Bind UI ----------
+      drawerBtn.addEventListener('click', toggleDrawer);
+      invertBtn.addEventListener('click', toggleInvert);
+      motionBtn.addEventListener('click', toggleMotion);
+
+      arrPreset.addEventListener('change', () => setArrangement(arrPreset.value));
+
+      angle.addEventListener('input', () => root.style.setProperty('--angle', angle.value + 'deg'));
+      dotSize.addEventListener('input', () => {
+        root.style.setProperty('--dotSize', dotSize.value + 'px');
+        setArrangement(arrPreset.value);
+      });
+      gap.addEventListener('input', () => {
+        root.style.setProperty('--gap', gap.value + 'px');
+        setArrangement(arrPreset.value);
+      });
+
+      speedA.addEventListener('input', () => root.style.setProperty('--speedA', speedA.value + 's'));
+      speedB.addEventListener('input', () => root.style.setProperty('--speedB', speedB.value + 's'));
+      shiftX.addEventListener('input', () => root.style.setProperty('--shiftX', shiftX.value + 'px'));
+      shiftY.addEventListener('input', () => root.style.setProperty('--shiftY', shiftY.value + 'px'));
+
+      contrast.addEventListener('input', () => root.style.setProperty('--contrast', contrast.value));
+      grain.addEventListener('input', () => root.style.setProperty('--grain', grain.value));
+      alphaA.addEventListener('input', () => root.style.setProperty('--alphaA', alphaA.value));
+      alphaB.addEventListener('input', () => root.style.setProperty('--alphaB', alphaB.value));
+
+      colorPreset.addEventListener('change', () => {
+        const key = colorPreset.value;
+        if(key === 'custom') return;
+        applyColors(PRESETS[key] || PRESETS.keta_mono);
+      });
+
+      function setCustom(){
+        colorPreset.value = 'custom';
+        root.style.setProperty('--bg', bg.value);
+        root.style.setProperty('--fg', fg.value);
+        root.style.setProperty('--dotA', dotA.value);
+        root.style.setProperty('--dotB', dotB.value);
+      }
+      [bg, fg, dotA, dotB].forEach(el => el.addEventListener('input', setCustom));
+
+      resetBtn.addEventListener('click', () => {
+        colorPreset.value = 'keta_mono';
+        applyColors(PRESETS.keta_mono);
+
+        arrPreset.value = 'grid';
+        angle.value = 18; dotSize.value = 120; gap.value = 70;
+        speedA.value = 12; speedB.value = 15; shiftX.value = 720; shiftY.value = -540;
+        grain.value = 0;
+
+        root.style.setProperty('--angle', '18deg');
+        root.style.setProperty('--dotSize', '120px');
+        root.style.setProperty('--gap', '70px');
+        root.style.setProperty('--speedA', '12s');
+        root.style.setProperty('--speedB', '15s');
+        root.style.setProperty('--shiftX', '720px');
+        root.style.setProperty('--shiftY', '-540px');
+        root.style.setProperty('--grain', '0');
+
+        applyLight(3);
+        setArrangement('grid');
+      });
+
+      // Click lamps to set light level
+      lamps.forEach(l => {
+        l.style.cursor = 'pointer';
+        l.addEventListener('click', () => applyLight(parseInt(l.getAttribute('data-l'),10)));
+      });
+
+      // ---------- Hotkeys (kept minimal + canonical lights) ----------
+      window.addEventListener('keydown', (e) => {
+        const k = (e.key || '').toLowerCase();
+
+        // 1–6 lights (canonical)
+        if(!e.shiftKey && !e.metaKey && !e.ctrlKey && /^[1-6]$/.test(k)){
+          e.preventDefault();
+          applyLight(parseInt(k,10));
+          return;
+        }
+
+        // Shift+I invert (canonical)
+        if(e.shiftKey && k === 'i'){
+          e.preventDefault();
+          toggleInvert();
+          return;
+        }
+
+        // K controls drawer
+        if(!e.shiftKey && k === 'k'){
+          e.preventDefault();
+          toggleDrawer();
+          return;
+        }
+
+        // M motion
+        if(!e.shiftKey && k === 'm'){
+          e.preventDefault();
+          toggleMotion();
+          return;
+        }
+      }, { passive:false });
+
+      // ---------- Init ----------
+      // Set initial dot backgrounds
+      fieldA.style.backgroundImage =
+        `radial-gradient(circle at center, var(--dotA) 0 48%, transparent 50% 100%)`;
+      fieldB.style.backgroundImage =
+        `radial-gradient(circle at center, var(--dotB) 0 46%, transparent 49% 100%)`;
+
+      applyColors(PRESETS.keta_mono);
+      applyLight(3);
+      setArrangement('grid');
+
+      // Stamp updatedAt runtime
+      const stamp = document.getElementById('stamp');
+      try{
+        const now = new Date().toISOString();
+        stamp.textContent = stamp.textContent.replace(
+          /UPDATED_AT:\s*".*?"/,
+          `UPDATED_AT: "${now}"`
+        );
+      }catch(_){}
+    })();
+  </script>
+</body>
+</html>
