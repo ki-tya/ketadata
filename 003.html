@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1.0" />
+<title>KETADATA // DOT CAPILLARIES</title>
+
+<style>
+:root{
+  --bg:#000;
+  --dot:#fff;
+
+  /* SPARSITY + ORDER */
+  --colGap: 14;           /* px between vertical lines */
+  --rowGap: 18;           /* px between dots down the line */
+  --dotSize: 2.2;         /* px radius (flat, arial-ish) */
+  --dotSize2: 1.2;        /* secondary smaller dot */
+  --density: 0.55;        /* 0..1 chance of dot per row per column */
+  --doubleChance: 0.22;   /* chance of a paired dot */
+
+  /* MOTION (capillary flow) */
+  --speed: 26;            /* px/sec */
+  --jitterX: 0.55;        /* subtle imperfection, still ordered */
+  --jitterY: 0.65;
+
+  /* TEXTURE (flat, no glow) */
+  --trail: 0.10;          /* higher = less trail, flatter */
+  --vignette: 0.85;       /* subtle depth only */
+  --crush: 0.10;
+
+  /* UI */
+  --uiBorder: rgba(255,255,255,.16);
+  --uiText: rgba(255,255,255,.70);
+
+  --font: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, "Helvetica Neue", Helvetica, sans-serif;
+}
+
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0;
+  background:var(--bg);
+  overflow:hidden;
+}
+
+/* minimal black depth (still flat) */
+#crush{
+  position:fixed; inset:0; z-index:0;
+  pointer-events:none;
+  opacity:var(--crush);
+  background: radial-gradient(circle at 50% 55%, transparent 50%, #000 100%);
+}
+#vignette{
+  position:fixed; inset:0; z-index:1;
+  pointer-events:none;
+  opacity:var(--vignette);
+  background: radial-gradient(circle at 50% 55%, transparent 62%, #000 100%);
+}
+
+#wrap{position:fixed; inset:0; z-index:2}
+canvas{width:100%; height:100%}
+
+/* UI (simple + brutal) */
+#ui{position:fixed; inset:0; z-index:3; pointer-events:none; user-select:none; font-family:var(--font)}
+#warn{
+  position:absolute; top:12px; left:12px;
+  pointer-events:auto;
+  font-size:10px;
+  letter-spacing:.22em;
+  text-transform:uppercase;
+  color:var(--uiText);
+  padding:8px 10px;
+  border:2px solid var(--uiBorder);
+  background:rgba(0,0,0,.06);
+}
+#enter{
+  position:absolute; right:12px; bottom:12px;
+  pointer-events:auto;
+  font-size:11px;
+  letter-spacing:.26em;
+  text-transform:uppercase;
+  color:rgba(255,255,255,.72);
+  padding:10px 12px;
+  border:2px solid var(--uiBorder);
+  background:rgba(0,0,0,.05);
+  text-decoration:none;
+  transition: background .10s linear, color .10s linear, transform .10s linear;
+}
+#enter:hover{background:#fff;color:#000}
+#enter:active{transform:translateY(0px)}
+
+@media (prefers-reduced-motion: reduce){
+  #crush,#vignette{display:none}
+  canvas{display:none}
+}
+</style>
+</head>
+
+<body>
+<div id="crush" aria-hidden="true"></div>
+<div id="vignette" aria-hidden="true"></div>
+
+<div id="wrap">
+  <canvas id="c"></canvas>
+</div>
+
+<div id="ui">
+  <div id="warn">WARNING: HIGH CONTRAST</div>
+  <a id="enter" href="https://ketadata.com/index11.html">[ENTER]</a>
+</div>
+
+<script>
+/* =========================================================
+   DOT CAPILLARIES (ORDERED POLKA DOTS IN LINES)
+   - flat, sparse, arial-ish
+   - no glow, no blur
+========================================================= */
+const TARGET_URL = "https://ketadata.com/index11.html";
+const canvas = document.getElementById("c");
+const ctx = canvas.getContext("2d", { alpha:true });
+
+let w,h,dpr;
+function resize(){
+  dpr = window.devicePixelRatio || 1;
+  w = innerWidth; h = innerHeight;
+  canvas.width = Math.floor(w*dpr);
+  canvas.height = Math.floor(h*dpr);
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+}
+addEventListener("resize", resize);
+resize();
+
+function cssNum(name, fallback){
+  const v = parseFloat(getComputedStyle(document.documentElement).getPropertyValue(name));
+  return Number.isFinite(v) ? v : fallback;
+}
+
+let cols = [];
+function rebuildCols(){
+  const colGap = cssNum("--colGap", 14);
+  const n = Math.ceil(w / colGap);
+  cols = new Array(n).fill(0).map((_,i)=>({
+    x: i*colGap + (colGap/2),
+    phase: Math.random()*1000,
+    // slight per-column drift, still vertical
+    dx: (Math.random()*2-1) * 0.18
+  }));
+}
+rebuildCols();
+addEventListener("resize", rebuildCols);
+
+function circle(x,y,r){
+  ctx.beginPath();
+  ctx.arc(x,y,r,0,Math.PI*2);
+  ctx.fill();
+}
+
+let t0 = performance.now();
+
+function frame(now){
+  const dt = Math.max(0.001, (now - t0)/1000);
+  t0 = now;
+
+  const trail = cssNum("--trail", 0.10);
+  const colGap = cssNum("--colGap", 14);
+  const rowGap = cssNum("--rowGap", 18);
+  const dotSize = cssNum("--dotSize", 2.2);
+  const dotSize2 = cssNum("--dotSize2", 1.2);
+  const density = Math.max(0, Math.min(1, cssNum("--density", 0.55)));
+  const doubleChance = Math.max(0, Math.min(1, cssNum("--doubleChance", 0.22)));
+  const speed = cssNum("--speed", 26);
+  const jitterX = cssNum("--jitterX", 0.55);
+  const jitterY = cssNum("--jitterY", 0.65);
+
+  // flatter: erase more each frame
+  ctx.fillStyle = `rgba(0,0,0,${trail})`;
+  ctx.fillRect(0,0,w,h);
+
+  ctx.fillStyle = "#fff";
+  ctx.globalAlpha = 1.0;
+  ctx.globalCompositeOperation = "source-over";
+
+  // y offset scroll (capillary flow)
+  const scroll = (now/1000) * speed;
+
+  // rows to draw
+  const rows = Math.ceil(h / rowGap) + 2;
+
+  for(let ci=0; ci<cols.length; ci++){
+    const c = cols[ci];
+    const xBase = c.x + c.dx;
+
+    for(let ri=0; ri<rows; ri++){
+      // anchor rows to a grid, scroll downward
+      let y = (ri*rowGap + (scroll % rowGap)) - rowGap;
+
+      // sparse: only some grid points become dots
+      // deterministic-ish per cell so it feels ordered, not random noise
+      const seed = (ci*1315423911) ^ (ri*2654435761);
+      const r01 = Math.abs(Math.sin(seed*0.000001 + (now*0.0002))) % 1;
+
+      if(r01 < density){
+        const jx = (Math.sin(seed*0.000003 + now*0.001) * jitterX);
+        const jy = (Math.cos(seed*0.000004 + now*0.0012) * jitterY);
+
+        // primary dot
+        circle(xBase + jx, y + jy, dotSize);
+
+        // occasional paired dot (capillary “double pulse”)
+        const r02 = Math.abs(Math.cos(seed*0.000002 + now*0.0009)) % 1;
+        if(r02 < doubleChance){
+          circle(xBase + jx + (dotSize*2.1), y + jy, dotSize2);
+        }
+      }
+    }
+  }
+
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+addEventListener("keydown", (e)=>{
+  if(e.key === "Enter") location.href = TARGET_URL;
+});
+</script>
+
+<!-- ============================================================
+KETADATA HTML SERIALIZATION STAMP
+AE/EE/WB: AE
+FILE_ID: DOT_CAPILLARIES_ORDERED_V1
+ROOM_ID: COVER
+VERSION: v1
+UPDATED_AT: 2025-12-28T00:00:00-05:00
+CHANGELOG:
+- STYLE SHIFT: FLAT + SPARSE "ARIAL" VIBE (ORDERED POLKA DOT LINES)
+- NO GLOW / NO HAZE / NO BLOOM: PURE WHITE DOTS ON BLACK
+- CAPILLARY FLOW: GRID-LOCKED DOTS SCROLLING DOWN (STRAIGHT LINES)
+============================================================ -->
+</body>
+</html>
