@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1.0" />
+<title>KETADATA // LINE OCEAN // VOID</title>
+
+<style>
+:root{
+  --bg:#000;
+  --ink:#fff;
+
+  /* GRID (STRAIGHT LINES ONLY) */
+  --cols: 120;
+  --rows: 80;
+
+  /* OCEAN SHAPE */
+  --shore: 0.70;
+  --amp: 0.18;
+  --foamBand: 44;
+
+  /* MOTION */
+  --speed: 0.70;
+  --fall: 34;
+  --trail: 0.085;
+
+  /* DENSITY */
+  --waveFill: 0.62;
+  --foamFill: 0.96;
+  --whiteHot: 1.00;
+
+  /* GLYPHS */
+  --fontPx: 12;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+
+  /* UI */
+  --uiFont: Arial, Helvetica, sans-serif;
+  --uiSize: 16px;
+  --uiKern: 0.18em;
+  --uiPadY: 16px;
+  --uiPadX: 18px;
+  --uiBorder: 4px;
+}
+
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0;
+  background:#000;
+  overflow:hidden;
+}
+
+/* FIELD */
+#wrap{position:fixed; inset:0; z-index:1}
+canvas{width:100%; height:100%; image-rendering:pixelated}
+
+/* UI */
+#ui{
+  position:fixed; inset:0; z-index:2;
+  pointer-events:none;
+  user-select:none;
+  font-family:var(--uiFont);
+}
+#warn{
+  position:absolute; top:16px; left:16px;
+  pointer-events:auto;
+  font-weight:900;
+  font-size:var(--uiSize);
+  letter-spacing:var(--uiKern);
+  text-transform:uppercase;
+  color:#000;
+  background:#fff;
+  border:var(--uiBorder) solid #fff;
+  padding:var(--uiPadY) var(--uiPadX);
+  box-shadow:0 0 0 4px #000 inset;
+}
+#enter{
+  position:absolute; right:16px; bottom:16px;
+  pointer-events:auto;
+  font-weight:900;
+  font-size:var(--uiSize);
+  letter-spacing:var(--uiKern);
+  text-transform:uppercase;
+  color:#000;
+  background:#fff;
+  border:var(--uiBorder) solid #fff;
+  padding:var(--uiPadY) var(--uiPadX);
+  text-decoration:none;
+  box-shadow:0 0 0 4px #000 inset;
+  transition:transform .08s linear;
+}
+#enter:hover{transform:translateY(-2px)}
+#enter:active{transform:translateY(0)}
+
+@media (prefers-reduced-motion: reduce){
+  canvas{display:none}
+}
+</style>
+</head>
+
+<body>
+
+<div id="wrap"><canvas id="c"></canvas></div>
+
+<div id="ui">
+  <div id="warn">EPILEPSY WARNING: THIS SITE MAY CAUSE SEIZURE</div>
+  <a id="enter" href="https://ketadata.com/index11.html">ENTER</a>
+</div>
+
+<script>
+/* =========================================================
+   LINE OCEAN (NO HORIZON LINE)
+   - grid-aligned only
+   - wave implied by density only
+========================================================= */
+
+const canvas = document.getElementById("c");
+const ctx = canvas.getContext("2d", { alpha:true });
+
+let w,h,dpr;
+function resize(){
+  dpr = window.devicePixelRatio || 1;
+  w = innerWidth; h = innerHeight;
+  canvas.width = Math.floor(w*dpr);
+  canvas.height = Math.floor(h*dpr);
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+}
+addEventListener("resize", resize);
+resize();
+
+function cssNum(name,fallback){
+  const v=parseFloat(getComputedStyle(document.documentElement).getPropertyValue(name));
+  return Number.isFinite(v)?v:fallback;
+}
+function clamp01(x){return Math.max(0,Math.min(1,x))}
+function pick(a){return a[(Math.random()*a.length)|0]}
+
+function brailleDense(){
+  const r=Math.random();
+  if(r<0.72) return String.fromCharCode(0x2800+(0xC0+(Math.random()*64|0)));
+  if(r<0.985) return String.fromCharCode(0x2800+(Math.random()*256|0));
+  return String.fromCharCode(0x28FF);
+}
+const TOK=["<",">","/","=","{","}","[","]","|","K","D","T","A","0","1","#"];
+function glyph(){
+  const r=Math.random();
+  if(r<0.64) return brailleDense();
+  if(r<0.86) return pick(TOK);
+  return "█";
+}
+
+let last=performance.now();
+
+function frame(now){
+  const dt=Math.max(0.001,(now-last)/1000);
+  last=now;
+
+  const cols=Math.max(70,Math.round(cssNum("--cols",120)));
+  const rows=Math.max(50,Math.round(cssNum("--rows",80)));
+
+  const shore=clamp01(cssNum("--shore",0.70));
+  const ampPct=clamp01(cssNum("--amp",0.18));
+  const foamBand=Math.max(16,cssNum("--foamBand",44));
+
+  const speed=cssNum("--speed",0.70);
+  const fall=cssNum("--fall",34);
+  const trail=Math.max(0.02,Math.min(0.18,cssNum("--trail",0.085)));
+
+  const waveFill=clamp01(cssNum("--waveFill",0.62));
+  const foamFill=clamp01(cssNum("--foamFill",0.96));
+  const whiteHot=clamp01(cssNum("--whiteHot",1.0));
+
+  const fontPx=Math.max(10,Math.round(cssNum("--fontPx",12)));
+
+  ctx.fillStyle=`rgba(0,0,0,${trail})`;
+  ctx.fillRect(0,0,w,h);
+
+  const cellW=w/cols;
+  const cellH=h/rows;
+
+  const t=(now/1000)*speed;
+  const yDrift=((now/1000)*fall)%cellH;
+  const baseY=h*shore;
+
+  ctx.textBaseline="top";
+  ctx.font=`900 ${fontPx}px ${getComputedStyle(document.body).fontFamily}`;
+  ctx.fillStyle="#fff";
+  ctx.shadowBlur=0;
+
+  for(let cx=0;cx<cols;cx++){
+    const nx=cx/cols;
+    const crest=
+      baseY+
+      Math.sin(nx*6.0+t*1.30)*(h*ampPct*0.40)+
+      Math.sin(nx*14.0+t*0.92)*(h*ampPct*0.22)+
+      Math.sin(nx*28.0+t*0.62)*(h*ampPct*0.10);
+
+    const foamTop=crest-foamBand*0.55;
+    const foamBot=crest+foamBand*0.55;
+    const x=cx*cellW;
+
+    for(let ry=0;ry<rows;ry++){
+      const y=(ry*cellH+yDrift)-cellH;
+      if(y>foamBot) continue;
+
+      const inFoam=(y>=foamTop && y<=foamBot);
+      const p=inFoam?foamFill:waveFill;
+      if(Math.random()>p) continue;
+
+      ctx.globalAlpha=(inFoam?1.0:(0.80+Math.random()*0.20))*whiteHot;
+      ctx.fillText(glyph(),x,y);
+    }
+  }
+
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+addEventListener("keydown",e=>{
+  if(e.key==="Enter") location.href="https://ketadata.com/index11.html";
+});
+</script>
+
+<!-- ============================================================
+KETADATA HTML SERIALIZATION STAMP
+AE/EE/WB: AE
+FILE_ID: LINE_OCEAN_NO_HORIZON_V1
+ROOM_ID: COVER
+VERSION: v1
+UPDATED_AT: 2025-12-28
+CHANGELOG:
+- REMOVED HARD HORIZONTAL SHORELINE
+- WAVE BOUNDARY NOW IMPLIED BY DENSITY ONLY
+============================================================ -->
+</body>
+</html>
