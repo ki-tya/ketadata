@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1.0" />
+<title>KETADATA // WHITE-HOT CAPILLARY (VISCOSITY)</title>
+
+<style>
+:root{
+  --bg:#000;
+  --ink:#fff;
+
+  /* persistence */
+  --trail:0.026;          /* longer burn */
+  --density:1.95;         /* more activity */
+  --speed:1.06;
+
+  /* grid */
+  --font:12px;
+  --lh:14px;
+  --colW:9.15;
+
+  /* VISCOSITY / PROMINENCE */
+  --hotPasses:9;          /* more overlap draws */
+  --hotJitter:2.35;       /* more erratic overlap */
+  --hotSmear:5;           /* more vertical ooze */
+  --fatPasses:3;          /* true thickness (cluster offsets) */
+  --fatPx:1.10;
+
+  /* WHITE-HOT ALPHA */
+  --alphaMin:0.94;
+  --alphaMax:1.00;
+
+  /* burn-through etch (no glow) */
+  --etchAlpha:0.90;
+  --etchStep:1;
+
+  /* black depth */
+  --vignette:0.96;
+  --crush:0.28;
+  --grain:0.10;
+
+  --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+}
+
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0;
+  background:var(--bg);
+  color:var(--ink);
+  overflow:hidden;
+  font-family:var(--mono);
+}
+
+/* deep black clamps */
+#crush{
+  position:fixed; inset:0; z-index:0;
+  pointer-events:none;
+  opacity:var(--crush);
+  background: radial-gradient(circle at 50% 55%, transparent 38%, #000 100%);
+}
+#vignette{
+  position:fixed; inset:0; z-index:1;
+  pointer-events:none;
+  opacity:var(--vignette);
+  background: radial-gradient(circle at 50% 55%, transparent 52%, #000 100%);
+}
+#grain{
+  position:fixed; inset:0; z-index:2;
+  pointer-events:none;
+  opacity:var(--grain);
+  mix-blend-mode:overlay;
+  filter:url(#grainFilter);
+}
+
+/* field */
+#wrap{position:fixed; inset:0; z-index:3}
+canvas{
+  width:100%;
+  height:100%;
+  image-rendering:pixelated;
+}
+
+/* UI minimal */
+#ui{position:fixed; inset:0; z-index:5; pointer-events:none; user-select:none}
+#warn{
+  position:absolute; top:12px; left:12px;
+  pointer-events:auto;
+  font-size:10px;
+  letter-spacing:.22em;
+  padding:8px 10px;
+  border:2px solid rgba(255,255,255,.20);
+  color:#fff;
+  background:rgba(0,0,0,.05);
+}
+#enter{
+  position:absolute; right:12px; bottom:12px;
+  pointer-events:auto;
+  font-size:11px;
+  letter-spacing:.26em;
+  padding:10px 12px;
+  border:2px solid rgba(255,255,255,.20);
+  color:#fff;
+  text-decoration:none;
+  background:rgba(0,0,0,.05);
+}
+#enter:hover{background:#fff;color:#000}
+
+@media (prefers-reduced-motion: reduce){
+  #crush,#vignette,#grain{display:none}
+  canvas{display:none}
+}
+</style>
+</head>
+
+<body>
+<svg width="0" height="0" style="position:absolute">
+  <filter id="grainFilter">
+    <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="16"/>
+    <feColorMatrix type="matrix" values="
+      1 0 0 0 0
+      0 1 0 0 0
+      0 0 1 0 0
+      0 0 0 0.16 0"/>
+  </filter>
+</svg>
+
+<div id="crush"></div>
+<div id="vignette"></div>
+<div id="grain"></div>
+
+<div id="wrap">
+  <canvas id="c"></canvas>
+</div>
+
+<div id="ui">
+  <div id="warn">WARNING: HIGH CONTRAST</div>
+  <a id="enter" href="https://ketadata.com/index11.html">[ENTER]</a>
+</div>
+
+<script>
+/* =========================================================
+   WHITE-HOT CAPILLARY (THICK / VISCOSITY / PROMINENT)
+   - no glow
+   - straight down (column-locked)
+   - heavy overlap + fat clusters + ooze smears
+========================================================= */
+
+const TARGET_URL="https://ketadata.com/index11.html";
+const canvas=document.getElementById("c");
+const ctx=canvas.getContext("2d",{alpha:true});
+
+let w,h,dpr;
+function resize(){
+  dpr=window.devicePixelRatio||1;
+  w=innerWidth; h=innerHeight;
+  canvas.width=Math.floor(w*dpr);
+  canvas.height=Math.floor(h*dpr);
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+}
+addEventListener("resize",resize); resize();
+
+function cssNum(name,fallback){
+  const v=parseFloat(getComputedStyle(document.documentElement).getPropertyValue(name));
+  return Number.isFinite(v)?v:fallback;
+}
+
+function brailleDense(){
+  const r=Math.random();
+  if(r<0.76) return String.fromCharCode(0x2800+(0xD0+(Math.random()*48|0))); // denser
+  if(r<0.985) return String.fromCharCode(0x2800+(Math.random()*256|0));
+  return String.fromCharCode(0x28FF);
+}
+
+const colW=()=>cssNum("--colW",9.15);
+const lh =()=>cssNum("--lh",14);
+const fontPx=()=>cssNum("--font",12);
+
+let cols=0, drops=[];
+function resetDrops(){
+  cols=Math.ceil(w/colW());
+  drops=new Array(cols).fill(0).map(()=>({
+    y:Math.random()*h,
+    v:1.0+Math.random()*3.1,
+    p:Math.random()*Math.PI*2,
+    spasm:Math.random(),
+    xoff:(Math.random()<0.5?-0.20:0.20)
+  }));
+}
+resetDrops();
+addEventListener("resize",resetDrops);
+
+/* “fat cluster” offsets (thickness without rounding/glow) */
+function clusterOffsets(fatPasses, fatPx){
+  // deterministic-ish set so it looks like viscous ink, not soft halo
+  const o = [[0,0]];
+  if(fatPasses>=1) o.push([ fatPx,0],[-fatPx,0],[0, fatPx],[0,-fatPx]);
+  if(fatPasses>=2) o.push([ fatPx, fatPx],[-fatPx,-fatPx],[ fatPx,-fatPx],[-fatPx, fatPx]);
+  if(fatPasses>=3) o.push([ 2*fatPx,0],[-2*fatPx,0],[0,2*fatPx],[0,-2*fatPx]);
+  return o;
+}
+
+function tick(){
+  const trail=cssNum("--trail",0.026);
+  const density=cssNum("--density",1.95);
+  const speedMul=cssNum("--speed",1.06);
+
+  const hotPasses=Math.max(1,Math.min(14,Math.round(cssNum("--hotPasses",9))));
+  const hotJitter=cssNum("--hotJitter",2.35);
+  const hotSmear=Math.max(0,Math.min(10,Math.round(cssNum("--hotSmear",5))));
+
+  const fatPasses=Math.max(0,Math.min(4,Math.round(cssNum("--fatPasses",3))));
+  const fatPx=cssNum("--fatPx",1.10);
+  const fatO = clusterOffsets(fatPasses, fatPx);
+
+  const aMin=cssNum("--alphaMin",0.94);
+  const aMax=cssNum("--alphaMax",1.00);
+
+  const etchAlpha=cssNum("--etchAlpha",0.90);
+  const etchStep=Math.max(1,Math.round(cssNum("--etchStep",1)));
+
+  // black trail fill
+  ctx.fillStyle=`rgba(0,0,0,${trail})`;
+  ctx.fillRect(0,0,w,h);
+
+  const t=performance.now()/1000;
+  const step=Math.max(1, 1 + Math.floor(1.0/Math.max(0.42,density)));
+
+  ctx.save();
+  ctx.textBaseline="top";
+  ctx.font=`900 ${fontPx()}px ${getComputedStyle(document.body).fontFamily}`;
+  ctx.shadowBlur=0; // NO GLOW EVER
+  ctx.fillStyle="#fff";
+
+  for(let i=0;i<cols;i+=step){
+    const d=drops[i];
+    const xBase=i*colW();
+    const y=d.y;
+
+    const pulse=0.76 + 0.24*Math.sin(t*0.95 + d.p);
+    const spasmKick = (Math.random() < 0.014 + d.spasm*0.008) ? (1.35 + Math.random()*1.10) : 1.0;
+    const speed = d.v * pulse * speedMul * spasmKick;
+
+    const ch=brailleDense();
+    const hardAlpha=aMin + Math.random()*(aMax-aMin);
+
+    /* WHITE-HOT OVERLAP PASSES */
+    ctx.globalCompositeOperation="source-over";
+    for(let k=0;k<hotPasses;k++){
+      // jitter grows with pass index -> viscous turbulence
+      const j = (k+1)/hotPasses;
+      const jx = (Math.random()*2-1) * hotJitter * j;
+      const jy = (Math.random()*2-1) * (hotJitter*0.62) * j;
+      ctx.globalAlpha = hardAlpha;
+
+      // thick cluster offsets per pass
+      for(const [ox,oy] of fatO){
+        ctx.fillText(ch, xBase + d.xoff + jx + ox, y + jy + oy);
+      }
+    }
+
+    /* OOZE SMEARS: pull the same glyph up/down the column (still straight) */
+    for(let s=1;s<=hotSmear;s++){
+      if(Math.random()<0.62){
+        ctx.globalAlpha = 0.50 + Math.random()*0.45;
+        // slight deterministic offset so it reads like a river, not noise
+        const yo = (Math.random()<0.5 ? -1 : 1) * lh() * s;
+        for(const [ox,oy] of fatO.slice(0, Math.min(5, fatO.length))){
+          ctx.fillText(ch, xBase + d.xoff + ox*0.6, y + yo + oy*0.6);
+        }
+      }
+    }
+
+    /* BURN-THROUGH ETCH: harsh cut into black (difference) */
+    ctx.globalCompositeOperation="difference";
+    ctx.globalAlpha = etchAlpha;
+    // multiple etch taps to make it “eat” the void (still sharp)
+    ctx.fillText(ch, xBase + etchStep, y);
+    ctx.fillText(ch, xBase, y + etchStep);
+    if(Math.random()<0.45){
+      ctx.fillText(ch, xBase - etchStep, y);
+      ctx.fillText(ch, xBase, y - etchStep);
+    }
+    ctx.globalCompositeOperation="source-over";
+
+    d.y += lh()*speed;
+
+    if(d.y > h + 120){
+      d.y = -Math.random()*680;
+      d.v = 1.0 + Math.random()*3.6;
+      d.p = Math.random()*Math.PI*2;
+      d.spasm = Math.random();
+    }
+  }
+
+  ctx.restore();
+  requestAnimationFrame(tick);
+}
+tick();
+
+addEventListener("keydown",(e)=>{
+  if(e.key==="Enter") location.href=TARGET_URL;
+});
+</script>
+
+<!-- ============================================================
+KETADATA HTML SERIALIZATION STAMP
+AE/EE/WB: AE
+FILE_ID: BRAILLE_WHITEHOT_CAPILLARY_VISC_V2
+ROOM_ID: COVER
+VERSION: v2
+UPDATED_AT: 2025-12-28T00:00:00-05:00
+CHANGELOG:
+- THICKER: FAT CLUSTER OFFSETS + MORE HOT PASSES (PROMINENT WHITE)
+- MORE VISCOSITY: MORE SMEARS + HIGHER JITTER (ERRATIC OVERLAP)
+- STILL NO GLOW: ZERO SHADOW / ZERO BLOOM / ZERO HAZE
+- BURN-THROUGH: STRONGER DIFFERENCE ETCH MULTI-TAPS
+============================================================ -->
+</body>
+</html>
