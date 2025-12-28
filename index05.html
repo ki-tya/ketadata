@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1.0" />
+<title>KETADATA // BRAILLE FIELD (DEEP BLACK)</title>
+<style>
+  :root{
+    /* DEEP BLACK STACK */
+    --bg0:#000000;     /* absolute */
+    --bg1:#000000;     /* keep pure */
+    --pit:#020203;     /* near-black tint */
+    --void:#000;       /* void */
+
+    /* WHITE INK */
+    --fg:#ffffff;
+
+    /* TRAILS / DENSITY */
+    --trail: 0.060;         /* lower = longer persistence */
+    --density: 1.35;        /* more updates */
+    --scanOpacity: .10;     /* reduce scan so black reads deeper */
+
+    /* SEAR */
+    --glowNear: 22px;
+    --glowFar:  110px;
+
+    /* THICKNESS */
+    --inkAlphaMin: 0.80;
+    --inkAlphaMax: 1.00;
+    --fatPasses: 2;
+    --fatPx: 0.70;
+
+    /* DRIP */
+    --drip: 1;
+    --dripOpacity: .78;
+    --dripSpeed: 12.5s;
+    --gooBlur: 16px;
+
+    /* DEPTH (adds parallax-ish darkness + grain) */
+    --depth: 1;              /* 0/1 */
+    --grainOpacity: .22;
+    --vignette: .92;         /* 0..1 stronger vignette */
+    --pitPulse: 14s;         /* slow void breath */
+
+    /* typography */
+    --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    --font: 12px;
+    --lh: 14px;
+  }
+
+  *{ box-sizing:border-box; }
+  html,body{ height:100%; }
+  body{
+    margin:0;
+    background: var(--bg0);
+    color: var(--fg);
+    overflow:hidden;
+    font-family: var(--mono);
+  }
+
+  /* =========================================================
+     DEEP BLACK DEPTH STACK (makes the black feel “deeper”)
+     - multiple near-black gradients + vignette + subtle grain
+  ========================================================= */
+  #depth{
+    position:fixed; inset:0;
+    z-index:0;
+    pointer-events:none;
+    opacity: var(--depth);
+    background:
+      radial-gradient(1200px 900px at 50% 38%, rgba(255,255,255,.02), transparent 70%),
+      radial-gradient(900px 700px at 12% 82%, rgba(255,255,255,.012), transparent 72%),
+      radial-gradient(900px 700px at 88% 82%, rgba(255,255,255,.010), transparent 74%),
+      linear-gradient(180deg, var(--bg0), var(--bg1));
+  }
+  #depth::before{
+    content:"";
+    position:absolute; inset:-18%;
+    background:
+      radial-gradient(closest-side at 50% 50%, rgba(255,255,255,.020), transparent 62%),
+      conic-gradient(from 210deg, rgba(255,255,255,.010), transparent, rgba(255,255,255,.008), transparent, rgba(255,255,255,.010));
+    filter: blur(30px);
+    opacity:.55;
+    animation: voidBreath var(--pitPulse) ease-in-out infinite;
+    mix-blend-mode: overlay;
+  }
+  @keyframes voidBreath{
+    0%   { transform: translate(-1.2%,-0.8%) scale(1.00) rotate(0deg); opacity:.45; }
+    50%  { transform: translate( 1.2%, 0.8%) scale(1.02) rotate(180deg); opacity:.62; }
+    100% { transform: translate(-1.2%,-0.8%) scale(1.00) rotate(360deg); opacity:.45; }
+  }
+
+  /* vignette clamps the edges into the pit */
+  #vignette{
+    position:fixed; inset:0;
+    z-index:1;
+    pointer-events:none;
+    opacity: var(--vignette);
+    background:
+      radial-gradient(closest-side at 50% 55%, transparent 56%, rgba(0,0,0,.94) 100%),
+      radial-gradient(closest-side at 50% 0%, rgba(0,0,0,.70), transparent 55%);
+    mix-blend-mode: multiply;
+  }
+
+  /* subtle grain so black reads as “material” */
+  #grain{
+    position:fixed; inset:0;
+    z-index:2;
+    pointer-events:none;
+    opacity: var(--grainOpacity);
+    mix-blend-mode: overlay;
+    filter: url(#grainFilter);
+    background: rgba(255,255,255,.12);
+  }
+
+  /* =========================================================
+     FIELD (PURE WHITE BRAILLE/HTML STREAM)
+  ========================================================= */
+  #wrap{
+    position:fixed; inset:0;
+    z-index:3;
+  }
+  canvas#c{
+    position:absolute; inset:0;
+    width:100%; height:100%;
+  }
+
+  /* scan reduced for deeper blacks */
+  #scan{
+    position:fixed; inset:0;
+    z-index:4;
+    pointer-events:none;
+    opacity: var(--scanOpacity);
+    mix-blend-mode: overlay;
+    background:
+      repeating-linear-gradient(
+        0deg,
+        rgba(255,255,255,.08),
+        rgba(255,255,255,.08) 1px,
+        transparent 1px,
+        transparent 4px
+      ),
+      repeating-linear-gradient(
+        90deg,
+        rgba(255,255,255,.03),
+        rgba(255,255,255,.03) 1px,
+        transparent 1px,
+        transparent 64px
+      );
+    filter: blur(.4px);
+  }
+
+  /* drip glaze */
+  #drip{
+    position:fixed;
+    left:-10%;
+    top:-52px;
+    width:120%;
+    height: 170px;
+    z-index:5;
+    pointer-events:none;
+    opacity: calc(var(--dripOpacity) * var(--drip));
+    filter: blur(var(--gooBlur));
+    mix-blend-mode: screen;
+    background:
+      radial-gradient(22px 66px at 6% 84%, rgba(255,255,255,.16), transparent 74%),
+      radial-gradient(28px 84px at 16% 90%, rgba(255,255,255,.14), transparent 76%),
+      radial-gradient(22px 70px at 28% 84%, rgba(255,255,255,.16), transparent 74%),
+      radial-gradient(34px 94px at 40% 92%, rgba(255,255,255,.12), transparent 78%),
+      radial-gradient(22px 70px at 52% 84%, rgba(255,255,255,.16), transparent 74%),
+      radial-gradient(34px 98px at 64% 94%, rgba(255,255,255,.12), transparent 78%),
+      radial-gradient(22px 70px at 76% 86%, rgba(255,255,255,.16), transparent 76%),
+      radial-gradient(28px 88px at 88% 94%, rgba(255,255,255,.12), transparent 78%),
+      linear-gradient(180deg, rgba(255,255,255,.10), transparent 72%);
+    animation: dripSlide var(--dripSpeed) ease-in-out infinite;
+  }
+  @keyframes dripSlide{
+    0%   { transform: translateY(0px); opacity: calc(.58 * var(--dripOpacity) * var(--drip)); }
+    50%  { transform: translateY(16px); opacity: calc(.88 * var(--dripOpacity) * var(--drip)); }
+    100% { transform: translateY(0px); opacity: calc(.58 * var(--dripOpacity) * var(--drip)); }
+  }
+
+  /* =========================================================
+     UI (kept minimal)
+  ========================================================= */
+  #ui{
+    position:fixed; inset:0;
+    z-index:6;
+    pointer-events:none;
+    user-select:none;
+  }
+  #warn{
+    position:absolute;
+    top: 12px;
+    left: 12px;
+    pointer-events:auto;
+    font-size: 10px;
+    letter-spacing: .22em;
+    text-transform: uppercase;
+    color: rgba(255,255,255,.70);
+    padding: 9px 11px;
+    border: 2px solid rgba(255,255,255,.14);
+    background: rgba(0,0,0,.10);
+    backdrop-filter: blur(10px);
+  }
+  #enter{
+    position:absolute;
+    right: 12px;
+    bottom: 12px;
+    pointer-events:auto;
+    text-decoration:none;
+    font-size: 11px;
+    letter-spacing: .26em;
+    text-transform: uppercase;
+    color: rgba(255,255,255,.60);
+    padding: 11px 13px;
+    border: 2px solid rgba(255,255,255,.14);
+    background: rgba(0,0,0,.08);
+    backdrop-filter: blur(10px);
+    transition: color .12s linear, border-color .12s linear, transform .12s linear, background .12s linear;
+  }
+  #enter:hover{
+    color:#fff;
+    border-color: rgba(255,255,255,.34);
+    background: rgba(0,0,0,.14);
+    transform: translateY(-1px);
+  }
+  #enter:active{ transform: translateY(0px); }
+
+  textarea#payload{
+    position:absolute;
+    left:-9999px; top:-9999px;
+    width:1px; height:1px;
+    opacity:0;
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    #depth,#vignette,#grain,#scan,#drip { display:none; }
+    canvas#c{ display:none; }
+  }
+</style>
+</head>
+
+<body>
+  <!-- SVG filter for grain -->
+  <svg width="0" height="0" style="position:absolute">
+    <filter id="grainFilter">
+      <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="8" />
+      <feColorMatrix type="matrix" values="
+        1 0 0 0 0
+        0 1 0 0 0
+        0 0 1 0 0
+        0 0 0 0.22 0"/>
+    </filter>
+  </svg>
+
+  <div id="depth" aria-hidden="true"></div>
+  <div id="vignette" aria-hidden="true"></div>
+  <div id="grain" aria-hidden="true"></div>
+
+  <div id="wrap">
+    <canvas id="c"></canvas>
+  </div>
+
+  <div id="scan" aria-hidden="true"></div>
+  <div id="drip" aria-hidden="true"></div>
+
+  <div id="ui">
+    <div id="warn">WARNING: HIGH CONTRAST / FAST MOTION</div>
+    <a id="enter" href="https://ketadata.com/index11.html">[ENTER]</a>
+  </div>
+
+  <textarea id="payload" aria-hidden="true"></textarea>
+
+<script>
+/* =========================================================
+   BRAILLE CODE MATRIX — DEEP BLACK DEPTH
+========================================================= */
+const TARGET_URL = "https://ketadata.com/index11.html";
+
+function buildInnerHTML(){
+  const ts = new Date().toISOString();
+  return [
+`<!DOCTYPE html>`,
+`<html>`,
+`<head>`,
+`  <meta charset="utf-8">`,
+`  <meta name="viewport" content="width=device-width,initial-scale=1.0">`,
+`  <style>`,
+`    html,body{height:100%;margin:0;background:#000;color:#fff;font-family:ui-monospace,monospace;}`,
+`    .sig{position:fixed;left:12px;top:12px;border:2px solid rgba(255,255,255,.14);padding:9px 11px;letter-spacing:.22em;text-transform:uppercase;font-size:10px;opacity:.70;}`,
+`    .key{position:fixed;right:12px;bottom:12px;border:2px solid rgba(255,255,255,.14);padding:11px 13px;letter-spacing:.26em;text-transform:uppercase;font-size:11px;opacity:.60;}`,
+`  </style>`,
+`</head>`,
+`<body>`,
+`  <div class="sig">SIGNAL // ${ts}</div>`,
+`  <a class="key" href="${TARGET_URL}">[ENTER]</a>`,
+`</body>`,
+`</html>`
+  ].join("\n");
+}
+
+const payloadEl = document.getElementById("payload");
+payloadEl.value = buildInnerHTML();
+
+function brailleChar(){
+  const r = Math.random();
+  let code;
+  if(r < 0.55) code = 0x2800 + (0xFF & (0xC0 + (Math.random()*64|0)));
+  else if(r < 0.96) code = 0x2800 + (0xFF & (Math.random()*256|0));
+  else code = 0x28FF;
+  return String.fromCharCode(code);
+}
+
+const TOKENS = [
+  "<div>", "</div>", "<span>", "</span>", "<html>", "</html>",
+  "<head>", "</head>", "<body>", "</body>", "<style>", "</style>",
+  "<meta>", "href=", "src=", "id=", "class=",
+  "----", "------", "----------", "////////////////", "::", "==", "||", "[]", "{}",
+  "KETADATA", "STATE", "NULL", "LIGHT", "INVERT"
+];
+const pick = (a)=>a[(Math.random()*a.length)|0];
+
+const source = payloadEl.value;
+let srcIdx = 0;
+
+function nextChunk(){
+  const r = Math.random();
+  if(r < 0.26){
+    const len = 10 + (Math.random()*30|0);
+    const chunk = source.slice(srcIdx, srcIdx + len);
+    srcIdx += len;
+    if(srcIdx >= source.length) srcIdx = 0;
+    return chunk.replace(/\s/g, " ");
+  } else if(r < 0.34){
+    return pick(TOKENS);
+  } else {
+    const n = 10 + (Math.random()*26|0);
+    let s = "";
+    for(let i=0;i<n;i++) s += brailleChar();
+    return s;
+  }
+}
+
+/* Canvas */
+const canvas = document.getElementById("c");
+const ctx = canvas.getContext("2d", { alpha:true });
+
+let w,h,dpr;
+function resize(){
+  dpr = window.devicePixelRatio || 1;
+  w = window.innerWidth;
+  h = window.innerHeight;
+  canvas.width = Math.floor(w*dpr);
+  canvas.height = Math.floor(h*dpr);
+  canvas.style.width = w+"px";
+  canvas.style.height = h+"px";
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+}
+window.addEventListener("resize", resize);
+resize();
+
+const root = getComputedStyle(document.documentElement);
+const fontPx = (root.getPropertyValue("--font").trim() || "12px");
+const lh = parseFloat(root.getPropertyValue("--lh")) || 14;
+
+function cellW(){ return 9.2; }
+
+let cols = 0;
+let drops = [];
+function resetDrops(){
+  cols = Math.ceil(w / cellW());
+  drops = new Array(cols).fill(0).map(()=> ({
+    y: Math.random()*h,
+    v: 0.9 + Math.random()*2.6,
+    melt: Math.random()*0.95,
+    pulse: Math.random()*Math.PI*2
+  }));
+}
+resetDrops();
+window.addEventListener("resize", resetDrops);
+
+function cssNum(name, fallback){
+  const v = parseFloat(getComputedStyle(document.documentElement).getPropertyValue(name));
+  return Number.isFinite(v) ? v : fallback;
+}
+
+function tick(){
+  const trail = cssNum("--trail", 0.060);
+  const density = cssNum("--density", 1.35);
+
+  const glowNear = cssNum("--glowNear", 22);
+  const glowFar  = cssNum("--glowFar", 110);
+
+  const inkA0 = cssNum("--inkAlphaMin", 0.80);
+  const inkA1 = cssNum("--inkAlphaMax", 1.00);
+
+  const fatPasses = Math.max(0, Math.min(3, Math.round(cssNum("--fatPasses", 2))));
+  const fatPx = cssNum("--fatPx", 0.70);
+
+  /* deeper trails: fade with pure black */
+  ctx.fillStyle = `rgba(0,0,0,${trail})`;
+  ctx.fillRect(0,0,w,h);
+
+  ctx.save();
+  ctx.fillStyle = "#fff";
+  ctx.textBaseline = "top";
+  ctx.font = `800 ${fontPx} ${getComputedStyle(document.body).fontFamily}`;
+
+  ctx.shadowColor = "rgba(255,255,255,.62)";
+  ctx.shadowBlur = glowNear;
+
+  const step = Math.max(1, 1 + Math.floor(1.2 / Math.max(0.3, density)));
+  const t = performance.now()/1000;
+
+  for(let i=0;i<cols;i+=step){
+    const x = i * cellW();
+    const d = drops[i];
+
+    const chunk = nextChunk();
+    const sliceLen = 1 + (Math.random()*4|0);
+    const out = chunk.slice(0, sliceLen);
+
+    const wave = 0.55 + 0.55 * Math.sin(t*0.7 + d.pulse + i*0.03);
+    const visc = 0.65 + (d.melt * 0.65);
+    const speed = d.v * (0.7 + wave*0.9) * visc;
+
+    ctx.globalAlpha = inkA0 + Math.random()*(inkA1-inkA0);
+
+    ctx.fillText(out, x, d.y);
+    if(fatPasses >= 1){
+      ctx.fillText(out, x + fatPx, d.y);
+      ctx.fillText(out, x - fatPx, d.y);
+    }
+    if(fatPasses >= 2){
+      ctx.fillText(out, x, d.y + fatPx);
+      ctx.fillText(out, x, d.y - fatPx);
+    }
+    if(fatPasses >= 3){
+      ctx.fillText(out, x + fatPx, d.y + fatPx);
+      ctx.fillText(out, x - fatPx, d.y - fatPx);
+    }
+
+    if(Math.random() < 0.012){
+      ctx.globalAlpha = 0.98;
+      const b = brailleChar();
+      ctx.fillText(b, x, d.y - lh*1);
+      ctx.fillText(b, x, d.y - lh*2);
+      ctx.fillText(b, x, d.y - lh*3);
+      ctx.fillText(b, x, d.y - lh*4);
+    }
+
+    d.y += lh * speed;
+
+    if(d.y > h + 60 && Math.random() > 0.985){
+      d.y = -Math.random()*320;
+      d.v = 0.9 + Math.random()*2.8;
+      d.melt = Math.random()*0.95;
+      d.pulse = Math.random()*Math.PI*2;
+    }
+  }
+
+  /* far bloom: very subtle so blacks stay black */
+  ctx.globalCompositeOperation = "screen";
+  ctx.globalAlpha = 0.10;
+  ctx.shadowColor = "rgba(255,255,255,.34)";
+  ctx.shadowBlur = glowFar;
+  ctx.fillStyle = "rgba(255,255,255,.02)";
+  ctx.fillRect(0,0,w,h);
+
+  ctx.restore();
+  requestAnimationFrame(tick);
+}
+requestAnimationFrame(tick);
+
+window.addEventListener("keydown", (e)=>{
+  if(e.key === "Enter"){
+    window.location.href = TARGET_URL;
+  }
+});
+</script>
+
+<!-- ============================================================
+KETADATA HTML SERIALIZATION STAMP
+AE/EE/WB: AE
+FILE_ID: BRAILLE_MATRIX_COVER_DEEPBLACK_V3
+ROOM_ID: COVER
+VERSION: v3
+UPDATED_AT: 2025-12-28T00:00:00-05:00
+CHANGELOG:
+- DEEP BLACK DEPTH: VOID BREATH + VIGNETTE + GRAIN (SUBTLE) FOR BLACKER BLACK
+- REDUCED SCAN + REDUCED BLOOM SO BLACK STAYS BLACK
+- KEEP: THICK WHITE INK, DRIP GLAZE, LONG TRAILS
+============================================================ -->
+</body>
+</html>
