@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1.0" />
+<title>KETADATA // BEAD CURTAIN (INDUSTRIAL)</title>
+
+<style>
+:root{
+  --bg:#000;
+  --ink:#fff;
+
+  /* BEAD CURTAIN GRID */
+  --colGap: 16;          /* px between strands */
+  --rowGap: 14;          /* px between beads */
+  --beadW: 4.4;          /* bead block width */
+  --beadH: 3.0;          /* bead block height */
+  --beadW2: 2.2;         /* small bead width */
+  --beadH2: 2.0;         /* small bead height */
+
+  /* SPARSITY (bead curtains are not full columns) */
+  --fill: 0.62;          /* 0..1 probability bead exists per row */
+  --double: 0.26;        /* chance of side-bead */
+  --breaks: 0.10;        /* chance to “skip” a segment for harshness */
+
+  /* MOTION */
+  --speed: 64;           /* px/sec fall */
+  --strandDrift: 0.35;   /* subtle lateral vibration */
+  --beadJitterX: 0.40;   /* slight imperfection */
+  --beadJitterY: 0.55;
+
+  /* FLATNESS / CONTRAST */
+  --trail: 0.16;         /* higher = flatter (less persistence) */
+  --crush: 0.20;         /* deeper black */
+  --vignette: 0.92;      /* clamp edges */
+
+  /* “SLAVIC GOTH” INDUSTRIAL EDGE: hard lattice, not glow */
+  --gridOverlay: 0.12;   /* faint structural grid */
+  --scratch: 0.10;       /* faint vertical scratches */
+
+  /* UI */
+  --uiBorder: rgba(255,255,255,.16);
+  --uiText: rgba(255,255,255,.70);
+
+  --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+}
+
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0;
+  background:var(--bg);
+  overflow:hidden;
+}
+
+/* BLACK DEPTH (hard) */
+#crush{
+  position:fixed; inset:0; z-index:0;
+  pointer-events:none;
+  opacity:var(--crush);
+  background: radial-gradient(circle at 50% 58%, transparent 44%, #000 100%);
+  mix-blend-mode:multiply;
+}
+#vignette{
+  position:fixed; inset:0; z-index:1;
+  pointer-events:none;
+  opacity:var(--vignette);
+  background: radial-gradient(circle at 50% 58%, transparent 58%, #000 100%);
+  mix-blend-mode:multiply;
+}
+
+/* STRUCTURAL OVERLAYS (industrial, no glow) */
+#structure{
+  position:fixed; inset:0; z-index:2;
+  pointer-events:none;
+  opacity:var(--gridOverlay);
+  background:
+    repeating-linear-gradient(90deg, rgba(255,255,255,.08), rgba(255,255,255,.08) 1px, transparent 1px, transparent 64px),
+    repeating-linear-gradient(0deg, rgba(255,255,255,.05), rgba(255,255,255,.05) 1px, transparent 1px, transparent 28px);
+  mix-blend-mode:overlay;
+}
+#scratches{
+  position:fixed; inset:0; z-index:2;
+  pointer-events:none;
+  opacity:var(--scratch);
+  background:
+    repeating-linear-gradient(
+      90deg,
+      transparent,
+      transparent 23px,
+      rgba(255,255,255,.10) 24px,
+      transparent 25px,
+      transparent 71px,
+      rgba(255,255,255,.08) 72px,
+      transparent 73px
+    );
+  mix-blend-mode:overlay;
+}
+
+/* FIELD */
+#wrap{position:fixed; inset:0; z-index:3}
+canvas{width:100%; height:100%; image-rendering:pixelated}
+
+/* UI (minimal brutal) */
+#ui{position:fixed; inset:0; z-index:4; pointer-events:none; user-select:none; font-family:var(--mono)}
+#warn{
+  position:absolute; top:12px; left:12px;
+  pointer-events:auto;
+  font-size:10px;
+  letter-spacing:.22em;
+  text-transform:uppercase;
+  color:var(--uiText);
+  padding:8px 10px;
+  border:2px solid var(--uiBorder);
+  background:rgba(0,0,0,.06);
+}
+#enter{
+  position:absolute; right:12px; bottom:12px;
+  pointer-events:auto;
+  font-size:11px;
+  letter-spacing:.26em;
+  text-transform:uppercase;
+  color:rgba(255,255,255,.72);
+  padding:10px 12px;
+  border:2px solid var(--uiBorder);
+  background:rgba(0,0,0,.05);
+  text-decoration:none;
+  transition: background .10s linear, color .10s linear, transform .10s linear;
+}
+#enter:hover{background:#fff;color:#000}
+#enter:active{transform:translateY(0px)}
+
+@media (prefers-reduced-motion: reduce){
+  #crush,#vignette,#structure,#scratches{display:none}
+  canvas{display:none}
+}
+</style>
+</head>
+
+<body>
+<div id="crush" aria-hidden="true"></div>
+<div id="vignette" aria-hidden="true"></div>
+<div id="structure" aria-hidden="true"></div>
+<div id="scratches" aria-hidden="true"></div>
+
+<div id="wrap">
+  <canvas id="c"></canvas>
+</div>
+
+<div id="ui">
+  <div id="warn">WARNING: HIGH CONTRAST</div>
+  <a id="enter" href="https://ketadata.com/index11.html">[ENTER]</a>
+</div>
+
+<script>
+/* =========================================================
+   BEAD CURTAIN (BLOCKY / INDUSTRIAL / “SLAVIC GOTH”)
+   - vertical strands
+   - block beads (rects), not circles
+   - fall like bead curtains (strand phase offsets)
+   - sparse + broken segments
+========================================================= */
+
+const TARGET_URL = "https://ketadata.com/index11.html";
+const canvas = document.getElementById("c");
+const ctx = canvas.getContext("2d", { alpha:true });
+
+let w,h,dpr;
+function resize(){
+  dpr = window.devicePixelRatio || 1;
+  w = innerWidth; h = innerHeight;
+  canvas.width = Math.floor(w*dpr);
+  canvas.height = Math.floor(h*dpr);
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+}
+addEventListener("resize", resize);
+resize();
+
+function cssNum(name, fallback){
+  const v = parseFloat(getComputedStyle(document.documentElement).getPropertyValue(name));
+  return Number.isFinite(v) ? v : fallback;
+}
+
+function clamp01(x){ return Math.max(0, Math.min(1, x)); }
+
+/* deterministic-ish noise */
+function hash(n){
+  n = (n ^ 61) ^ (n >>> 16);
+  n = n + (n << 3);
+  n = n ^ (n >>> 4);
+  n = n * 0x27d4eb2d;
+  n = n ^ (n >>> 15);
+  return (n >>> 0);
+}
+function h01(n){ return (hash(n) % 1000000) / 1000000; }
+
+let strands = [];
+function rebuild(){
+  const colGap = cssNum("--colGap", 16);
+  const n = Math.ceil(w / colGap);
+  strands = new Array(n).fill(0).map((_,i)=>({
+    i,
+    x: i*colGap + colGap/2,
+    // bead curtain: each strand has its own fall phase
+    phase: Math.random()*1000,
+    // gentle lateral vibration
+    drift: (Math.random()*2-1),
+    // “industrial irregularity” per strand
+    grit: Math.random()
+  }));
+}
+rebuild();
+addEventListener("resize", rebuild);
+
+function rect(x,y,w,h){
+  ctx.fillRect(x - w/2, y - h/2, w, h);
+}
+
+let last = performance.now();
+
+function frame(now){
+  const dt = Math.max(0.001, (now - last)/1000);
+  last = now;
+
+  const trail = cssNum("--trail", 0.16);
+
+  const colGap = cssNum("--colGap", 16);
+  const rowGap = cssNum("--rowGap", 14);
+
+  const beadW  = cssNum("--beadW", 4.4);
+  const beadH  = cssNum("--beadH", 3.0);
+  const beadW2 = cssNum("--beadW2", 2.2);
+  const beadH2 = cssNum("--beadH2", 2.0);
+
+  const fill = clamp01(cssNum("--fill", 0.62));
+  const dbl  = clamp01(cssNum("--double", 0.26));
+  const breaks = clamp01(cssNum("--breaks", 0.10));
+
+  const speed = cssNum("--speed", 64);
+  const strandDrift = cssNum("--strandDrift", 0.35);
+  const jxMag = cssNum("--beadJitterX", 0.40);
+  const jyMag = cssNum("--beadJitterY", 0.55);
+
+  ctx.fillStyle = `rgba(0,0,0,${trail})`;
+  ctx.fillRect(0,0,w,h);
+
+  ctx.fillStyle = "#fff";
+  ctx.globalAlpha = 1;
+  ctx.globalCompositeOperation = "source-over";
+
+  const t = now/1000;
+  const rows = Math.ceil(h / rowGap) + 3;
+
+  for(let si=0; si<strands.length; si++){
+    const s = strands[si];
+
+    // strand-specific fall offset (bead curtain)
+    const strandOffset = (s.phase + t*speed) % rowGap;
+
+    // subtle vibration, still vertical
+    const vib = Math.sin(t*1.4 + s.phase*0.01) * strandDrift * 1.2;
+    const xBase = s.x + vib;
+
+    for(let ri=0; ri<rows; ri++){
+      const y = (ri*rowGap + strandOffset) - rowGap;
+
+      // decide whether bead exists at this grid position (ordered, sparse)
+      const seed = (s.i * 73856093) ^ (ri * 19349663);
+      const r = h01(seed);
+
+      // breaks create harsh missing segments
+      const rBreak = h01(seed ^ 0x9e3779b9);
+
+      if(rBreak < breaks) continue;
+      if(r > fill) continue;
+
+      // small “industrial jitter” but ordered
+      const jx = (h01(seed ^ 0xA53A) * 2 - 1) * jxMag;
+      const jy = (h01(seed ^ 0xC2B1) * 2 - 1) * jyMag;
+
+      rect(xBase + jx, y + jy, beadW, beadH);
+
+      // occasional side bead (like a split-link in the curtain)
+      const r2 = h01(seed ^ 0xDEADBEEF);
+      if(r2 < dbl){
+        const side = (r2 < dbl/2) ? -1 : 1;
+        rect(xBase + jx + side*(beadW*0.95 + 2.2), y + jy, beadW2, beadH2);
+      }
+
+      // occasional “staple” bead (two stacked blocks) for goth hardware feel
+      const r3 = h01(seed ^ 0xBADC0DE);
+      if(r3 < 0.10){
+        rect(xBase + jx, y + jy + (beadH*0.9), beadW2, beadH2);
+      }
+    }
+  }
+
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+addEventListener("keydown", (e)=>{
+  if(e.key === "Enter") location.href = TARGET_URL;
+});
+</script>
+
+<!-- ============================================================
+KETADATA HTML SERIALIZATION STAMP
+AE/EE/WB: AE
+FILE_ID: BEAD_CURTAIN_BLOCKY_INDUSTRIAL_V1
+ROOM_ID: COVER
+VERSION: v1
+UPDATED_AT: 2025-12-28T00:00:00-05:00
+CHANGELOG:
+- BLOCKIER: RECT BEADS (NO DOTS) + HARD LATTICE OVERLAY
+- INDUSTRIAL: GRID + SCRATCHES (NO GLOW)
+- BEAD CURTAIN MOTION: PER-STRAND PHASE OFFSETS + FALLING
+- SPARSE + BROKEN: MISSING SEGMENTS FOR “HARDWARE” FEEL
+============================================================ -->
+</body>
+</html>
