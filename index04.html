@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1.0" />
+<title>KETADATA // BRAILLE FIELD (ACID)</title>
+<style>
+  :root{
+    --bg:#000;
+    --fg:#fff;
+
+    /* ACID / SEAR (thicker, whiter, meaner) */
+    --trail: 0.075;          /* lower = longer persistence */
+    --density: 1.35;         /* more columns updated */
+    --scanOpacity: .22;
+
+    --glowNear: 22px;
+    --glowFar:  90px;
+
+    /* THICKENING */
+    --inkAlphaMin: 0.78;
+    --inkAlphaMax: 1.00;
+    --fatPasses: 2;          /* 0..3 (how many extra offset draws) */
+    --fatPx: 0.65;           /* thickness radius */
+
+    /* DRIP */
+    --drip: 1;               /* 0/1 */
+    --dripOpacity: .72;
+    --dripSpeed: 10.5s;      /* slower = heavier */
+    --gooBlur: 14px;
+
+    /* typography */
+    --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    --font: 12px;
+    --lh: 14px;
+    --ls: .16em;
+  }
+
+  *{ box-sizing:border-box; }
+  html,body{ height:100%; }
+  body{
+    margin:0;
+    background: var(--bg);
+    color: var(--fg);
+    overflow:hidden;
+    font-family: var(--mono);
+  }
+
+  /* =========================================================
+     FIELD (PURE WHITE CODE ON BLACK)
+  ========================================================= */
+  #wrap{
+    position:fixed; inset:0;
+    z-index:1;
+  }
+  canvas#c{
+    position:absolute; inset:0;
+    width:100%; height:100%;
+  }
+
+  /* ACID HAZE (slow, thick) */
+  #acidHaze{
+    position:fixed; inset:0;
+    z-index:2;
+    pointer-events:none;
+    mix-blend-mode: screen;
+    opacity:.55;
+    background:
+      radial-gradient(900px 700px at 20% 18%, rgba(255,255,255,.10), transparent 70%),
+      radial-gradient(1000px 760px at 84% 28%, rgba(255,255,255,.08), transparent 74%),
+      radial-gradient(1000px 900px at 50% 92%, rgba(255,255,255,.08), transparent 72%),
+      linear-gradient(180deg, rgba(255,255,255,.03), transparent 50%, rgba(255,255,255,.03));
+    filter: blur(18px);
+  }
+  #acidHaze::after{
+    content:"";
+    position:absolute; inset:-18%;
+    background:
+      conic-gradient(from 180deg,
+        rgba(255,255,255,.08),
+        transparent,
+        rgba(255,255,255,.06),
+        transparent,
+        rgba(255,255,255,.07));
+    opacity:.75;
+    filter: blur(28px);
+    animation: hazeDrift 14s linear infinite;
+  }
+  @keyframes hazeDrift{
+    from{ transform: translate(-2%,-1%) rotate(0deg); }
+    to  { transform: translate( 2%, 1%) rotate(360deg); }
+  }
+
+  /* subtle brutal scan lattice */
+  #scan{
+    position:fixed; inset:0;
+    z-index:3;
+    pointer-events:none;
+    opacity: var(--scanOpacity);
+    mix-blend-mode: overlay;
+    background:
+      repeating-linear-gradient(
+        0deg,
+        rgba(255,255,255,.10),
+        rgba(255,255,255,.10) 1px,
+        transparent 1px,
+        transparent 3px
+      ),
+      repeating-linear-gradient(
+        90deg,
+        rgba(255,255,255,.04),
+        rgba(255,255,255,.04) 1px,
+        transparent 1px,
+        transparent 56px
+      );
+    filter: blur(.35px);
+  }
+
+  /* DRIP GLAZE (acid on glass) */
+  #drip{
+    position:fixed;
+    left:-10%;
+    top:-46px;
+    width:120%;
+    height: 160px;
+    z-index:4;
+    pointer-events:none;
+    opacity: calc(var(--dripOpacity) * var(--drip));
+    filter: blur(var(--gooBlur));
+    mix-blend-mode: screen;
+    background:
+      radial-gradient(22px 60px at 6% 84%, rgba(255,255,255,.18), transparent 72%),
+      radial-gradient(26px 74px at 16% 88%, rgba(255,255,255,.16), transparent 74%),
+      radial-gradient(22px 64px at 28% 84%, rgba(255,255,255,.18), transparent 72%),
+      radial-gradient(30px 84px at 40% 90%, rgba(255,255,255,.14), transparent 76%),
+      radial-gradient(22px 64px at 52% 84%, rgba(255,255,255,.18), transparent 72%),
+      radial-gradient(32px 88px at 64% 92%, rgba(255,255,255,.14), transparent 76%),
+      radial-gradient(22px 64px at 76% 86%, rgba(255,255,255,.18), transparent 74%),
+      radial-gradient(26px 78px at 88% 92%, rgba(255,255,255,.14), transparent 76%),
+      linear-gradient(180deg, rgba(255,255,255,.12), transparent 72%);
+    animation: dripSlide var(--dripSpeed) ease-in-out infinite;
+  }
+  @keyframes dripSlide{
+    0%   { transform: translateY(0px); opacity: calc(.62 * var(--dripOpacity) * var(--drip)); }
+    50%  { transform: translateY(14px); opacity: calc(.86 * var(--dripOpacity) * var(--drip)); }
+    100% { transform: translateY(0px); opacity: calc(.62 * var(--dripOpacity) * var(--drip)); }
+  }
+
+  /* =========================================================
+     UI (SIMPLE + BRUTALIST, THICKER / WHITER)
+  ========================================================= */
+  #ui{
+    position:fixed; inset:0;
+    z-index:6;
+    pointer-events:none;
+    user-select:none;
+  }
+  #warn{
+    position:absolute;
+    top: 12px;
+    left: 12px;
+    pointer-events:auto;
+    font-size: 10px;
+    letter-spacing: .22em;
+    text-transform: uppercase;
+    color: rgba(255,255,255,.78);
+    padding: 9px 11px;
+    border: 2px solid rgba(255,255,255,.18);
+    background: rgba(0,0,0,.10);
+    backdrop-filter: blur(10px);
+    box-shadow: 0 0 42px rgba(255,255,255,.06);
+  }
+  #enter{
+    position:absolute;
+    right: 12px;
+    bottom: 12px;
+    pointer-events:auto;
+    text-decoration:none;
+    font-size: 11px;
+    letter-spacing: .26em;
+    text-transform: uppercase;
+    color: rgba(255,255,255,.64);
+    padding: 11px 13px;
+    border: 2px solid rgba(255,255,255,.18);
+    background: rgba(0,0,0,.08);
+    backdrop-filter: blur(10px);
+    transition: color .12s linear, border-color .12s linear, transform .12s linear, background .12s linear;
+    box-shadow:
+      0 0 0 1px rgba(0,0,0,.35) inset,
+      0 0 60px rgba(255,255,255,.06);
+  }
+  #enter:hover{
+    color:#fff;
+    border-color: rgba(255,255,255,.38);
+    background: rgba(0,0,0,.14);
+    transform: translateY(-1px);
+  }
+  #enter:active{ transform: translateY(0px); }
+
+  /* =========================================================
+     HIDDEN "HTML INSIDE HTML" (GENERATED TEXT PAYLOAD)
+  ========================================================= */
+  textarea#payload{
+    position:absolute;
+    left:-9999px; top:-9999px;
+    width:1px; height:1px;
+    opacity:0;
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    #acidHaze, #scan, #drip { display:none; }
+    canvas#c{ display:none; }
+  }
+</style>
+</head>
+
+<body>
+  <div id="wrap">
+    <canvas id="c"></canvas>
+  </div>
+
+  <div id="acidHaze" aria-hidden="true"></div>
+  <div id="scan" aria-hidden="true"></div>
+  <div id="drip" aria-hidden="true"></div>
+
+  <div id="ui">
+    <div id="warn">WARNING: HIGH CONTRAST / FAST MOTION</div>
+    <a id="enter" href="https://ketadata.com/index11.html">[ENTER]</a>
+  </div>
+
+  <textarea id="payload" aria-hidden="true"></textarea>
+
+<script>
+/* =========================================================
+   BRAILLE CODE MATRIX — ACID WHITE (THICK / DRIPPING / SEARING)
+========================================================= */
+
+const TARGET_URL = "https://ketadata.com/index11.html";
+
+/* inner HTML doc string (source material) */
+function buildInnerHTML(){
+  const ts = new Date().toISOString();
+  return [
+`<!DOCTYPE html>`,
+`<html>`,
+`<head>`,
+`  <meta charset="utf-8">`,
+`  <meta name="viewport" content="width=device-width,initial-scale=1.0">`,
+`  <style>`,
+`    html,body{height:100%;margin:0;background:#000;color:#fff;font-family:ui-monospace,monospace;}`,
+`    .sig{position:fixed;left:12px;top:12px;border:2px solid rgba(255,255,255,.18);padding:9px 11px;letter-spacing:.22em;text-transform:uppercase;font-size:10px;opacity:.78;}`,
+`    .key{position:fixed;right:12px;bottom:12px;border:2px solid rgba(255,255,255,.18);padding:11px 13px;letter-spacing:.26em;text-transform:uppercase;font-size:11px;}`,
+`  </style>`,
+`</head>`,
+`<body>`,
+`  <div class="sig">BAD GATEWAY // SIGNAL // ${ts}</div>`,
+`  <a class="key" href="${TARGET_URL}">[ENTER]</a>`,
+`</body>`,
+`</html>`
+  ].join("\n");
+}
+
+const payloadEl = document.getElementById("payload");
+payloadEl.value = buildInnerHTML();
+
+/* Braille: U+2800..U+28FF */
+function brailleChar(){
+  const r = Math.random();
+  let code;
+  if(r < 0.50) code = 0x2800 + (0xFF & (0xC0 + (Math.random()*64|0))); // denser bias
+  else if(r < 0.94) code = 0x2800 + (0xFF & (Math.random()*256|0));
+  else code = 0x28FF;
+  return String.fromCharCode(code);
+}
+
+const TOKENS = [
+  "<div>", "</div>", "<span>", "</span>", "<html>", "</html>",
+  "<head>", "</head>", "<body>", "</body>", "<style>", "</style>",
+  "<meta>", "</meta>", "href=", "src=", "id=", "class=",
+  "----", "------", "----------", "////////////////", "::", "==", "||", "[]", "{}",
+  "KETADATA", "NO_DRIFT", "STATE", "NULL", "LIGHT", "INVERT"
+];
+
+function pick(a){ return a[(Math.random()*a.length)|0]; }
+
+const source = payloadEl.value;
+let srcIdx = 0;
+
+function nextChunk(){
+  const r = Math.random();
+  if(r < 0.26){
+    const len = 10 + (Math.random()*30|0);
+    const chunk = source.slice(srcIdx, srcIdx + len);
+    srcIdx += len;
+    if(srcIdx >= source.length) srcIdx = 0;
+    return chunk.replace(/\s/g, " ");
+  } else if(r < 0.34){
+    return pick(TOKENS);
+  } else {
+    const n = 10 + (Math.random()*26|0);
+    let s = "";
+    for(let i=0;i<n;i++) s += brailleChar();
+    return s;
+  }
+}
+
+/* Canvas */
+const canvas = document.getElementById("c");
+const ctx = canvas.getContext("2d", { alpha: true });
+
+let w,h,dpr;
+function resize(){
+  dpr = window.devicePixelRatio || 1;
+  w = window.innerWidth;
+  h = window.innerHeight;
+  canvas.width = Math.floor(w*dpr);
+  canvas.height = Math.floor(h*dpr);
+  canvas.style.width = w+"px";
+  canvas.style.height = h+"px";
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+}
+window.addEventListener("resize", resize);
+resize();
+
+const root = getComputedStyle(document.documentElement);
+const fontPx = (root.getPropertyValue("--font").trim() || "12px");
+const lh = parseFloat(root.getPropertyValue("--lh")) || 14;
+const ls = root.getPropertyValue("--ls").trim() || ".16em";
+
+/* approximate mono cell width */
+function cellW(){ return 9.2; }
+
+let cols = 0;
+let drops = [];
+function resetDrops(){
+  cols = Math.ceil(w / cellW());
+  drops = new Array(cols).fill(0).map(()=> ({
+    y: Math.random()*h,
+    v: 0.9 + Math.random()*2.4,      // base fall speed
+    melt: Math.random()*0.9,         // “viscous” variation
+    pulse: Math.random()*Math.PI*2
+  }));
+}
+resetDrops();
+window.addEventListener("resize", resetDrops);
+
+/* thickness controls */
+function cssNum(name, fallback){
+  const v = parseFloat(getComputedStyle(document.documentElement).getPropertyValue(name));
+  return Number.isFinite(v) ? v : fallback;
+}
+
+function tick(){
+  const trail = cssNum("--trail", 0.075);
+  const density = cssNum("--density", 1.35);
+
+  const glowNear = cssNum("--glowNear", 22);
+  const glowFar  = cssNum("--glowFar",  90);
+
+  const inkA0 = cssNum("--inkAlphaMin", 0.78);
+  const inkA1 = cssNum("--inkAlphaMax", 1.00);
+
+  const fatPasses = Math.max(0, Math.min(3, Math.round(cssNum("--fatPasses", 2))));
+  const fatPx = cssNum("--fatPx", 0.65);
+
+  /* persistent trail */
+  ctx.fillStyle = `rgba(0,0,0,${trail})`;
+  ctx.fillRect(0,0,w,h);
+
+  /* set ink */
+  ctx.save();
+  ctx.fillStyle = "#fff";
+  ctx.textBaseline = "top";
+  ctx.font = `700 ${fontPx} ${getComputedStyle(document.body).fontFamily}`;
+
+  /* SEARING GLOW */
+  ctx.shadowColor = "rgba(255,255,255,.62)";
+  ctx.shadowBlur = glowNear;
+
+  /* update step: smaller step = more columns updated */
+  const step = Math.max(1, 1 + Math.floor(1.2 / Math.max(0.3, density)));
+
+  const t = performance.now()/1000;
+
+  for(let i=0;i<cols;i+=step){
+    const x = i * cellW();
+    const d = drops[i];
+
+    const chunk = nextChunk();
+    const sliceLen = 1 + (Math.random()*4|0);
+    const out = chunk.slice(0, sliceLen);
+
+    /* viscous speed modulation (slower + heavier in waves) */
+    const wave = 0.55 + 0.55 * Math.sin(t*0.7 + d.pulse + i*0.03);
+    const visc = 0.65 + (d.melt * 0.65);
+    const speed = d.v * (0.7 + wave*0.9) * visc;
+
+    /* alpha */
+    ctx.globalAlpha = inkA0 + Math.random()*(inkA1-inkA0);
+
+    /* THICKEN: draw multiple offset passes */
+    ctx.fillText(out, x, d.y);
+    if(fatPasses >= 1){
+      ctx.fillText(out, x + fatPx, d.y);
+      ctx.fillText(out, x - fatPx, d.y);
+    }
+    if(fatPasses >= 2){
+      ctx.fillText(out, x, d.y + fatPx);
+      ctx.fillText(out, x, d.y - fatPx);
+    }
+    if(fatPasses >= 3){
+      ctx.fillText(out, x + fatPx, d.y + fatPx);
+      ctx.fillText(out, x - fatPx, d.y - fatPx);
+    }
+
+    /* ACID BURN BLASTS (bigger, thicker) */
+    if(Math.random() < 0.012){
+      ctx.globalAlpha = 0.98;
+      const b = brailleChar();
+      ctx.fillText(b, x, d.y - lh*1);
+      ctx.fillText(b, x, d.y - lh*2);
+      ctx.fillText(b, x, d.y - lh*3);
+      ctx.fillText(b, x, d.y - lh*4);
+    }
+
+    /* fall */
+    d.y += lh * speed;
+
+    /* wrap */
+    if(d.y > h + 60 && Math.random() > 0.985){
+      d.y = -Math.random()*320;
+      d.v = 0.9 + Math.random()*2.6;
+      d.melt = Math.random()*0.95;
+      d.pulse = Math.random()*Math.PI*2;
+    }
+  }
+
+  /* second pass: FAR GLOW BLOOM (screen) */
+  ctx.globalCompositeOperation = "screen";
+  ctx.globalAlpha = 0.16;
+  ctx.shadowColor = "rgba(255,255,255,.38)";
+  ctx.shadowBlur = glowFar;
+  // light bloom sweep (no extra geometry; just a faint pass of the whole canvas)
+  // Achieved by drawing a translucent rect with blur via shadow.
+  ctx.fillStyle = "rgba(255,255,255,.02)";
+  ctx.fillRect(0,0,w,h);
+
+  ctx.restore();
+  requestAnimationFrame(tick);
+}
+requestAnimationFrame(tick);
+
+/* Enter key routes */
+window.addEventListener("keydown", (e)=>{
+  if(e.key === "Enter"){
+    window.location.href = TARGET_URL;
+  }
+});
+</script>
+
+<!-- ============================================================
+KETADATA HTML SERIALIZATION STAMP
+AE/EE/WB: AE
+FILE_ID: BRAILLE_MATRIX_COVER_ACID_V2
+ROOM_ID: COVER
+VERSION: v2
+UPDATED_AT: 2025-12-28T00:00:00-05:00
+CHANGELOG:
+- THICKER INK: MULTI-PASS OFFSET DRAWS (FAT PASSES) FOR VISCOSITY
+- SEARING WHITE: BIGGER GLOW + FAR BLOOM PASS
+- DRIP GLAZE: ACID DRIP LAYER AT TOP (TOGGLE VIA --drip)
+- ACID HAZE: SLOW SCREEN-BLENDED FIELD
+- UI: THICKER BORDERS + WHITER TEXT, STILL BRUTALIST
+============================================================ -->
+</body>
+</html>
