@@ -1,0 +1,718 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>KETADATA // WIDE FIELD EXPLOSION</title>
+<style>
+:root{
+  --bg:#000;
+  --fg:#fff;
+
+  --invert:0;
+  --null:0;
+
+  /* Explosion controls */
+  --count: 180;          /* number of shards */
+  --vel: 1.0;            /* global velocity multiplier */
+  --spin: 1.0;           /* global spin multiplier */
+  --zoom: 1.0;           /* global scale */
+  --jitter: 0.55;        /* 0..1 micro noise */
+  --trail: 0.22;         /* 0..1 alpha for persistence */
+  --grain: 0.06;         /* 0..0.12 */
+  --flash: 0.0;          /* 0..1 */
+
+  /* “Normal KETADATA” accents (UI only) */
+  --uiBg: rgba(0,0,0,0.58);
+  --uiLine: var(--fg);
+}
+
+/* RESET */
+*{box-sizing:border-box;}
+html,body{margin:0;height:100%;overflow:hidden;background:var(--bg);color:var(--fg);font-family:Arial,Helvetica,sans-serif;}
+canvas{position:fixed;inset:0;display:block;}
+
+/* HUD */
+#hud{
+  position:fixed;
+  top:0;left:0;right:0;
+  padding:10px 12px;
+  border-bottom:2px solid var(--uiLine);
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  background:var(--uiBg);
+  backdrop-filter: blur(2px);
+  z-index:10;
+}
+.left,.right{display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
+.tag{
+  border:2px solid var(--uiLine);
+  padding:6px 10px;
+  font-weight:900;
+  letter-spacing:0.12em;
+  font-size:11px;
+  text-transform:uppercase;
+  user-select:none;
+}
+.btn{
+  border:2px solid var(--uiLine);
+  background:transparent;
+  color:var(--fg);
+  padding:6px 10px;
+  font-weight:900;
+  letter-spacing:0.12em;
+  font-size:11px;
+  cursor:pointer;
+  text-transform:uppercase;
+  border-radius:0;
+}
+.btn[aria-pressed="true"]{background:var(--fg);color:var(--bg);}
+.btn:active{transform:translateY(1px);}
+
+/* Lights 1–6 */
+.lights{display:flex;gap:6px;align-items:center;}
+.lamp{width:18px;height:18px;border:2px solid var(--uiLine);background:transparent;}
+.lamp.on{background:var(--fg);}
+
+/* Controls Drawer */
+#drawer{
+  position:fixed;
+  top:54px;
+  right:12px;
+  width:min(560px, calc(100vw - 24px));
+  border:2px solid var(--uiLine);
+  background:rgba(0,0,0,0.72);
+  z-index:11;
+  padding:10px;
+  display:none;
+}
+body.invert #drawer{background:rgba(255,255,255,0.72);}
+#drawer.open{display:block;}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.panel{border:1px solid rgba(255,255,255,0.25);padding:10px;}
+body.invert .panel{border-color:rgba(0,0,0,0.25);}
+.panel h3{
+  margin:0 0 10px 0;
+  font-size:12px;
+  font-weight:900;
+  letter-spacing:0.10em;
+  text-transform:uppercase;
+}
+.control{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:8px 0;}
+.control label{
+  font-size:11px;
+  font-weight:900;
+  letter-spacing:0.10em;
+  text-transform:uppercase;
+  opacity:0.9;
+  user-select:none;
+}
+select,input[type="range"]{
+  width:58%;
+  border:2px solid var(--uiLine);
+  background:transparent;
+  color:var(--fg);
+  padding:6px 8px;
+  border-radius:0;
+  outline:none;
+  font:800 12px/1 Arial,Helvetica,sans-serif;
+  letter-spacing:0.08em;
+  text-transform:uppercase;
+}
+input[type="range"]{padding:0;height:28px;}
+option{background:#000;color:#fff;}
+body.invert option{background:#fff;color:#000;}
+
+/* Grain */
+#grain{
+  position:fixed;inset:0;pointer-events:none;z-index:5;
+  opacity:var(--grain);
+  mix-blend-mode:overlay;
+  background-image:
+    repeating-linear-gradient(0deg, rgba(255,255,255,.12) 0 1px, transparent 1px 2px),
+    repeating-linear-gradient(90deg, rgba(255,255,255,.10) 0 1px, transparent 1px 3px);
+}
+
+/* NULL */
+body.null #hud,
+body.null #drawer,
+body.null #grain{
+  opacity:0;
+  pointer-events:none;
+}
+
+/* INVERT */
+body.invert{
+  --bg:#fff;
+  --fg:#000;
+  --uiBg: rgba(255,255,255,0.58);
+  background:var(--bg);
+  color:var(--fg);
+}
+
+/* Stamp */
+#stamp{
+  position:fixed;
+  bottom:10px;
+  left:12px;
+  right:12px;
+  z-index:10;
+  font: 800 10px/1.25 Arial, Helvetica, sans-serif;
+  letter-spacing:0.08em;
+  text-transform:uppercase;
+  opacity:0.85;
+  mix-blend-mode:difference;
+  white-space:pre-wrap;
+  pointer-events:auto;
+}
+body.null #stamp{opacity:0;}
+</style>
+</head>
+
+<body>
+<canvas id="c"></canvas>
+<div id="grain" aria-hidden="true"></div>
+
+<div id="hud">
+  <div class="left">
+    <div class="tag">KETADATA</div>
+    <div class="tag">WIDE FIELD EXPLOSION</div>
+    <div class="lights" id="lights" title="LIGHTS 1–6 (hotkeys 1..6)">
+      <span class="lamp" data-l="1"></span>
+      <span class="lamp" data-l="2"></span>
+      <span class="lamp" data-l="3"></span>
+      <span class="lamp" data-l="4"></span>
+      <span class="lamp" data-l="5"></span>
+      <span class="lamp" data-l="6"></span>
+    </div>
+  </div>
+
+  <div class="right">
+    <button class="btn" id="drawerBtn" aria-pressed="false" title="Controls (K)">Controls</button>
+    <button class="btn" id="invertBtn" aria-pressed="false" title="Invert (Shift+I)">Invert</button>
+    <button class="btn" id="nullBtn" aria-pressed="false" title="NULL (Shift+N)">NULL</button>
+    <button class="btn" id="regenBtn" title="Regenerate (R)">Regenerate</button>
+  </div>
+</div>
+
+<div id="drawer">
+  <div class="grid">
+    <div class="panel">
+      <h3>Explosion</h3>
+      <div class="control"><label for="count">Count</label><input id="count" type="range" min="40" max="420" value="180"></div>
+      <div class="control"><label for="vel">Velocity</label><input id="vel" type="range" min="0.2" max="3.0" step="0.01" value="1.0"></div>
+      <div class="control"><label for="spin">Spin</label><input id="spin" type="range" min="0.0" max="3.0" step="0.01" value="1.0"></div>
+      <div class="control"><label for="zoom">Zoom</label><input id="zoom" type="range" min="0.6" max="1.8" step="0.01" value="1.0"></div>
+      <div class="control"><label for="jitter">Jitter</label><input id="jitter" type="range" min="0" max="1" step="0.01" value="0.55"></div>
+    </div>
+
+    <div class="panel">
+      <h3>Persistence</h3>
+      <div class="control"><label for="trail">Trail</label><input id="trail" type="range" min="0.02" max="0.65" step="0.01" value="0.22"></div>
+      <div class="control"><label for="grainCtl">Grain</label><input id="grainCtl" type="range" min="0" max="0.12" step="0.01" value="0.06"></div>
+      <div class="control"><label for="flash">Flash</label><input id="flash" type="range" min="0" max="1" step="0.01" value="0"></div>
+      <div class="control"><label for="mode">Arrangement</label>
+        <select id="mode">
+          <option value="burst">Burst (Default)</option>
+          <option value="spray">Spray</option>
+          <option value="orbital">Orbital</option>
+          <option value="shatter">Shatter Grid</option>
+          <option value="storm">Storm</option>
+          <option value="void">Void Inhale</option>
+        </select>
+      </div>
+      <div class="control"><label for="reset">Reset</label><button class="btn" id="resetBtn" type="button">Default</button></div>
+    </div>
+  </div>
+</div>
+
+<div id="stamp">
+AE: WIDE_FIELD_FRAGMENTATION + TRAIL_PERSISTENCE + GRAIN<br/>
+EE: USER_SET_ALGO + LIGHTS_1_6 + INVERT + NULL + REGEN<br/>
+WB: SINGLE_FILE_HTML<br/><br/>
+FILE_ID: "KETA_WIDE_FIELD_EXPLOSION"<br/>
+ROOM_ID: "NULL"<br/>
+VERSION_ID: "V1"<br/>
+UPDATED_AT: "<span id="ts"></span>"<br/>
+CHANGELOG: "WIDE FIELD — NO CENTER / NO QUESTIONS / MAX DISPERSION"
+</div>
+
+<script>
+(() => {
+  const body = document.body;
+  const root = document.documentElement;
+  const canvas = document.getElementById('c');
+  const ctx = canvas.getContext('2d', { alpha: false });
+
+  // UI
+  const drawer = document.getElementById('drawer');
+  const drawerBtn = document.getElementById('drawerBtn');
+  const invertBtn = document.getElementById('invertBtn');
+  const nullBtn = document.getElementById('nullBtn');
+  const regenBtn = document.getElementById('regenBtn');
+
+  const countEl = document.getElementById('count');
+  const velEl = document.getElementById('vel');
+  const spinEl = document.getElementById('spin');
+  const zoomEl = document.getElementById('zoom');
+  const jitterEl = document.getElementById('jitter');
+
+  const trailEl = document.getElementById('trail');
+  const grainEl = document.getElementById('grain');
+  const grainCtlEl = document.getElementById('grainCtl');
+  const flashEl = document.getElementById('flash');
+  const modeEl = document.getElementById('mode');
+  const resetBtn = document.getElementById('resetBtn');
+
+  const lightsEl = document.getElementById('lights');
+  const lamps = Array.from(lightsEl.querySelectorAll('.lamp'));
+
+  // State (literal interface memory, local only)
+  const STORAGE_KEY = 'KETA_WIDE_FIELD_EXPLOSION_V1_STATE';
+  const defaultState = {
+    count: 180, vel: 1.0, spin: 1.0, zoom: 1.0, jitter: 0.55,
+    trail: 0.22, grain: 0.06, flash: 0.0, mode: 'burst',
+    invert: false, nullMode: false, drawerOpen: false, light: 3
+  };
+  let S = loadState();
+
+  // Shards
+  let W=0,H=0, cx=0, cy=0, dpr=1;
+  let shards = [];
+  let t = 0;
+
+  function resize(){
+    dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+    W = Math.floor(window.innerWidth);
+    H = Math.floor(window.innerHeight);
+    canvas.width = Math.floor(W*dpr);
+    canvas.height = Math.floor(H*dpr);
+    canvas.style.width = W + 'px';
+    canvas.style.height = H + 'px';
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    cx = W/2;
+    cy = H/2;
+  }
+  window.addEventListener('resize', resize);
+
+  // Utils
+  const rnd = (a=1)=>Math.random()*a;
+  const rnda = (a=1)=> (Math.random()*2-1)*a;
+  function clamp(x,a,b){ return Math.max(a, Math.min(b, x)); }
+  function lerp(a,b,u){ return a + (b-a)*u; }
+
+  // Visual primitives (strict B/W, “normal KETADATA”)
+  function bgCol(){ return getComputedStyle(root).getPropertyValue('--bg').trim() || '#000'; }
+  function fgCol(){ return getComputedStyle(root).getPropertyValue('--fg').trim() || '#fff'; }
+
+  // Modes define initial velocity fields and constraints
+  function initShards(){
+    const n = S.count;
+    shards = new Array(n);
+    const z = S.zoom;
+    const baseV = 140 * S.vel;
+
+    for(let i=0;i<n;i++){
+      const a = rnd(Math.PI*2);
+      const r = Math.pow(rnd(1), 0.35) * Math.min(W,H) * 0.22 * z;
+
+      let x = cx + Math.cos(a)*r;
+      let y = cy + Math.sin(a)*r;
+
+      // Shape: mix of rectangles, lines, rings
+      const kind = rnd();
+      const size = lerp(8, 70, Math.pow(rnd(), 0.55)) * z;
+      const w = size * lerp(0.35, 1.6, rnd());
+      const h = size * lerp(0.25, 1.8, rnd());
+
+      // Velocity field per mode
+      let vx=0, vy=0;
+      const mode = S.mode;
+
+      if(mode === 'burst'){
+        vx = Math.cos(a) * baseV * (0.35 + rnd(1.25));
+        vy = Math.sin(a) * baseV * (0.35 + rnd(1.25));
+      } else if(mode === 'spray'){
+        const a2 = lerp(-0.35, 0.35, rnd()) + (-Math.PI/6);
+        vx = Math.cos(a2) * baseV * (0.5 + rnd(1.4));
+        vy = Math.sin(a2) * baseV * (0.5 + rnd(1.4));
+        x = cx + rnda(40); y = cy + rnda(40);
+      } else if(mode === 'orbital'){
+        // tangential + slight radial
+        vx = -Math.sin(a) * baseV * (0.4 + rnd(1.0));
+        vy =  Math.cos(a) * baseV * (0.4 + rnd(1.0));
+        vx += Math.cos(a) * baseV * 0.15;
+        vy += Math.sin(a) * baseV * 0.15;
+      } else if(mode === 'shatter'){
+        // grid origin fragments
+        const gx = Math.floor((i % Math.floor(Math.sqrt(n))) / 1) || 1;
+        const gy = Math.floor(i / Math.floor(Math.sqrt(n))) || 1;
+        x = (W * (gx / Math.floor(Math.sqrt(n)))) + rnda(8);
+        y = (H * (gy / Math.floor(Math.sqrt(n)))) + rnda(8);
+        const a3 = Math.atan2(y - cy, x - cx);
+        vx = Math.cos(a3) * baseV * (0.25 + rnd(1.35));
+        vy = Math.sin(a3) * baseV * (0.25 + rnd(1.35));
+      } else if(mode === 'storm'){
+        // biased wind + turbulence
+        vx = baseV * lerp(0.15, 0.55, rnd());
+        vy = baseV * lerp(-0.25, 0.25, rnd());
+        x = rnd(W); y = rnd(H);
+      } else if(mode === 'void'){
+        // inhale then explode (we’ll animate direction over time)
+        vx = Math.cos(a) * baseV * (0.15 + rnd(0.8));
+        vy = Math.sin(a) * baseV * (0.15 + rnd(0.8));
+      }
+
+      const rot = rnd(Math.PI*2);
+      const vr = rnda(2.2) * S.spin;
+
+      shards[i] = {
+        x, y, vx, vy, rot, vr,
+        w, h,
+        kind,
+        ink: (rnd() < 0.55) ? 1 : 0 // 1 draws fg, 0 draws bg via difference tricks
+      };
+    }
+  }
+
+  // Drawing
+  function clearWithTrail(){
+    // “trail” is the alpha of the clear fill: lower = longer persistence
+    const a = clamp(S.trail, 0.02, 0.85);
+    ctx.globalAlpha = a;
+    ctx.fillStyle = bgCol();
+    ctx.fillRect(0,0,W,H);
+    ctx.globalAlpha = 1;
+  }
+
+  function drawShard(s){
+    // Strict black/white, no colors. Use composite to get “inversion shards”.
+    const fg = fgCol();
+    const bg = bgCol();
+
+    ctx.save();
+    ctx.translate(s.x, s.y);
+    ctx.rotate(s.rot);
+
+    const j = S.jitter;
+    const jx = rnda(1) * 14 * j;
+    const jy = rnda(1) * 14 * j;
+    ctx.translate(jx, jy);
+
+    // Flash = momentary high-contrast strobe (user-controlled)
+    if(S.flash > 0){
+      ctx.globalAlpha = clamp(0.25 + S.flash*0.75, 0.25, 1);
+    }
+
+    const strokeW = 2;
+    const fill = (s.ink === 1) ? fg : bg;
+
+    if(s.kind < 0.55){
+      // rectangle
+      ctx.lineWidth = strokeW;
+      ctx.strokeStyle = fg;
+      ctx.fillStyle = fill;
+      ctx.beginPath();
+      ctx.rect(-s.w/2, -s.h/2, s.w, s.h);
+      ctx.fill();
+      ctx.stroke();
+    } else if(s.kind < 0.80){
+      // line shard
+      ctx.lineWidth = strokeW + rnd(2);
+      ctx.strokeStyle = fg;
+      ctx.beginPath();
+      ctx.moveTo(-s.w/2, 0);
+      ctx.lineTo(s.w/2, 0);
+      ctx.stroke();
+    } else {
+      // ring shard
+      ctx.lineWidth = strokeW;
+      ctx.strokeStyle = fg;
+      const r = Math.max(6, (s.w+s.h)*0.18);
+      ctx.beginPath();
+      ctx.arc(0,0,r,0,Math.PI*2);
+      ctx.stroke();
+      if(rnd() < 0.35){
+        ctx.beginPath();
+        ctx.arc(0,0,r*0.55,0,Math.PI*2);
+        ctx.stroke();
+      }
+    }
+
+    ctx.restore();
+  }
+
+  function step(dt){
+    t += dt;
+
+    // “Void inhale” mode: direction flips over time (no center, but a breathing vector field)
+    const inhale = (S.mode === 'void') ? (Math.sin(t*0.6) * 0.5 + 0.5) : 0;
+
+    for(const s of shards){
+      // Turbulence field (straight math, no noise libs)
+      const nx = Math.sin((s.y*0.004) + t*1.4) + Math.cos((s.x*0.003) - t*1.1);
+      const ny = Math.cos((s.x*0.004) + t*1.2) - Math.sin((s.y*0.003) - t*1.3);
+
+      const turb = 22 * S.jitter;
+
+      let ax = nx * turb;
+      let ay = ny * turb;
+
+      if(S.mode === 'storm'){
+        ax += 18;
+        ay += 0;
+      }
+
+      if(S.mode === 'void'){
+        // inhale toward an offset void (not center), then release outward
+        const vx = (W*0.33);
+        const vy = (H*0.62);
+        const dx = (vx - s.x);
+        const dy = (vy - s.y);
+        const mag = Math.max(1, Math.hypot(dx,dy));
+        const dir = (inhale < 0.55) ? 1 : -1; // inhale then reverse
+        ax += (dx/mag) * 120 * dir;
+        ay += (dy/mag) * 120 * dir;
+      }
+
+      // Integrate
+      s.vx += ax * dt;
+      s.vy += ay * dt;
+
+      const velScale = 0.985; // light damping
+      s.vx *= velScale;
+      s.vy *= velScale;
+
+      s.x += s.vx * dt;
+      s.y += s.vy * dt;
+
+      s.rot += s.vr * dt;
+
+      // Wrap
+      const pad = 80;
+      if(s.x < -pad) s.x = W + pad;
+      if(s.x > W + pad) s.x = -pad;
+      if(s.y < -pad) s.y = H + pad;
+      if(s.y > H + pad) s.y = -pad;
+    }
+  }
+
+  // LIGHTS 1–6 map to intensity envelope (velocity + trail + jitter)
+  function applyLight(level){
+    S.light = clamp(level, 1, 6);
+    lamps.forEach(l => {
+      const n = parseInt(l.getAttribute('data-l'),10);
+      l.classList.toggle('on', n <= S.light);
+    });
+
+    // No new modes. Just a calibrated envelope.
+    const k = (S.light - 1) / 5; // 0..1
+    // velocity: 0.8..2.4
+    velEl.value = (0.8 + k*1.6).toFixed(2);
+    // trail: 0.35..0.10 (higher light = longer trails)
+    trailEl.value = (0.35 - k*0.25).toFixed(2);
+    // jitter: 0.25..0.85
+    jitterEl.value = (0.25 + k*0.60).toFixed(2);
+    // spin: 0.6..2.0
+    spinEl.value = (0.6 + k*1.4).toFixed(2);
+
+    syncFromControls(true);
+  }
+
+  // UI sync
+  function syncToControls(){
+    countEl.value = S.count;
+    velEl.value = S.vel.toFixed(2);
+    spinEl.value = S.spin.toFixed(2);
+    zoomEl.value = S.zoom.toFixed(2);
+    jitterEl.value = S.jitter.toFixed(2);
+    trailEl.value = S.trail.toFixed(2);
+    grainCtlEl.value = S.grain.toFixed(2);
+    flashEl.value = S.flash.toFixed(2);
+    modeEl.value = S.mode;
+
+    body.classList.toggle('invert', !!S.invert);
+    body.classList.toggle('null', !!S.nullMode);
+    drawer.classList.toggle('open', !!S.drawerOpen);
+    drawerBtn.setAttribute('aria-pressed', String(!!S.drawerOpen));
+    invertBtn.setAttribute('aria-pressed', String(!!S.invert));
+    nullBtn.setAttribute('aria-pressed', String(!!S.nullMode));
+
+    root.style.setProperty('--grain', S.grain.toFixed(2));
+    root.style.setProperty('--trail', S.trail.toFixed(2));
+    root.style.setProperty('--jitter', S.jitter.toFixed(2));
+    root.style.setProperty('--vel', S.vel.toFixed(2));
+    root.style.setProperty('--spin', S.spin.toFixed(2));
+    root.style.setProperty('--zoom', S.zoom.toFixed(2));
+    root.style.setProperty('--flash', S.flash.toFixed(2));
+    root.style.setProperty('--count', String(S.count));
+
+    applyLight(S.light);
+  }
+
+  function syncFromControls(skipLight=false){
+    S.count = parseInt(countEl.value,10);
+    S.vel = parseFloat(velEl.value);
+    S.spin = parseFloat(spinEl.value);
+    S.zoom = parseFloat(zoomEl.value);
+    S.jitter = parseFloat(jitterEl.value);
+    S.trail = parseFloat(trailEl.value);
+    S.grain = parseFloat(grainCtlEl.value);
+    S.flash = parseFloat(flashEl.value);
+    S.mode = modeEl.value;
+
+    root.style.setProperty('--grain', S.grain.toFixed(2));
+    root.style.setProperty('--trail', S.trail.toFixed(2));
+    root.style.setProperty('--jitter', S.jitter.toFixed(2));
+    root.style.setProperty('--vel', S.vel.toFixed(2));
+    root.style.setProperty('--spin', S.spin.toFixed(2));
+    root.style.setProperty('--zoom', S.zoom.toFixed(2));
+    root.style.setProperty('--flash', S.flash.toFixed(2));
+    root.style.setProperty('--count', String(S.count));
+
+    if(!skipLight){
+      // if user touches controls manually, lights become descriptive not prescriptive
+      // (we keep the lamp UI but do not force it to override user values)
+      lamps.forEach(l => l.classList.remove('on'));
+      const approx = clamp(Math.round(1 + (S.vel-0.8)/1.6*5), 1, 6);
+      S.light = approx;
+      lamps.forEach(l => {
+        const n = parseInt(l.getAttribute('data-l'),10);
+        l.classList.toggle('on', n <= S.light);
+      });
+    }
+
+    saveState();
+  }
+
+  // Persistence (literal interface memory)
+  function saveState(){
+    const payload = JSON.stringify(S);
+    try{ localStorage.setItem(STORAGE_KEY, payload); }catch(_){}
+  }
+  function loadState(){
+    try{
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if(!raw) return { ...defaultState };
+      const parsed = JSON.parse(raw);
+      return { ...defaultState, ...parsed };
+    }catch(_){
+      return { ...defaultState };
+    }
+  }
+
+  // Buttons
+  function toggleDrawer(){
+    S.drawerOpen = !S.drawerOpen;
+    drawer.classList.toggle('open', S.drawerOpen);
+    drawerBtn.setAttribute('aria-pressed', String(S.drawerOpen));
+    saveState();
+  }
+  function toggleInvert(){
+    S.invert = !S.invert;
+    body.classList.toggle('invert', S.invert);
+    invertBtn.setAttribute('aria-pressed', String(S.invert));
+    saveState();
+  }
+  function toggleNull(){
+    S.nullMode = !S.nullMode;
+    body.classList.toggle('null', S.nullMode);
+    nullBtn.setAttribute('aria-pressed', String(S.nullMode));
+    saveState();
+  }
+  function regenerate(){
+    initShards();
+  }
+
+  drawerBtn.addEventListener('click', toggleDrawer);
+  invertBtn.addEventListener('click', toggleInvert);
+  nullBtn.addEventListener('click', toggleNull);
+  regenBtn.addEventListener('click', regenerate);
+  resetBtn.addEventListener('click', () => {
+    S = { ...defaultState };
+    saveState();
+    syncToControls();
+    initShards();
+  });
+
+  // Lamps click
+  lamps.forEach(l => {
+    l.style.cursor = 'pointer';
+    l.addEventListener('click', () => applyLight(parseInt(l.getAttribute('data-l'),10)));
+  });
+
+  // Control bindings
+  [countEl, velEl, spinEl, zoomEl, jitterEl, trailEl, grainCtlEl, flashEl, modeEl].forEach(el => {
+    el.addEventListener('input', () => { syncFromControls(); });
+    el.addEventListener('change', () => { syncFromControls(); if(el===countEl || el===modeEl) initShards(); });
+  });
+
+  // Hotkeys (minimal, canonical + regen)
+  window.addEventListener('keydown', (e) => {
+    const k = (e.key || '').toLowerCase();
+
+    // 1–6 lights
+    if(!e.shiftKey && !e.metaKey && !e.ctrlKey && /^[1-6]$/.test(k)){
+      e.preventDefault();
+      applyLight(parseInt(k,10));
+      return;
+    }
+
+    // Shift+I invert
+    if(e.shiftKey && k === 'i'){ e.preventDefault(); toggleInvert(); return; }
+
+    // Shift+N NULL
+    if(e.shiftKey && k === 'n'){ e.preventDefault(); toggleNull(); return; }
+
+    // K controls drawer
+    if(!e.shiftKey && k === 'k'){ e.preventDefault(); toggleDrawer(); return; }
+
+    // R regenerate
+    if(!e.shiftKey && k === 'r'){ e.preventDefault(); regenerate(); return; }
+  }, { passive:false });
+
+  // Animation loop
+  let last = performance.now();
+  function loop(now){
+    const dt = Math.min(0.033, (now - last) / 1000);
+    last = now;
+
+    // Clear with persistence (trail)
+    clearWithTrail();
+
+    // Draw shards
+    const fg = fgCol();
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.strokeStyle = fg;
+
+    // Optional flash: invert the clear pass momentarily without changing state
+    if(S.flash > 0){
+      ctx.save();
+      ctx.globalAlpha = clamp(S.flash*0.35, 0, 0.35);
+      ctx.fillStyle = fg;
+      ctx.fillRect(0,0,W,H);
+      ctx.restore();
+    }
+
+    // Update physics
+    step(dt);
+
+    // Render
+    for(const s of shards) drawShard(s);
+
+    requestAnimationFrame(loop);
+  }
+
+  // Init
+  resize();
+  syncToControls();
+  initShards();
+
+  document.getElementById('ts').textContent = new Date().toISOString();
+
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
