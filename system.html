@@ -547,20 +547,38 @@ const URLS = {
 };
 
 /* =========================================================
-EE ▸ STORAGE — BASE MUST BE STABLE
-(UPDATE: isolate Base state onto canonical key to prevent
-other pages/hotkey nav from overwriting it)
+EE ▸ STORAGE — BASE STATE MUST BE IMMUTABLE UNLESS USER RESETS
+- Base state key is SALTED + BASE-ONLY to prevent other pages from overwriting it.
+- Migrates from older keys once (legacy/canon) into salted key.
 ========================================================= */
 const FILE_ID="KETADATA_SHELL8";
 const PAGE_ID="BASE_SYSTEM";
 const STORAGE_EPOCH="BASE_CANON";
 
-/* CANONICAL BASE KEY (Base reads/writes here only) */
-const STORAGE_KEY_CANON = `KDT::STATE::${FILE_ID}::${PAGE_ID}::${STORAGE_EPOCH}::BASE`;
-/* LEGACY KEY (older builds may have written here) */
-const STORAGE_KEY_LEGACY = `KDT::STATE::${FILE_ID}::${PAGE_ID}::${STORAGE_EPOCH}`;
-/* Base uses canonical key going forward */
-const STORAGE_KEY = STORAGE_KEY_CANON;
+/* Stable per-user salt so Base key is unique and cannot be clobbered by other pages */
+const BASE_SALT_KEY = `KDT::BASE::SALT::${FILE_ID}`;
+
+function _rand8(){
+  const a=new Uint32Array(1);
+  try{crypto.getRandomValues(a);}catch(e){a[0]=Math.floor(Math.random()*1e9);}
+  return (a[0]>>>0).toString(16).padStart(8,"0");
+}
+function getBaseSalt(){
+  let s=null;
+  try{s=localStorage.getItem(BASE_SALT_KEY);}catch(e){}
+  if(!s){
+    s=_rand8();
+    try{localStorage.setItem(BASE_SALT_KEY,s);}catch(e){}
+  }
+  return s;
+}
+
+/* BASE-ONLY CANONICAL KEY (use this only for Base) */
+const STORAGE_KEY = `KDT::BASE::STATE::${FILE_ID}::${getBaseSalt()}`;
+
+/* Previous keys (for migration only) */
+const STORAGE_KEY_CANON_OLD = `KDT::STATE::${FILE_ID}::${PAGE_ID}::${STORAGE_EPOCH}::BASE`;
+const STORAGE_KEY_LEGACY_OLD = `KDT::STATE::${FILE_ID}::${PAGE_ID}::${STORAGE_EPOCH}`;
 
 function nowISO(){return new Date().toISOString();}
 const $=(id)=>document.getElementById(id);
@@ -698,7 +716,6 @@ function mergeDefault(obj){
   if(!out.ui.noteRect || typeof out.ui.noteRect!=="object") out.ui.noteRect=structuredClone(DEFAULT.ui.noteRect);
   if(typeof out.ui.drawerH!=="number") out.ui.drawerH=DEFAULT.ui.drawerH;
 
-  // collapses
   ["universalsCollapsed","registryCollapsed","activeCollapsed","setsCollapsed","bulkCollapsed","presetsCollapsed"].forEach(k=>{
     if(typeof out.ui[k]!=="boolean") out.ui[k]=DEFAULT.ui[k];
   });
@@ -706,25 +723,37 @@ function mergeDefault(obj){
   return out;
 }
 
-/* UPDATED: canonical load + legacy migration */
+/* Base load (salted key) + migration from older keys */
 function loadLocal(){
   try{
-    // Prefer canonical Base key
-    let raw = localStorage.getItem(STORAGE_KEY_CANON);
+    // 1) Primary: salted Base-only key
+    let raw = localStorage.getItem(STORAGE_KEY);
 
-    // If missing, fall back to legacy and migrate once
+    // 2) Migration path: prior canon key
     if(!raw){
-      raw = localStorage.getItem(STORAGE_KEY_LEGACY);
-      if(raw){
-        const migrated = mergeDefault(JSON.parse(raw));
-        try{ localStorage.setItem(STORAGE_KEY_CANON, JSON.stringify(migrated)); }catch(e){}
-        return migrated;
-      }
-      return null;
+      raw = localStorage.getItem(STORAGE_KEY_CANON_OLD) || null;
     }
 
-    return mergeDefault(JSON.parse(raw));
-  }catch(e){return null}
+    // 3) Migration path: legacy key
+    if(!raw){
+      raw = localStorage.getItem(STORAGE_KEY_LEGACY_OLD) || null;
+    }
+
+    if(!raw) return null;
+
+    const parsed = mergeDefault(JSON.parse(raw));
+
+    // If loaded from older key, migrate into salted key once
+    try{
+      if(!localStorage.getItem(STORAGE_KEY)){
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
+      }
+    }catch(e){}
+
+    return parsed;
+  }catch(e){
+    return null;
+  }
 }
 
 function ensureCorePresets(){
@@ -805,19 +834,19 @@ async function copy(text){
   catch(e){toast("COPY FAILED");}
 }
 
-/* persist */
+/* persist (Base writes ONLY to salted Base key) */
 function persist(){
   STATE.updatedAt=nowISO();
   ensureCorePresets();
   root.style.setProperty("--drawer-h", String(STATE.ui.drawerH));
-  try{localStorage.setItem(STORAGE_KEY_CANON, JSON.stringify(STATE));}catch(e){}
+  try{localStorage.setItem(STORAGE_KEY, JSON.stringify(STATE));}catch(e){}
   render();
 }
 
 /* export/import */
 function exportState(){
   ensureCorePresets();
-  return JSON.stringify({ STORAGE_KEY: STORAGE_KEY_CANON, FILE_ID, PAGE_ID, STORAGE_EPOCH, STATE }, null, 2);
+  return JSON.stringify({ STORAGE_KEY: STORAGE_KEY, FILE_ID, PAGE_ID, STORAGE_EPOCH, STATE }, null, 2);
 }
 function importState(text){
   const parsed=JSON.parse(text);
@@ -1003,7 +1032,7 @@ function ensureActiveSet(){
 function setEditorFromSet(setObj){
   if(!setObj) return;
   ACTIVE_SET_ID = String(setObj.id);
-  $("setNameInput").value = canonSetName(setObj.label||"SET");
+  $("setNameInput").value = canonSetName(setObj.label||"SET") || "SET";
   const lines = (setObj.items||[]).map(it=>{
     const n = canonRoomName(it.label||"") || deriveNameFromUrl(it.url);
     return `${n} | ${String(it.url||"").trim()}`;
@@ -1053,7 +1082,7 @@ function setDrawer(on){
   persist();
 }
 
-/* FIX: force KETA_NOTE to top-right under icon on open */
+/* force KETA_NOTE to top-right under icon on open */
 function setKetaNote(on){
   STATE.ui.noteOpen=!!on;
   if(on){
@@ -1476,7 +1505,6 @@ function render(){
   $("universals").value=STATE.universals||"";
   $("roomName").textContent=canonRoomName(STATE.room)||"BASE";
 
-  // section visibility
   $("universals").style.display = STATE.ui.universalsCollapsed ? "none" : "block";
   $("registryBody").style.display = STATE.ui.registryCollapsed ? "none" : "block";
   $("activeBody").style.display = STATE.ui.activeCollapsed ? "none" : "block";
@@ -1496,7 +1524,6 @@ function render(){
   $("runLabel").textContent=STATE.ui.lightRunning ? "ON" : "OFF";
   $("motionLabel").textContent=STATE.ui.motionOn ? "ON" : "OFF";
 
-  /* note geometry: if x is null -> dock right */
   if(STATE.ui.noteRect){
     const r=STATE.ui.noteRect;
     const box=$("ketaNote");
@@ -1755,9 +1782,9 @@ $("btnBulkClear").addEventListener("click", ()=>{ $("bulkRoomInput").value=""; t
   }catch(_){}
 })();
 
-/* Cross-tab sync (canonical only) */
+/* Cross-tab sync (salted Base key only) */
 window.addEventListener("storage",(e)=>{
-  if(e.key!==STORAGE_KEY_CANON) return;
+  if(e.key!==STORAGE_KEY) return;
   try{
     const incoming=JSON.parse(e.newValue||"null");
     if(!incoming) return;
@@ -1774,13 +1801,19 @@ window.addEventListener("pageshow",()=>{
 });
 
 /* Boot */
-let STATE = loadLocal() || structuredClone(DEFAULT);
+const _BOOT_LOADED = loadLocal();
+let STATE = _BOOT_LOADED || structuredClone(DEFAULT);
 ensureCorePresets();
 root.style.setProperty("--drawer-h", String(STATE.ui.drawerH));
 bindHotkeys();
 
 render();
-persist();
+
+/* Do NOT overwrite an existing Base state on boot. Only seed storage on first run. */
+if(!_BOOT_LOADED){
+  persist();
+}
+
 if(STATE.ui.lightRunning && !STATE.ui.blackout) startLight(STATE.ui.lightPreset||1);
 </script>
 
@@ -1789,13 +1822,15 @@ AE/EE/WB SERIALIZATION STAMP (MANDATORY)
 AE/EE/WB + FILE_ID/ROOM_ID/VERSION/UPDATED_AT/CHANGELOG
 FILE_ID: KETADATA_SHELL8
 ROOM_ID: BASE
-VERSION: BASE_SYSTEM_CANON_v2_3
+VERSION: BASE_SYSTEM_CANON_v2_4
 UPDATED_AT: 2025-12-27T00:00:00-05:00
 CHANGELOG:
-- EE: BASE STATE ISOLATED TO CANONICAL STORAGE KEY (MIGRATE ONCE FROM LEGACY) TO PREVENT HOTKEY NAV / OTHER PAGES OVERWRITING BASE
-- EE: EXPORT NOW EMITS CANONICAL STORAGE KEY
-- WB: CROSS-TAB SYNC LISTENS TO CANONICAL KEY ONLY
+- EE: BASE STATE STORED UNDER SALTED BASE-ONLY STORAGE KEY TO PREVENT ANY OTHER PAGE FROM CLOBBERING IT
+- EE: MIGRATE ONCE FROM OLDER KEYS INTO SALTED BASE KEY
+- EE: BOOT NO LONGER OVERWRITES EXISTING STATE ON REFRESH (ONLY SEEDS ON FIRST RUN)
+- WB: CROSS-TAB STORAGE SYNC LISTENS TO SALTED BASE KEY
 ========================================================= -->
 </body>
 </html>
+
 
