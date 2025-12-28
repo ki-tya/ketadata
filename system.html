@@ -548,11 +548,19 @@ const URLS = {
 
 /* =========================================================
 EE ▸ STORAGE — BASE MUST BE STABLE
+(UPDATE: isolate Base state onto canonical key to prevent
+other pages/hotkey nav from overwriting it)
 ========================================================= */
 const FILE_ID="KETADATA_SHELL8";
 const PAGE_ID="BASE_SYSTEM";
 const STORAGE_EPOCH="BASE_CANON";
-const STORAGE_KEY=`KDT::STATE::${FILE_ID}::${PAGE_ID}::${STORAGE_EPOCH}`;
+
+/* CANONICAL BASE KEY (Base reads/writes here only) */
+const STORAGE_KEY_CANON = `KDT::STATE::${FILE_ID}::${PAGE_ID}::${STORAGE_EPOCH}::BASE`;
+/* LEGACY KEY (older builds may have written here) */
+const STORAGE_KEY_LEGACY = `KDT::STATE::${FILE_ID}::${PAGE_ID}::${STORAGE_EPOCH}`;
+/* Base uses canonical key going forward */
+const STORAGE_KEY = STORAGE_KEY_CANON;
 
 function nowISO(){return new Date().toISOString();}
 const $=(id)=>document.getElementById(id);
@@ -698,10 +706,23 @@ function mergeDefault(obj){
   return out;
 }
 
+/* UPDATED: canonical load + legacy migration */
 function loadLocal(){
   try{
-    const raw=localStorage.getItem(STORAGE_KEY);
-    if(!raw) return null;
+    // Prefer canonical Base key
+    let raw = localStorage.getItem(STORAGE_KEY_CANON);
+
+    // If missing, fall back to legacy and migrate once
+    if(!raw){
+      raw = localStorage.getItem(STORAGE_KEY_LEGACY);
+      if(raw){
+        const migrated = mergeDefault(JSON.parse(raw));
+        try{ localStorage.setItem(STORAGE_KEY_CANON, JSON.stringify(migrated)); }catch(e){}
+        return migrated;
+      }
+      return null;
+    }
+
     return mergeDefault(JSON.parse(raw));
   }catch(e){return null}
 }
@@ -789,14 +810,14 @@ function persist(){
   STATE.updatedAt=nowISO();
   ensureCorePresets();
   root.style.setProperty("--drawer-h", String(STATE.ui.drawerH));
-  try{localStorage.setItem(STORAGE_KEY, JSON.stringify(STATE));}catch(e){}
+  try{localStorage.setItem(STORAGE_KEY_CANON, JSON.stringify(STATE));}catch(e){}
   render();
 }
 
 /* export/import */
 function exportState(){
   ensureCorePresets();
-  return JSON.stringify({ STORAGE_KEY, FILE_ID, PAGE_ID, STORAGE_EPOCH, STATE }, null, 2);
+  return JSON.stringify({ STORAGE_KEY: STORAGE_KEY_CANON, FILE_ID, PAGE_ID, STORAGE_EPOCH, STATE }, null, 2);
 }
 function importState(text){
   const parsed=JSON.parse(text);
@@ -1734,9 +1755,9 @@ $("btnBulkClear").addEventListener("click", ()=>{ $("bulkRoomInput").value=""; t
   }catch(_){}
 })();
 
-/* Cross-tab sync */
+/* Cross-tab sync (canonical only) */
 window.addEventListener("storage",(e)=>{
-  if(e.key!==STORAGE_KEY) return;
+  if(e.key!==STORAGE_KEY_CANON) return;
   try{
     const incoming=JSON.parse(e.newValue||"null");
     if(!incoming) return;
@@ -1768,11 +1789,12 @@ AE/EE/WB SERIALIZATION STAMP (MANDATORY)
 AE/EE/WB + FILE_ID/ROOM_ID/VERSION/UPDATED_AT/CHANGELOG
 FILE_ID: KETADATA_SHELL8
 ROOM_ID: BASE
-VERSION: BASE_SYSTEM_CANON_v2_2
+VERSION: BASE_SYSTEM_CANON_v2_3
 UPDATED_AT: 2025-12-27T00:00:00-05:00
 CHANGELOG:
-- EE: FORCE KETA_NOTE DOCK RIGHT ON OPEN (NOTE_RECT.X = NULL)
-- EE/WB: ADDED COLLAPSE TOGGLES FOR DRAWER SECTIONS (REGISTRY / ACTIVE / SETS / BULK / PRESETS) + PERSISTED IN STATE
+- EE: BASE STATE ISOLATED TO CANONICAL STORAGE KEY (MIGRATE ONCE FROM LEGACY) TO PREVENT HOTKEY NAV / OTHER PAGES OVERWRITING BASE
+- EE: EXPORT NOW EMITS CANONICAL STORAGE KEY
+- WB: CROSS-TAB SYNC LISTENS TO CANONICAL KEY ONLY
 ========================================================= -->
 </body>
 </html>
