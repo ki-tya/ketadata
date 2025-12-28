@@ -548,37 +548,21 @@ const URLS = {
 
 /* =========================================================
 EE ▸ STORAGE — BASE STATE MUST BE IMMUTABLE UNLESS USER RESETS
-- Base state key is SALTED + BASE-ONLY to prevent other pages from overwriting it.
-- Migrates from older keys once (legacy/canon) into salted key.
+FIX: make the Base key stable, add atomic write + backup, persist on lifecycle events.
 ========================================================= */
 const FILE_ID="KETADATA_SHELL8";
 const PAGE_ID="BASE_SYSTEM";
 const STORAGE_EPOCH="BASE_CANON";
 
-/* Stable per-user salt so Base key is unique and cannot be clobbered by other pages */
-const BASE_SALT_KEY = `KDT::BASE::SALT::${FILE_ID}`;
-
-function _rand8(){
-  const a=new Uint32Array(1);
-  try{crypto.getRandomValues(a);}catch(e){a[0]=Math.floor(Math.random()*1e9);}
-  return (a[0]>>>0).toString(16).padStart(8,"0");
-}
-function getBaseSalt(){
-  let s=null;
-  try{s=localStorage.getItem(BASE_SALT_KEY);}catch(e){}
-  if(!s){
-    s=_rand8();
-    try{localStorage.setItem(BASE_SALT_KEY,s);}catch(e){}
-  }
-  return s;
-}
-
-/* BASE-ONLY CANONICAL KEY (use this only for Base) */
-const STORAGE_KEY = `KDT::BASE::STATE::${FILE_ID}::${getBaseSalt()}`;
+const STORAGE_KEY_MAIN   = `KDT::BASE::STATE::${FILE_ID}::${PAGE_ID}::CANON_v1`;
+const STORAGE_KEY_BACKUP = `KDT::BASE::STATE::${FILE_ID}::${PAGE_ID}::CANON_v1::BACKUP`;
+const STORAGE_KEY_TMP    = `KDT::BASE::STATE::${FILE_ID}::${PAGE_ID}::CANON_v1::TMP`;
 
 /* Previous keys (for migration only) */
 const STORAGE_KEY_CANON_OLD = `KDT::STATE::${FILE_ID}::${PAGE_ID}::${STORAGE_EPOCH}::BASE`;
 const STORAGE_KEY_LEGACY_OLD = `KDT::STATE::${FILE_ID}::${PAGE_ID}::${STORAGE_EPOCH}`;
+/* Salted key from prior iteration (for migration only) */
+const STORAGE_KEY_SALTED_PREFIX = `KDT::BASE::STATE::${FILE_ID}::`; // if present, we'll attempt to detect legacy salted key
 
 function nowISO(){return new Date().toISOString();}
 const $=(id)=>document.getElementById(id);
@@ -723,37 +707,70 @@ function mergeDefault(obj){
   return out;
 }
 
-/* Base load (salted key) + migration from older keys */
-function loadLocal(){
+/* Attempt to find a legacy salted Base key (from prior iteration) */
+function findLegacySaltedKey(){
   try{
-    // 1) Primary: salted Base-only key
-    let raw = localStorage.getItem(STORAGE_KEY);
-
-    // 2) Migration path: prior canon key
-    if(!raw){
-      raw = localStorage.getItem(STORAGE_KEY_CANON_OLD) || null;
-    }
-
-    // 3) Migration path: legacy key
-    if(!raw){
-      raw = localStorage.getItem(STORAGE_KEY_LEGACY_OLD) || null;
-    }
-
-    if(!raw) return null;
-
-    const parsed = mergeDefault(JSON.parse(raw));
-
-    // If loaded from older key, migrate into salted key once
-    try{
-      if(!localStorage.getItem(STORAGE_KEY)){
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
+    for(let i=0;i<localStorage.length;i++){
+      const k=localStorage.key(i);
+      if(k && k.startsWith(STORAGE_KEY_SALTED_PREFIX) && k.includes("KDT::BASE::STATE::")) {
+        // Heuristic: old salted key format: KDT::BASE::STATE::FILE_ID::<salt>
+        // Only accept short keys (avoid picking up unrelated)
+        if(k.split("::").length >= 5) return k;
       }
-    }catch(e){}
+    }
+  }catch(e){}
+  return null;
+}
 
-    return parsed;
+function loadFromKey(key){
+  try{
+    const raw = localStorage.getItem(key);
+    if(!raw) return null;
+    const parsed = JSON.parse(raw);
+    return mergeDefault(parsed);
   }catch(e){
     return null;
   }
+}
+
+/* Base load (main key + backup + migration) */
+function loadLocal(){
+  // 1) main
+  let s = loadFromKey(STORAGE_KEY_MAIN);
+  if(s) return s;
+
+  // 2) backup
+  s = loadFromKey(STORAGE_KEY_BACKUP);
+  if(s){
+    // heal main if backup is valid
+    try{ localStorage.setItem(STORAGE_KEY_MAIN, JSON.stringify(s)); }catch(e){}
+    return s;
+  }
+
+  // 3) migrate from older keys
+  s = loadFromKey(STORAGE_KEY_CANON_OLD) || loadFromKey(STORAGE_KEY_LEGACY_OLD);
+  if(s){
+    try{
+      localStorage.setItem(STORAGE_KEY_MAIN, JSON.stringify(s));
+      localStorage.setItem(STORAGE_KEY_BACKUP, JSON.stringify(s));
+    }catch(e){}
+    return s;
+  }
+
+  // 4) migrate from legacy salted key (if exists)
+  const legacySalted = findLegacySaltedKey();
+  if(legacySalted){
+    s = loadFromKey(legacySalted);
+    if(s){
+      try{
+        localStorage.setItem(STORAGE_KEY_MAIN, JSON.stringify(s));
+        localStorage.setItem(STORAGE_KEY_BACKUP, JSON.stringify(s));
+      }catch(e){}
+      return s;
+    }
+  }
+
+  return null;
 }
 
 function ensureCorePresets(){
@@ -834,19 +851,32 @@ async function copy(text){
   catch(e){toast("COPY FAILED");}
 }
 
-/* persist (Base writes ONLY to salted Base key) */
-function persist(){
+/* =========================================================
+EE ▸ PERSIST (ROBUST)
+- atomic write: TMP -> MAIN -> BACKUP
+- optional silent flag (no render) for lifecycle flush
+========================================================= */
+function persist(silent=false){
   STATE.updatedAt=nowISO();
   ensureCorePresets();
   root.style.setProperty("--drawer-h", String(STATE.ui.drawerH));
-  try{localStorage.setItem(STORAGE_KEY, JSON.stringify(STATE));}catch(e){}
-  render();
+
+  const blob = JSON.stringify(STATE);
+
+  try{
+    // atomic-ish commit
+    localStorage.setItem(STORAGE_KEY_TMP, blob);
+    localStorage.setItem(STORAGE_KEY_MAIN, blob);
+    localStorage.setItem(STORAGE_KEY_BACKUP, blob);
+  }catch(e){}
+
+  if(!silent) render();
 }
 
 /* export/import */
 function exportState(){
   ensureCorePresets();
-  return JSON.stringify({ STORAGE_KEY: STORAGE_KEY, FILE_ID, PAGE_ID, STORAGE_EPOCH, STATE }, null, 2);
+  return JSON.stringify({ STORAGE_KEY: STORAGE_KEY_MAIN, FILE_ID, PAGE_ID, STORAGE_EPOCH, STATE }, null, 2);
 }
 function importState(text){
   const parsed=JSON.parse(text);
@@ -855,7 +885,7 @@ function importState(text){
   ensureCorePresets();
   stopLight(true);
   if(STATE.ui.lightRunning && !STATE.ui.blackout) startLight(STATE.ui.lightPreset);
-  persist();
+  persist(false);
 }
 
 /* =========================================================
@@ -873,7 +903,7 @@ function stopLight(silent=false){
   if(lightInterval){clearInterval(lightInterval); lightInterval=null;}
   STATE.ui.lightRunning=false;
   resetStage();
-  if(!silent) persist();
+  if(!silent) persist(false);
 }
 function startLight(preset){
   stopLight(true);
@@ -941,13 +971,13 @@ function startLight(preset){
     },30);
   }
 
-  persist();
+  persist(false);
 }
 
 function selectPreset(p){
   STATE.ui.lightPreset=p;
   if(STATE.ui.lightRunning) startLight(p);
-  else persist();
+  else persist(false);
 }
 function toggleRun(){
   if(STATE.ui.blackout) return;
@@ -1079,7 +1109,7 @@ EE ▸ UI SETTERS (PERSISTED)
 function setDrawer(on){
   STATE.ui.drawerOpen=!!on;
   if(on) STATE.ui.blackout=false;
-  persist();
+  persist(false);
 }
 
 /* force KETA_NOTE to top-right under icon on open */
@@ -1091,17 +1121,17 @@ function setKetaNote(on){
       STATE.ui.noteRect.x = null; // always dock right
     }
   }
-  persist();
+  persist(false);
 }
 
-function setUniversalsCollapsed(on){ STATE.ui.universalsCollapsed=!!on; persist(); }
-function setRegistryCollapsed(on){ STATE.ui.registryCollapsed=!!on; persist(); }
-function setActiveCollapsed(on){ STATE.ui.activeCollapsed=!!on; persist(); }
-function setSetsCollapsed(on){ STATE.ui.setsCollapsed=!!on; persist(); }
-function setBulkCollapsed(on){ STATE.ui.bulkCollapsed=!!on; persist(); }
-function setPresetsCollapsed(on){ STATE.ui.presetsCollapsed=!!on; persist(); }
+function setUniversalsCollapsed(on){ STATE.ui.universalsCollapsed=!!on; persist(false); }
+function setRegistryCollapsed(on){ STATE.ui.registryCollapsed=!!on; persist(false); }
+function setActiveCollapsed(on){ STATE.ui.activeCollapsed=!!on; persist(false); }
+function setSetsCollapsed(on){ STATE.ui.setsCollapsed=!!on; persist(false); }
+function setBulkCollapsed(on){ STATE.ui.bulkCollapsed=!!on; persist(false); }
+function setPresetsCollapsed(on){ STATE.ui.presetsCollapsed=!!on; persist(false); }
 
-function setInvert(on){ STATE.ui.invert=!!on; persist(); }
+function setInvert(on){ STATE.ui.invert=!!on; persist(false); }
 
 /* blackout restore cache */
 let BLACKOUT_CACHE=null;
@@ -1141,20 +1171,23 @@ function setBlackout(on){
     }
   }
 
-  persist();
+  persist(false);
 }
 function toggleBlackout(){ setBlackout(!STATE.ui.blackout); }
 
 function setFullscreen(on){
   STATE.ui.fullscreen=!!on;
-  persist();
+  persist(false);
 }
 function toggleFullscreen(){ setFullscreen(!STATE.ui.fullscreen); }
 
 /* =========================================================
 WB ▸ NAVIGATION (GO + NEW TAB)
 ========================================================= */
-function finalizeBeforeNav(){ persist(); }
+function finalizeBeforeNav(){
+  // force a lifecycle-safe flush before leaving
+  persist(true);
+}
 function go(url){
   const u=String(url||"").trim();
   if(!u) return;
