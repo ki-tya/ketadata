@@ -547,12 +547,12 @@ const URLS = {
 };
 
 /* =========================================================
-EE ▸ STORAGE — BASE STATE MUST BE IMMUTABLE UNLESS USER RESETS
-FIX:
-- Path-scoped Base key so sibling pages cannot clobber Base
-- Atomic-ish write MAIN+BACKUP+TMP
-- Lifecycle flush (pagehide/visibilitychange/beforeunload)
-- Cross-tab sync listens to the actual Base key
+EE ▸ STORAGE — DUMB + SOVEREIGN + GUARANTEED
+RULE: BASE IS ITS OWN SOVEREIGN HTML.
+- ONE CONSTANT KEY (NOT PATH SCOPED) => survives refresh, hotkey nav, new tabs, renames.
+- Write on every change, and also on pagehide/visibilitychange/beforeunload.
+- Read on boot and on pageshow (BFCache).
+- Cross-tab sync via storage event on that one key.
 ========================================================= */
 const FILE_ID="KETADATA_SHELL8";
 const PAGE_ID="BASE_SYSTEM";
@@ -565,17 +565,11 @@ const root=$("root");
 const stage=$("stage");
 const motion=$("motion");
 
-/* Path-scope the Base key (this exact URL only) */
-function baseScopeKey(){
-  const raw = (location.origin + location.pathname);
-  return raw.replace(/[^a-z0-9]+/gi,"_").replace(/^_+|_+$/g,"").slice(-120) || "BASE";
-}
-
-/* Canon keys (NEW) */
-const BASE_SCOPE = baseScopeKey();
-const STORAGE_KEY_MAIN   = `KDT::BASE::STATE::${FILE_ID}::${PAGE_ID}::${BASE_SCOPE}::CANON_v2`;
-const STORAGE_KEY_BACKUP = `KDT::BASE::STATE::${FILE_ID}::${PAGE_ID}::${BASE_SCOPE}::CANON_v2::BACKUP`;
-const STORAGE_KEY_TMP    = `KDT::BASE::STATE::${FILE_ID}::${PAGE_ID}::${BASE_SCOPE}::CANON_v2::TMP`;
+/* SOVEREIGN CANON KEYS (NEW) */
+const BASE_SCOPE = "SOVEREIGN"; // export signature only; not used for keying
+const STORAGE_KEY_MAIN   = `KDT::BASE::SOVEREIGN::STATE::${FILE_ID}::${PAGE_ID}::CANON_v3`;
+const STORAGE_KEY_BACKUP = `KDT::BASE::SOVEREIGN::STATE::${FILE_ID}::${PAGE_ID}::CANON_v3::BACKUP`;
+const STORAGE_KEY_TMP    = `KDT::BASE::SOVEREIGN::STATE::${FILE_ID}::${PAGE_ID}::CANON_v3::TMP`;
 
 /* Previous keys (for migration only) */
 const STORAGE_KEY_CANON_OLD = `KDT::BASE::STATE::${FILE_ID}::${PAGE_ID}::CANON_v1`;
@@ -584,7 +578,44 @@ const STORAGE_KEY_TMP_OLD = `KDT::BASE::STATE::${FILE_ID}::${PAGE_ID}::CANON_v1:
 
 const STORAGE_KEY_LEGACY_OLD = `KDT::STATE::${FILE_ID}::${PAGE_ID}::${STORAGE_EPOCH}`;
 const STORAGE_KEY_CANON_OLD2 = `KDT::STATE::${FILE_ID}::${PAGE_ID}::${STORAGE_EPOCH}::BASE`;
-const STORAGE_KEY_SALTED_PREFIX = `KDT::BASE::STATE::${FILE_ID}::`; // heuristic legacy salted detection
+
+/* Also migrate from your last path-scoped v2 keys (any path) */
+function findLastPathScopedV2(){
+  try{
+    for(let i=0;i<localStorage.length;i++){
+      const k=localStorage.key(i);
+      if(!k) continue;
+      if(k.startsWith(`KDT::BASE::STATE::${FILE_ID}::${PAGE_ID}::`) && k.includes("CANON_v2")){
+        // prefer MAIN over BACKUP/TMP
+        if(!k.endsWith("::BACKUP") && !k.endsWith("::TMP")) return k;
+      }
+    }
+  }catch(e){}
+  return null;
+}
+function findLastPathScopedV2Backup(){
+  try{
+    for(let i=0;i<localStorage.length;i++){
+      const k=localStorage.key(i);
+      if(!k) continue;
+      if(k.startsWith(`KDT::BASE::STATE::${FILE_ID}::${PAGE_ID}::`) && k.includes("CANON_v2::BACKUP")){
+        return k;
+      }
+    }
+  }catch(e){}
+  return null;
+}
+
+function loadFromKey(key){
+  try{
+    const raw = localStorage.getItem(key);
+    if(!raw) return null;
+    const parsed = JSON.parse(raw);
+    return parsed;
+  }catch(e){
+    return null;
+  }
+}
 
 /* =========================================================
 EE ▸ DEFAULT PRESETS (ALWAYS PRESENT)
@@ -722,74 +753,64 @@ function mergeDefault(obj){
   return out;
 }
 
-/* Attempt to find a legacy salted Base key (from prior iteration) */
-function findLegacySaltedKey(){
-  try{
-    for(let i=0;i<localStorage.length;i++){
-      const k=localStorage.key(i);
-      if(k && k.startsWith(STORAGE_KEY_SALTED_PREFIX) && k.includes("KDT::BASE::STATE::")) {
-        if(k.split("::").length >= 5) return k;
-      }
-    }
-  }catch(e){}
-  return null;
-}
-
-function loadFromKey(key){
-  try{
-    const raw = localStorage.getItem(key);
-    if(!raw) return null;
-    const parsed = JSON.parse(raw);
-    return mergeDefault(parsed);
-  }catch(e){
-    return null;
-  }
-}
-
-/* Base load (NEW keys + backup + migration) */
+/* =========================================================
+EE ▸ LOAD (SOVEREIGN)
+Order:
+1) SOVEREIGN MAIN
+2) SOVEREIGN BACKUP
+3) migrate from last path-scoped v2 key (any path)
+4) migrate old canon/legacy keys
+========================================================= */
 function loadLocal(){
-  // 1) new main
+  // 1) sovereign main
   let s = loadFromKey(STORAGE_KEY_MAIN);
-  if(s) return s;
+  if(s) return mergeDefault(s);
 
-  // 2) new backup
+  // 2) sovereign backup
   s = loadFromKey(STORAGE_KEY_BACKUP);
   if(s){
-    try{ localStorage.setItem(STORAGE_KEY_MAIN, JSON.stringify(s)); }catch(e){}
-    return s;
+    const merged = mergeDefault(s);
+    try{
+      localStorage.setItem(STORAGE_KEY_MAIN, JSON.stringify(merged));
+      localStorage.setItem(STORAGE_KEY_BACKUP, JSON.stringify(merged));
+    }catch(e){}
+    return merged;
   }
 
-  // 3) migrate from previous canon v1 keys (unscope)
+  // 3) migrate from any path-scoped v2 main/backup
+  const v2 = findLastPathScopedV2() || findLastPathScopedV2Backup();
+  if(v2){
+    s = loadFromKey(v2);
+    if(s){
+      const merged = mergeDefault(s);
+      try{
+        localStorage.setItem(STORAGE_KEY_MAIN, JSON.stringify(merged));
+        localStorage.setItem(STORAGE_KEY_BACKUP, JSON.stringify(merged));
+      }catch(e){}
+      return merged;
+    }
+  }
+
+  // 4) migrate prior canon v1
   s = loadFromKey(STORAGE_KEY_CANON_OLD) || loadFromKey(STORAGE_KEY_BACKUP_OLD);
   if(s){
+    const merged = mergeDefault(s);
     try{
-      localStorage.setItem(STORAGE_KEY_MAIN, JSON.stringify(s));
-      localStorage.setItem(STORAGE_KEY_BACKUP, JSON.stringify(s));
+      localStorage.setItem(STORAGE_KEY_MAIN, JSON.stringify(merged));
+      localStorage.setItem(STORAGE_KEY_BACKUP, JSON.stringify(merged));
     }catch(e){}
-    return s;
+    return merged;
   }
 
-  // 4) migrate from older legacy keys
+  // 5) migrate older legacy keys
   s = loadFromKey(STORAGE_KEY_CANON_OLD2) || loadFromKey(STORAGE_KEY_LEGACY_OLD);
   if(s){
+    const merged = mergeDefault(s);
     try{
-      localStorage.setItem(STORAGE_KEY_MAIN, JSON.stringify(s));
-      localStorage.setItem(STORAGE_KEY_BACKUP, JSON.stringify(s));
+      localStorage.setItem(STORAGE_KEY_MAIN, JSON.stringify(merged));
+      localStorage.setItem(STORAGE_KEY_BACKUP, JSON.stringify(merged));
     }catch(e){}
-    return s;
-  }
-
-  // 5) migrate from any legacy salted key if found
-  const legacySalted = findLegacySaltedKey();
-  if(legacySalted){
-    s = loadFromKey(legacySalted);
-    if(s){
-      try{
-        localStorage.setItem(STORAGE_KEY_MAIN, JSON.stringify(s));
-        localStorage.setItem(STORAGE_KEY_BACKUP, JSON.stringify(s));
-      }catch(e){}
-      return s;
-    }
+    return merged;
   }
 
   return null;
@@ -874,11 +895,15 @@ async function copy(text){
 }
 
 /* =========================================================
-EE ▸ PERSIST (ROBUST)
-- atomic write: TMP -> MAIN -> BACKUP
-- lifecycle flush: pagehide/visibilitychange/beforeunload
+EE ▸ PERSIST (SOVEREIGN, DUMB, RELIABLE)
+- write MAIN + BACKUP every time
+- also flush on lifecycle events
 ========================================================= */
+let _BOOTING = true;
+
 function persist(silent=false){
+  if(_BOOTING) return;
+
   STATE.updatedAt=nowISO();
   ensureCorePresets();
   root.style.setProperty("--drawer-h", String(STATE.ui.drawerH));
@@ -1846,7 +1871,7 @@ $("btnBulkClear").addEventListener("click", ()=>{ $("bulkRoomInput").value=""; t
   }catch(_){}
 })();
 
-/* Cross-tab sync (Base key) */
+/* Cross-tab sync (SOVEREIGN key) */
 window.addEventListener("storage",(e)=>{
   if(e.key!==STORAGE_KEY_MAIN) return;
   try{
@@ -1854,31 +1879,38 @@ window.addEventListener("storage",(e)=>{
     if(!incoming) return;
     STATE=mergeDefault(incoming);
     ensureCorePresets();
-    // do not persist here (avoid loops) — just render
     render();
   }catch(_){}
 });
 
-/* BFCache restore */
+/* BFCache restore (reload sovereign state) */
 window.addEventListener("pageshow",()=>{
   const stored=loadLocal();
-  if(stored){ STATE=stored; ensureCorePresets(); render(); }
+  if(stored){
+    STATE=stored;
+    ensureCorePresets();
+    render();
+  }
 });
 
-/* Boot */
+/* =========================================================
+BOOT
+========================================================= */
 const _BOOT_LOADED = loadLocal();
-let STATE = _BOOT_LOADED || structuredClone(DEFAULT);
+let STATE = _BOOT_LOADED ? _BOOT_LOADED : structuredClone(DEFAULT);
 ensureCorePresets();
 root.style.setProperty("--drawer-h", String(STATE.ui.drawerH));
 bindHotkeys();
 
+_BOOTING = false;
 render();
 
-/* Do NOT overwrite an existing Base state on boot. Only seed storage on first run. */
+/* Seed sovereign storage only if nothing exists yet */
 if(!_BOOT_LOADED){
-  persist();
+  persist(true);
 }
 
+/* Ensure running light resumes */
 if(STATE.ui.lightRunning && !STATE.ui.blackout) startLight(STATE.ui.lightPreset||1);
 </script>
 
@@ -1887,14 +1919,13 @@ AE/EE/WB SERIALIZATION STAMP (MANDATORY)
 AE/EE/WB + FILE_ID/ROOM_ID/VERSION/UPDATED_AT/CHANGELOG
 FILE_ID: KETADATA_SHELL8
 ROOM_ID: BASE
-VERSION: BASE_SYSTEM_CANON_v2_5
+VERSION: BASE_SYSTEM_SOVEREIGN_v3
 UPDATED_AT: 2025-12-27T00:00:00-05:00
 CHANGELOG:
-- EE: BASE STORAGE KEY IS NOW PATH-SCOPED (origin+pathname) TO PREVENT OTHER PAGES FROM CLOBBERING BASE
-- EE: LIFECYCLE FLUSH (pagehide/beforeunload/visibilitychange) TO GUARANTEE LAST STATE SURVIVES REFRESH/NAV
-- WB: CROSS-TAB STORAGE SYNC FIXED (LISTENS TO STORAGE_KEY_MAIN; NO UNDEFINED STORAGE_KEY)
-- EE: MIGRATION KEPT FROM PRIOR CANON/LEGACY KEYS INTO NEW PATH-SCOPED CANON KEY
+- EE: BASE STORAGE NOW USES A SINGLE SOVEREIGN KEY (NOT PATH-SCOPED) => PERSISTS ACROSS REFRESH / HOTKEY NAV / NEW TABS / FILE RENAMES
+- EE: BOOT GUARD (_BOOTING) PREVENTS ANY PREMATURE WRITE BEFORE STATE LOAD
+- EE: MIGRATION: AUTO-IMPORTS ANY PRIOR PATH-SCOPED v2 BASE INTO SOVEREIGN v3
+- EE: CROSS-TAB SYNC LISTENS TO THE SOVEREIGN KEY
 ========================================================= -->
 </body>
 </html>
-
