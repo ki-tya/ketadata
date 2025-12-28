@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1.0" />
+<title>KETADATA // INDEX</title>
+
+<style>
+:root{
+  --bg:#000;
+  --fg:#fff;
+  --muted: rgba(255,255,255,.42);
+  --faint: rgba(255,255,255,.18);
+  --hair: rgba(255,255,255,.12);
+
+  --speedA: 14s;
+  --speedB: 22s;
+  --speedC: 38s;
+}
+
+*{ box-sizing:border-box; }
+html,body{ height:100%; }
+
+body{
+  margin:0;
+  background:var(--bg);
+  color:var(--fg);
+  overflow:hidden;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+/* =========================================================
+   FULL-SCREEN SIGNAL FIELD
+========================================================= */
+#signal{
+  position:fixed;
+  inset:0;
+  z-index:1;
+}
+
+/* canvas used purely for line orchestration */
+canvas{
+  position:absolute;
+  inset:0;
+}
+
+/* =========================================================
+   OVERLAY UI (MINIMAL, FLOATING)
+========================================================= */
+#overlay{
+  position:fixed;
+  inset:0;
+  z-index:5;
+  display:flex;
+  align-items:flex-end;
+  justify-content:space-between;
+  padding:18px;
+  pointer-events:none;
+}
+
+.warning{
+  pointer-events:auto;
+  border:1px solid var(--hair);
+  padding:10px 12px;
+  max-width:min(720px,72vw);
+  background:rgba(0,0,0,.32);
+  backdrop-filter: blur(10px);
+}
+
+.warning .t{
+  font-size:10px;
+  letter-spacing:.28em;
+  text-transform:uppercase;
+  color:rgba(255,255,255,.86);
+  margin-bottom:6px;
+  display:flex;
+  align-items:center;
+  gap:10px;
+}
+.warning .t::before{
+  content:"";
+  width:10px;height:10px;
+  background:#fff;
+  border:1px solid #fff;
+}
+
+.warning .b{
+  font-size:11px;
+  letter-spacing:.16em;
+  text-transform:uppercase;
+  color:rgba(255,255,255,.56);
+  line-height:1.35;
+}
+
+.enter{
+  pointer-events:auto;
+  border:1px solid var(--hair);
+  padding:10px 14px;
+  background:rgba(0,0,0,.32);
+  backdrop-filter: blur(10px);
+  color:var(--muted);
+  text-decoration:none;
+  display:inline-flex;
+  align-items:center;
+  gap:10px;
+  cursor:pointer;
+  transition:color .12s linear, border-color .12s linear, transform .12s linear;
+  user-select:none;
+}
+
+.enter:hover{
+  color:#fff;
+  border-color:rgba(255,255,255,.36);
+  transform: translateY(-1px);
+}
+
+.enter .lbl{
+  font-size:11px;
+  letter-spacing:.26em;
+  text-transform:uppercase;
+}
+.enter .key{
+  border:1px solid rgba(255,255,255,.18);
+  padding:2px 8px;
+  font-size:10px;
+  letter-spacing:.18em;
+}
+
+/* =========================================================
+   ACCESSIBILITY
+========================================================= */
+@media (prefers-reduced-motion: reduce){
+  canvas{ display:none; }
+}
+</style>
+</head>
+
+<body>
+
+<div id="signal">
+  <canvas id="c"></canvas>
+</div>
+
+<div id="overlay">
+  <div class="warning">
+    <div class="t">Epilepsy warning</div>
+    <div class="b">
+      This page contains rapidly moving horizontal signal lines and flashing contrast.
+      Viewer discretion advised.
+    </div>
+  </div>
+
+  <a class="enter" href="https://ketadata.com/index11.html">
+    <span class="lbl">ENTER</span>
+    <span class="key">[ENTER]</span>
+  </a>
+</div>
+
+<script>
+/* =========================================================
+   SIGNAL ENGINE — FULL SCREEN LINE FIELD
+========================================================= */
+const canvas = document.getElementById("c");
+const ctx = canvas.getContext("2d");
+
+let w, h, dpr;
+function resize(){
+  dpr = window.devicePixelRatio || 1;
+  w = window.innerWidth;
+  h = window.innerHeight;
+  canvas.width  = w * dpr;
+  canvas.height = h * dpr;
+  canvas.style.width = w+"px";
+  canvas.style.height = h+"px";
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+}
+window.addEventListener("resize", resize);
+resize();
+
+/* character grammar */
+const TOKENS = [
+  "--------------","----------","------","---","--",
+  ">>>>>","<<<<<","::","////","\\\\\\\\","==",
+  "KETADATA","SIGNAL","NO DRIFT","WB","EE","AE"
+];
+
+function pick(a){ return a[(Math.random()*a.length)|0]; }
+
+/* build long strings once */
+function buildLine(){
+  let s = "";
+  for(let i=0;i<140;i++){
+    s += (Math.random()<0.7 ? "--------------" : pick(TOKENS)) + " ";
+  }
+  return s;
+}
+
+/* line objects spanning entire height */
+const lines = [];
+const LINE_GAP = 14; // pixel spacing
+
+for(let y=0;y<h;y+=LINE_GAP){
+  lines.push({
+    y,
+    text: buildLine(),
+    speed:
+      Math.random()<0.33 ? 1/14 :
+      Math.random()<0.66 ? 1/22 :
+                           1/38,
+    offset: Math.random()*w,
+    alpha: 0.35 + Math.random()*0.55,
+    size: 11 + Math.random()*2
+  });
+}
+
+let last = performance.now();
+
+function tick(now){
+  const dt = (now-last)/1000;
+  last = now;
+
+  ctx.fillStyle = "rgba(0,0,0,0.18)";
+  ctx.fillRect(0,0,w,h);
+
+  ctx.fillStyle = "#fff";
+
+  for(const l of lines){
+    l.offset -= w * l.speed * dt;
+    if(l.offset < -w*2) l.offset += w*2;
+
+    ctx.globalAlpha = l.alpha;
+    ctx.font = `${l.size}px ui-monospace, monospace`;
+    ctx.fillText(l.text, l.offset, l.y);
+    ctx.fillText(l.text, l.offset + w*2, l.y);
+  }
+
+  ctx.globalAlpha = 1;
+  requestAnimationFrame(tick);
+}
+
+ctx.fillStyle="#000";
+ctx.fillRect(0,0,w,h);
+requestAnimationFrame(tick);
+
+/* keyboard enter */
+window.addEventListener("keydown", e=>{
+  if(e.key === "Enter"){
+    window.location.href = "https://ketadata.com/index11.html";
+  }
+});
+</script>
+
+<!-- ============================================================
+KETADATA HTML SERIALIZATION STAMP
+AE/EE/WB: AE
+FILE_ID: INDEX_SIGNAL_FIELD_V2
+ROOM_ID: COVER
+VERSION: v2
+UPDATED_AT: 2025-12-28T00:00:00-05:00
+CHANGELOG:
+- FULL-SCREEN HORIZONTAL SIGNAL FIELD (NO ROWS / NO EMPTY SPACE)
+- MULTI-SPEED LINE LAYERS WITH TERMINAL-LIKE GLYPH GRAMMAR
+- MINIMAL EPILEPSY WARNING + GREY [ENTER] → WHITE ON HOVER
+============================================================ -->
+</body>
+</html>
