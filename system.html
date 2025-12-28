@@ -548,21 +548,15 @@ const URLS = {
 
 /* =========================================================
 EE ▸ STORAGE — BASE STATE MUST BE IMMUTABLE UNLESS USER RESETS
-FIX: make the Base key stable, add atomic write + backup, persist on lifecycle events.
+FIX:
+- Path-scoped Base key so sibling pages cannot clobber Base
+- Atomic-ish write MAIN+BACKUP+TMP
+- Lifecycle flush (pagehide/visibilitychange/beforeunload)
+- Cross-tab sync listens to the actual Base key
 ========================================================= */
 const FILE_ID="KETADATA_SHELL8";
 const PAGE_ID="BASE_SYSTEM";
 const STORAGE_EPOCH="BASE_CANON";
-
-const STORAGE_KEY_MAIN   = `KDT::BASE::STATE::${FILE_ID}::${PAGE_ID}::CANON_v1`;
-const STORAGE_KEY_BACKUP = `KDT::BASE::STATE::${FILE_ID}::${PAGE_ID}::CANON_v1::BACKUP`;
-const STORAGE_KEY_TMP    = `KDT::BASE::STATE::${FILE_ID}::${PAGE_ID}::CANON_v1::TMP`;
-
-/* Previous keys (for migration only) */
-const STORAGE_KEY_CANON_OLD = `KDT::STATE::${FILE_ID}::${PAGE_ID}::${STORAGE_EPOCH}::BASE`;
-const STORAGE_KEY_LEGACY_OLD = `KDT::STATE::${FILE_ID}::${PAGE_ID}::${STORAGE_EPOCH}`;
-/* Salted key from prior iteration (for migration only) */
-const STORAGE_KEY_SALTED_PREFIX = `KDT::BASE::STATE::${FILE_ID}::`; // if present, we'll attempt to detect legacy salted key
 
 function nowISO(){return new Date().toISOString();}
 const $=(id)=>document.getElementById(id);
@@ -570,6 +564,27 @@ const $=(id)=>document.getElementById(id);
 const root=$("root");
 const stage=$("stage");
 const motion=$("motion");
+
+/* Path-scope the Base key (this exact URL only) */
+function baseScopeKey(){
+  const raw = (location.origin + location.pathname);
+  return raw.replace(/[^a-z0-9]+/gi,"_").replace(/^_+|_+$/g,"").slice(-120) || "BASE";
+}
+
+/* Canon keys (NEW) */
+const BASE_SCOPE = baseScopeKey();
+const STORAGE_KEY_MAIN   = `KDT::BASE::STATE::${FILE_ID}::${PAGE_ID}::${BASE_SCOPE}::CANON_v2`;
+const STORAGE_KEY_BACKUP = `KDT::BASE::STATE::${FILE_ID}::${PAGE_ID}::${BASE_SCOPE}::CANON_v2::BACKUP`;
+const STORAGE_KEY_TMP    = `KDT::BASE::STATE::${FILE_ID}::${PAGE_ID}::${BASE_SCOPE}::CANON_v2::TMP`;
+
+/* Previous keys (for migration only) */
+const STORAGE_KEY_CANON_OLD = `KDT::BASE::STATE::${FILE_ID}::${PAGE_ID}::CANON_v1`;
+const STORAGE_KEY_BACKUP_OLD = `KDT::BASE::STATE::${FILE_ID}::${PAGE_ID}::CANON_v1::BACKUP`;
+const STORAGE_KEY_TMP_OLD = `KDT::BASE::STATE::${FILE_ID}::${PAGE_ID}::CANON_v1::TMP`;
+
+const STORAGE_KEY_LEGACY_OLD = `KDT::STATE::${FILE_ID}::${PAGE_ID}::${STORAGE_EPOCH}`;
+const STORAGE_KEY_CANON_OLD2 = `KDT::STATE::${FILE_ID}::${PAGE_ID}::${STORAGE_EPOCH}::BASE`;
+const STORAGE_KEY_SALTED_PREFIX = `KDT::BASE::STATE::${FILE_ID}::`; // heuristic legacy salted detection
 
 /* =========================================================
 EE ▸ DEFAULT PRESETS (ALWAYS PRESENT)
@@ -713,8 +728,6 @@ function findLegacySaltedKey(){
     for(let i=0;i<localStorage.length;i++){
       const k=localStorage.key(i);
       if(k && k.startsWith(STORAGE_KEY_SALTED_PREFIX) && k.includes("KDT::BASE::STATE::")) {
-        // Heuristic: old salted key format: KDT::BASE::STATE::FILE_ID::<salt>
-        // Only accept short keys (avoid picking up unrelated)
         if(k.split("::").length >= 5) return k;
       }
     }
@@ -733,22 +746,21 @@ function loadFromKey(key){
   }
 }
 
-/* Base load (main key + backup + migration) */
+/* Base load (NEW keys + backup + migration) */
 function loadLocal(){
-  // 1) main
+  // 1) new main
   let s = loadFromKey(STORAGE_KEY_MAIN);
   if(s) return s;
 
-  // 2) backup
+  // 2) new backup
   s = loadFromKey(STORAGE_KEY_BACKUP);
   if(s){
-    // heal main if backup is valid
     try{ localStorage.setItem(STORAGE_KEY_MAIN, JSON.stringify(s)); }catch(e){}
     return s;
   }
 
-  // 3) migrate from older keys
-  s = loadFromKey(STORAGE_KEY_CANON_OLD) || loadFromKey(STORAGE_KEY_LEGACY_OLD);
+  // 3) migrate from previous canon v1 keys (unscope)
+  s = loadFromKey(STORAGE_KEY_CANON_OLD) || loadFromKey(STORAGE_KEY_BACKUP_OLD);
   if(s){
     try{
       localStorage.setItem(STORAGE_KEY_MAIN, JSON.stringify(s));
@@ -757,7 +769,17 @@ function loadLocal(){
     return s;
   }
 
-  // 4) migrate from legacy salted key (if exists)
+  // 4) migrate from older legacy keys
+  s = loadFromKey(STORAGE_KEY_CANON_OLD2) || loadFromKey(STORAGE_KEY_LEGACY_OLD);
+  if(s){
+    try{
+      localStorage.setItem(STORAGE_KEY_MAIN, JSON.stringify(s));
+      localStorage.setItem(STORAGE_KEY_BACKUP, JSON.stringify(s));
+    }catch(e){}
+    return s;
+  }
+
+  // 5) migrate from any legacy salted key if found
   const legacySalted = findLegacySaltedKey();
   if(legacySalted){
     s = loadFromKey(legacySalted);
@@ -854,7 +876,7 @@ async function copy(text){
 /* =========================================================
 EE ▸ PERSIST (ROBUST)
 - atomic write: TMP -> MAIN -> BACKUP
-- optional silent flag (no render) for lifecycle flush
+- lifecycle flush: pagehide/visibilitychange/beforeunload
 ========================================================= */
 function persist(silent=false){
   STATE.updatedAt=nowISO();
@@ -864,7 +886,6 @@ function persist(silent=false){
   const blob = JSON.stringify(STATE);
 
   try{
-    // atomic-ish commit
     localStorage.setItem(STORAGE_KEY_TMP, blob);
     localStorage.setItem(STORAGE_KEY_MAIN, blob);
     localStorage.setItem(STORAGE_KEY_BACKUP, blob);
@@ -873,10 +894,21 @@ function persist(silent=false){
   if(!silent) render();
 }
 
+/* lifecycle flush — guarantees most recent Base survives refresh/navigation */
+(function bindLifecycleFlush(){
+  const flush=()=>{ try{ persist(true); }catch(e){} };
+
+  window.addEventListener("pagehide", flush, {capture:true});
+  window.addEventListener("beforeunload", flush, {capture:true});
+  document.addEventListener("visibilitychange", ()=>{
+    if(document.visibilityState==="hidden") flush();
+  }, {capture:true});
+})();
+
 /* export/import */
 function exportState(){
   ensureCorePresets();
-  return JSON.stringify({ STORAGE_KEY: STORAGE_KEY_MAIN, FILE_ID, PAGE_ID, STORAGE_EPOCH, STATE }, null, 2);
+  return JSON.stringify({ STORAGE_KEY: STORAGE_KEY_MAIN, FILE_ID, PAGE_ID, STORAGE_EPOCH, BASE_SCOPE, STATE }, null, 2);
 }
 function importState(text){
   const parsed=JSON.parse(text);
@@ -1185,7 +1217,6 @@ function toggleFullscreen(){ setFullscreen(!STATE.ui.fullscreen); }
 WB ▸ NAVIGATION (GO + NEW TAB)
 ========================================================= */
 function finalizeBeforeNav(){
-  // force a lifecycle-safe flush before leaving
   persist(true);
 }
 function go(url){
@@ -1815,14 +1846,15 @@ $("btnBulkClear").addEventListener("click", ()=>{ $("bulkRoomInput").value=""; t
   }catch(_){}
 })();
 
-/* Cross-tab sync (salted Base key only) */
+/* Cross-tab sync (Base key) */
 window.addEventListener("storage",(e)=>{
-  if(e.key!==STORAGE_KEY) return;
+  if(e.key!==STORAGE_KEY_MAIN) return;
   try{
     const incoming=JSON.parse(e.newValue||"null");
     if(!incoming) return;
     STATE=mergeDefault(incoming);
     ensureCorePresets();
+    // do not persist here (avoid loops) — just render
     render();
   }catch(_){}
 });
@@ -1855,15 +1887,16 @@ AE/EE/WB SERIALIZATION STAMP (MANDATORY)
 AE/EE/WB + FILE_ID/ROOM_ID/VERSION/UPDATED_AT/CHANGELOG
 FILE_ID: KETADATA_SHELL8
 ROOM_ID: BASE
-VERSION: BASE_SYSTEM_CANON_v2_4
+VERSION: BASE_SYSTEM_CANON_v2_5
 UPDATED_AT: 2025-12-27T00:00:00-05:00
 CHANGELOG:
-- EE: BASE STATE STORED UNDER SALTED BASE-ONLY STORAGE KEY TO PREVENT ANY OTHER PAGE FROM CLOBBERING IT
-- EE: MIGRATE ONCE FROM OLDER KEYS INTO SALTED BASE KEY
-- EE: BOOT NO LONGER OVERWRITES EXISTING STATE ON REFRESH (ONLY SEEDS ON FIRST RUN)
-- WB: CROSS-TAB STORAGE SYNC LISTENS TO SALTED BASE KEY
+- EE: BASE STORAGE KEY IS NOW PATH-SCOPED (origin+pathname) TO PREVENT OTHER PAGES FROM CLOBBERING BASE
+- EE: LIFECYCLE FLUSH (pagehide/beforeunload/visibilitychange) TO GUARANTEE LAST STATE SURVIVES REFRESH/NAV
+- WB: CROSS-TAB STORAGE SYNC FIXED (LISTENS TO STORAGE_KEY_MAIN; NO UNDEFINED STORAGE_KEY)
+- EE: MIGRATION KEPT FROM PRIOR CANON/LEGACY KEYS INTO NEW PATH-SCOPED CANON KEY
 ========================================================= -->
 </body>
 </html>
+
 
 
