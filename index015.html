@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1.0" />
+<title>KETADATA // LINE OCEAN // BLOCKIER</title>
+
+<style>
+:root{
+  /* UI */
+  --uiFont: Arial, Helvetica, sans-serif;
+  --uiSize: 18px;
+  --uiKern: 0.18em;
+  --uiPadY: 18px;
+  --uiPadX: 22px;
+  --uiBorder: 6px;
+  --warnOpacity: 0.78;
+
+  /* Ocean (BLOCKIER) */
+  --cols: 96;   /* ↓ fewer columns */
+  --rows: 64;   /* ↓ fewer rows */
+  --shore: 0.70;
+  --amp: 0.18;
+  --foamBand: 44;
+
+  --speed: 0.70;
+  --fall: 34;
+  --trail: 0.085;
+
+  --waveFill: 0.62;
+  --foamFill: 0.96;
+
+  --fontPx: 16; /* ↑ bigger blocks */
+}
+
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0;
+  overflow:hidden;
+  cursor:pointer;
+  background:#fff;
+}
+
+/* Invert system */
+body.invert{background:#fff;color:#000}
+body:not(.invert){background:#000;color:#fff}
+
+/* field */
+#wrap{position:fixed; inset:0; z-index:1}
+canvas{width:100%; height:100%; image-rendering:pixelated; display:block}
+
+/* warning */
+#warn{
+  position:fixed;
+  left:50%;
+  top:50%;
+  transform:translate(-50%,-50%);
+  z-index:2;
+
+  font-family:var(--uiFont);
+  font-weight:900;
+  font-size:var(--uiSize);
+  letter-spacing:var(--uiKern);
+  line-height:1.25;
+  text-transform:uppercase;
+  text-align:center;
+
+  opacity:var(--warnOpacity);
+  pointer-events:none;
+  user-select:none;
+
+  padding:var(--uiPadY) var(--uiPadX);
+  border:var(--uiBorder) solid currentColor;
+  background:transparent;
+}
+
+@media (prefers-reduced-motion: reduce){
+  canvas{display:none}
+}
+</style>
+</head>
+
+<body class="invert">
+  <div id="wrap"><canvas id="c"></canvas></div>
+  <div id="warn">EPILEPSY WARNING: THIS SITE MAY CAUSE SEIZURE</div>
+
+<script>
+/* ROUTING + INVERT */
+const TARGET_URL="https://ketadata.com/index11.html";
+addEventListener("click",()=>location.href=TARGET_URL);
+addEventListener("keydown",e=>{
+  if(e.key==="Enter") location.href=TARGET_URL;
+  if(e.shiftKey && e.key.toLowerCase()==="i"){
+    document.body.classList.toggle("invert");
+  }
+});
+
+/* OCEAN */
+const canvas=document.getElementById("c");
+const ctx=canvas.getContext("2d",{alpha:false});
+
+let w,h,dpr;
+function resize(){
+  dpr=window.devicePixelRatio||1;
+  w=innerWidth; h=innerHeight;
+  canvas.width=Math.floor(w*dpr);
+  canvas.height=Math.floor(h*dpr);
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+}
+addEventListener("resize",resize);
+resize();
+
+function cssNum(n,f){
+  const v=parseFloat(getComputedStyle(document.documentElement).getPropertyValue(n));
+  return Number.isFinite(v)?v:f;
+}
+function clamp01(x){return Math.max(0,Math.min(1,x))}
+function pick(a){return a[(Math.random()*a.length)|0]}
+
+/* BLOCK-HEAVY GLYPHS */
+function glyph(){
+  const r=Math.random();
+  if(r<0.55) return "█";          // dominant block
+  if(r<0.75) return "▓";
+  if(r<0.90) return "▒";
+  return String.fromCharCode(0x2800+(Math.random()*256|0)); // occasional braille noise
+}
+
+function frame(now){
+  const cols=Math.round(cssNum("--cols",96));
+  const rows=Math.round(cssNum("--rows",64));
+
+  const shore=clamp01(cssNum("--shore",0.70));
+  const ampPct=clamp01(cssNum("--amp",0.18));
+  const foamBand=Math.max(16,cssNum("--foamBand",44));
+
+  const speed=cssNum("--speed",0.70);
+  const fall=cssNum("--fall",34);
+  const trail=Math.max(0.02,Math.min(0.18,cssNum("--trail",0.085)));
+
+  const waveFill=clamp01(cssNum("--waveFill",0.62));
+  const foamFill=clamp01(cssNum("--foamFill",0.96));
+
+  const fontPx=Math.round(cssNum("--fontPx",16));
+
+  const inverted=document.body.classList.contains("invert");
+  const BG=inverted?"#fff":"#000";
+  const INK=inverted?"#000":"#fff";
+
+  ctx.globalAlpha=1;
+  ctx.fillStyle=BG;
+  ctx.fillRect(0,0,w,h);
+
+  ctx.globalAlpha=trail;
+  ctx.fillRect(0,0,w,h);
+  ctx.globalAlpha=1;
+
+  const cellW=w/cols;
+  const cellH=h/rows;
+
+  const t=(now/1000)*speed;
+  const yDrift=((now/1000)*fall)%cellH;
+  const baseY=h*shore;
+
+  ctx.font=`900 ${fontPx}px Arial, Helvetica, sans-serif`;
+  ctx.fillStyle=INK;
+  ctx.textBaseline="top";
+
+  for(let cx=0;cx<cols;cx++){
+    const nx=cx/cols;
+    const crest=
+      baseY+
+      Math.sin(nx*6+t*1.3)*(h*ampPct*0.4)+
+      Math.sin(nx*14+t*0.9)*(h*ampPct*0.22);
+
+    const foamTop=crest-foamBand*0.55;
+    const foamBot=crest+foamBand*0.55;
+
+    const x=cx*cellW;
+
+    for(let ry=0;ry<rows;ry++){
+      const y=(ry*cellH+yDrift)-cellH;
+      if(y>foamBot) continue;
+
+      const inFoam=(y>=foamTop && y<=foamBot);
+      if(Math.random()>(inFoam?foamFill:waveFill)) continue;
+
+      ctx.globalAlpha=inFoam?1:(0.85+Math.random()*0.15);
+      ctx.fillText(glyph(),x,y);
+    }
+  }
+
+  ctx.globalAlpha=1;
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+
+<!--
+KETADATA SERIALIZATION
+FILE_ID: LINE_OCEAN_BLOCKIER_V1
+ROOM_ID: COVER
+VERSION: v1
+UPDATED_AT: 2025-12-28
+-->
+</body>
+</html>
