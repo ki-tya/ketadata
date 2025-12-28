@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1.0" />
+<title>KETADATA // BRAILLE FIELD</title>
+<style>
+  :root{
+    --bg:#000;
+    --fg:#fff;
+
+    /* acid / sear */
+    --searA: 14px;
+    --searB: 44px;
+    --trail: 0.12;          /* lower = longer trails */
+    --density: 1.0;         /* overall intensity multiplier */
+    --scanOpacity: .18;
+
+    /* typography */
+    --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    --font: 12px;
+    --lh: 14px;
+    --ls: .16em;
+  }
+
+  *{ box-sizing:border-box; }
+  html,body{ height:100%; }
+  body{
+    margin:0;
+    background: var(--bg);
+    color: var(--fg);
+    overflow:hidden;
+    font-family: var(--mono);
+  }
+
+  /* =========================================================
+     FIELD (PURE WHITE CODE ON BLACK)
+  ========================================================= */
+  #wrap{
+    position:fixed; inset:0;
+    z-index:1;
+  }
+  canvas#c{
+    position:absolute; inset:0;
+    width:100%; height:100%;
+  }
+
+  /* subtle brutal scan lattice */
+  #scan{
+    position:fixed; inset:0;
+    z-index:2;
+    pointer-events:none;
+    opacity: var(--scanOpacity);
+    mix-blend-mode: overlay;
+    background:
+      repeating-linear-gradient(
+        0deg,
+        rgba(255,255,255,.08),
+        rgba(255,255,255,.08) 1px,
+        transparent 1px,
+        transparent 3px
+      ),
+      repeating-linear-gradient(
+        90deg,
+        rgba(255,255,255,.03),
+        rgba(255,255,255,.03) 1px,
+        transparent 1px,
+        transparent 52px
+      );
+    filter: blur(.35px);
+  }
+
+  /* =========================================================
+     UI (SIMPLE + BRUTALIST, REPOSITIONED)
+     - Warning: top-left, small
+     - Enter: bottom-right, small
+  ========================================================= */
+  #ui{
+    position:fixed; inset:0;
+    z-index:5;
+    pointer-events:none;
+    user-select:none;
+  }
+  #warn{
+    position:absolute;
+    top: 12px;
+    left: 12px;
+    pointer-events:auto;
+    font-size: 10px;
+    letter-spacing: .22em;
+    text-transform: uppercase;
+    color: rgba(255,255,255,.52);
+    padding: 8px 10px;
+    border: 1px solid rgba(255,255,255,.14);
+    background: rgba(0,0,0,.22);
+    backdrop-filter: blur(8px);
+  }
+  #enter{
+    position:absolute;
+    right: 12px;
+    bottom: 12px;
+    pointer-events:auto;
+    text-decoration:none;
+    font-size: 11px;
+    letter-spacing: .26em;
+    text-transform: uppercase;
+    color: rgba(255,255,255,.36);
+    padding: 10px 12px;
+    border: 1px solid rgba(255,255,255,.14);
+    background: rgba(0,0,0,.18);
+    backdrop-filter: blur(8px);
+    transition: color .12s linear, border-color .12s linear, transform .12s linear;
+  }
+  #enter:hover{
+    color:#fff;
+    border-color: rgba(255,255,255,.34);
+    transform: translateY(-1px);
+  }
+  #enter:active{ transform: translateY(0px); }
+
+  /* =========================================================
+     HIDDEN "HTML INSIDE HTML" (GENERATED TEXT PAYLOAD)
+     - This is not displayed; it's used as source material for the stream.
+  ========================================================= */
+  textarea#payload{
+    position:absolute;
+    left:-9999px; top:-9999px;
+    width:1px; height:1px;
+    opacity:0;
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    canvas#c{ display:none; }
+  }
+</style>
+</head>
+
+<body>
+  <div id="wrap">
+    <canvas id="c"></canvas>
+  </div>
+  <div id="scan" aria-hidden="true"></div>
+
+  <div id="ui">
+    <div id="warn">WARNING: STROBING / FAST MOTION</div>
+    <a id="enter" href="https://ketadata.com/index11.html">[ENTER]</a>
+  </div>
+
+  <!-- HTML INSIDE HTML (SOURCE MATERIAL FOR THE STREAM) -->
+  <textarea id="payload" aria-hidden="true"></textarea>
+
+<script>
+/* =========================================================
+   BRAILLE CODE MATRIX — PURE WHITE, ACIDIC, NO TITLE
+   - Canvas renders the stream, but content is HTML-ish + braille blocks.
+   - We also generate a literal HTML document string ("html inside html")
+     and feed it into the stream as source material.
+========================================================= */
+
+const TARGET_URL = "https://ketadata.com/index11.html";
+
+// 1) Generate a full HTML doc INSIDE this HTML (as a string)
+function buildInnerHTML(){
+  const ts = new Date().toISOString();
+  // keep it brutal, low-kitsch, infrastructural
+  return [
+`<!DOCTYPE html>`,
+`<html>`,
+`<head>`,
+`  <meta charset="utf-8">`,
+`  <meta name="viewport" content="width=device-width,initial-scale=1.0">`,
+`  <title>KETADATA</title>`,
+`  <style>`,
+`    html,body{height:100%;margin:0;background:#000;color:#fff;font-family:ui-monospace,monospace;}`,
+`    .node{position:fixed;inset:0;display:grid;place-items:center;}`,
+`    .sig{letter-spacing:.22em;text-transform:uppercase;font-size:10px;opacity:.52;}`,
+`    .key{position:fixed;right:12px;bottom:12px;border:1px solid rgba(255,255,255,.14);padding:10px 12px;}`,
+`  </style>`,
+`</head>`,
+`<body>`,
+`  <div class="node">`,
+`    <div class="sig">BAD GATEWAY // SIGNAL // ${ts}</div>`,
+`  </div>`,
+`  <a class="key" href="${TARGET_URL}">[ENTER]</a>`,
+`</body>`,
+`</html>`
+  ].join("\n");
+}
+
+const payloadEl = document.getElementById("payload");
+payloadEl.value = buildInnerHTML();
+
+// 2) Character sets: braille + box-dots + a few HTML tokens
+// Braille patterns block: U+2800..U+28FF
+function brailleChar(){
+  // bias toward denser dots for “acidic” sear
+  const r = Math.random();
+  let code;
+  if(r < 0.60) code = 0x2800 + (0xFF & (Math.random()*256|0));     // full range
+  else if(r < 0.86) code = 0x2800 + (0xFF & (0xC0 + (Math.random()*64|0))); // denser
+  else code = 0x28FF; // max
+  return String.fromCharCode(code);
+}
+
+const TOKENS = [
+  "<div>", "</div>", "<span>", "</span>", "<html>", "</html>",
+  "<head>", "</head>", "<body>", "</body>", "<style>", "</style>",
+  "<meta>", "<title>", "</title>", "href=", "src=", "id=", "class=",
+  "----", "------", "----------", "////////////////", "::", "==", "||", "[]", "{}"
+];
+
+function pick(a){ return a[(Math.random()*a.length)|0]; }
+
+// 3) Build stream source: inner HTML + braille infill + tokens
+const source = payloadEl.value;
+
+// Slice source into chunks; we'll inject braille between chunks.
+let srcIdx = 0;
+function nextChunk(){
+  // sometimes emit a raw HTML chunk, sometimes emit braille
+  const r = Math.random();
+  if(r < 0.22){
+    // HTML chunk
+    const len = 8 + (Math.random()*26|0);
+    const chunk = source.slice(srcIdx, srcIdx + len);
+    srcIdx += len;
+    if(srcIdx >= source.length) srcIdx = 0;
+    return chunk.replace(/\s/g, " "); // keep spacing stable
+  } else if(r < 0.28){
+    // token puncture
+    return pick(TOKENS);
+  } else {
+    // braille run
+    const n = 8 + (Math.random()*22|0);
+    let s = "";
+    for(let i=0;i<n;i++) s += brailleChar();
+    return s;
+  }
+}
+
+// 4) Canvas matrix
+const canvas = document.getElementById("c");
+const ctx = canvas.getContext("2d");
+
+let w,h,dpr;
+function resize(){
+  dpr = window.devicePixelRatio || 1;
+  w = window.innerWidth;
+  h = window.innerHeight;
+  canvas.width = Math.floor(w*dpr);
+  canvas.height = Math.floor(h*dpr);
+  canvas.style.width = w+"px";
+  canvas.style.height = h+"px";
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+}
+window.addEventListener("resize", resize);
+resize();
+
+const font = getComputedStyle(document.documentElement).getPropertyValue("--font").trim() || "12px";
+const lh = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--lh")) || 14;
+const ls = getComputedStyle(document.documentElement).getPropertyValue("--ls").trim() || ".16em";
+
+// Columns sized by character cell
+function cellW(){
+  // approximate mono char width; slightly wider due to letter spacing
+  return 9.2;
+}
+
+let cols = 0;
+let drops = [];
+function resetDrops(){
+  cols = Math.ceil(w / cellW());
+  drops = new Array(cols).fill(0).map(()=> Math.random()*h);
+}
+resetDrops();
+window.addEventListener("resize", resetDrops);
+
+function clamp(x,a,b){ return Math.max(a, Math.min(b,x)); }
+
+let last = performance.now();
+function tick(now){
+  const dt = (now-last)/1000;
+  last = now;
+
+  // trail fade: "acidic" persistence
+  const trail = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--trail")) || 0.12;
+  ctx.fillStyle = `rgba(0,0,0,${trail})`;
+  ctx.fillRect(0,0,w,h);
+
+  // pure white ink + sear glow
+  ctx.save();
+  ctx.fillStyle = "#fff";
+  ctx.shadowColor = "rgba(255,255,255,.55)";
+  ctx.shadowBlur = 18;
+  ctx.font = `600 ${font} ${getComputedStyle(document.body).fontFamily}`;
+  ctx.textBaseline = "top";
+
+  // density ramps with dt to keep motion consistent
+  const density = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--density")) || 1.0;
+  const step = 1 + Math.floor(density * 1.2);
+
+  for(let i=0;i<cols;i+=step){
+    const x = i * cellW();
+    const y = drops[i];
+
+    // emit chunk; we print it across, but clip to 1–3 chars width feel
+    const chunk = nextChunk();
+    // choose a small visible slice to keep it matrix-like but “html-ish”
+    const sliceLen = 1 + (Math.random()*4|0);
+    const out = chunk.slice(0, sliceLen);
+
+    // slightly vary alpha per column
+    ctx.globalAlpha = 0.70 + Math.random()*0.30;
+
+    ctx.fillText(out, x, y);
+
+    // occasional “acid burn” blast: same char repeated in a small vertical burst
+    if(Math.random() < 0.008){
+      ctx.globalAlpha = 0.95;
+      const b = brailleChar();
+      ctx.fillText(b, x, y - lh*1);
+      ctx.fillText(b, x, y - lh*2);
+      ctx.fillText(b, x, y - lh*3);
+    }
+
+    // fall speed: fast, aggressive
+    drops[i] += lh * (0.85 + Math.random()*2.1) * (0.9 + density*0.6);
+
+    // reset
+    if(drops[i] > h + 40 && Math.random() > 0.985){
+      drops[i] = -Math.random()*240;
+    }
+  }
+
+  ctx.restore();
+
+  requestAnimationFrame(tick);
+}
+requestAnimationFrame(tick);
+
+// Enter key routes
+window.addEventListener("keydown", (e)=>{
+  if(e.key === "Enter"){
+    window.location.href = TARGET_URL;
+  }
+});
+</script>
+
+<!-- ============================================================
+KETADATA HTML SERIALIZATION STAMP
+AE/EE/WB: AE
+FILE_ID: BRAILLE_MATRIX_COVER_V1
+ROOM_ID: COVER
+VERSION: v1
+UPDATED_AT: 2025-12-28T00:00:00-05:00
+CHANGELOG:
+- NEW: PURE WHITE BRAILLE/HTML MATRIX FIELD (CANVAS RENDER, FULL SCREEN)
+- ADD: "HTML INSIDE HTML" GENERATED DOC STRING FEEDS THE STREAM
+- REMOVE: TITLE (NONE)
+- UI: BRUTAL WARNING (TOP-LEFT) + [ENTER] (BOTTOM-RIGHT), GREY→WHITE ON HOVER
+- AESTHETIC: ACIDIC SEAR (WHITE GLOW + LONG TRAILS), BLACK BACKGROUND
+============================================================ -->
+</body>
+</html>
