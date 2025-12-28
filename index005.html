@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1.0" />
+<title>KETADATA // WAVE // VOID BEACH</title>
+
+<style>
+:root{
+  --bg:#000;
+  --ink:#fff;
+
+  /* wave */
+  --waveSpeed: 0.78;         /* overall drift */
+  --waveHeight: 0.22;        /* amplitude as % of screen height */
+  --shoreline: 0.70;         /* where the “beach” sits (0..1 from top) */
+  --foamThickness: 42;       /* px band around shoreline */
+  --sprayChance: 0.11;       /* random splatter above the crest */
+
+  /* code density */
+  --cols: 110;               /* columns across screen (monospace grid) */
+  --rows: 70;                /* rows down screen */
+  --chunkBias: 0.66;         /* how much becomes braille/code vs empty */
+  --whiteHot: 1.00;          /* alpha */
+
+  /* motion / trail */
+  --trail: 0.09;             /* persistence */
+  --jitter: 0.65;            /* subtle turbulence */
+
+  /* typography */
+  --fontPx: 12;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+
+  /* ui */
+  --uiBorder: rgba(255,255,255,.16);
+  --uiText: rgba(255,255,255,.70);
+}
+
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0;
+  background:var(--bg);
+  overflow:hidden;
+  font-family:var(--mono);
+}
+
+/* field */
+#wrap{position:fixed; inset:0; z-index:1}
+canvas{width:100%; height:100%; image-rendering:pixelated}
+
+/* UI minimal */
+#ui{position:fixed; inset:0; z-index:2; pointer-events:none; user-select:none}
+#warn{
+  position:absolute; top:12px; left:12px;
+  pointer-events:auto;
+  font-size:10px;
+  letter-spacing:.22em;
+  text-transform:uppercase;
+  color:var(--uiText);
+  padding:8px 10px;
+  border:2px solid var(--uiBorder);
+  background:rgba(0,0,0,.06);
+}
+#enter{
+  position:absolute; right:12px; bottom:12px;
+  pointer-events:auto;
+  font-size:11px;
+  letter-spacing:.26em;
+  text-transform:uppercase;
+  color:rgba(255,255,255,.72);
+  padding:10px 12px;
+  border:2px solid var(--uiBorder);
+  background:rgba(0,0,0,.05);
+  text-decoration:none;
+  transition: background .10s linear, color .10s linear;
+}
+#enter:hover{background:#fff;color:#000}
+
+@media (prefers-reduced-motion: reduce){
+  canvas{display:none}
+}
+</style>
+</head>
+
+<body>
+<div id="wrap"><canvas id="c"></canvas></div>
+
+<div id="ui">
+  <div id="warn">WARNING: HIGH CONTRAST / FAST MOTION</div>
+  <a id="enter" href="https://ketadata.com/index11.html">[ENTER]</a>
+</div>
+
+<script>
+/* =========================================================
+   WHITE WAVE OF CODE HITTING THE VOID BEACH
+   - crest/foam band made of code/braille
+   - tide pushes in/out
+   - spray particles above crest
+   - flat white on black (no glow)
+========================================================= */
+
+const TARGET_URL = "https://ketadata.com/index11.html";
+const canvas = document.getElementById("c");
+const ctx = canvas.getContext("2d", { alpha:true });
+
+let w,h,dpr;
+function resize(){
+  dpr = window.devicePixelRatio || 1;
+  w = innerWidth; h = innerHeight;
+  canvas.width = Math.floor(w*dpr);
+  canvas.height = Math.floor(h*dpr);
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+}
+addEventListener("resize", resize);
+resize();
+
+function cssNum(name, fallback){
+  const v = parseFloat(getComputedStyle(document.documentElement).getPropertyValue(name));
+  return Number.isFinite(v) ? v : fallback;
+}
+
+function pick(a){ return a[(Math.random()*a.length)|0]; }
+
+function brailleDense(){
+  const r=Math.random();
+  if(r<0.72) return String.fromCharCode(0x2800 + (0xC0 + (Math.random()*64|0)));
+  if(r<0.985) return String.fromCharCode(0x2800 + (Math.random()*256|0));
+  return String.fromCharCode(0x28FF);
+}
+
+const TOK = ["<",">","/","=","{","}","[","]","|","::","//","----","KETADATA","NULL","STATE","AE","EE","WB"];
+function codeGlyph(){
+  const r=Math.random();
+  if(r<0.55) return brailleDense();
+  if(r<0.78) return pick(TOK).slice(0,1);
+  return "#";
+}
+
+/* spray particles */
+const spray = [];
+function emitSpray(x,y,amt){
+  for(let i=0;i<amt;i++){
+    spray.push({
+      x, y,
+      vx:(Math.random()*2-1)*90,
+      vy:-(60+Math.random()*210),
+      life:0.55+Math.random()*0.65,
+      t:0,
+      ch: (Math.random()<0.7)?brailleDense():"·"
+    });
+  }
+}
+
+let last = performance.now();
+
+function frame(now){
+  const dt = Math.max(0.001, (now-last)/1000);
+  last = now;
+
+  const waveSpeed = cssNum("--waveSpeed", 0.78);
+  const waveHeight = cssNum("--waveHeight", 0.22);
+  const shoreline = cssNum("--shoreline", 0.70);
+  const foamThickness = cssNum("--foamThickness", 42);
+  const sprayChance = cssNum("--sprayChance", 0.11);
+
+  const cols = Math.max(60, Math.round(cssNum("--cols", 110)));
+  const rows = Math.max(40, Math.round(cssNum("--rows", 70)));
+  const chunkBias = Math.max(0, Math.min(1, cssNum("--chunkBias", 0.66)));
+  const whiteHot = Math.max(0, Math.min(1, cssNum("--whiteHot", 1.0)));
+
+  const trail = Math.max(0.02, Math.min(0.25, cssNum("--trail", 0.09)));
+  const jitter = cssNum("--jitter", 0.65);
+
+  // trail
+  ctx.fillStyle = `rgba(0,0,0,${trail})`;
+  ctx.fillRect(0,0,w,h);
+
+  // grid sizing
+  const cellW = w / cols;
+  const cellH = h / rows;
+
+  // wave function
+  const t = now/1000 * waveSpeed;
+  const baseY = h * shoreline;
+
+  // tide in/out (moves shoreline slightly)
+  const tide = Math.sin(t*0.55) * (h*0.04);
+
+  // draw “beach” as pure void (already black), but we add a thin hard horizon cut
+  ctx.fillStyle = "rgba(255,255,255,0.06)";
+  ctx.fillRect(0, baseY + tide + foamThickness*1.15, w, 1);
+
+  // crest is a moving curve
+  // we render code above it (wave body) and foam band around it
+  ctx.textBaseline = "top";
+  ctx.font = `900 ${Math.max(10, Math.round(cssNum("--fontPx", 12)))}px ${getComputedStyle(document.body).fontFamily}`;
+  ctx.fillStyle = "#fff";
+  ctx.shadowBlur = 0;
+
+  for(let cx=0; cx<cols; cx++){
+    const x = cx * cellW;
+
+    // multiple frequencies to feel like surf
+    const nx = cx / cols;
+    const crest =
+      baseY + tide
+      + Math.sin((nx*6.0) + t*1.35) * (h*waveHeight*0.34)
+      + Math.sin((nx*13.0) + t*0.92) * (h*waveHeight*0.18)
+      + Math.sin((nx*29.0) + t*0.62) * (h*waveHeight*0.08);
+
+    // foam band bounds
+    const foamTop = crest - foamThickness*0.55;
+    const foamBot = crest + foamThickness*0.55;
+
+    // chance to emit spray where the crest is energetic
+    const energy = Math.abs(Math.cos((nx*10.0)+t*1.2));
+    if(Math.random() < sprayChance * energy * 0.30){
+      emitSpray(x + cellW*0.5, crest - foamThickness*0.25, 1 + ((Math.random()*3)|0));
+    }
+
+    // render down the column
+    for(let ry=0; ry<rows; ry++){
+      const y = ry * cellH;
+
+      // determine region
+      const inWave = y < crest;
+      const inFoam = (y >= foamTop && y <= foamBot);
+
+      if(!inWave && !inFoam) continue; // beach/void stays empty
+
+      // density shaping:
+      // - foam band is loud (almost solid)
+      // - wave body is sparser
+      const band = inFoam ? 0.96 : chunkBias;
+
+      // subtle turbulence (still reads flat)
+      const j = (Math.sin((cx*0.07)+(ry*0.11)+t*2.2) + Math.cos((cx*0.03)-(ry*0.09)+t*1.6))*0.5;
+      const p = band + j*0.08*jitter;
+
+      if(Math.random() > p) continue;
+
+      const ch = codeGlyph();
+
+      // alpha: foam brighter, wave slightly varied
+      const a = inFoam ? 1.0 : (0.78 + Math.random()*0.22);
+      ctx.globalAlpha = a * whiteHot;
+
+      // snap to grid; slight drift sideways gives “push” into beach
+      const push = Math.sin(t*0.9 + nx*2.0) * (cellW*0.18);
+      ctx.fillText(ch, x + push, y);
+    }
+  }
+
+  // update + draw spray
+  if(spray.length){
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = "#fff";
+    for(let i=spray.length-1; i>=0; i--){
+      const p = spray[i];
+      p.t += dt;
+      p.x += p.vx*dt;
+      p.y += p.vy*dt;
+      p.vy += 380*dt; // gravity
+      const life = p.t / p.life;
+      if(life >= 1 || p.y > h + 30){ spray.splice(i,1); continue; }
+      ctx.globalAlpha = (1-life) * 1.0;
+      ctx.fillText(p.ch, p.x, p.y);
+    }
+  }
+
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+addEventListener("keydown",(e)=>{
+  if(e.key === "Enter") location.href = TARGET_URL;
+});
+</script>
+
+<!-- ============================================================
+KETADATA HTML SERIALIZATION STAMP
+AE/EE/WB: AE
+FILE_ID: WAVE_CODE_VOID_BEACH_V1
+ROOM_ID: COVER
+VERSION: v1
+UPDATED_AT: 2025-12-28T00:00:00-05:00
+CHANGELOG:
+- NEW INTRO VISUAL: WHITE CODE WAVE BREAKING INTO BLACK VOID BEACH
+- FOAM BAND: DENSE BRAILLE/CODE STRIP AT SHORELINE + SPRAY PARTICLES
+- FLAT: PURE WHITE, NO GLOW / NO BLUR
+============================================================ -->
+</body>
+</html>
