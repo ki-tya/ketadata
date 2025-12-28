@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1.0" />
+<title>KETADATA // CASCADE GRID</title>
+
+<style>
+:root{
+  --bg:#000;
+  --ink:#fff;
+
+  /* CASCADE GRID */
+  --tile: 26;            /* chunky squares (not small) */
+  --tileVar: 10;         /* size wobble */
+  --colsHint: 52;        /* influences auto sizing on big screens */
+
+  /* MOTION */
+  --speedMin: 240;       /* px/sec */
+  --speedMax: 820;       /* px/sec */
+  --spawnRate: 0.22;     /* chance per column per frame to spawn new block */
+  --trail: 0.16;         /* persistence (higher = flatter / cleaner) */
+
+  /* CHAOS */
+  --stutter: 0.18;       /* occasional glitch jumps */
+  --stutterAmp: 2.25;    /* strength of jump */
+  --clusterChance: 0.32; /* sometimes spawn multi-block clumps */
+  --clusterMax: 4;       /* max blocks in a clump */
+
+  /* CONTRAST */
+  --white: #ffffff;
+  --blackCrush: 0.22;
+  --vignette: 0.94;
+
+  /* UI (ARIAL, BRUTAL, UNMISSABLE) */
+  --uiFont: Arial, Helvetica, sans-serif;
+  --uiStroke: 3px;
+  --uiPadY: 16px;
+  --uiPadX: 18px;
+  --uiBorder: 4px;
+  --uiSize: 16px;
+  --uiKern: 0.18em;
+}
+
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0;
+  background:var(--bg);
+  overflow:hidden;
+}
+
+/* black depth clamp */
+#crush{
+  position:fixed; inset:0; z-index:0;
+  pointer-events:none;
+  opacity:var(--blackCrush);
+  background: radial-gradient(circle at 50% 58%, transparent 42%, #000 100%);
+  mix-blend-mode:multiply;
+}
+#vignette{
+  position:fixed; inset:0; z-index:1;
+  pointer-events:none;
+  opacity:var(--vignette);
+  background: radial-gradient(circle at 50% 58%, transparent 58%, #000 100%);
+  mix-blend-mode:multiply;
+}
+
+/* field */
+#wrap{position:fixed; inset:0; z-index:2}
+canvas{width:100%; height:100%; image-rendering:pixelated}
+
+/* UI: ARIAL, BRUTALIST, BOLD, UNMISSABLE */
+#ui{
+  position:fixed; inset:0; z-index:3;
+  pointer-events:none;
+  user-select:none;
+  font-family:var(--uiFont);
+}
+#warn{
+  position:absolute; top:16px; left:16px;
+  pointer-events:auto;
+  font-weight:900;
+  font-size:var(--uiSize);
+  letter-spacing:var(--uiKern);
+  text-transform:uppercase;
+  color:#000;
+  background:#fff;
+  border: var(--uiBorder) solid #fff;
+  padding: var(--uiPadY) var(--uiPadX);
+  box-shadow: 0 0 0 4px #000 inset; /* hard double edge */
+}
+#enter{
+  position:absolute; right:16px; bottom:16px;
+  pointer-events:auto;
+  font-weight:900;
+  font-size:var(--uiSize);
+  letter-spacing:var(--uiKern);
+  text-transform:uppercase;
+  color:#000;
+  background:#fff;
+  border: var(--uiBorder) solid #fff;
+  padding: var(--uiPadY) var(--uiPadX);
+  text-decoration:none;
+  box-shadow: 0 0 0 4px #000 inset; /* hard double edge */
+  transition: transform .08s linear;
+}
+#enter:hover{transform:translateY(-2px)}
+#enter:active{transform:translateY(0px)}
+
+@media (prefers-reduced-motion: reduce){
+  #crush,#vignette{display:none}
+  canvas{display:none}
+}
+</style>
+</head>
+
+<body>
+<div id="crush" aria-hidden="true"></div>
+<div id="vignette" aria-hidden="true"></div>
+
+<div id="wrap"><canvas id="c"></canvas></div>
+
+<div id="ui">
+  <div id="warn">EPILEPSY WARNING</div>
+  <a id="enter" href="https://ketadata.com/index11.html">ENTER</a>
+</div>
+
+<script>
+/* =========================================================
+   WHITE SQUARES CASCADE DOWN (CHUNKY / CHAOTIC)
+   - per-column falling blocks
+   - occasional clumps + stutter
+   - flat bright white, no glow
+========================================================= */
+
+const TARGET_URL = "https://ketadata.com/index11.html";
+const canvas = document.getElementById("c");
+const ctx = canvas.getContext("2d", { alpha:false });
+
+let w,h,dpr;
+function resize(){
+  dpr = window.devicePixelRatio || 1;
+  w = innerWidth; h = innerHeight;
+  canvas.width = Math.floor(w*dpr);
+  canvas.height = Math.floor(h*dpr);
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+}
+addEventListener("resize", resize);
+resize();
+
+function cssNum(name, fallback){
+  const v = parseFloat(getComputedStyle(document.documentElement).getPropertyValue(name));
+  return Number.isFinite(v) ? v : fallback;
+}
+
+let tile=26, cols=0, colX=[];
+function rebuildGrid(){
+  const base = cssNum("--tile", 26);
+  const varr = cssNum("--tileVar", 10);
+  const hint = Math.max(20, Math.round(cssNum("--colsHint", 52)));
+
+  // choose a chunky tile size that respects screen width
+  const fromHint = Math.max(16, Math.floor(w / hint));
+  tile = Math.max(18, Math.round((base*0.55 + fromHint*0.45) + (Math.random()*2-1)*(varr*0.25)));
+
+  cols = Math.ceil(w / tile);
+  colX = new Array(cols).fill(0).map((_,i)=> i*tile);
+}
+rebuildGrid();
+addEventListener("resize", rebuildGrid);
+
+/* falling blocks */
+const blocks = [];
+function spawnBlock(col, y, sizeMul=1){
+  const s = tile * sizeMul;
+  blocks.push({
+    x: colX[col],
+    y: y,
+    s: s,
+    vy: cssNum("--speedMin",240) + Math.random()*(cssNum("--speedMax",820)-cssNum("--speedMin",240)),
+    wob: (Math.random()*2-1)*0.25
+  });
+}
+
+function maybeSpawn(){
+  const spawnRate = cssNum("--spawnRate",0.22);
+  const clusterChance = cssNum("--clusterChance",0.32);
+  const clusterMax = Math.max(1, Math.round(cssNum("--clusterMax",4)));
+
+  for(let c=0;c<cols;c++){
+    if(Math.random() < spawnRate){
+      const clump = (Math.random() < clusterChance) ? (2 + (Math.random()*(clusterMax-1)|0)) : 1;
+      for(let k=0;k<clump;k++){
+        const sizeMul = (Math.random()<0.18) ? 2 : 1; // occasional bigger chunks
+        spawnBlock(c, -tile - k*(tile*0.8), sizeMul);
+        // slight sideways spray inside same column (still reads like cascade)
+        if(Math.random()<0.16 && c+1<cols) spawnBlock(c+1, -tile - k*(tile*0.8), 1);
+      }
+    }
+  }
+}
+
+let last = performance.now();
+function frame(now){
+  const dt = Math.max(0.001, (now-last)/1000);
+  last = now;
+
+  const trail = cssNum("--trail",0.16);
+  const stutter = cssNum("--stutter",0.18);
+  const stutterAmp = cssNum("--stutterAmp",2.25);
+
+  // background wipe (flat, leaves some persistence)
+  ctx.fillStyle = `rgba(0,0,0,${trail})`;
+  ctx.fillRect(0,0,w,h);
+
+  maybeSpawn();
+
+  // stutter/glitch jump
+  const glitch = (Math.random() < stutter) ? (1 + Math.random()*stutterAmp) : 1;
+
+  // update + draw blocks
+  ctx.fillStyle = "#ffffff";
+  for(let i=blocks.length-1;i>=0;i--){
+    const b = blocks[i];
+    b.y += b.vy * dt * glitch;
+
+    // tiny wobble to avoid perfect rain
+    const x = b.x + Math.sin((now/1000)*2.2 + b.wob)*0.6;
+
+    ctx.fillRect(x, b.y, b.s, b.s);
+
+    if(b.y > h + b.s + 20){
+      blocks.splice(i,1);
+    }
+  }
+
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+addEventListener("keydown",(e)=>{
+  if(e.key === "Enter") location.href = TARGET_URL;
+});
+</script>
+
+<!-- ============================================================
+KETADATA HTML SERIALIZATION STAMP
+AE/EE/WB: AE
+FILE_ID: WHITE_SQUARES_CASCADE_BRUTAL_UI_V1
+ROOM_ID: COVER
+VERSION: v1
+UPDATED_AT: 2025-12-28T00:00:00-05:00
+CHANGELOG:
+- VISUAL: CHUNKY WHITE SQUARES CASCADING DOWN IN CHAOTIC CLUMPS
+- UI: ARIAL / BOLD / BRUTALIST / UNMISSABLE LABEL + BUTTON
+- FLAT: PURE WHITE ON BLACK, NO GLOW
+============================================================ -->
+</body>
+</html>
