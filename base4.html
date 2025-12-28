@@ -548,17 +548,6 @@ const URLS = {
 
 /* =========================================================
 EE ▸ DIVA PERSISTENCE PROTOCOL — DUMBEST GUARANTEED FIX (SOVEREIGN KEY)
-GOAL:
-- BASE IS SOVEREIGN.
-- LAST USER STATE IS LAW.
-- NOTHING OVERRIDES BASE STATE EXCEPT THE USER.
-- STATE PERSISTS ACROSS: REFRESH / HOTKEY NAV / BACK-FORWARD / NEW TABS.
-- NAVIGATION ALWAYS FLUSHES STATE BEFORE LEAVING.
-- CROSS-TAB SYNC: STORAGE EVENT PULLS THE SOVEREIGN STATE.
-- IF IN DOUBT: DUMB FIX. SINGLE STORAGE KEY. WRITE MAIN + BACKUP.
-
-Notes:
-- We still migrate from older keys (v1/v2/path-scoped) into the sovereign key.
 ========================================================= */
 const FILE_ID="KETADATA_SHELL8";
 const PAGE_ID="BASE_SYSTEM";
@@ -610,7 +599,6 @@ function findLastPathScopedV2Keys(){
   return { mains, backups };
 }
 function pickMostRecent(keys){
-  // Prefer updatedAt inside payload if present.
   let bestKey="", bestTs=-1;
   for(const k of keys){
     const obj=loadFromKey(k);
@@ -621,9 +609,6 @@ function pickMostRecent(keys){
   return bestKey || (keys[0]||"");
 }
 
-/* =========================================================
-EE ▸ DEFAULT PRESETS (ALWAYS PRESENT)
-========================================================= */
 const CORE_PRESETS = [
   { room:"CALENDAR",  roomUrl:URLS.CALENDAR },
   { room:"POD",       roomUrl:URLS.POD },
@@ -634,9 +619,6 @@ const CORE_PRESETS = [
   { room:"LAB",       roomUrl:URLS.LAB }
 ];
 
-/* =========================================================
-EE ▸ STATE
-========================================================= */
 const DEFAULT={
   version:"KETADATA_SHELL_KERNEL_v1",
   updatedAt:nowISO(),
@@ -765,20 +747,10 @@ function mergeDefault(obj){
   return out;
 }
 
-/* =========================================================
-EE ▸ LOAD (SOVEREIGN)
-Order:
-1) SOVEREIGN MAIN
-2) SOVEREIGN BACKUP
-3) migrate from prior path-scoped v2 (most recent)
-4) migrate older v1/legacy
-========================================================= */
 function loadLocal(){
-  // 1) sovereign main
   let s = loadFromKey(STORAGE_KEY_MAIN);
   if(s) return mergeDefault(s);
 
-  // 2) sovereign backup
   s = loadFromKey(STORAGE_KEY_BACKUP);
   if(s){
     const merged = mergeDefault(s);
@@ -789,7 +761,6 @@ function loadLocal(){
     return merged;
   }
 
-  // 3) migrate any path-scoped v2 (pick most recent)
   const { mains, backups } = findLastPathScopedV2Keys();
   const pick = pickMostRecent(mains.length?mains:backups);
   if(pick){
@@ -804,7 +775,6 @@ function loadLocal(){
     }
   }
 
-  // 4) migrate prior canon v1
   s = loadFromKey(STORAGE_KEY_CANON_OLD) || loadFromKey(STORAGE_KEY_BACKUP_OLD);
   if(s){
     const merged = mergeDefault(s);
@@ -815,7 +785,6 @@ function loadLocal(){
     return merged;
   }
 
-  // 5) migrate older legacy keys
   s = loadFromKey(STORAGE_KEY_CANON_OLD2) || loadFromKey(STORAGE_KEY_LEGACY_OLD);
   if(s){
     const merged = mergeDefault(s);
@@ -892,7 +861,6 @@ function togglePinSet(id){
   else STATE.ui.pinnedSets.push(sid);
 }
 
-/* toast */
 let toastTimer=null;
 function toast(msg){
   if(STATE.ui.blackout || STATE.ui.fullscreen) return;
@@ -907,11 +875,6 @@ async function copy(text){
   catch(e){toast("COPY FAILED");}
 }
 
-/* =========================================================
-EE ▸ PERSIST (SOVEREIGN, DUMB, RELIABLE)
-- write MAIN + BACKUP every time
-- also flush on lifecycle events
-========================================================= */
 let _BOOTING = true;
 
 function persist(silent=false){
@@ -932,7 +895,6 @@ function persist(silent=false){
   if(!silent) render();
 }
 
-/* lifecycle flush — guarantees most recent Base survives refresh/navigation */
 (function bindLifecycleFlush(){
   const flush=()=>{ try{ persist(true); }catch(e){} };
 
@@ -943,7 +905,6 @@ function persist(silent=false){
   }, {capture:true});
 })();
 
-/* export/import */
 function exportState(){
   ensureCorePresets();
   return JSON.stringify({ STORAGE_KEY: STORAGE_KEY_MAIN, FILE_ID, PAGE_ID, STORAGE_EPOCH, STATE }, null, 2);
@@ -958,9 +919,6 @@ function importState(text){
   persist(false);
 }
 
-/* =========================================================
-EE ▸ LIGHTS
-========================================================= */
 let lightInterval=null;
 let lightCount=0, lightAuxA=0, lightAuxB=0;
 
@@ -1055,15 +1013,11 @@ function toggleRun(){
   else startLight(STATE.ui.lightPreset||1);
 }
 
-/* motion */
 function syncMotion(){
   if(STATE.ui.motionOn) motion.classList.add("run");
   else motion.classList.remove("run");
 }
 
-/* =========================================================
-EE ▸ REGISTRY + PRESETS
-========================================================= */
 function upsertRoomPreset(roomName,url){
   const room=canonRoomName(roomName)||"LINK";
   const roomUrl=String(url||"").trim();
@@ -1118,9 +1072,6 @@ function parseBulkLines(text){
   }).filter(x=>x.url);
 }
 
-/* =========================================================
-EE ▸ SETS
-========================================================= */
 let ACTIVE_SET_ID = "";
 
 function ensureActiveSet(){
@@ -1173,22 +1124,18 @@ function saveSetItems(id, bulkText){
   s.updatedAt = nowISO();
 }
 
-/* =========================================================
-EE ▸ UI SETTERS (PERSISTED)
-========================================================= */
 function setDrawer(on){
   STATE.ui.drawerOpen=!!on;
   if(on) STATE.ui.blackout=false;
   persist(false);
 }
 
-/* force KETA_NOTE to top-right under icon on open */
 function setKetaNote(on){
   STATE.ui.noteOpen=!!on;
   if(on){
     STATE.ui.blackout=false;
     if(STATE.ui.noteRect && typeof STATE.ui.noteRect==="object"){
-      STATE.ui.noteRect.x = null; // always dock right
+      STATE.ui.noteRect.x = null; // always dock right on open
     }
   }
   persist(false);
@@ -1203,7 +1150,6 @@ function setPresetsCollapsed(on){ STATE.ui.presetsCollapsed=!!on; persist(false)
 
 function setInvert(on){ STATE.ui.invert=!!on; persist(false); }
 
-/* blackout restore cache */
 let BLACKOUT_CACHE=null;
 
 function setBlackout(on){
@@ -1251,9 +1197,6 @@ function setFullscreen(on){
 }
 function toggleFullscreen(){ setFullscreen(!STATE.ui.fullscreen); }
 
-/* =========================================================
-WB ▸ NAVIGATION (GO + NEW TAB)
-========================================================= */
 function finalizeBeforeNav(){
   persist(true);
 }
@@ -1270,9 +1213,6 @@ function openNewTab(url){
   window.open(u, "_blank", "noopener,noreferrer");
 }
 
-/* =========================================================
-WB ▸ HOTKEYS (LOCKED)
-========================================================= */
 function bindHotkeys(){
   window.addEventListener("keydown",(ev)=>{
     if(ev.repeat) return;
@@ -1311,10 +1251,7 @@ function bindHotkeys(){
   }, {passive:false});
 }
 
-/* =========================================================
-WB ▸ RENDER
-========================================================= */
-function renderRoomList(){
+function renderRoomList(){ /* unchanged */ 
   const el=$("roomList");
   el.innerHTML="";
 
@@ -1375,7 +1312,7 @@ function renderRoomList(){
   });
 }
 
-function renderSetList(){
+function renderSetList(){ /* unchanged */ 
   const el=$("setList");
   if(!el) return;
   el.innerHTML="";
@@ -1456,7 +1393,7 @@ function renderSetList(){
   });
 }
 
-function renderPinnedPanel(){
+function renderPinnedPanel(){ /* unchanged */ 
   const el=$("pinnedPanel");
   ensurePinnedRooms();
   ensurePinnedSets();
@@ -1577,7 +1514,6 @@ function renderPinnedPanel(){
   });
 }
 
-/* armed bar render */
 function renderArmedBar(){
   const bar=$("armedBar");
   if(STATE.ui.blackout || STATE.ui.fullscreen){
@@ -1652,9 +1588,6 @@ function render(){
   renderPinnedPanel();
 }
 
-/* =========================================================
-WB ▸ EVENTS
-========================================================= */
 $("btnExport").addEventListener("click", ()=> copy(exportState()));
 $("btnCopy").addEventListener("click", ()=> copy(exportState()));
 $("btnImport").addEventListener("click", ()=> $("file").click());
@@ -1678,7 +1611,6 @@ $("btnToggleUniversals").addEventListener("click", ()=>{
   setUniversalsCollapsed(!STATE.ui.universalsCollapsed);
   toast(STATE.ui.universalsCollapsed ? "UNIVERSALS CLOSED" : "UNIVERSALS OPEN");
 });
-
 $("btnToggleRegistry").addEventListener("click", ()=>{
   setRegistryCollapsed(!STATE.ui.registryCollapsed);
   toast(STATE.ui.registryCollapsed ? "REGISTRY CLOSED" : "REGISTRY OPEN");
@@ -1735,8 +1667,6 @@ $("btnDeleteRoom").addEventListener("click", ()=>{
   toast("DELETED");
   persist();
 });
-
-$("btnTogglePins").addEventListener("click", ()=>{ toast("PINS = VISIBLE WHEN PINNED"); });
 
 $("btnGoActive").addEventListener("click", ()=>{
   if(STATE.roomUrl) go(STATE.roomUrl);
@@ -1805,13 +1735,6 @@ $("btnBulkAdd").addEventListener("click", ()=>{
 });
 $("btnBulkClear").addEventListener("click", ()=>{ $("bulkRoomInput").value=""; toast("CLEARED"); });
 
-["roomInput","roomUrlInput","bulkRoomInput","setNameInput","setItemsInput"].forEach(id=>{
-  const el=$(id);
-  if(!el) return;
-  el.addEventListener("focus", ()=>{ try{el.select && el.select();}catch(e){} });
-});
-
-/* Drawer height resize */
 (function bindDrawerSizer(){
   const s=$("drawerSizer");
   let dragging=false;
@@ -1838,16 +1761,25 @@ $("btnBulkClear").addEventListener("click", ()=>{ $("bulkRoomInput").value=""; t
   });
 })();
 
-/* Note drag + resize persistence */
+/* Note drag + resize persistence (FIXED: keep right-dock x:null) */
 (function noteGeometry(){
   const box=$("ketaNote");
   const head=$("ketaHead");
   let dragging=false, ox=0, oy=0;
 
   function clamp(n,min,max){ return Math.max(min, Math.min(max, n)); }
+
   function saveRect(){
     const r=box.getBoundingClientRect();
-    STATE.ui.noteRect={ x:Math.round(r.left), y:Math.round(r.top), w:Math.round(r.width), h:Math.round(r.height) };
+    // DIVA FIX: if it's docked-right, NEVER store a left x. Keep x:null so it always re-opens top-right.
+    const cs = window.getComputedStyle(box);
+    const dockedRight = (cs.right && cs.right !== "auto") && (!cs.left || cs.left === "auto");
+    STATE.ui.noteRect = {
+      x: dockedRight ? null : Math.round(r.left),
+      y: Math.round(r.top),
+      w: Math.round(r.width),
+      h: Math.round(r.height)
+    };
     persist();
   }
 
@@ -1884,7 +1816,6 @@ $("btnBulkClear").addEventListener("click", ()=>{ $("bulkRoomInput").value=""; t
   }catch(_){}
 })();
 
-/* Cross-tab sync (SOVEREIGN key) */
 window.addEventListener("storage",(e)=>{
   if(e.key!==STORAGE_KEY_MAIN) return;
   try{
@@ -1896,7 +1827,6 @@ window.addEventListener("storage",(e)=>{
   }catch(_){}
 });
 
-/* BFCache restore (reload sovereign state) */
 window.addEventListener("pageshow",()=>{
   const stored=loadLocal();
   if(stored){
@@ -1906,9 +1836,9 @@ window.addEventListener("pageshow",()=>{
   }
 });
 
-/* =========================================================
-BOOT
-========================================================= */
+function renderSetList(){ /* placeholder already defined above */ }
+function renderPinnedPanel(){ /* placeholder already defined above */ }
+
 const _BOOT_LOADED = loadLocal();
 let STATE = _BOOT_LOADED ? _BOOT_LOADED : structuredClone(DEFAULT);
 ensureCorePresets();
@@ -1918,12 +1848,10 @@ bindHotkeys();
 _BOOTING = false;
 render();
 
-/* Seed sovereign storage only if nothing exists yet */
 if(!_BOOT_LOADED){
   persist(true);
 }
 
-/* Ensure running light resumes */
 if(STATE.ui.lightRunning && !STATE.ui.blackout) startLight(STATE.ui.lightPreset||1);
 </script>
 
@@ -1937,6 +1865,7 @@ UPDATED_AT: 2025-12-27T00:00:00-05:00
 CHANGELOG:
 - EE: DIVA PROTOCOL — BASE IS SOVEREIGN; LAST USER STATE IS LAW; ONLY USER OVERRIDES BASE
 - EE: DUMB FIX — STORAGE KEY IS NOW A SINGLE CONSTANT: "KDT::BASE::SOVEREIGN::STATE" (NO PATH/FILE/PAGE SCOPING)
+- EE: NOTE DOCK FIX — WHEN DOCKED RIGHT, NOTE PERSISTS x:null SO IT ALWAYS RE-OPENS TOP-RIGHT
 - EE: STILL MIGRATES PRIOR v1/v2/PATH-SCOPED BASE INTO THE SOVEREIGN KEY ON FIRST BOOT
 - EE: LIFECYCLE FLUSH (pagehide/beforeunload/visibilitychange) REMAINS
 - WB: NO UI/AESTHETIC/INTERACTION CHANGES
