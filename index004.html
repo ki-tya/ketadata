@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1.0" />
+<title>KETADATA // CRUMBLE GRID</title>
+
+<style>
+:root{
+  --bg:#000;
+  --ink:#fff;
+
+  /* TILE SCALE (not too small) */
+  --tile: 22;            /* px (base tile size) */
+  --tileVar: 10;         /* px variation (makes it chaotic but still chunky) */
+
+  /* CHAOS / REAPPEAR */
+  --spawn: 0.10;         /* chance a cell flips per frame cluster */
+  --burst: 12;           /* number of clusters per frame */
+  --bleed: 0.55;         /* probability adjacent tiles also flip */
+  --decay: 0.88;         /* 0..1 how quickly tiles disappear (lower = more white linger) */
+
+  /* MOTION / FEEL */
+  --stutter: 0.55;       /* how often it "stutters" / jumps */
+  --stutterAmp: 1.25;    /* how hard the stutter is */
+
+  /* CONTRAST */
+  --whiteAlpha: 1.00;    /* pure white */
+  --blackCrush: 0.22;
+  --vignette: 0.94;
+
+  /* UI */
+  --uiBorder: rgba(255,255,255,.16);
+  --uiText: rgba(255,255,255,.70);
+
+  --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+}
+
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0;
+  background:var(--bg);
+  overflow:hidden;
+  font-family:var(--mono);
+}
+
+/* deep black clamp */
+#crush{
+  position:fixed; inset:0; z-index:0;
+  pointer-events:none;
+  opacity:var(--blackCrush);
+  background: radial-gradient(circle at 50% 58%, transparent 42%, #000 100%);
+  mix-blend-mode:multiply;
+}
+#vignette{
+  position:fixed; inset:0; z-index:1;
+  pointer-events:none;
+  opacity:var(--vignette);
+  background: radial-gradient(circle at 50% 58%, transparent 58%, #000 100%);
+  mix-blend-mode:multiply;
+}
+
+/* field */
+#wrap{position:fixed; inset:0; z-index:2}
+canvas{width:100%; height:100%; image-rendering:pixelated}
+
+/* UI minimal */
+#ui{position:fixed; inset:0; z-index:3; pointer-events:none; user-select:none}
+#warn{
+  position:absolute; top:12px; left:12px;
+  pointer-events:auto;
+  font-size:10px;
+  letter-spacing:.22em;
+  text-transform:uppercase;
+  color:var(--uiText);
+  padding:8px 10px;
+  border:2px solid var(--uiBorder);
+  background:rgba(0,0,0,.06);
+}
+#enter{
+  position:absolute; right:12px; bottom:12px;
+  pointer-events:auto;
+  font-size:11px;
+  letter-spacing:.26em;
+  text-transform:uppercase;
+  color:rgba(255,255,255,.72);
+  padding:10px 12px;
+  border:2px solid var(--uiBorder);
+  background:rgba(0,0,0,.05);
+  text-decoration:none;
+  transition: background .10s linear, color .10s linear, transform .10s linear;
+}
+#enter:hover{background:#fff;color:#000}
+#enter:active{transform:translateY(0px)}
+
+@media (prefers-reduced-motion: reduce){
+  #crush,#vignette{display:none}
+  canvas{display:none}
+}
+</style>
+</head>
+
+<body>
+<div id="crush" aria-hidden="true"></div>
+<div id="vignette" aria-hidden="true"></div>
+
+<div id="wrap">
+  <canvas id="c"></canvas>
+</div>
+
+<div id="ui">
+  <div id="warn">WARNING: HIGH CONTRAST / FAST MOTION</div>
+  <a id="enter" href="https://ketadata.com/index11.html">[ENTER]</a>
+</div>
+
+<script>
+/* =========================================================
+   CRUMBLE GRID
+   - chunky squares
+   - chaotic checkering that crumbles / reappears
+   - flat white, no glow, no blur
+========================================================= */
+
+const TARGET_URL = "https://ketadata.com/index11.html";
+const canvas = document.getElementById("c");
+const ctx = canvas.getContext("2d", { alpha:false });
+
+let w,h,dpr;
+function resize(){
+  dpr = window.devicePixelRatio || 1;
+  w = innerWidth; h = innerHeight;
+  canvas.width = Math.floor(w*dpr);
+  canvas.height = Math.floor(h*dpr);
+  canvas.style.width = w+"px";
+  canvas.style.height = h+"px";
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+}
+addEventListener("resize", resize);
+resize();
+
+function cssNum(name, fallback){
+  const v = parseFloat(getComputedStyle(document.documentElement).getPropertyValue(name));
+  return Number.isFinite(v) ? v : fallback;
+}
+
+function rint(n){ return (Math.random()*n)|0; }
+
+/* state grid */
+let tile, cols, rows, grid, next;
+function rebuild(){
+  const base = cssNum("--tile", 22);
+  const varr = cssNum("--tileVar", 10);
+  // pick a tile size each rebuild for "breathing" scale but still chunky
+  tile = Math.max(14, Math.round(base + (Math.random()*2-1)*varr*0.35));
+  cols = Math.ceil(w / tile);
+  rows = Math.ceil(h / tile);
+  grid = new Uint8Array(cols*rows);
+  next = new Uint8Array(cols*rows);
+
+  // start with a harsh checker seed
+  for(let y=0;y<rows;y++){
+    for(let x=0;x<cols;x++){
+      const i = y*cols + x;
+      grid[i] = ((x+y)&1) ? 1 : 0;
+      // punch holes
+      if(Math.random()<0.22) grid[i] = 0;
+    }
+  }
+}
+rebuild();
+addEventListener("resize", rebuild);
+
+function idx(x,y){ return y*cols + x; }
+function inb(x,y){ return x>=0 && y>=0 && x<cols && y<rows; }
+
+function flip(i){
+  grid[i] = grid[i] ? 0 : 1;
+}
+
+function stampCluster(cx, cy, radius, bleed){
+  for(let dy=-radius; dy<=radius; dy++){
+    for(let dx=-radius; dx<=radius; dx++){
+      if(Math.abs(dx)+Math.abs(dy) > radius+1) continue;
+      const x = cx + dx, y = cy + dy;
+      if(!inb(x,y)) continue;
+      if(Math.random() < bleed) flip(idx(x,y));
+    }
+  }
+}
+
+let last = performance.now();
+let acc = 0;
+let phase = 0;
+
+function step(now){
+  const dt = Math.max(0.001, (now-last)/1000);
+  last = now;
+  acc += dt;
+
+  const spawn = cssNum("--spawn", 0.10);
+  const burst = Math.max(1, Math.round(cssNum("--burst", 12)));
+  const bleed = cssNum("--bleed", 0.55);
+  const decay = Math.max(0.60, Math.min(0.98, cssNum("--decay", 0.88)));
+
+  const stutter = Math.max(0, Math.min(1, cssNum("--stutter", 0.55)));
+  const stutterAmp = cssNum("--stutterAmp", 1.25);
+
+  // occasional rescale "reality shift"
+  if(Math.random() < 0.0025){
+    rebuild();
+  }
+
+  // update pattern: multiple bursts per frame
+  // “crumble”: fade some whites back to black each frame via probabilistic decay
+  for(let i=0;i<grid.length;i++){
+    if(grid[i] === 1 && Math.random() > decay){
+      grid[i] = 0;
+    }
+  }
+
+  for(let b=0;b<burst;b++){
+    if(Math.random() > spawn) continue;
+
+    const cx = rint(cols);
+    const cy = rint(rows);
+
+    // chunky cluster radius 1..3 (not tiny noise)
+    const radius = 1 + rint(3);
+
+    // chaotic stamp
+    stampCluster(cx, cy, radius, bleed);
+
+    // extra “crumbles” diagonally
+    if(Math.random() < 0.35){
+      stampCluster(cx + (Math.random()<0.5?-2:2), cy + (Math.random()<0.5?-2:2), 1 + rint(2), bleed*0.9);
+    }
+  }
+
+  // stutter: sometimes apply a second update pass instantly
+  if(Math.random() < stutter){
+    const extra = Math.max(1, Math.round(burst * stutterAmp));
+    for(let b=0;b<extra;b++){
+      if(Math.random() > (spawn*0.8)) continue;
+      stampCluster(rint(cols), rint(rows), 1 + rint(3), bleed);
+    }
+  }
+
+  // draw
+  ctx.clearRect(0,0,w,h);
+  ctx.fillStyle = "#000";
+  ctx.fillRect(0,0,w,h);
+
+  ctx.fillStyle = "rgba(255,255,255,1)";
+  for(let y=0;y<rows;y++){
+    for(let x=0;x<cols;x++){
+      if(grid[idx(x,y)]){
+        // slight size variance (still flat, still squares)
+        const s = tile;
+        ctx.fillRect(x*tile, y*tile, s, s);
+      }
+    }
+  }
+
+  requestAnimationFrame(step);
+}
+requestAnimationFrame(step);
+
+addEventListener("keydown",(e)=>{
+  if(e.key === "Enter") location.href = TARGET_URL;
+});
+</script>
+
+<!-- ============================================================
+KETADATA HTML SERIALIZATION STAMP
+AE/EE/WB: AE
+FILE_ID: CRUMBLE_CHECKER_INTRO_V1
+ROOM_ID: COVER
+VERSION: v1
+UPDATED_AT: 2025-12-28T00:00:00-05:00
+CHANGELOG:
+- INTRO GRID: CHUNKY WHITE SQUARES, CHAOTIC CHECKERING
+- BEHAVIOR: CRUMBLE + REAPPEAR (CLUSTER FLIPS + DECAY)
+- FLAT: NO GLOW / NO BLUR, PURE WHITE ON BLACK
+============================================================ -->
+</body>
+</html>
