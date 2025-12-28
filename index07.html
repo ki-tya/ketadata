@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1.0" />
+<title>KETADATA // BRAILLE CAPILLARY</title>
+<style>
+  :root{
+    /* BLACK INFINITY */
+    --bg:#000;
+
+    /* INK (NO GLOW) */
+    --ink:#fff;
+    --inkAlphaMin: 0.88;
+    --inkAlphaMax: 1.00;
+
+    /* TRAILS (burn-through) */
+    --trail: 0.040;          /* lower = longer burn trail */
+    --density: 1.65;         /* more columns updated */
+    --speedMul: 1.05;
+
+    /* SHAPE (STRAIGHT LINES DOWN) */
+    --colW: 9.2;             /* mono cell width approximation */
+    --lh: 14;                /* line height px */
+    --font: 12px;
+
+    /* CAPILLARY FEEL (crisp, jagged, not rounded) */
+    --edgeHard: 1;           /* 0/1: hard edge pass */
+    --fatPasses: 1;          /* minimal thickening */
+    --fatPx: 0.55;
+
+    /* BURN (NOT GLOW): high-contrast “cut” / “etch” passes */
+    --etch: 1;               /* 0/1 */
+    --etchAlpha: 0.55;       /* intensity of burn-through */
+    --etchStep: 2;           /* how many pixels to offset etch */
+    --sparkRate: 0.020;      /* burst frequency */
+
+    /* BLACK DEPTH (no haze, no bloom) */
+    --vignette: 0.92;        /* clamp edges */
+    --blackCrush: 0.16;      /* deepen */
+    --grainOpacity: 0.12;    /* material */
+
+    /* UI minimal */
+    --uiBorder: rgba(255,255,255,.18);
+    --uiText: rgba(255,255,255,.72);
+
+    /* typography */
+    --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  }
+
+  *{ box-sizing:border-box; }
+  html,body{ height:100%; }
+  body{
+    margin:0;
+    background: var(--bg);
+    color: var(--ink);
+    overflow:hidden;
+    font-family: var(--mono);
+  }
+
+  /* =========================================================
+     DEPTH (BLACKER BLACK, SHARP)
+  ========================================================= */
+  #crush{
+    position:fixed; inset:0;
+    z-index:0;
+    pointer-events:none;
+    opacity: var(--blackCrush);
+    background:
+      radial-gradient(closest-side at 50% 55%, transparent 40%, rgba(0,0,0,1) 100%),
+      linear-gradient(180deg, #000, #000);
+    mix-blend-mode: multiply;
+  }
+  #vignette{
+    position:fixed; inset:0;
+    z-index:1;
+    pointer-events:none;
+    opacity: var(--vignette);
+    background: radial-gradient(closest-side at 50% 55%, transparent 55%, rgba(0,0,0,.96) 100%);
+    mix-blend-mode: multiply;
+  }
+  #grain{
+    position:fixed; inset:0;
+    z-index:2;
+    pointer-events:none;
+    opacity: var(--grainOpacity);
+    mix-blend-mode: overlay;
+    filter: url(#grainFilter);
+    background: rgba(255,255,255,.10);
+  }
+
+  /* =========================================================
+     FIELD
+  ========================================================= */
+  #wrap{ position:fixed; inset:0; z-index:3; }
+  canvas#c{
+    position:absolute; inset:0;
+    width:100%; height:100%;
+    image-rendering: pixelated;
+  }
+
+  /* =========================================================
+     UI (minimal, brutal)
+  ========================================================= */
+  #ui{ position:fixed; inset:0; z-index:5; pointer-events:none; user-select:none; }
+  #warn{
+    position:absolute; top:12px; left:12px;
+    pointer-events:auto;
+    font-size:10px;
+    letter-spacing:.22em;
+    text-transform:uppercase;
+    color: var(--uiText);
+    padding: 9px 11px;
+    border: 2px solid var(--uiBorder);
+    background: rgba(0,0,0,.10);
+    backdrop-filter: blur(8px);
+  }
+  #enter{
+    position:absolute; right:12px; bottom:12px;
+    pointer-events:auto;
+    text-decoration:none;
+    font-size:11px;
+    letter-spacing:.26em;
+    text-transform:uppercase;
+    color: rgba(255,255,255,.64);
+    padding: 11px 13px;
+    border: 2px solid var(--uiBorder);
+    background: rgba(0,0,0,.08);
+    backdrop-filter: blur(8px);
+    transition: color .10s linear, border-color .10s linear, transform .10s linear, background .10s linear;
+  }
+  #enter:hover{
+    color:#fff;
+    border-color: rgba(255,255,255,.38);
+    background: rgba(0,0,0,.14);
+    transform: translateY(-1px);
+  }
+  #enter:active{ transform: translateY(0px); }
+
+  textarea#payload{
+    position:absolute; left:-9999px; top:-9999px;
+    width:1px; height:1px; opacity:0;
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    #crush,#vignette,#grain { display:none; }
+    canvas#c{ display:none; }
+  }
+</style>
+</head>
+
+<body>
+  <svg width="0" height="0" style="position:absolute">
+    <filter id="grainFilter">
+      <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="11" />
+      <feColorMatrix type="matrix" values="
+        1 0 0 0 0
+        0 1 0 0 0
+        0 0 1 0 0
+        0 0 0 0.18 0"/>
+    </filter>
+  </svg>
+
+  <div id="crush" aria-hidden="true"></div>
+  <div id="vignette" aria-hidden="true"></div>
+  <div id="grain" aria-hidden="true"></div>
+
+  <div id="wrap">
+    <canvas id="c"></canvas>
+  </div>
+
+  <div id="ui">
+    <div id="warn">WARNING: HIGH CONTRAST / FAST MOTION</div>
+    <a id="enter" href="https://ketadata.com/index11.html">[ENTER]</a>
+  </div>
+
+  <textarea id="payload" aria-hidden="true"></textarea>
+
+<script>
+/* =========================================================
+   BRAILLE CAPILLARY — STRAIGHT LINES DOWN, NO GLOW
+   - burn-through is created with etch (difference) passes
+========================================================= */
+
+const TARGET_URL = "https://ketadata.com/index11.html";
+
+/* inner HTML doc string (source material) */
+function buildInnerHTML(){
+  const ts = new Date().toISOString();
+  return [
+`<!DOCTYPE html>`,
+`<html>`,
+`<head>`,
+`  <meta charset="utf-8">`,
+`  <meta name="viewport" content="width=device-width,initial-scale=1.0">`,
+`  <style>`,
+`    html,body{height:100%;margin:0;background:#000;color:#fff;font-family:ui-monospace,monospace;}`,
+`  </style>`,
+`</head>`,
+`<body>`,
+`  <!-- KETADATA: BRAILLE CAPILLARY -->`,
+`  <!-- ${ts} -->`,
+`  <a href="${TARGET_URL}">[ENTER]</a>`,
+`</body>`,
+`</html>`
+  ].join("\n");
+}
+const payloadEl = document.getElementById("payload");
+payloadEl.value = buildInnerHTML();
+
+/* Braille: U+2800..U+28FF (bias to dense) */
+function brailleChar(){
+  const r = Math.random();
+  let code;
+  if(r < 0.68) code = 0x2800 + (0xFF & (0xC0 + (Math.random()*64|0)));
+  else if(r < 0.985) code = 0x2800 + (0xFF & (Math.random()*256|0));
+  else code = 0x28FF;
+  return String.fromCharCode(code);
+}
+
+const TOKENS = [
+  "<div>","</div>","<span>","</span>","<html>","</html>",
+  "<head>","</head>","<body>","</body>","<style>","</style>",
+  "<meta>","href=","src=","id=","class=",
+  "----","------","----------","////////////////","::","==","||","[]","{}",
+  "KETADATA","STATE","NULL","LIGHT","INVERT"
+];
+const pick = (a)=>a[(Math.random()*a.length)|0];
+
+const source = payloadEl.value;
+let srcIdx = 0;
+
+function nextChunk(){
+  const r = Math.random();
+  if(r < 0.18){
+    const len = 8 + (Math.random()*22|0);
+    const chunk = source.slice(srcIdx, srcIdx + len);
+    srcIdx += len;
+    if(srcIdx >= source.length) srcIdx = 0;
+    return chunk.replace(/\s/g, " ");
+  } else if(r < 0.26){
+    return pick(TOKENS);
+  } else {
+    const n = 8 + (Math.random()*18|0);
+    let s = "";
+    for(let i=0;i<n;i++) s += brailleChar();
+    return s;
+  }
+}
+
+/* Canvas */
+const canvas = document.getElementById("c");
+const ctx = canvas.getContext("2d", { alpha:true });
+
+let w,h,dpr;
+function resize(){
+  dpr = window.devicePixelRatio || 1;
+  w = window.innerWidth;
+  h = window.innerHeight;
+  canvas.width = Math.floor(w*dpr);
+  canvas.height = Math.floor(h*dpr);
+  canvas.style.width = w+"px";
+  canvas.style.height = h+"px";
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+}
+window.addEventListener("resize", resize);
+resize();
+
+function cssNum(name, fallback){
+  const v = parseFloat(getComputedStyle(document.documentElement).getPropertyValue(name));
+  return Number.isFinite(v) ? v : fallback;
+}
+
+/* column grid */
+function cellW(){ return cssNum("--colW", 9.2); }
+function lineH(){ return cssNum("--lh", 14); }
+function fontPx(){ return cssNum("--font", 12); }
+
+let cols = 0;
+let drops = [];
+function resetDrops(){
+  cols = Math.ceil(w / cellW());
+  drops = new Array(cols).fill(0).map(()=> ({
+    y: Math.random()*h,
+    v: 1.0 + Math.random()*2.6,  // speed
+    phase: Math.random()*Math.PI*2,
+    bias: Math.random()*0.9
+  }));
+}
+resetDrops();
+window.addEventListener("resize", resetDrops);
+
+/* hard clamp to columns (straight lines down) */
+function tick(){
+  const trail = cssNum("--trail", 0.04);
+  const density = cssNum("--density", 1.65);
+  const speedMul = cssNum("--speedMul", 1.05);
+
+  const inkA0 = cssNum("--inkAlphaMin", 0.88);
+  const inkA1 = cssNum("--inkAlphaMax", 1.00);
+
+  const fatPasses = Math.max(0, Math.min(3, Math.round(cssNum("--fatPasses", 1))));
+  const fatPx = cssNum("--fatPx", 0.55);
+
+  const etch = Math.round(cssNum("--etch", 1)) ? 1 : 0;
+  const etchAlpha = cssNum("--etchAlpha", 0.55);
+  const etchStep = Math.max(1, Math.round(cssNum("--etchStep", 2)));
+
+  const sparkRate = cssNum("--sparkRate", 0.020);
+
+  /* burn trail */
+  ctx.fillStyle = `rgba(0,0,0,${trail})`;
+  ctx.fillRect(0,0,w,h);
+
+  const t = performance.now()/1000;
+  const step = Math.max(1, 1 + Math.floor(1.0 / Math.max(0.4, density)));
+
+  /* BASE INK (no shadow, no glow) */
+  ctx.save();
+  ctx.textBaseline = "top";
+  ctx.font = `900 ${fontPx()}px ${getComputedStyle(document.body).fontFamily}`;
+  ctx.fillStyle = "#fff";
+  ctx.shadowBlur = 0;
+  ctx.globalCompositeOperation = "source-over";
+
+  for(let i=0;i<cols;i+=step){
+    const x = i * cellW();
+    const d = drops[i];
+
+    /* straight vertical “capillary” variation: slight speed wave only */
+    const wave = 0.75 + 0.25 * Math.sin(t*0.9 + d.phase);
+    const speed = d.v * wave * speedMul;
+
+    const chunk = nextChunk();
+    const out = chunk.slice(0, 1 + (Math.random()*3|0));
+
+    /* CRISP INK */
+    ctx.globalAlpha = inkA0 + Math.random()*(inkA1-inkA0);
+    ctx.fillText(out, x, d.y);
+
+    /* minimal thickening (keeps it not rounded) */
+    if(fatPasses >= 1){
+      ctx.fillText(out, x + fatPx, d.y);
+    }
+
+    /* ETCH PASS (burn-through): subtractive cuts into black */
+    if(etch){
+      ctx.globalCompositeOperation = "difference";
+      ctx.globalAlpha = etchAlpha;
+      // offset “micro cuts” to make it feel like it’s eating the black
+      ctx.fillText(out, x + etchStep, d.y);
+      ctx.fillText(out, x, d.y + etchStep);
+      ctx.globalCompositeOperation = "source-over";
+    }
+
+    /* SPARKS (hard, not glowy): rapid bright ticks */
+    if(Math.random() < sparkRate){
+      ctx.globalAlpha = 1.0;
+      const b = brailleChar();
+      ctx.fillText(b, x, d.y - lineH()*1);
+      ctx.fillText(b, x, d.y - lineH()*2);
+    }
+
+    d.y += lineH() * speed;
+
+    /* wrap */
+    if(d.y > h + 80 && Math.random() > 0.985){
+      d.y = -Math.random()*420;
+      d.v = 1.0 + Math.random()*2.8;
+      d.phase = Math.random()*Math.PI*2;
+      d.bias = Math.random()*0.9;
+    }
+  }
+
+  ctx.restore();
+  requestAnimationFrame(tick);
+}
+requestAnimationFrame(tick);
+
+/* Enter key routes */
+window.addEventListener("keydown", (e)=>{
+  if(e.key === "Enter"){
+    window.location.href = TARGET_URL;
+  }
+});
+</script>
+
+<!-- ============================================================
+KETADATA HTML SERIALIZATION STAMP
+AE/EE/WB: AE
+FILE_ID: BRAILLE_CAPILLARY_NOGLOW_V1
+ROOM_ID: COVER
+VERSION: v1
+UPDATED_AT: 2025-12-28T00:00:00-05:00
+CHANGELOG:
+- REMOVED: ALL GLOW / HAZE / BLOOM (NO ROUNDED HALOS)
+- CAPILLARY FEEL: STRAIGHT VERTICAL LINES (COLUMN-LOCKED) WITH BURN-ETCH PASSES
+- HIGH CONTRAST: BLACK CRUSH + VIGNETTE + MATERIAL GRAIN
+- THICK BUT SHARP: MINIMAL FAT PASS (NO SOFT ROUNDING)
+============================================================ -->
+</body>
+</html>
