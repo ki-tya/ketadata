@@ -1,0 +1,597 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>KETADATA_SUBSTANCE_V1</title>
+<style>
+  :root{
+    --bg:#0b0c0f;
+    --fg:#e9e9ea;
+    --muted:rgba(233,233,234,.62);
+    --line:rgba(233,233,234,.14);
+    --panel:rgba(11,12,15,.78);
+
+    --mode:mental;          /* mental | physical */
+    --light:4;              /* 1..6 */
+    --invert:0;             /* 0/1 */
+    --null:0;               /* 0/1 */
+    --motion:1;             /* 0/1 */
+  }
+  html,body{height:100%;margin:0;background:var(--bg);color:var(--fg);overflow:hidden}
+  *{box-sizing:border-box}
+  body{font:12px/1.35 Arial, Helvetica, sans-serif}
+  body.invert{filter:invert(1) hue-rotate(180deg)}
+  canvas{position:fixed;inset:0;width:100%;height:100%;display:block}
+
+  .wrap{position:fixed;inset:0;display:flex;flex-direction:column;pointer-events:none}
+  .bar{
+    pointer-events:auto;
+    display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+    padding:10px 10px;border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,0));
+  }
+  .pill{
+    pointer-events:auto;
+    border:1px solid var(--line);
+    background:rgba(255,255,255,.03);
+    padding:6px 8px;
+    letter-spacing:.10em;
+    text-transform:uppercase;
+    cursor:pointer;
+    user-select:none;
+  }
+  .pill:active{transform:translateY(1px)}
+  .spacer{flex:1}
+  .hud{color:var(--muted);letter-spacing:.10em;text-transform:uppercase;user-select:none}
+  .stage{flex:1 1 auto;display:flex;align-items:stretch;justify-content:center;pointer-events:none}
+  .panel{
+    pointer-events:auto;
+    margin:10px;
+    max-width:980px;
+    width:calc(100% - 20px);
+    border:1px solid var(--line);
+    background:var(--panel);
+    padding:10px;
+    display:flex;
+    gap:10px;
+  }
+  .col{flex:1;min-width:260px}
+  .box{
+    border:1px solid var(--line);
+    background:rgba(255,255,255,.02);
+    padding:10px;
+  }
+  .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .k{color:var(--muted);letter-spacing:.10em;text-transform:uppercase}
+  input[type="range"]{width:180px}
+  .txt{white-space:pre-wrap;word-break:break-word}
+  .stamp{
+    margin-top:10px;
+    padding-top:10px;
+    border-top:1px solid var(--line);
+    color:var(--muted);
+    white-space:pre-wrap;
+  }
+
+  body.null .bar, body.null .panel{display:none !important}
+  body.null .wrap{pointer-events:none}
+  body.hide-explain .panel{display:none !important}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<div class="wrap">
+  <div class="bar">
+    <div class="pill" id="btnMode">MODE: MENTAL</div>
+    <div class="pill" id="btnExplain">EXPLAIN: ON (SHIFT+E)</div>
+    <div class="pill" id="btnInvert">INVERT (SHIFT+I)</div>
+    <div class="pill" id="btnNull">NULL (SHIFT+N)</div>
+    <div class="pill" id="btnFull">FULL (SHIFT+F)</div>
+    <div class="pill" id="btnMotion">MOTION: ON</div>
+    <div class="pill" id="btnExport">EXPORT STATE</div>
+    <label class="pill" style="cursor:pointer;">IMPORT STATE<input id="fileImport" type="file" accept="application/json" style="display:none"></label>
+    <div class="pill" id="btnDownload">DOWNLOAD HTML</div>
+    <div class="spacer"></div>
+    <div class="hud" id="hud">SUBSTANCE · MODE MENTAL · LIGHT 4</div>
+  </div>
+
+  <div class="stage">
+    <div class="panel" id="panel">
+      <div class="col">
+        <div class="box">
+          <div class="row">
+            <div class="k">LIGHT</div>
+            <div class="pill" data-light="1">1</div>
+            <div class="pill" data-light="2">2</div>
+            <div class="pill" data-light="3">3</div>
+            <div class="pill" data-light="4">4</div>
+            <div class="pill" data-light="5">5</div>
+            <div class="pill" data-light="6">6</div>
+          </div>
+
+          <div class="row" style="margin-top:8px">
+            <div class="k">MASS</div><input id="mass" type="range" min="0" max="1" step="0.01"><div class="k" id="massV"></div>
+          </div>
+          <div class="row" style="margin-top:8px">
+            <div class="k">VISCOSITY</div><input id="visc" type="range" min="0" max="1" step="0.01"><div class="k" id="viscV"></div>
+          </div>
+          <div class="row" style="margin-top:8px">
+            <div class="k">GRAIN</div><input id="grain" type="range" min="0" max="1" step="0.01"><div class="k" id="grainV"></div>
+          </div>
+          <div class="row" style="margin-top:8px">
+            <div class="k">COMPRESSION</div><input id="comp" type="range" min="0" max="1" step="0.01"><div class="k" id="compV"></div>
+          </div>
+          <div class="row" style="margin-top:8px">
+            <div class="k">TRAIL</div><input id="trail" type="range" min="0.03" max="0.35" step="0.01"><div class="k" id="trailV"></div>
+          </div>
+          <div class="row" style="margin-top:8px">
+            <div class="k">ZOOM</div><input id="zoom" type="range" min="0.6" max="1.8" step="0.01"><div class="k" id="zoomV"></div>
+          </div>
+
+          <div class="txt" style="margin-top:10px;color:var(--muted);letter-spacing:.10em;text-transform:uppercase">
+HOTKEYS: SHIFT+I INVERT · SHIFT+N NULL · SHIFT+F FULL · SHIFT+E EXPLAIN · 1–6 LIGHT · M MODE · SPACE IMPACT
+MENTAL = ANGULAR DENSITY · PHYSICAL = CIRCULAR MATTER
+          </div>
+        </div>
+      </div>
+
+      <div class="col">
+        <div class="box">
+          <div class="txt" id="law">
+KETADATA SUBSTANCE v1
+
+SUBSTANCE HERE MEANS: RESISTANCE + WEIGHT + CONTACT.
+NO STORY. NO SYMBOL. NO OUTCOME.
+ONLY MASS + VISCOSITY + GRAIN + COMPRESSION.
+TWO READINGS OF THE SAME MATERIAL EVENT:
+
+MENTAL: STRIATED, ANGULAR, DENSITY AS STRUCTURE.
+PHYSICAL: IMMERSIVE, CIRCULAR, DENSITY AS FIELD.
+
+THIS SURFACE MODULATES PERCEPTION ONLY.
+          </div>
+
+          <div class="stamp" id="stamp">
+AE: SUBSTANCE_FIELD
+EE: DUAL_MODE_MATERIAL
+WB: SINGLE_FILE_HTML
+FILE_ID: KETADATA_SUBSTANCE_V1
+ROOM_ID: BASE
+VERSION: v1
+UPDATED_AT: 2025-12-29T00:00:00-05:00
+STATE_CLASS: LIMINAL
+TELEOLOGY: NONE
+EPISTEMIC_MODE: REFLEX
+CHANGELOG:
+- SUBSTANCE FIELD: DUAL MODE (MENTAL ANGULAR / PHYSICAL CIRCULAR)
+- CONTROLS: MASS, VISCOSITY, GRAIN, COMPRESSION, TRAIL, ZOOM
+- SYSTEM UNIVERSALS: INVERT/NULL/FULL/LIGHTS + EXPLAIN TOGGLE
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const c = document.getElementById('c');
+  const ctx = c.getContext('2d', { alpha:false });
+  const root = document.documentElement;
+  const body = document.body;
+  const $ = (id)=>document.getElementById(id);
+
+  const ui = {
+    btnMode: $('btnMode'),
+    btnExplain: $('btnExplain'),
+    btnInvert: $('btnInvert'),
+    btnNull: $('btnNull'),
+    btnFull: $('btnFull'),
+    btnMotion: $('btnMotion'),
+    btnExport: $('btnExport'),
+    fileImport: $('fileImport'),
+    btnDownload: $('btnDownload'),
+    hud: $('hud'),
+
+    mass: $('mass'), massV: $('massV'),
+    visc: $('visc'), viscV: $('viscV'),
+    grain: $('grain'), grainV: $('grainV'),
+    comp: $('comp'), compV: $('compV'),
+    trail: $('trail'), trailV: $('trailV'),
+    zoom: $('zoom'), zoomV: $('zoomV'),
+  };
+
+  const S = {
+    VERSION: "KETADATA_SUBSTANCE_V1_STATE",
+    updatedAt: new Date().toISOString(),
+    mode: "mental",
+    explain: true,
+    light: 4,
+    invert: false,
+    nullMode: false,
+    motion: true,
+    params: {
+      mass: 0.72,
+      visc: 0.62,
+      grain: 0.35,
+      comp: 0.52,
+      trail: 0.10,
+      zoom: 1.00
+    },
+    impact: 0,
+    seed: Math.random()*1e6,
+    t: 0
+  };
+
+  const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+  const TAU=Math.PI*2;
+
+  function resize(){
+    const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+    c.width = Math.floor(innerWidth*dpr);
+    c.height = Math.floor(innerHeight*dpr);
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+  }
+  addEventListener('resize', resize);
+
+  function applyExplain(){
+    body.classList.toggle('hide-explain', !S.explain);
+    ui.btnExplain.textContent = "EXPLAIN: " + (S.explain ? "ON" : "OFF") + " (SHIFT+E)";
+  }
+
+  function cssSync(){
+    root.style.setProperty('--mode', S.mode);
+    root.style.setProperty('--light', String(S.light));
+    root.style.setProperty('--invert', S.invert ? 1 : 0);
+    root.style.setProperty('--null', S.nullMode ? 1 : 0);
+    root.style.setProperty('--motion', S.motion ? 1 : 0);
+
+    body.classList.toggle('invert', !!S.invert);
+    body.classList.toggle('null', !!S.nullMode);
+    applyExplain();
+
+    ui.btnMode.textContent = "MODE: " + S.mode.toUpperCase();
+    ui.btnMotion.textContent = "MOTION: " + (S.motion ? "ON":"OFF");
+
+    ui.mass.value = S.params.mass; ui.massV.textContent = S.params.mass.toFixed(2);
+    ui.visc.value = S.params.visc; ui.viscV.textContent = S.params.visc.toFixed(2);
+    ui.grain.value = S.params.grain; ui.grainV.textContent = S.params.grain.toFixed(2);
+    ui.comp.value = S.params.comp; ui.compV.textContent = S.params.comp.toFixed(2);
+    ui.trail.value = S.params.trail; ui.trailV.textContent = S.params.trail.toFixed(2);
+    ui.zoom.value = S.params.zoom; ui.zoomV.textContent = S.params.zoom.toFixed(2);
+
+    ui.hud.textContent =
+      "SUBSTANCE · MODE " + S.mode.toUpperCase() +
+      " · LIGHT " + S.light +
+      " · MASS " + S.params.mass.toFixed(2) +
+      " · VISC " + S.params.visc.toFixed(2) +
+      " · COMP " + S.params.comp.toFixed(2);
+  }
+
+  function toggleFull(){
+    const d=document, el=d.documentElement;
+    if(!d.fullscreenElement){
+      (el.requestFullscreen||el.webkitRequestFullscreen||el.mozRequestFullScreen||el.msRequestFullscreen).call(el);
+    } else {
+      (d.exitFullscreen||d.webkitExitFullscreen||d.mozCancelFullScreen||d.msExitFullscreen).call(d);
+    }
+  }
+
+  function toggleMode(){
+    S.mode = (S.mode === 'mental') ? 'physical' : 'mental';
+    cssSync();
+  }
+
+  function impact(){
+    S.impact = Math.min(1, S.impact + 0.95);
+  }
+
+  function exportState(){
+    S.updatedAt = new Date().toISOString();
+    const blob = new Blob([JSON.stringify(S, null, 2)], {type:"application/json"});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = "KETADATA_SUBSTANCE_V1_STATE_" + S.updatedAt.replace(/[:.]/g,'-') + ".json";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(()=>URL.revokeObjectURL(a.href), 4000);
+    cssSync();
+  }
+
+  async function importState(file){
+    const txt = await file.text();
+    const obj = JSON.parse(txt);
+    if(!obj || typeof obj !== 'object') return;
+
+    if(typeof obj.mode === 'string') S.mode = (obj.mode === 'physical') ? 'physical' : 'mental';
+    if(typeof obj.explain === 'boolean') S.explain = obj.explain;
+    if(typeof obj.light === 'number') S.light = clamp(Math.round(obj.light),1,6);
+    if(typeof obj.invert === 'boolean') S.invert = obj.invert;
+    if(typeof obj.nullMode === 'boolean') S.nullMode = obj.nullMode;
+    if(typeof obj.motion === 'boolean') S.motion = obj.motion;
+
+    if(obj.params && typeof obj.params === 'object'){
+      const p=obj.params;
+      if(typeof p.mass === 'number') S.params.mass = clamp(p.mass,0,1);
+      if(typeof p.visc === 'number') S.params.visc = clamp(p.visc,0,1);
+      if(typeof p.grain === 'number') S.params.grain = clamp(p.grain,0,1);
+      if(typeof p.comp === 'number') S.params.comp = clamp(p.comp,0,1);
+      if(typeof p.trail === 'number') S.params.trail = clamp(p.trail,0.03,0.35);
+      if(typeof p.zoom === 'number') S.params.zoom = clamp(p.zoom,0.6,1.8);
+    }
+
+    S.impact = 0;
+    cssSync();
+  }
+
+  function n2(x,y){
+    const s = Math.sin(x*12.9898 + y*78.233 + S.seed) * 43758.5453123;
+    return s - Math.floor(s);
+  }
+
+  function draw(ts){
+    const dt = Math.min(0.033, (draw._last ? (ts - draw._last)/1000 : 0.016));
+    draw._last = ts;
+
+    if(!S.nullMode && S.motion){
+      const m = S.params.mass;
+      const v = S.params.visc;
+      const c0 = S.params.comp;
+      const drive = 0.12 + (1-m)*0.55 + (1-v)*0.35 + (1-c0)*0.25;
+      S.t += dt * (0.20 + drive + S.impact*0.18);
+      S.impact = Math.max(0, S.impact - dt*(0.70 + S.light*0.10));
+    }
+
+    if(S.nullMode){
+      ctx.fillStyle = "#0b0c0f";
+      ctx.fillRect(0,0,innerWidth,innerHeight);
+      requestAnimationFrame(draw);
+      return;
+    }
+
+    const trail = clamp(S.params.trail, 0.03, 0.35);
+    ctx.fillStyle = `rgba(11,12,15,${trail})`;
+    ctx.fillRect(0,0,innerWidth,innerHeight);
+
+    const cx = innerWidth/2, cy = innerHeight/2;
+    const minDim = Math.min(innerWidth, innerHeight);
+
+    const mass = clamp(S.params.mass,0,1);
+    const visc = clamp(S.params.visc,0,1);
+    const grain = clamp(S.params.grain,0,1);
+    const comp = clamp(S.params.comp,0,1);
+
+    const light = clamp(S.light,1,6);
+    const gain = 0.52 + (light-1)*0.13 + S.impact*0.22 + mass*0.10;
+
+    const baseR = minDim * (0.22 + 0.28*mass + 0.10*comp);
+    const zoom = S.params.zoom;
+
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.scale(zoom, zoom);
+
+    // grain as "contact" (material noise)
+    if(grain > 0.01){
+      const pts = Math.floor(140 + grain*1200);
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = `rgba(233,233,234,${clamp(0.010 + grain*0.040,0.010,0.070) * gain})`;
+      for(let i=0;i<pts;i++){
+        const a = n2(i*1.7, S.t*0.18)*TAU;
+        const r = baseR*(0.08 + n2(i*2.3, S.t*0.12)*1.25);
+        const x = Math.cos(a)*r;
+        const y = Math.sin(a)*r;
+        const j = (n2(i*5.1,S.t*0.09)-0.5)*(2 + grain*16);
+        ctx.beginPath();
+        ctx.moveTo(x,y);
+        ctx.lineTo(x + j, y - j);
+        ctx.stroke();
+      }
+    }
+
+    if(S.mode === "mental"){
+      // MENTAL SUBSTANCE: striated blocks + shear planes (heavy, angular, compressed)
+      const layers = 18 + Math.floor(mass*30) + light*2;
+      const span = baseR*(0.90 + comp*0.65);
+      const shear = 10 + Math.floor((1-visc)*18) + Math.floor(comp*10);
+
+      ctx.lineWidth = 0.9 + comp*2.6 + mass*0.8;
+      ctx.strokeStyle = `rgba(233,233,234,${clamp(0.02 + comp*0.10,0.02,0.20) * gain})`;
+
+      for(let i=0;i<layers;i++){
+        const u=i/(layers-1||1);
+        const y = (u*2-1)*span;
+        const wob = Math.sin(S.t*(0.55 + (1-visc)*0.9) + u*10) * (6 + (1-visc)*28);
+        const w = span*(1.10 + mass*0.55) - Math.abs(wob)*0.4;
+        const h = 6 + Math.floor(2 + comp*10 + u*2);
+        ctx.save();
+        ctx.translate(wob*0.7, y);
+        ctx.beginPath();
+        ctx.rect(-w, -h/2, w*2, h);
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      // shear planes (material resistance)
+      for(let k=0;k<shear;k++){
+        const u=k/(shear-1||1);
+        const a = (u*0.65 + 0.18)*Math.PI + Math.sin(S.t*0.4 + k)*0.10;
+        const len = span*(1.05 + u*0.85);
+        const dx = Math.cos(a)*len;
+        const dy = Math.sin(a)*len;
+        ctx.beginPath();
+        ctx.moveTo(-dx,-dy);
+        ctx.lineTo(dx,dy);
+        ctx.stroke();
+      }
+
+      // compression frames (matter boundaries)
+      const frames = 5 + Math.floor(comp*10);
+      ctx.strokeStyle = `rgba(233,233,234,${clamp(0.012 + mass*0.06,0.012,0.11) * gain})`;
+      for(let f=0;f<frames;f++){
+        const u=f/(frames-1||1);
+        const w = baseR*(0.70 + u*(1.50 + mass*0.60));
+        const h = baseR*(0.55 + u*(1.15 + comp*0.55));
+        const rot = Math.sin(S.t*0.22 + u)*0.06*(1-visc);
+        ctx.save();
+        ctx.rotate(rot);
+        ctx.beginPath();
+        ctx.rect(-w,-h,w*2,h*2);
+        ctx.stroke();
+        ctx.restore();
+      }
+    } else {
+      // PHYSICAL SUBSTANCE: viscous rings + eddies (thick, circular, body-in-matter)
+      const rings = 18 + Math.floor(mass*30) + light*2;
+      const eddies = 10 + Math.floor((1-visc)*26) + Math.floor(mass*10);
+      const spokes = 8 + Math.floor(comp*26);
+
+      ctx.lineWidth = 0.9 + mass*2.2 + comp*1.2;
+      ctx.strokeStyle = `rgba(233,233,234,${clamp(0.02 + mass*0.08,0.02,0.18) * gain})`;
+
+      for(let r=0;r<rings;r++){
+        const u=r/(rings-1||1);
+        const rr = baseR*(0.10 + u*(1.15 + mass*0.35));
+        const wob = (Math.sin(S.t*(0.65 + (1-visc)*0.55) + u*7) + Math.cos(S.t*0.52 + r))*0.5*(2 + (1-visc)*22);
+        ctx.beginPath();
+        ctx.arc(0,0, rr + wob, 0, TAU);
+        ctx.stroke();
+      }
+
+      // eddies: little orbiting loops (viscous turbulence)
+      ctx.strokeStyle = `rgba(233,233,234,${clamp(0.014 + (1-visc)*0.06,0.014,0.12) * gain})`;
+      for(let i=0;i<eddies;i++){
+        const u=i/(eddies-1||1);
+        const rr = baseR*(0.22 + u*(1.05 + mass*0.30));
+        const a = S.t*(0.30 + u*(1.55 + (1-visc)*0.8)) + i*0.42;
+        const x = Math.cos(a)*rr;
+        const y = Math.sin(a)*rr;
+        const r0 = 6 + (1-visc)*18 + comp*8;
+        const w = r0*(0.35 + 0.35*Math.sin(S.t*0.9 + i));
+        ctx.beginPath();
+        ctx.arc(x,y,w,0,TAU);
+        ctx.stroke();
+      }
+
+      // compression spokes: inward pressure (low aggression)
+      ctx.strokeStyle = `rgba(233,233,234,${clamp(0.010 + comp*0.07,0.010,0.11) * gain})`;
+      for(let s=0;s<spokes;s++){
+        const a = (s/spokes)*TAU + S.t*0.05;
+        const x = Math.cos(a)*baseR*(1.05 + mass*0.35);
+        const y = Math.sin(a)*baseR*(1.05 + mass*0.35);
+        ctx.beginPath();
+        ctx.moveTo(0,0);
+        ctx.lineTo(x,y);
+        ctx.stroke();
+      }
+    }
+
+    ctx.restore();
+    requestAnimationFrame(draw);
+  }
+
+  function isTyping(){
+    const a=document.activeElement;
+    if(!a) return false;
+    const tag=(a.tagName||"").toLowerCase();
+    return tag==="input" || tag==="textarea" || tag==="select";
+  }
+
+  ui.btnMode.onclick = ()=>{ toggleMode(); };
+  ui.btnExplain.onclick = ()=>{ S.explain = !S.explain; cssSync(); };
+  ui.btnInvert.onclick = ()=>{ S.invert = !S.invert; cssSync(); };
+  ui.btnNull.onclick = ()=>{ S.nullMode = !S.nullMode; cssSync(); };
+  ui.btnFull.onclick = ()=>{ toggleFull(); };
+  ui.btnMotion.onclick = ()=>{ S.motion = !S.motion; cssSync(); };
+  ui.btnExport.onclick = ()=>{ exportState(); };
+
+  ui.fileImport.addEventListener('change', async (e)=>{
+    const f = e.target.files && e.target.files[0];
+    if(f) await importState(f);
+    e.target.value = "";
+  });
+
+  ui.btnDownload.onclick = ()=>{
+    const html = "<!doctype html>\n" + document.documentElement.outerHTML;
+    const blob = new Blob([html], {type:"text/html"});
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "KETADATA_SUBSTANCE_V1.html";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(()=>URL.revokeObjectURL(a.href), 4000);
+  };
+
+  document.querySelectorAll('[data-light]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      S.light = Number(btn.getAttribute('data-light'));
+      cssSync();
+    });
+  });
+
+  function bindRange(el, key){
+    el.addEventListener('input', ()=>{
+      S.params[key] = Number(el.value);
+      cssSync();
+    });
+  }
+  bindRange(ui.mass,'mass');
+  bindRange(ui.visc,'visc');
+  bindRange(ui.grain,'grain');
+  bindRange(ui.comp,'comp');
+  bindRange(ui.trail,'trail');
+  bindRange(ui.zoom,'zoom');
+
+  function toggleMode(){ S.mode = (S.mode === 'mental') ? 'physical' : 'mental'; cssSync(); }
+  function toggleFull(){
+    const d=document, el=d.documentElement;
+    if(!d.fullscreenElement){
+      (el.requestFullscreen||el.webkitRequestFullscreen||el.mozRequestFullScreen||el.msRequestFullscreen).call(el);
+    } else {
+      (d.exitFullscreen||d.webkitExitFullscreen||d.mozCancelFullScreen||d.msExitFullscreen).call(d);
+    }
+  }
+
+  addEventListener('keydown', (e)=>{
+    if(isTyping()) return;
+    const k=(e.key||"").toLowerCase();
+    if(k>='1' && k<='6'){ S.light = Number(k); cssSync(); return; }
+    if(e.shiftKey && k==='i'){ e.preventDefault(); S.invert = !S.invert; cssSync(); return; }
+    if(e.shiftKey && k==='n'){ e.preventDefault(); S.nullMode = !S.nullMode; cssSync(); return; }
+    if(e.shiftKey && k==='f'){ e.preventDefault(); toggleFull(); return; }
+    if(e.shiftKey && k==='e'){ e.preventDefault(); S.explain = !S.explain; cssSync(); return; }
+    if(k==='m'){ e.preventDefault(); toggleMode(); return; }
+    if(k===' '){ e.preventDefault(); impact(); return; }
+  }, {passive:false});
+
+  function impact(){ impact = impact; S.impact = Math.min(1, S.impact + 0.95); }
+
+  resize();
+  cssSync();
+  requestAnimationFrame(draw);
+})();
+</script>
+
+<!-- ============================================================
+  KETADATA HTML SERIALIZATION STAMP
+  AE/EE/WB: WB
+  FILE_ID: KETADATA_SUBSTANCE_V1
+  ROOM_ID: BASE
+  VERSION: v1
+  UPDATED_AT: 2025-12-29T00:00:00-05:00
+
+  STATE_CLASS: LIMINAL
+  TELEOLOGY: NONE
+  EPISTEMIC_MODE: REFLEX
+
+  CHANGELOG:
+  - SUBSTANCE FIELD: DUAL MODE (MENTAL ANGULAR / PHYSICAL CIRCULAR)
+  - CONTROLS: MASS, VISCOSITY, GRAIN, COMPRESSION, TRAIL, ZOOM
+  - SYSTEM UNIVERSALS: INVERT (SHIFT+I), NULL (SHIFT+N), FULL (SHIFT+F), LIGHTS (1–6), EXPLAIN (SHIFT+E)
+============================================================ -->
+</body>
+</html>
