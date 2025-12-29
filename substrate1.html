@@ -1,0 +1,279 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>NTSH_PSYCHO_V1 · INTERPRETIVE DANCE</title>
+<style>
+  :root{
+    --bg:#0b0c0f;
+    --fg:#e9e9ea;
+    --line:rgba(233,233,234,.14);
+    --trail:0.10;      /* 0..0.35 lower = longer trails */
+    --speed:0.75;      /* 0..2 */
+    --ornate:0.72;     /* 0..1 */
+    --sym:10;          /* 3..24 */
+    --light:4;         /* 1..6 */
+    --invert:0;        /* 0/1 */
+    --null:0;          /* 0/1 */
+  }
+  html,body{height:100%;margin:0;background:var(--bg);overflow:hidden}
+  body.invert{filter:invert(1) hue-rotate(180deg)}
+  canvas{position:fixed;inset:0;width:100%;height:100%;display:block}
+  /* minimal on-screen UI; same font size throughout */
+  .hud{
+    position:fixed;left:10px;bottom:10px;z-index:3;
+    font:12px/1 Arial, Helvetica, sans-serif;
+    letter-spacing:.12em;text-transform:uppercase;
+    color:rgba(233,233,234,.55);
+    user-select:none;pointer-events:none;
+    opacity:calc(1 - (var(--null) * 1));
+  }
+  body.null .hud{opacity:0}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div class="hud" id="hud">SHIFT+I INVERT · SHIFT+N NULL · SHIFT+F FULL · 1–6 LIGHT · SPACE PULSE</div>
+
+<script>
+(() => {
+  const c = document.getElementById('c');
+  const ctx = c.getContext('2d', { alpha:false });
+  const root = document.documentElement;
+  const body = document.body;
+
+  const S = {
+    t: 0,
+    seed: Math.random()*1e6,
+    pulse: 0,
+    light: 4,
+    invert: false,
+    nullMode: false,
+    // dynamic params (kept internal; no UI)
+    trail: 0.10,
+    speed: 0.75,
+    ornate: 0.72,
+    sym: 10
+  };
+
+  const clamp = (v,a,b)=>Math.max(a,Math.min(b,v));
+  const TAU = Math.PI*2;
+
+  function resize(){
+    const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+    c.width = Math.floor(innerWidth*dpr);
+    c.height = Math.floor(innerHeight*dpr);
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+  }
+  addEventListener('resize', resize);
+
+  function cssSync(){
+    root.style.setProperty('--trail', S.trail.toFixed(3));
+    root.style.setProperty('--speed', S.speed.toFixed(3));
+    root.style.setProperty('--ornate', S.ornate.toFixed(3));
+    root.style.setProperty('--sym', String(S.sym));
+    root.style.setProperty('--light', String(S.light));
+    root.style.setProperty('--invert', S.invert ? 1 : 0);
+    root.style.setProperty('--null', S.nullMode ? 1 : 0);
+    body.classList.toggle('invert', !!S.invert);
+    body.classList.toggle('null', !!S.nullMode);
+  }
+
+  // deterministic-ish noise
+  function n2(x,y){
+    const s = Math.sin(x*12.9898 + y*78.233 + S.seed) * 43758.5453123;
+    return s - Math.floor(s);
+  }
+
+  // draw a field of “non-teleological” motion: no center goal, only regulated drift + symmetry entrainment
+  function draw(ts){
+    const dt = Math.min(0.033, (draw._last ? (ts - draw._last)/1000 : 0.016));
+    draw._last = ts;
+
+    // evolve
+    const speed = S.speed * (S.nullMode ? 0.0 : 1.0);
+    S.t += dt * (0.18 + speed*1.65);
+    S.pulse = Math.max(0, S.pulse - dt*(0.85 + S.light*0.12));
+
+    // background with trails
+    const trail = clamp(S.trail, 0.03, 0.35);
+    ctx.fillStyle = `rgba(11,12,15,${trail})`;
+    ctx.fillRect(0,0,innerWidth,innerHeight);
+
+    const cx = innerWidth/2, cy = innerHeight/2;
+    const minDim = Math.min(innerWidth, innerHeight);
+    const R = minDim * (0.46 + 0.06*Math.sin(S.t*0.25));
+
+    const sym = S.sym|0;
+    const ornate = clamp(S.ornate,0,1);
+    const light = clamp(S.light,1,6);
+
+    // exposure/energy based on light + pulse
+    const gain = 0.55 + (light-1)*0.13 + S.pulse*0.18;
+    const aBase = clamp(0.03 + ornate*0.08, 0.02, 0.18) * gain;
+    const wBase = 0.7 + ornate*2.2 + (light-1)*0.12;
+
+    ctx.save();
+    ctx.translate(cx, cy);
+
+    // FIELD A: kaleido chords (straight-line lace)
+    const rings = 10 + Math.floor(ornate*12) + light;
+    const chords = 22 + Math.floor(ornate*62);
+    ctx.lineWidth = wBase;
+    ctx.strokeStyle = `rgba(233,233,234,${aBase})`;
+
+    for(let r=0;r<rings;r++){
+      const u = r/(rings-1);
+      const rr = R*(0.12 + u*0.92);
+      const phase = S.t*(0.55 + u*1.35) + r*0.37;
+      const wob = (Math.sin(phase) + Math.cos(phase*0.73))*0.5;
+
+      for(let k=0;k<sym;k++){
+        const rot = (k/sym)*TAU;
+        ctx.save();
+        ctx.rotate(rot);
+
+        for(let i=0;i<chords;i++){
+          const p = i/(chords-1);
+          const ang1 = p*TAU*0.5 + (Math.sin(S.t*0.35 + r)*0.18);
+          const ang2 = ang1 + (TAU/4) * (0.55 + 0.45*Math.sin(S.t + p*3 + r));
+
+          const jitter = (n2(p*13+r*0.7, k*0.9+S.t*0.2)-0.5) * (6 + ornate*18);
+          const rr2 = rr * (1 + wob*0.08*ornate);
+
+          const x1 = Math.cos(ang1)*rr2 + jitter;
+          const y1 = Math.sin(ang1)*rr2 - jitter;
+          const x2 = Math.cos(ang2)*rr2 - jitter;
+          const y2 = Math.sin(ang2)*rr2 + jitter;
+
+          ctx.beginPath();
+          ctx.moveTo(x1,y1);
+          ctx.lineTo(x2,y2);
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
+    }
+
+    // FIELD B: “somatic pressure bars” (rectilinear compressions)
+    const bars = 10 + light*3;
+    ctx.lineWidth = 1.1 + ornate*1.6;
+    ctx.strokeStyle = `rgba(233,233,234,${clamp(0.02 + ornate*0.10,0.02,0.16) * gain})`;
+    for(let i=0;i<bars;i++){
+      const u = i/(bars-1);
+      const w = minDim*(0.16 + u*0.72);
+      const h = 7 + i*2;
+      const a = S.t*(0.42 + u*1.1) + i*0.9;
+      const dx = Math.cos(a)* (18 + ornate*70);
+      const dy = Math.sin(a*0.92)* (18 + ornate*70);
+
+      ctx.save();
+      ctx.translate(dx, dy);
+      ctx.rotate((Math.sin(S.t*0.3 + i)*0.10) * (0.25 + ornate));
+      ctx.beginPath();
+      ctx.rect(-w/2, -h/2, w, h);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // FIELD C: pulse ring (soft; no flash)
+    if(S.pulse > 0.001){
+      const a = clamp(0.015 + S.pulse*0.10, 0, 0.13);
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = `rgba(233,233,234,${a})`;
+      const layers = 18;
+      for(let i=0;i<layers;i++){
+        const u=i/(layers-1);
+        const rr = R*(0.22 + u*0.95);
+        const sides = 10 + Math.floor(u*22);
+        ctx.beginPath();
+        for(let s=0;s<=sides;s++){
+          const ang=(s/sides)*TAU + S.t*0.08;
+          const x=Math.cos(ang)*rr;
+          const y=Math.sin(ang)*rr;
+          if(s===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+        }
+        ctx.stroke();
+      }
+    }
+
+    ctx.restore();
+
+    requestAnimationFrame(draw);
+  }
+
+  function isTyping(){
+    const a=document.activeElement;
+    if(!a) return false;
+    const tag=(a.tagName||"").toLowerCase();
+    return tag==="input" || tag==="textarea" || tag==="select";
+  }
+
+  function pulse(){ S.pulse = Math.min(1, S.pulse + 0.9); }
+
+  addEventListener('keydown', (e)=>{
+    if(isTyping()) return;
+    const k=(e.key||"").toLowerCase();
+
+    // lights 1–6
+    if(k>='1' && k<='6'){
+      S.light = Number(k);
+      cssSync();
+      return;
+    }
+
+    // shift hotkeys
+    if(e.shiftKey && k==='i'){ e.preventDefault(); S.invert = !S.invert; cssSync(); return; }
+    if(e.shiftKey && k==='n'){ e.preventDefault(); S.nullMode = !S.nullMode; cssSync(); return; }
+    if(e.shiftKey && k==='f'){
+      e.preventDefault();
+      const d=document, el=d.documentElement;
+      if(!d.fullscreenElement){
+        (el.requestFullscreen||el.webkitRequestFullscreen||el.mozRequestFullScreen||el.msRequestFullscreen).call(el);
+      }else{
+        (d.exitFullscreen||d.webkitExitFullscreen||d.mozCancelFullScreen||d.msExitFullscreen).call(d);
+      }
+      return;
+    }
+
+    // space pulse
+    if(k===' '){
+      e.preventDefault();
+      pulse();
+      return;
+    }
+
+    // small tactile tuning (optional)
+    if(k==='arrowup'){ e.preventDefault(); S.speed = clamp(S.speed+0.05,0,2); cssSync(); }
+    if(k==='arrowdown'){ e.preventDefault(); S.speed = clamp(S.speed-0.05,0,2); cssSync(); }
+    if(k==='arrowright'){ e.preventDefault(); S.ornate = clamp(S.ornate+0.03,0,1); cssSync(); }
+    if(k==='arrowleft'){ e.preventDefault(); S.ornate = clamp(S.ornate-0.03,0,1); cssSync(); }
+  }, {passive:false});
+
+  // init
+  resize();
+  cssSync();
+  requestAnimationFrame(draw);
+})();
+</script>
+
+<!-- ============================================================
+  KETADATA HTML SERIALIZATION STAMP
+  AE/EE/WB: WB
+  FILE_ID: NTSH_PSYCHO_V1_DANCE
+  ROOM_ID: BASE
+  VERSION: v1
+  UPDATED_AT: 2025-12-29T00:00:00-05:00
+
+  STATE_CLASS: LIMINAL
+  TELEOLOGY: NONE
+  EPISTEMIC_MODE: REFLEX
+
+  CHANGELOG:
+  - INTERPRETIVE VISUAL ONLY (NO TEXT CONTENT)
+  - NON-TELEOLOGICAL DANCE FIELD (SYMMETRIC CHORDS + PRESSURE BARS)
+  - SYSTEM UNIVERSALS: INVERT (SHIFT+I), NULL (SHIFT+N), FULL (SHIFT+F), LIGHTS (1–6), PULSE (SPACE)
+============================================================ -->
+</body>
+</html>
