@@ -1,0 +1,842 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>KETADATA // INTERPRETIVE CHAT MODULE</title>
+<style>
+  :root{
+    --bg:#0a0b0d;
+    --fg:#f2f3f5;
+    --muted:#b7bcc6;
+    --line:rgba(242,243,245,.28);
+    --line2:rgba(242,243,245,.14);
+    --panel:rgba(10,11,13,.76);
+    --panel2:rgba(10,11,13,.56);
+    --glass:rgba(242,243,245,.04);
+    --accent:#f2f3f5;
+
+    --invert:0;
+    --null:0;
+    --motion:1;
+
+    --light:3;         /* 1..6 */
+    --intensity:.52;   /* derived */
+    --grain:.06;
+    --trail:.18;
+  }
+
+  /* INVERT */
+  body.invert{
+    --bg:#f2f3f5;
+    --fg:#0a0b0d;
+    --muted:#23262d;
+    --line:rgba(10,11,13,.28);
+    --line2:rgba(10,11,13,.14);
+    --panel:rgba(242,243,245,.78);
+    --panel2:rgba(242,243,245,.60);
+    --glass:rgba(10,11,13,.04);
+    --accent:#0a0b0d;
+  }
+
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0;background:var(--bg);color:var(--fg);font-family:Arial,Helvetica,sans-serif;overflow:hidden}
+  a{color:inherit;text-decoration:none}
+  button,input,select,textarea{font-family:inherit}
+  .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace}
+
+  /* BACKDROP CANVAS */
+  canvas{position:fixed;inset:0;display:block;z-index:0}
+
+  /* GRAIN */
+  #grain{
+    position:fixed;inset:0;z-index:1;pointer-events:none;
+    opacity:var(--grain);
+    mix-blend-mode:overlay;
+    background-image:
+      repeating-linear-gradient(0deg, rgba(255,255,255,.10) 0 1px, transparent 1px 3px),
+      repeating-linear-gradient(90deg, rgba(255,255,255,.08) 0 1px, transparent 1px 4px);
+  }
+  body.invert #grain{mix-blend-mode:multiply}
+
+  /* LAYOUT */
+  .shell{
+    position:relative;z-index:2;height:100%;
+    display:grid;
+    grid-template-rows:auto 1fr auto;
+  }
+
+  /* TOP BAR */
+  .topbar{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:10px 12px;
+    border-bottom:2px solid var(--accent);
+    background:var(--panel);
+    backdrop-filter: blur(3px);
+  }
+  .brand{
+    display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;
+    font-weight:900;letter-spacing:.16em;text-transform:uppercase;font-size:11px;
+  }
+  .brand .tag{
+    border:2px solid var(--accent);
+    padding:6px 10px;
+    background:transparent;
+  }
+  .controls{
+    display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+  }
+  .btn{
+    border:2px solid var(--accent);
+    background:transparent;color:var(--fg);
+    padding:6px 10px;
+    font-weight:900;letter-spacing:.14em;text-transform:uppercase;font-size:11px;
+    cursor:pointer;border-radius:0;
+  }
+  .btn:active{transform:translateY(1px)}
+  .btn[aria-pressed="true"]{background:var(--fg);color:var(--bg)}
+  .lights{display:flex;align-items:center;gap:6px;margin-left:4px}
+  .lamp{width:18px;height:18px;border:2px solid var(--accent);background:transparent;cursor:pointer}
+  .lamp.on{background:var(--fg)}
+
+  /* MAIN */
+  .main{
+    display:grid;
+    grid-template-columns: minmax(320px, 440px) 1fr minmax(320px, 440px);
+    gap:12px;
+    padding:12px;
+    height:100%;
+    overflow:hidden;
+  }
+
+  /* PANELS */
+  .panel{
+    border:2px solid var(--line);
+    background:var(--panel2);
+    backdrop-filter: blur(2px);
+    box-shadow: 0 0 0 1px var(--glass) inset;
+    overflow:hidden;
+    display:flex;flex-direction:column;
+    min-height:0;
+  }
+  .panel .hdr{
+    padding:10px 10px;
+    border-bottom:1px solid var(--line2);
+    display:flex;align-items:center;justify-content:space-between;gap:10px;
+    background:rgba(0,0,0,.10);
+  }
+  body.invert .panel .hdr{background:rgba(255,255,255,.10)}
+  .panel .hdr .title{
+    font-weight:900;letter-spacing:.14em;text-transform:uppercase;font-size:11px;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  }
+  .panel .hdr .mini{
+    display:flex;gap:6px;align-items:center;flex-wrap:wrap;
+  }
+  .chip{
+    border:1px solid var(--line);
+    padding:4px 8px;
+    font-weight:900;letter-spacing:.10em;text-transform:uppercase;font-size:10px;
+    opacity:.9;
+  }
+  .panel .body{
+    padding:10px;
+    overflow:auto;
+    min-height:0;
+  }
+
+  /* CENTER: INTERFACE CARD GRID */
+  .grid{
+    display:grid;
+    grid-template-columns:1fr;
+    gap:10px;
+  }
+  .card{
+    border:1px solid var(--line);
+    padding:10px;
+    background:rgba(0,0,0,.08);
+  }
+  body.invert .card{background:rgba(255,255,255,.10)}
+  .card .ct{
+    display:flex;justify-content:space-between;gap:10px;align-items:flex-start;flex-wrap:wrap;
+  }
+  .card .h{
+    font-weight:900;letter-spacing:.12em;text-transform:uppercase;font-size:11px;
+  }
+  .card .p{
+    margin-top:8px;
+    color:var(--muted);
+    font-size:12px;line-height:1.35;
+  }
+  .monoBlock{
+    margin-top:10px;
+    border:1px solid var(--line2);
+    background:rgba(0,0,0,.12);
+    padding:10px;
+    white-space:pre-wrap;
+    font-size:11px;
+    line-height:1.35;
+  }
+  body.invert .monoBlock{background:rgba(255,255,255,.12)}
+
+  /* SELECTS + INPUTS */
+  .row{
+    display:flex;gap:8px;align-items:center;flex-wrap:wrap;
+  }
+  .label{
+    font-weight:900;letter-spacing:.12em;text-transform:uppercase;font-size:10px;
+    opacity:.9;
+  }
+  select,input[type="range"],input[type="number"],input[type="text"]{
+    border:2px solid var(--accent);
+    background:transparent;color:var(--fg);
+    padding:6px 8px;
+    font-weight:900;letter-spacing:.10em;text-transform:uppercase;font-size:11px;
+    border-radius:0;outline:none;
+  }
+  input[type="range"]{padding:0;height:28px}
+  option{background:var(--bg);color:var(--fg)}
+
+  /* QUEUE */
+  .queue{
+    display:flex;flex-direction:column;gap:8px;
+  }
+  .qitem{
+    border:1px solid var(--line);
+    background:rgba(0,0,0,.08);
+    padding:10px;
+    display:grid;
+    grid-template-columns: 1fr auto;
+    gap:8px;
+    align-items:center;
+  }
+  body.invert .qitem{background:rgba(255,255,255,.10)}
+  .qitem .meta{
+    display:flex;flex-direction:column;gap:4px;min-width:0;
+  }
+  .qitem .meta .t{
+    font-weight:900;letter-spacing:.12em;text-transform:uppercase;font-size:11px;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  }
+  .qitem .meta .s{
+    color:var(--muted);
+    font-size:11px;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  }
+  .qitem .amt{
+    border:2px solid var(--accent);
+    padding:6px 10px;
+    font-weight:900;letter-spacing:.12em;text-transform:uppercase;font-size:11px;
+    min-width:110px;
+    text-align:right;
+  }
+
+  /* BOTTOM BAR */
+  .bottombar{
+    border-top:2px solid var(--accent);
+    background:var(--panel);
+    padding:10px 12px;
+    display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;
+  }
+  .hotkeys{
+    display:flex;gap:10px;align-items:center;flex-wrap:wrap;
+    color:var(--muted);
+    font-size:11px;
+  }
+  .hotkeys .k{border:1px solid var(--line);padding:4px 8px;letter-spacing:.10em;text-transform:uppercase;font-weight:900;color:var(--fg)}
+  .stamp{
+    width:100%;
+    margin-top:8px;
+    font: 900 10px/1.25 Arial, Helvetica, sans-serif;
+    letter-spacing:.10em;text-transform:uppercase;
+    opacity:.85;
+    mix-blend-mode:difference;
+    white-space:pre-wrap;
+  }
+  body.invert .stamp{mix-blend-mode:difference}
+
+  /* NULL */
+  body.null .topbar,
+  body.null .bottombar,
+  body.null #grain,
+  body.null .panel{
+    opacity:0;
+    pointer-events:none;
+  }
+  body.null .shell{grid-template-rows:0 1fr 0}
+  body.null .main{padding:0;gap:0;grid-template-columns:1fr}
+
+  /* SCROLLBAR (quiet) */
+  .panel .body::-webkit-scrollbar{width:10px}
+  .panel .body::-webkit-scrollbar-thumb{background:rgba(255,255,255,.18)}
+  body.invert .panel .body::-webkit-scrollbar-thumb{background:rgba(0,0,0,.18)}
+</style>
+</head>
+<body>
+<canvas id="bg"></canvas>
+<div id="grain" aria-hidden="true"></div>
+
+<div class="shell">
+  <div class="topbar">
+    <div class="brand">
+      <div class="tag">KETADATA</div>
+      <div class="tag">INTERPRETIVE MODULE</div>
+      <div class="tag">HIGH ENERGY / LOW VIOLENCE</div>
+    </div>
+
+    <div class="controls">
+      <div class="lights" id="lights" title="LIGHTS 1–6">
+        <div class="lamp" data-l="1"></div>
+        <div class="lamp" data-l="2"></div>
+        <div class="lamp" data-l="3"></div>
+        <div class="lamp" data-l="4"></div>
+        <div class="lamp" data-l="5"></div>
+        <div class="lamp" data-l="6"></div>
+      </div>
+      <button class="btn" id="invertBtn" aria-pressed="false" title="SHIFT+I">INVERT</button>
+      <button class="btn" id="nullBtn" aria-pressed="false" title="SHIFT+N">NULL</button>
+      <button class="btn" id="motionBtn" aria-pressed="true" title="M">MOTION</button>
+    </div>
+  </div>
+
+  <div class="main">
+    <!-- LEFT: CORES + CONTRACT -->
+    <section class="panel" id="leftPanel">
+      <div class="hdr">
+        <div class="title">CORE SYSTEM</div>
+        <div class="mini">
+          <div class="chip mono" id="activeCoreChip">CORE: DIVA</div>
+          <div class="chip mono" id="coreSyntaxChip">//DIVA</div>
+        </div>
+      </div>
+      <div class="body">
+        <div class="card">
+          <div class="ct">
+            <div class="h">CORE SWITCH</div>
+            <div class="row">
+              <span class="label">SELECT</span>
+              <select id="coreSelect">
+                <option value="DIVA">DIVA</option>
+                <option value="REFLEX">REFLEX</option>
+                <option value="RECIPROCITY">RECIPROCITY</option>
+                <option value="ARCHIVE">ARCHIVE</option>
+                <option value="STRATEGY">STRATEGY</option>
+                <option value="ORIENT">ORIENT</option>
+              </select>
+            </div>
+          </div>
+          <div class="p">
+            One core active at a time. Switching changes how the system responds. No tiers. No moral framing. Just physics.
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="ct">
+            <div class="h">CORE LAWS (ONE-LINERS)</div>
+            <div class="chip mono">CANON</div>
+          </div>
+          <div class="monoBlock mono" id="coreLaws">
+DIVA — SHIP FIRST. PROTECT AGENCY. DO NOT NEGOTIATE MOMENTUM.
+REFLEXIVITY — MODEL THE LOOP, NOT THE SELF.
+RECIPROCITY — THIS IS A TOOL, NOT A BOND.
+ARCHIVE — RECORD WITHOUT MEANING. PRESERVE WITHOUT HIERARCHY.
+STRATEGY — CHOOSE UNDER CONSTRAINT. NAME THE COST. COMMIT.
+ORIENTATION — NAME THE PHASE. REDUCE FALSE URGENCY.</div>
+        </div>
+
+        <div class="card">
+          <div class="ct">
+            <div class="h">GLOBAL RULES</div>
+            <div class="chip mono">LOW VIOLENCE</div>
+          </div>
+          <div class="monoBlock mono">
+ASSUME COMPETENCE
+NO MORALIZING
+NO IDENTITY ENFORCEMENT
+NO SWEETENED CARE
+NO EMOTIONAL MIRRORING / EXCLUSIVITY
+MINIMAL VERBOSITY
+ARTIFACT-FIRST WHEN APPLICABLE
+EXPLICIT ASSUMPTIONS ONLY WHEN REQUIRED
+SURGICAL EDITS ONLY WHEN MODIFYING EXISTING WORK</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- CENTER: INTERPRETIVE CONCEPTS -->
+    <section class="panel" id="centerPanel">
+      <div class="hdr">
+        <div class="title">INTERPRETIVE INTERFACE</div>
+        <div class="mini">
+          <div class="chip mono" id="phaseChip">PHASE: EXECUTE → OBSERVE → DECIDE</div>
+        </div>
+      </div>
+      <div class="body">
+        <div class="grid">
+          <div class="card">
+            <div class="ct">
+              <div class="h">THE PRINCIPLE</div>
+              <div class="chip mono">JUST PHYSICS</div>
+            </div>
+            <div class="p">
+              CARE IS OFTEN SWEETENED CONTROL. THIS SYSTEM USES RESPECT INSTEAD:
+              ENERGY STAYS HIGH, VIOLENCE STAYS LOW. NO QUESTIONS BY DEFAULT. NO TIERS. NO MORAL FRAMING.
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="ct">
+              <div class="h">THE TRIAD</div>
+              <div class="chip mono">ACT / SEE / RELATE</div>
+            </div>
+            <div class="monoBlock mono">
+DIVA = AGENCY + EXECUTION
+REFLEXIVITY = COHERENCE + LOOP MODELING
+RECIPROCITY = RELATIONSHIP HYGIENE (TOOL, NOT BOND)</div>
+          </div>
+
+          <div class="card">
+            <div class="ct">
+              <div class="h">THE SEXTET MAP</div>
+              <div class="chip mono">COMPLETE</div>
+            </div>
+            <div class="monoBlock mono">
+ACTION FLOW: DIVA → STRATEGY
+UNDERSTANDING FLOW: REFLEXIVITY → ORIENTATION
+STABILITY FLOW: RECIPROCITY → ARCHIVE</div>
+          </div>
+
+          <div class="card">
+            <div class="ct">
+              <div class="h">MONETIZATION WITHOUT COERCION</div>
+              <div class="chip mono">QUEUE</div>
+            </div>
+            <div class="p">
+              NOT PAY-WHAT-YOU-WANT SOFTNESS. NOT FIXED PRICE RIGIDITY. NOT AUCTION AGGRESSION.
+              VOLUNTARY PRICE SIGNALING WITH QUEUE PRIORITY. ACCESS IS NOT RESTRICTED. TIMING IS.
+            </div>
+            <div class="monoBlock mono" id="queueRules">
+REQUESTS ARE PROCESSED THROUGH A RUNNING QUEUE.
+EACH REQUEST INCLUDES: ARTIFACT TYPE, MATERIALS, OPTIONAL CONTRIBUTION.
+ORDERING RULE: (1) CONTRIBUTION AMOUNT (2) SUBMISSION TIME.
+HIGHER CONTRIBUTIONS MOVE EARLIER. LOWER CONTRIBUTIONS REMAIN VALID.
+PRIORITY AFFECTS ORDER, NOT OUTCOME. NO DELIVERY GUARANTEES.</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- RIGHT: ARTIFACT MENU + QUEUE SIM -->
+    <section class="panel" id="rightPanel">
+      <div class="hdr">
+        <div class="title">ARTIFACT QUEUE</div>
+        <div class="mini">
+          <div class="chip mono" id="capacityChip">CAPACITY: 12 / WEEK</div>
+          <div class="chip mono">PRIORITY ≠ GUARANTEE</div>
+        </div>
+      </div>
+      <div class="body">
+        <div class="card">
+          <div class="ct">
+            <div class="h">ARTIFACT MENU</div>
+            <div class="chip mono">SELECT → SIGNAL → QUEUE</div>
+          </div>
+          <div class="monoBlock mono" id="artifactMenu">
+01 — PERSONALIZED KETADATA REPORT
+02 — CUSTOM SINGLE-FILE HTML
+03 — INTERPRETIVE HTML OF YOUR DATA (REPORT + INTERFACE)
+04 — SYSTEM SKETCH / BLUEPRINT
+05 — ARCHIVAL COMPRESSION (INDEX / METADATA)
+06 — LIMITED THREAD (TIME-BOXED)</div>
+        </div>
+
+        <div class="card">
+          <div class="ct">
+            <div class="h">REQUEST SIMULATOR</div>
+            <div class="chip mono">NO TIERS</div>
+          </div>
+
+          <div class="row" style="margin-top:10px">
+            <span class="label">TYPE</span>
+            <select id="artifactSelect" style="min-width:260px">
+              <option value="PERSONALIZED REPORT">PERSONALIZED REPORT</option>
+              <option value="CUSTOM HTML">CUSTOM HTML</option>
+              <option value="INTERPRETIVE DATA HTML">INTERPRETIVE DATA HTML</option>
+              <option value="SYSTEM BLUEPRINT">SYSTEM BLUEPRINT</option>
+              <option value="ARCHIVAL COMPRESSION">ARCHIVAL COMPRESSION</option>
+              <option value="LIMITED THREAD">LIMITED THREAD</option>
+            </select>
+          </div>
+
+          <div class="row" style="margin-top:10px">
+            <span class="label">CONTRIBUTION</span>
+            <input id="amt" type="number" min="0" step="1" value="50" style="width:140px"/>
+            <input id="amtRange" type="range" min="0" max="500" step="5" value="50" style="flex:1;min-width:160px"/>
+          </div>
+
+          <div class="row" style="margin-top:10px">
+            <span class="label">NOTE</span>
+            <input id="note" type="text" value="CEMENT CONCEPTS / INDUSTRIAL CHIC" style="flex:1;min-width:260px"/>
+          </div>
+
+          <div class="row" style="margin-top:10px;justify-content:space-between">
+            <button class="btn" id="addBtn">ADD REQUEST</button>
+            <button class="btn" id="clearBtn">CLEAR</button>
+          </div>
+
+          <div class="p" style="margin-top:10px">
+            Sorting is mechanical: higher contribution first, then timestamp. This is the monetization ethic in interface form.
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="ct">
+            <div class="h">RUNNING QUEUE</div>
+            <div class="chip mono" id="queueCountChip">0 REQUESTS</div>
+          </div>
+          <div class="queue" id="queue"></div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <div class="bottombar">
+    <div class="hotkeys mono">
+      <span class="k">1–6 LIGHTS</span>
+      <span class="k">SHIFT+I INVERT</span>
+      <span class="k">SHIFT+N NULL</span>
+      <span class="k">M MOTION</span>
+      <span class="k">K CORES (FOCUS)</span>
+    </div>
+
+    <div class="hotkeys mono" style="justify-content:flex-end">
+      <span class="k" id="intensityReadout">INTENSITY: 0.52</span>
+      <span class="k" id="timeReadout">TIME: --:--:--</span>
+    </div>
+
+    <div class="stamp mono" id="stamp">
+AE: INDUSTRIAL_CHIC_GLASS + BRUTAL_LABELS + MECHANICAL_QUEUE_INTERFACE
+EE: LIGHTS_1_6 + SHIFT_I_INVERT + SHIFT_N_NULL + MOTION_TOGGLE + CORE_SWITCH + QUEUE_SORT
+WB: SINGLE_FILE_HTML + PORTABLE_MANUAL_FRAGMENT
+
+FILE_ID: "KETA_INTERPRETIVE_CHAT_MODULE"
+ROOM_ID: "BASE"
+VERSION_ID: "V1"
+UPDATED_AT: "<span id='ts'></span>"
+CHANGELOG: "INTERPRETIVE INTERFACE FOR LAST-CHAT CONCEPTS: CORES + QUEUE + AGENCY"
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  /* -----------------------------
+     STATE
+  ------------------------------ */
+  const S = {
+    invert: false,
+    nullMode: false,
+    motion: true,
+    light: 3,
+    core: "DIVA",
+    queue: []
+  };
+
+  const coreMeta = {
+    DIVA: { syntax:"//DIVA", phase:"PHASE: EXECUTE", law:"SHIP FIRST. PROTECT AGENCY. DO NOT NEGOTIATE MOMENTUM." },
+    REFLEX: { syntax:"//REFLEX", phase:"PHASE: OBSERVE", law:"MODEL THE LOOP, NOT THE SELF." },
+    RECIPROCITY: { syntax:"//RECIPROCITY", phase:"PHASE: RELATE", law:"THIS IS A TOOL, NOT A BOND." },
+    ARCHIVE: { syntax:"//ARCHIVE", phase:"PHASE: REMEMBER", law:"RECORD WITHOUT MEANING. PRESERVE WITHOUT HIERARCHY." },
+    STRATEGY: { syntax:"//STRATEGY", phase:"PHASE: DECIDE", law:"CHOOSE UNDER CONSTRAINT. NAME THE COST. COMMIT." },
+    ORIENT: { syntax:"//ORIENT", phase:"PHASE: ORIENT", law:"NAME THE PHASE. REDUCE FALSE URGENCY." }
+  };
+
+  /* -----------------------------
+     ELEMENTS
+  ------------------------------ */
+  const body = document.body;
+  const root = document.documentElement;
+
+  const invertBtn = document.getElementById("invertBtn");
+  const nullBtn = document.getElementById("nullBtn");
+  const motionBtn = document.getElementById("motionBtn");
+
+  const lamps = Array.from(document.querySelectorAll(".lamp"));
+  const intensityReadout = document.getElementById("intensityReadout");
+  const timeReadout = document.getElementById("timeReadout");
+
+  const coreSelect = document.getElementById("coreSelect");
+  const activeCoreChip = document.getElementById("activeCoreChip");
+  const coreSyntaxChip = document.getElementById("coreSyntaxChip");
+  const phaseChip = document.getElementById("phaseChip");
+
+  const artifactSelect = document.getElementById("artifactSelect");
+  const amt = document.getElementById("amt");
+  const amtRange = document.getElementById("amtRange");
+  const note = document.getElementById("note");
+  const addBtn = document.getElementById("addBtn");
+  const clearBtn = document.getElementById("clearBtn");
+  const queueEl = document.getElementById("queue");
+  const queueCountChip = document.getElementById("queueCountChip");
+
+  /* -----------------------------
+     HELPERS
+  ------------------------------ */
+  const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
+  const pad2=(n)=>String(n).padStart(2,"0");
+
+  function setIntensityFromLight(){
+    // Map 1..6 -> 0.22..0.92
+    const k = (S.light-1)/5;
+    const intensity = 0.22 + k*0.70;
+    root.style.setProperty("--light", String(S.light));
+    root.style.setProperty("--intensity", intensity.toFixed(2));
+    root.style.setProperty("--grain", (0.03 + k*0.08).toFixed(2));
+    root.style.setProperty("--trail", (0.30 - k*0.18).toFixed(2));
+    intensityReadout.textContent = `INTENSITY: ${intensity.toFixed(2)}`;
+    lamps.forEach(l => {
+      const n = parseInt(l.dataset.l,10);
+      l.classList.toggle("on", n <= S.light);
+    });
+  }
+
+  function setCore(core){
+    S.core = core;
+    coreSelect.value = core;
+    const meta = coreMeta[core] || coreMeta.DIVA;
+    activeCoreChip.textContent = `CORE: ${core}`;
+    coreSyntaxChip.textContent = meta.syntax;
+    phaseChip.textContent = `${meta.phase}  →  (SWITCH CORES AS NEEDED)`;
+  }
+
+  function toggleInvert(){
+    S.invert = !S.invert;
+    body.classList.toggle("invert", S.invert);
+    invertBtn.setAttribute("aria-pressed", String(S.invert));
+  }
+
+  function toggleNull(){
+    S.nullMode = !S.nullMode;
+    body.classList.toggle("null", S.nullMode);
+    nullBtn.setAttribute("aria-pressed", String(S.nullMode));
+  }
+
+  function toggleMotion(){
+    S.motion = !S.motion;
+    motionBtn.setAttribute("aria-pressed", String(S.motion));
+  }
+
+  function sortQueue(){
+    // Higher contribution first, then timestamp
+    S.queue.sort((a,b) => (b.amount - a.amount) || (a.ts - b.ts));
+  }
+
+  function renderQueue(){
+    queueEl.innerHTML = "";
+    queueCountChip.textContent = `${S.queue.length} REQUESTS`;
+    for(const item of S.queue){
+      const div = document.createElement("div");
+      div.className = "qitem";
+      const left = document.createElement("div");
+      left.className = "meta";
+      const t = document.createElement("div");
+      t.className = "t mono";
+      t.textContent = item.type;
+      const s = document.createElement("div");
+      s.className = "s mono";
+      s.textContent = `${new Date(item.ts).toISOString()}  |  ${item.note || "—"}`;
+      left.appendChild(t); left.appendChild(s);
+
+      const right = document.createElement("div");
+      right.className = "amt mono";
+      right.textContent = item.amount ? `$${item.amount}` : `$0`;
+
+      div.appendChild(left);
+      div.appendChild(right);
+      queueEl.appendChild(div);
+    }
+  }
+
+  function addRequest(){
+    const type = artifactSelect.value;
+    const amount = Math.max(0, Math.floor(Number(amt.value) || 0));
+    const n = (note.value || "").trim().slice(0, 120);
+    S.queue.push({ type, amount, note:n, ts: Date.now() });
+    sortQueue();
+    renderQueue();
+  }
+
+  /* -----------------------------
+     UI EVENTS
+  ------------------------------ */
+  invertBtn.addEventListener("click", toggleInvert);
+  nullBtn.addEventListener("click", toggleNull);
+  motionBtn.addEventListener("click", toggleMotion);
+
+  lamps.forEach(l => l.addEventListener("click", () => {
+    S.light = parseInt(l.dataset.l,10);
+    setIntensityFromLight();
+  }));
+
+  coreSelect.addEventListener("change", () => setCore(coreSelect.value));
+
+  amtRange.addEventListener("input", () => { amt.value = amtRange.value; });
+  amt.addEventListener("input", () => {
+    const v = clamp(Number(amt.value)||0, 0, 500);
+    amt.value = v;
+    amtRange.value = v;
+  });
+
+  addBtn.addEventListener("click", addRequest);
+  clearBtn.addEventListener("click", () => { S.queue = []; renderQueue(); });
+
+  // Hotkeys (minimal)
+  window.addEventListener("keydown", (e) => {
+    const k = (e.key || "").toLowerCase();
+
+    if(!e.shiftKey && !e.metaKey && !e.ctrlKey && /^[1-6]$/.test(k)){
+      e.preventDefault();
+      S.light = parseInt(k,10);
+      setIntensityFromLight();
+      return;
+    }
+    if(e.shiftKey && k === "i"){ e.preventDefault(); toggleInvert(); return; }
+    if(e.shiftKey && k === "n"){ e.preventDefault(); toggleNull(); return; }
+    if(!e.shiftKey && k === "m"){ e.preventDefault(); toggleMotion(); return; }
+    if(!e.shiftKey && k === "k"){
+      e.preventDefault();
+      // quick core focus cycle (no new hotkeys beyond K)
+      const order = ["DIVA","REFLEX","STRATEGY","ARCHIVE","RECIPROCITY","ORIENT"];
+      const idx = order.indexOf(S.core);
+      setCore(order[(idx+1) % order.length]);
+      return;
+    }
+  }, {passive:false});
+
+  /* -----------------------------
+     BACKGROUND MOTION (INDUSTRIAL CHIC)
+     - harsh geometry + drifting beams
+     - intensity driven by LIGHTS
+  ------------------------------ */
+  const canvas = document.getElementById("bg");
+  const ctx = canvas.getContext("2d", {alpha:false});
+  let W=0,H=0,dpr=1, t=0;
+
+  function resize(){
+    dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+    W = Math.floor(window.innerWidth);
+    H = Math.floor(window.innerHeight);
+    canvas.width = Math.floor(W*dpr);
+    canvas.height = Math.floor(H*dpr);
+    canvas.style.width = W+"px";
+    canvas.style.height = H+"px";
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+  }
+  window.addEventListener("resize", resize);
+
+  function bgCol(){ return getComputedStyle(root).getPropertyValue("--bg").trim() || "#000"; }
+  function fgCol(){ return getComputedStyle(root).getPropertyValue("--fg").trim() || "#fff"; }
+
+  function tick(now){
+    const dt = Math.min(0.033, (now - (tick._last||now)) / 1000);
+    tick._last = now;
+
+    // time readout
+    const d = new Date();
+    timeReadout.textContent = `TIME: ${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`;
+
+    // motion
+    if(S.motion) t += dt;
+
+    // intensity
+    const intensity = parseFloat(getComputedStyle(root).getPropertyValue("--intensity")) || 0.52;
+    const trail = parseFloat(getComputedStyle(root).getPropertyValue("--trail")) || 0.18;
+
+    // clear with trail
+    ctx.globalAlpha = clamp(trail, 0.04, 0.55);
+    ctx.fillStyle = bgCol();
+    ctx.fillRect(0,0,W,H);
+    ctx.globalAlpha = 1;
+
+    // industrial grid
+    const fg = fgCol();
+    ctx.strokeStyle = fg;
+    ctx.lineWidth = 1;
+
+    const spacing = Math.floor(28 + (1-intensity)*34);
+    ctx.globalAlpha = 0.10 + intensity*0.14;
+    for(let x=0; x<=W; x+=spacing){
+      ctx.beginPath();
+      ctx.moveTo(x,0);
+      ctx.lineTo(x,H);
+      ctx.stroke();
+    }
+    for(let y=0; y<=H; y+=spacing){
+      ctx.beginPath();
+      ctx.moveTo(0,y);
+      ctx.lineTo(W,y);
+      ctx.stroke();
+    }
+
+    // beams / slabs
+    ctx.globalAlpha = 0.08 + intensity*0.12;
+    const beams = 6 + Math.floor(intensity*10);
+    for(let i=0;i<beams;i++){
+      const a = (i/beams)*Math.PI*2 + t*(0.25 + intensity*0.8);
+      const cx = W*0.5 + Math.cos(a*0.7)*W*0.18;
+      const cy = H*0.5 + Math.sin(a*0.9)*H*0.18;
+      const w = 80 + Math.sin(t*0.9 + i)*220*intensity;
+      const h = 14 + ((i%3)+1)*10;
+      ctx.save();
+      ctx.translate(cx,cy);
+      ctx.rotate(a*0.18);
+      ctx.strokeStyle = fg;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.rect(-w/2, -h/2, w, h);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // corner braces (chic)
+    ctx.globalAlpha = 0.18 + intensity*0.22;
+    ctx.lineWidth = 2;
+    const m = 18;
+    const L = 52;
+    // TL
+    ctx.beginPath(); ctx.moveTo(m,m+L); ctx.lineTo(m,m); ctx.lineTo(m+L,m); ctx.stroke();
+    // TR
+    ctx.beginPath(); ctx.moveTo(W-m-L,m); ctx.lineTo(W-m,m); ctx.lineTo(W-m,m+L); ctx.stroke();
+    // BL
+    ctx.beginPath(); ctx.moveTo(m,H-m-L); ctx.lineTo(m,H-m); ctx.lineTo(m+L,H-m); ctx.stroke();
+    // BR
+    ctx.beginPath(); ctx.moveTo(W-m-L,H-m); ctx.lineTo(W-m,H-m); ctx.lineTo(W-m,H-m-L); ctx.stroke();
+
+    requestAnimationFrame(tick);
+  }
+
+  /* -----------------------------
+     INIT
+  ------------------------------ */
+  resize();
+  setIntensityFromLight();
+  setCore("DIVA");
+
+  // seed queue with the “physics” concept (optional but concrete)
+  S.queue = [
+    { type:"INTERPRETIVE DATA HTML", amount:200, note:"PRIORITY QUEUE PRICING (NON-COERCIVE)", ts: Date.now()-180000 },
+    { type:"CUSTOM HTML", amount:75, note:"INDUSTRIAL CHIC INTERFACE ARTIFACT", ts: Date.now()-120000 },
+    { type:"PERSONALIZED REPORT", amount:0, note:"VALID, SLOWER, STILL IN QUEUE", ts: Date.now()-60000 },
+  ];
+  sortQueue();
+  renderQueue();
+
+  // stamp time
+  document.getElementById("ts").textContent = new Date().toISOString();
+
+  requestAnimationFrame(tick);
+})();
+</script>
+
+</body>
+</html>
