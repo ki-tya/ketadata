@@ -789,6 +789,33 @@ const DEFAULT={
   }
 };
 
+/* =========================================================
+STATE MIGRATION (SURGICAL)
+- When older Bases exist (multiplicity), their stored state may not
+  include newer UI fields (activeSets, padRect, etc).
+- This must never break wiring. We deep-fill missing keys from DEFAULT.
+========================================================= */
+function migrateState(s){
+  if(!s || typeof s!=="object") return structuredClone(DEFAULT);
+  // top-level keys
+  for(const k of Object.keys(DEFAULT)){
+    if(s[k]===undefined) s[k]=structuredClone(DEFAULT[k]);
+  }
+  if(!s.ui || typeof s.ui!=="object") s.ui={};
+  for(const k of Object.keys(DEFAULT.ui)){
+    if(s.ui[k]===undefined) s.ui[k]=structuredClone(DEFAULT.ui[k]);
+  }
+  // ensure shapes
+  if(!Array.isArray(s.ui.pinnedRooms)) s.ui.pinnedRooms=[];
+  if(!Array.isArray(s.ui.pinnedSets)) s.ui.pinnedSets=[];
+  if(!Array.isArray(s.ui.activeSets)) s.ui.activeSets=[];
+  if(!s.ui.padRect || typeof s.ui.padRect!=="object") s.ui.padRect=structuredClone(DEFAULT.ui.padRect);
+  if(s.ui.padRect.w==null) s.ui.padRect.w=DEFAULT.ui.padRect.w;
+  if(s.ui.padRect.h==null) s.ui.padRect.h=DEFAULT.ui.padRect.h;
+  return s;
+}
+
+
 function canonRoomName(name){return String(name||"").trim().toUpperCase();}
 function canonSetName(name){return String(name||"").trim().toUpperCase();}
 function uid8(){
@@ -2262,7 +2289,7 @@ window.addEventListener("storage",(e)=>{
 window.addEventListener("pageshow",()=>{
   const stored=loadLocal();
   if(stored){
-    STATE=stored;
+    STATE=migrateState(stored);
     ensureCorePresets();
     render();
   }
@@ -2272,7 +2299,7 @@ window.addEventListener("pageshow",()=>{
 BOOT
 ========================================================= */
 const _BOOT_LOADED = loadLocal();
-let STATE = _BOOT_LOADED ? _BOOT_LOADED : structuredClone(DEFAULT);
+let STATE = migrateState(_BOOT_LOADED ? _BOOT_LOADED : structuredClone(DEFAULT));
 ensureCorePresets();
 root.style.setProperty("--drawer-h", String(STATE.ui.drawerH));
 bindHotkeys();
