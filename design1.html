@@ -1,0 +1,838 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>KETADATA // STUDIO</title>
+
+  <style>
+    :root{
+      --bg1:#000000;
+      --bg2:#151515;
+      --bg3:#2a2a2a;
+      --bg4:#0a0a0a;
+
+      --motionSpeed: 0.55;
+      --angle: 145deg;
+
+      --aX: 18%; --aY: 20%;
+      --bX: 78%; --bY: 28%;
+      --cX: 28%; --cY: 86%;
+      --dX: 86%; --dY: 82%;
+
+      --aA: 0.18;
+      --bA: 0.14;
+      --cA: 0.12;
+      --dA: 0.10;
+
+      --txt:#ffffff;
+      --uiFont: Arial, Helvetica, sans-serif;
+      --uiSize: 12px;
+
+      --linkRest:#7a7a7a;
+      --linkHover:#ffffff;
+
+      --titleMaxPx: 140px; /* keep it small-ish by default */
+      --linkSizePx: 12px;  /* same-size rule */
+
+      /* LANDING POSITION */
+      --titleX: 50vw;
+      --titleY: 55vh;
+      --titleMaxWidth: calc(100vw - 88px);
+
+      /* UI */
+      --line: rgba(255,255,255,0.14);
+      --line2: rgba(255,255,255,0.24);
+      --panelBg: rgba(0,0,0,0.55);
+      --panelBlur: 8px;
+      --radius: 0px;
+
+      /* consistent control sizing */
+      --ctrlH: 28px;
+      --ctrlPadX: 8px;
+
+      /* HUD placement stability */
+      --hudX: 16px;
+      --hudY: 16px;
+      --hudW: 276px;
+    }
+
+    *{ box-sizing:border-box; }
+    html,body{ height:100%; }
+    html{ scroll-behavior:auto; }
+
+    body{
+      margin:0;
+      font-family: var(--uiFont);
+      font-size: var(--uiSize);
+      line-height: 1.35;
+      color: var(--txt);
+      background:#000;
+      overflow-x:hidden;
+
+      scroll-snap-type: y mandatory;
+      scroll-snap-stop: always;
+    }
+    section{
+      height:100vh;
+      scroll-snap-align:start;
+      position:relative;
+      z-index: 30;
+      overflow:hidden;
+    }
+
+    /* ===== BG LAYER ===== */
+    #bgLayer{
+      position:fixed;
+      inset:0;
+      z-index: 1;
+      pointer-events:none;
+      background:
+        radial-gradient(1100px 680px at var(--aX) var(--aY), rgba(255,255,255,var(--aA)), transparent 70%),
+        radial-gradient(900px 620px at var(--bX) var(--bY), rgba(255,255,255,var(--bA)), transparent 72%),
+        radial-gradient(1000px 720px at var(--cX) var(--cY), rgba(255,255,255,var(--cA)), transparent 74%),
+        radial-gradient(900px 640px at var(--dX) var(--dY), rgba(255,255,255,var(--dA)), transparent 72%),
+        linear-gradient(var(--angle), var(--bg1), var(--bg2), var(--bg3), var(--bg4));
+      background-size: auto, auto, auto, auto, 200% 200%;
+      filter: contrast(1.05);
+      opacity: 1;
+      transform: translate3d(0,0,0);
+    }
+    @keyframes drift{
+      0%   { background-position: 0% 0%, 0% 0%, 0% 0%, 0% 0%, 0% 50%; }
+      50%  { background-position: 0% 0%, 0% 0%, 0% 0%, 0% 0%, 100% 50%; }
+      100% { background-position: 0% 0%, 0% 0%, 0% 0%, 0% 0%, 0% 50%; }
+    }
+    #bgLayer.moving{
+      animation: drift calc(14s / max(0.12, var(--motionSpeed))) linear infinite;
+    }
+
+    /* ===== HUD PANEL ===== */
+    .hud{
+      position:fixed;
+      left:var(--hudX);
+      top:var(--hudY);
+      z-index:40;
+      width: var(--hudW);
+      border:1px solid var(--line2);
+      background: var(--panelBg);
+      backdrop-filter: blur(var(--panelBlur));
+      border-radius: var(--radius);
+      padding: 10px 10px 12px;
+      user-select:none;
+
+      /* IMPORTANT: prevent any header overflow past container */
+      overflow: hidden;
+
+      transform: translateZ(0);
+      will-change: transform;
+    }
+
+    /* FIX: no more motion button drifting outside — grid locks it */
+    .hudHead{
+      display:grid;
+      grid-template-columns: 1fr auto;
+      align-items:center;
+      gap:10px;
+      padding-bottom:8px;
+      border-bottom:1px solid var(--line);
+      margin-bottom:10px;
+      min-width: 0;
+    }
+    .hudLeft{
+      display:flex;
+      gap:8px;
+      align-items:center;
+      min-width: 0;
+    }
+    .hudRight{
+      display:flex;
+      gap:8px;
+      align-items:center;
+      justify-content:flex-end;
+      flex-wrap:wrap; /* if space is tight, wrap INSIDE the container */
+      min-width: 0;
+      max-width: 100%;
+    }
+
+    .lbl{
+      display:block;
+      letter-spacing:.16em;
+      text-transform:uppercase;
+      color: rgba(255,255,255,.72);
+      margin:10px 0 6px;
+    }
+    .mini2{
+      letter-spacing:.18em;
+      text-transform:uppercase;
+      color: rgba(255,255,255,.46);
+      margin-bottom:6px;
+    }
+
+    .twoCol{
+      display:grid;
+      grid-template-columns: minmax(0,1fr) minmax(0,1fr);
+      gap:10px;
+      align-items:end;
+    }
+
+    input[type="color"],
+    input[type="number"]{
+      width:100%;
+      height: var(--ctrlH);
+      border:1px solid var(--line2);
+      background:#000;
+      color:#fff;
+      padding:0 var(--ctrlPadX);
+      outline:none;
+      border-radius: var(--radius);
+      font-family: var(--uiFont);
+      font-size: var(--uiSize);
+      line-height: var(--ctrlH);
+      -webkit-appearance: none;
+      appearance: none;
+    }
+    input[type="color"]{
+      padding:0;
+      cursor:pointer;
+    }
+    input[type="color"]::-webkit-color-swatch-wrapper{ padding:0; }
+    input[type="color"]::-webkit-color-swatch{ border:none; }
+    input[type="range"]{
+      width:100%;
+      margin: 2px 0 0;
+    }
+
+    .btn{
+      height:var(--ctrlH);
+      padding:0 10px;
+      border:1px solid rgba(255,255,255,0.24);
+      background: rgba(0,0,0,0.45);
+      color: rgba(255,255,255,0.86);
+      letter-spacing:.16em;
+      text-transform:uppercase;
+      cursor:pointer;
+      border-radius: var(--radius);
+      white-space:nowrap;
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      line-height: 1;
+      font-family: var(--uiFont);
+      font-size: var(--uiSize);
+      max-width: 100%;
+    }
+    .btn:hover{ background: rgba(255,255,255,.06); border-color: rgba(255,255,255,.42); }
+    .btn.on{ background: rgba(255,255,255,.10); border-color: rgba(255,255,255,.52); }
+
+    .noteIconBtn{
+      width:var(--ctrlH);
+      height:var(--ctrlH);
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      border:1px solid rgba(255,255,255,0.24);
+      background: rgba(0,0,0,0.45);
+      cursor:pointer;
+      border-radius: var(--radius);
+      flex:0 0 auto;
+    }
+    .noteIconBtn:hover{ background: rgba(255,255,255,.06); border-color: rgba(255,255,255,.42); }
+    .ketaSquare{ width:10px;height:10px;background:#fff;display:inline-block; }
+
+    /* CHANGE: type controls always visible (no toggle/hide) */
+    .textSizeBlock{ display:block; margin-top: 10px; }
+
+    /* ===== KETA_NOTE ===== */
+    .ketaNote{
+      position:fixed;
+      right:16px;
+      bottom:16px;
+      z-index:40;
+      width: min(520px, calc(100vw - 32px));
+      border:1px solid rgba(255,255,255,0.58);
+      background: rgba(0,0,0,0.70);
+      backdrop-filter: blur(8px);
+      border-radius: 0;
+      display:none;
+      transform: translateZ(0);
+    }
+    .ketaHead{
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      padding:10px 10px;
+      border-bottom:1px solid rgba(255,255,255,0.18);
+      letter-spacing:.18em;
+      text-transform:uppercase;
+      user-select:none;
+    }
+    .hbtn{
+      height:22px;
+      padding:0 8px;
+      border:1px solid rgba(255,255,255,0.24);
+      background: rgba(0,0,0,0.35);
+      color:#fff;
+      cursor:pointer;
+      letter-spacing:.12em;
+      border-radius:0;
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      line-height:1;
+      font-family: var(--uiFont);
+      font-size: var(--uiSize);
+    }
+    .ketaBody{
+      display:grid;
+      grid-template-columns: 26px 1fr;
+      gap:10px;
+      padding:10px;
+      align-items:stretch;
+    }
+    .ketaIconCol{ display:flex; align-items:flex-start; justify-content:center; padding-top:4px; }
+    textarea{
+      width:100%;
+      height: 180px;
+      resize:vertical;
+      background:#000;
+      color:#fff;
+      border:1px solid rgba(255,255,255,0.16);
+      outline:none;
+      padding:10px;
+      font-family: var(--uiFont);
+      font-size: var(--uiSize);
+      line-height: 1.35;
+      border-radius:0;
+    }
+
+    /* ===== LANDING ===== */
+    .landing{ position:relative; }
+    .landingTitleWrap{
+      position:absolute;
+      left: var(--titleX);
+      top: var(--titleY);
+      transform: translate(-50%, -50%);
+      text-align:center;
+      width: var(--titleMaxWidth);
+      max-width: var(--titleMaxWidth);
+      padding: 0 10px;
+    }
+    .title{
+      margin:0;
+      font-weight:900;
+      letter-spacing:.08em;
+      text-transform:uppercase;
+      font-size: clamp(28px, 4.0vw, var(--titleMaxPx)); /* small baseline */
+      line-height:.98;
+      white-space:nowrap;
+      max-width: 100%;
+      overflow: visible;
+      padding-right: 0.22em;
+      text-shadow: 0 0 30px rgba(255,255,255,.06);
+      transform: translateZ(0);
+    }
+
+    .sub{
+      margin-top: 12px;
+      display:block;
+      width:100%;
+      text-align:left;
+      letter-spacing:.18em;
+      text-transform:uppercase;
+      color: rgba(255,255,255,.35);
+      font-weight:900;
+      text-decoration:none;
+      font-size: var(--uiSize);
+    }
+    .sub:hover{ color: rgba(255,255,255,.85); }
+
+    /* ===== DIRECTORY ===== */
+    .directory{
+      display:flex;
+      align-items:stretch;
+      justify-content:center;
+      padding: 84px 22px 72px;
+    }
+    .dirBox{
+      width: min(1100px, 100%);
+      border: 1px solid rgba(255,255,255,0.12);
+      background: rgba(0,0,0,0.46);
+      backdrop-filter: blur(8px);
+      padding: 16px 16px 10px;
+    }
+    .dirHead{
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      padding: 6px 0 12px;
+      border-bottom: 1px solid rgba(255,255,255,0.12);
+      margin-bottom: 12px;
+    }
+    .dirHead .t{
+      letter-spacing:.18em;
+      text-transform:uppercase;
+      color: rgba(255,255,255,.86);
+      font-weight:900;
+      font-size: var(--uiSize);
+    }
+    .dirHead .mini{
+      letter-spacing:.18em;
+      text-transform:uppercase;
+      color: rgba(255,255,255,.46);
+      font-size: var(--uiSize);
+    }
+    .dirGrid{
+      display:grid;
+      grid-template-columns: 1fr;
+      gap: 12px;
+      padding-bottom: 6px;
+    }
+    .group{
+      border:1px solid rgba(255,255,255,0.10);
+      background: rgba(0,0,0,0.35);
+      padding: 12px;
+    }
+    .groupTitle{
+      letter-spacing:.18em;
+      text-transform:uppercase;
+      color: rgba(255,255,255,.62);
+      margin-bottom: 10px;
+      font-weight:800;
+      font-size: var(--uiSize);
+    }
+    .links{
+      display:flex;
+      flex-wrap:wrap;
+      gap: 10px 14px;
+      align-items:center;
+    }
+    .links a{
+      font-size: var(--linkSizePx);
+      letter-spacing:.14em;
+      text-transform:uppercase;
+      color: var(--linkRest);
+      text-decoration:none;
+      border-bottom: 1px solid rgba(255,255,255,0.0);
+      padding-bottom: 2px;
+    }
+    .links a:hover{
+      color: var(--linkHover);
+      border-bottom-color: rgba(255,255,255,0.28);
+    }
+
+    .hint{
+      position:fixed;
+      left:16px;
+      bottom:16px;
+      z-index:40;
+      letter-spacing:.14em;
+      text-transform:uppercase;
+      color: rgba(255,255,255,0.38);
+      user-select:none;
+      font-size: var(--uiSize);
+    }
+    .kbd{
+      padding:2px 6px;
+      border:1px solid rgba(255,255,255,0.16);
+      background: rgba(0,0,0,0.35);
+      margin-right:6px;
+    }
+
+    body.invert{
+      filter: invert(1);
+      background:#fff;
+    }
+
+    @media (max-width: 560px){
+      :root{ --hudW: 250px; }
+      .landingTitleWrap{ padding: 0 14px; }
+      .title{ letter-spacing:.06em; }
+      .hudHead{ grid-template-columns: 1fr; }
+      .hudRight{ justify-content:flex-start; }
+    }
+  </style>
+</head>
+
+<body>
+  <div id="bgLayer" class="moving" aria-hidden="true"></div>
+
+  <div class="hud" id="hud">
+    <div class="hudHead">
+      <div class="hudLeft">
+        <button class="noteIconBtn" id="btnNote" type="button" title="KETA_NOTE (SHIFT+N)">
+          <span class="ketaSquare"></span>
+        </button>
+        <div style="letter-spacing:.16em; text-transform:uppercase; color:rgba(255,255,255,.78); font-weight:900; min-width:0;">
+          STUDIO
+        </div>
+      </div>
+
+      <div class="hudRight">
+        <!-- KEEP TYPE BUTTON AS A LABEL ONLY (controls are always visible now) -->
+        <button class="btn on" id="btnTextSize" type="button" title="Type controls are always visible">TYPE</button>
+        <button class="btn" id="btnMotion" type="button" title="Toggle motion (Space)">
+          <span id="motionLbl">MOTION: ON</span>
+        </button>
+      </div>
+    </div>
+
+    <span class="lbl">FIELD</span>
+    <div class="twoCol">
+      <div>
+        <div class="mini2">BG 1</div>
+        <input id="bg1" type="color" value="#000000" />
+      </div>
+      <div>
+        <div class="mini2">BG 2</div>
+        <input id="bg2" type="color" value="#151515" />
+      </div>
+    </div>
+    <div class="twoCol" style="margin-top:8px;">
+      <div>
+        <div class="mini2">BG 3</div>
+        <input id="bg3" type="color" value="#2a2a2a" />
+      </div>
+      <div>
+        <div class="mini2">BG 4</div>
+        <input id="bg4" type="color" value="#0a0a0a" />
+      </div>
+    </div>
+
+    <span class="lbl">ANGLE</span>
+    <input id="angle" type="range" min="0" max="360" step="1" value="145" />
+
+    <span class="lbl">TEXT</span>
+    <div class="twoCol">
+      <div>
+        <div class="mini2">COLOR</div>
+        <input id="txt" type="color" value="#ffffff" />
+      </div>
+      <div>
+        <div class="mini2">UI SIZE</div>
+        <input id="uiSize" type="number" min="10" max="18" step="1" value="12" />
+      </div>
+    </div>
+
+    <!-- ALWAYS VISIBLE NOW -->
+    <div class="textSizeBlock" id="textSizeBlock">
+      <span class="lbl">TYPE SCALE</span>
+      <div class="twoCol">
+        <div>
+          <div class="mini2">TITLE MAX</div>
+          <input id="titleMax" type="range" min="90" max="200" step="1" value="140" />
+        </div>
+        <div>
+          <div class="mini2">LINK SIZE</div>
+          <input id="linkSize" type="range" min="10" max="18" step="1" value="12" />
+        </div>
+      </div>
+    </div>
+
+    <span class="lbl">SPEED</span>
+    <input id="speed" type="range" min="0" max="1" step="0.01" value="0.55" />
+  </div>
+
+  <div class="ketaNote" id="ketaNote">
+    <div class="ketaHead" id="ketaHead">
+      <div>KETA_NOTE</div>
+      <button class="hbtn" id="btnHideNote" type="button">-</button>
+    </div>
+    <div class="ketaBody">
+      <div class="ketaIconCol"><span class="ketaSquare"></span></div>
+      <textarea id="ketaText" placeholder="GLOBAL NOTE" spellcheck="false"></textarea>
+    </div>
+  </div>
+
+  <section class="landing" id="top">
+    <div class="landingTitleWrap" id="titleWrap">
+      <h1 class="title" id="title">KETADATA [STUDIO]</h1>
+      <a class="sub" href="#directory">[DIRECTORY]</a>
+    </div>
+  </section>
+
+  <section class="directory" id="directory">
+    <div class="dirBox">
+      <div class="dirHead">
+        <div class="t">STUDIO DIRECTORY</div>
+        <div class="mini">LINKS ONLY</div>
+      </div>
+      <div class="dirGrid" id="dirGrid"></div>
+    </div>
+  </section>
+
+  <div class="hint">
+    <span class="kbd">SPACE</span> MOTION
+    <span class="kbd">SHIFT+I</span> INVERT
+    <span class="kbd">SHIFT+N</span> NOTE
+  </div>
+
+  <script>
+    const FILE_ID = "KETADATA_STUDIO";
+    const ROOM_ID = "STUDIO";
+    const VERSION_ID = "studio.v10_headlock_type_always_visible";
+    const STORAGE_KEY = `KDT::STATE::${FILE_ID}::${ROOM_ID}::${VERSION_ID}`;
+    const GLOBAL_KETA_NOTE_KEY = "KDT_GLOBAL_KETA_NOTE_V1";
+
+    const DIRECTORY = [
+      { group:"CORE", items:[
+        ["[SYSTEM.HTML]","system.html"],
+        ["[ROOM.HTML]","room.html"],
+        ["[MAP.HTML]","map.html"],
+        ["[KDTV1.HTML]","kdtv1.html"],
+        ["[CRUNCH1.HTML]","crunch1.html"]
+      ]},
+      { group:"STUDIO TOOLS", items:[
+        ["[TESTER3.HTML]","tester3.html"],
+        ["[LABYRINTH.HTML]","labyrinth.html"]
+      ]}
+    ];
+
+    const els = {
+      bgLayer: document.getElementById("bgLayer"),
+      btnMotion: document.getElementById("btnMotion"),
+      motionLbl: document.getElementById("motionLbl"),
+      btnNote: document.getElementById("btnNote"),
+      ketaNote: document.getElementById("ketaNote"),
+      ketaText: document.getElementById("ketaText"),
+      btnHideNote: document.getElementById("btnHideNote"),
+
+      bg1: document.getElementById("bg1"),
+      bg2: document.getElementById("bg2"),
+      bg3: document.getElementById("bg3"),
+      bg4: document.getElementById("bg4"),
+      angle: document.getElementById("angle"),
+      speed: document.getElementById("speed"),
+      txt: document.getElementById("txt"),
+      uiSize: document.getElementById("uiSize"),
+
+      btnTextSize: document.getElementById("btnTextSize"),
+      textSizeBlock: document.getElementById("textSizeBlock"),
+      titleMax: document.getElementById("titleMax"),
+      linkSize: document.getElementById("linkSize"),
+
+      dirGrid: document.getElementById("dirGrid"),
+      title: document.getElementById("title"),
+      titleWrap: document.getElementById("titleWrap"),
+    };
+
+    function applyCSSVar(name, value){
+      document.documentElement.style.setProperty(name, value);
+    }
+
+    function setMotion(on){
+      els.bgLayer.classList.toggle("moving", !!on);
+      els.btnMotion.classList.toggle("on", !!on);
+      els.motionLbl.textContent = on ? "MOTION: ON" : "MOTION: OFF";
+    }
+
+    function setInvert(on){
+      document.body.classList.toggle("invert", !!on);
+    }
+
+    function toggleNote(force){
+      const isOpen = els.ketaNote.style.display === "block";
+      const next = (typeof force === "boolean") ? force : !isOpen;
+      els.ketaNote.style.display = next ? "block" : "none";
+      save();
+    }
+
+    function renderDirectory(){
+      els.dirGrid.innerHTML = "";
+      for (const g of DIRECTORY){
+        const box = document.createElement("div");
+        box.className = "group";
+
+        const t = document.createElement("div");
+        t.className = "groupTitle";
+        t.textContent = g.group;
+
+        const links = document.createElement("div");
+        links.className = "links";
+
+        for (const [label, href] of g.items){
+          const a = document.createElement("a");
+          a.href = href;
+          a.textContent = label;
+          links.appendChild(a);
+        }
+
+        box.appendChild(t);
+        box.appendChild(links);
+        els.dirGrid.appendChild(box);
+      }
+    }
+
+    function fitTitle(){
+      const t = els.title;
+      const wrap = els.titleWrap;
+      if (!t || !wrap) return;
+
+      t.style.fontSize = "";
+      t.style.letterSpacing = "";
+
+      const maxPx = Number(els.titleMax.value) || 140;
+      const minPx = 22;
+      const pad = 24;
+      const avail = Math.max(180, wrap.clientWidth - pad);
+
+      let lo = minPx, hi = maxPx, best = minPx;
+      for (let i=0;i<14;i++){
+        const mid = (lo+hi)/2;
+        t.style.fontSize = mid + "px";
+        const w = t.scrollWidth;
+        if (w <= avail){ best = mid; lo = mid; }
+        else { hi = mid; }
+      }
+      t.style.fontSize = best + "px";
+    }
+
+    function getState(){
+      return {
+        version: VERSION_ID,
+        updatedAt: new Date().toISOString(),
+        ui: {
+          invert: document.body.classList.contains("invert"),
+          motion: els.bgLayer.classList.contains("moving"),
+          css: {
+            bg1: els.bg1.value,
+            bg2: els.bg2.value,
+            bg3: els.bg3.value,
+            bg4: els.bg4.value,
+            angle: Number(els.angle.value),
+            speed: Number(els.speed.value),
+            txt: els.txt.value,
+            uiSize: Number(els.uiSize.value),
+            titleMax: Number(els.titleMax.value),
+            linkSize: Number(els.linkSize.value),
+          }
+        }
+      };
+    }
+
+    function applyState(s){
+      if (!s || !s.ui) return;
+
+      setInvert(!!s.ui.invert);
+      setMotion(!!s.ui.motion);
+
+      const css = (s.ui && s.ui.css) ? s.ui.css : {};
+      if (css.bg1) els.bg1.value = css.bg1;
+      if (css.bg2) els.bg2.value = css.bg2;
+      if (css.bg3) els.bg3.value = css.bg3;
+      if (css.bg4) els.bg4.value = css.bg4;
+      if (typeof css.angle === "number") els.angle.value = css.angle;
+      if (typeof css.speed === "number") els.speed.value = css.speed;
+      if (css.txt) els.txt.value = css.txt;
+      if (typeof css.uiSize === "number") els.uiSize.value = css.uiSize;
+      if (typeof css.titleMax === "number") els.titleMax.value = css.titleMax;
+      if (typeof css.linkSize === "number") els.linkSize.value = css.linkSize;
+
+      applyCSSVar("--bg1", els.bg1.value);
+      applyCSSVar("--bg2", els.bg2.value);
+      applyCSSVar("--bg3", els.bg3.value);
+      applyCSSVar("--bg4", els.bg4.value);
+      applyCSSVar("--angle", `${els.angle.value}deg`);
+      applyCSSVar("--motionSpeed", els.speed.value);
+      applyCSSVar("--txt", els.txt.value);
+      applyCSSVar("--uiSize", `${els.uiSize.value}px`);
+      applyCSSVar("--titleMaxPx", `${els.titleMax.value}px`);
+      applyCSSVar("--linkSizePx", `${els.linkSize.value}px`);
+
+      fitTitle();
+    }
+
+    function save(){
+      try{
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(getState()));
+        localStorage.setItem(GLOBAL_KETA_NOTE_KEY, els.ketaText.value || "");
+      }catch(e){}
+    }
+
+    function load(){
+      try{
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (raw){
+          applyState(JSON.parse(raw));
+        }else{
+          applyState({ ui:{ invert:false, motion:true, css:{
+            bg1: els.bg1.value, bg2: els.bg2.value, bg3: els.bg3.value, bg4: els.bg4.value,
+            angle: Number(els.angle.value), speed: Number(els.speed.value),
+            txt: els.txt.value, uiSize: Number(els.uiSize.value),
+            titleMax: Number(els.titleMax.value), linkSize: Number(els.linkSize.value)
+          }}});
+        }
+
+        const note = localStorage.getItem(GLOBAL_KETA_NOTE_KEY);
+        if (typeof note === "string") els.ketaText.value = note;
+
+        fitTitle();
+      }catch(e){}
+    }
+
+    function bind(){
+      const reapply = () => {
+        applyCSSVar("--bg1", els.bg1.value);
+        applyCSSVar("--bg2", els.bg2.value);
+        applyCSSVar("--bg3", els.bg3.value);
+        applyCSSVar("--bg4", els.bg4.value);
+        applyCSSVar("--angle", `${els.angle.value}deg`);
+        applyCSSVar("--motionSpeed", els.speed.value);
+        applyCSSVar("--txt", els.txt.value);
+        applyCSSVar("--uiSize", `${els.uiSize.value}px`);
+        applyCSSVar("--titleMaxPx", `${els.titleMax.value}px`);
+        applyCSSVar("--linkSizePx", `${els.linkSize.value}px`);
+        fitTitle();
+        save();
+      };
+
+      [els.bg1,els.bg2,els.bg3,els.bg4,els.angle,els.speed,els.txt,els.uiSize,els.titleMax,els.linkSize]
+        .forEach(el => el.addEventListener("input", reapply));
+
+      els.btnMotion.addEventListener("click", () => { setMotion(!els.bgLayer.classList.contains("moving")); save(); });
+      els.btnNote.addEventListener("click", () => toggleNote());
+      els.btnHideNote.addEventListener("click", () => toggleNote(false));
+      els.ketaText.addEventListener("input", save);
+
+      window.addEventListener("resize", () => { fitTitle(); }, { passive:true });
+    }
+
+    window.addEventListener("keydown", (e) => {
+      const tag = (document.activeElement && document.activeElement.tagName) ? document.activeElement.tagName.toLowerCase() : "";
+      if (tag === "textarea" || tag === "input") return;
+
+      if (e.code === "Space"){
+        e.preventDefault();
+        setMotion(!els.bgLayer.classList.contains("moving"));
+        save();
+      }
+      if (e.shiftKey && (e.key === "I" || e.key === "i")){
+        e.preventDefault();
+        setInvert(!document.body.classList.contains("invert"));
+        save();
+      }
+      if (e.shiftKey && (e.key === "N" || e.key === "n")){
+        e.preventDefault();
+        toggleNote();
+      }
+    });
+
+    renderDirectory();
+    load();
+    bind();
+  </script>
+
+  <!-- =========================================================
+  KETADATA HTML SERIALIZATION STAMP
+  AE/EE/WB: WB
+  FILE_ID: KETADATA_STUDIO
+  ROOM_ID: STUDIO
+  VERSION: studio.v10_headlock_type_always_visible
+  UPDATED_AT: 2025-12-29T00:00:00-05:00
+  CHANGELOG:
+  - FIX: HUD HEAD LOCK (GRID) + HUD OVERFLOW HIDDEN (MOTION BUTTON CANNOT LEAK OUT)
+  - CHANGE: TYPE CONTROLS ALWAYS VISIBLE (NO HIDE)
+  - KEEP: EVERYTHING ELSE (MOTION, STATE, DIRECTORY, NOTE)
+  ========================================================= -->
+</body>
+</html>
