@@ -1,838 +1,1011 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>KETADATA // STUDIO</title>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>KETADATA // CHROMA_ACID // STUDIO</title>
+<style>
+  :root{
+    --ui: 12px;
+    --font: Arial, Helvetica, sans-serif;
 
-  <style>
-    :root{
-      --bg1:#000000;
-      --bg2:#151515;
-      --bg3:#2a2a2a;
-      --bg4:#0a0a0a;
+    --invert: 0;
+    --motion: 1;
+    --null: 0;
+    --light: 4;
 
-      --motionSpeed: 0.55;
-      --angle: 145deg;
+    --palette: ACID;
 
-      --aX: 18%; --aY: 20%;
-      --bX: 78%; --bY: 28%;
-      --cX: 28%; --cY: 86%;
-      --dX: 86%; --dY: 82%;
+    --bg0: #000000;
+    --bg1: #0b0b0f;
+    --a0:  #7dff00;
+    --a1:  #00e5ff;
+    --a2:  #ff2bd6;
+    --a3:  #ffd400;
 
-      --aA: 0.18;
-      --bA: 0.14;
-      --cA: 0.12;
-      --dA: 0.10;
+    --speed: 0.60;
+    --grain: 0.10;
+    --scan:  0.12;
+    --aberr: 1.80;
 
-      --txt:#ffffff;
-      --uiFont: Arial, Helvetica, sans-serif;
-      --uiSize: 12px;
+    --angle: 145deg;
 
-      --linkRest:#7a7a7a;
-      --linkHover:#ffffff;
+    --panelBg: rgba(0,0,0,0.56);
+    --line: rgba(255,255,255,0.14);
+    --line2: rgba(255,255,255,0.28);
 
-      --titleMaxPx: 140px; /* keep it small-ish by default */
-      --linkSizePx: 12px;  /* same-size rule */
+    --ctrlH: 28px;
+    --padX: 10px;
 
-      /* LANDING POSITION */
-      --titleX: 50vw;
-      --titleY: 55vh;
-      --titleMaxWidth: calc(100vw - 88px);
+    --hudX: 16px;
+    --hudY: 16px;
+    --hudW: 296px;
 
-      /* UI */
-      --line: rgba(255,255,255,0.14);
-      --line2: rgba(255,255,255,0.24);
-      --panelBg: rgba(0,0,0,0.55);
-      --panelBlur: 8px;
-      --radius: 0px;
+    --titleScale: 1.00;
+    --titleMaxPx: 140;
+    --linkSize: 12;
 
-      /* consistent control sizing */
-      --ctrlH: 28px;
-      --ctrlPadX: 8px;
+    --explain: 1;
+    --seed: 42;
+  }
 
-      /* HUD placement stability */
-      --hudX: 16px;
-      --hudY: 16px;
-      --hudW: 276px;
-    }
+  *{ box-sizing:border-box; }
+  html,body{ height:100%; }
+  body{
+    margin:0;
+    background:#000;
+    color:#fff;
+    font-family: var(--font);
+    font-size: var(--ui);
+    line-height: 1.2;
+    overflow:hidden;
+    filter: invert(var(--invert));
+  }
 
-    *{ box-sizing:border-box; }
-    html,body{ height:100%; }
-    html{ scroll-behavior:auto; }
+  canvas#v{
+    position:fixed;
+    inset:0;
+    width:100%;
+    height:100%;
+    display:block;
+    z-index:1;
+    background:
+      radial-gradient(1200px 900px at 15% 20%, rgba(255,255,255,0.06), transparent 70%),
+      linear-gradient(var(--angle), var(--bg0), var(--bg1));
+  }
 
-    body{
-      margin:0;
-      font-family: var(--uiFont);
-      font-size: var(--uiSize);
-      line-height: 1.35;
-      color: var(--txt);
-      background:#000;
-      overflow-x:hidden;
+  /* CONTROLLER (FIXED + CLIPPED + NO OVERFLOW LEAK) */
+  .hud{
+    position:fixed;
+    left:var(--hudX);
+    top:var(--hudY);
+    width:var(--hudW);
+    z-index:60;
+    background: var(--panelBg);
+    border:1px solid var(--line2);
+    backdrop-filter: blur(10px);
+    padding:10px;
+    overflow:hidden;           /* hard clamp: nothing can stick out */
+    contain: layout paint;     /* stabilize */
+  }
 
-      scroll-snap-type: y mandatory;
-      scroll-snap-stop: always;
-    }
-    section{
-      height:100vh;
-      scroll-snap-align:start;
-      position:relative;
-      z-index: 30;
-      overflow:hidden;
-    }
+  .hudHeader{
+    display:grid;
+    grid-template-columns: 1fr auto;
+    gap:8px;
+    align-items:center;
+    padding-bottom:10px;
+    margin-bottom:10px;
+    border-bottom:1px solid var(--line);
+    min-width:0;
+  }
 
-    /* ===== BG LAYER ===== */
-    #bgLayer{
-      position:fixed;
-      inset:0;
-      z-index: 1;
-      pointer-events:none;
-      background:
-        radial-gradient(1100px 680px at var(--aX) var(--aY), rgba(255,255,255,var(--aA)), transparent 70%),
-        radial-gradient(900px 620px at var(--bX) var(--bY), rgba(255,255,255,var(--bA)), transparent 72%),
-        radial-gradient(1000px 720px at var(--cX) var(--cY), rgba(255,255,255,var(--cA)), transparent 74%),
-        radial-gradient(900px 640px at var(--dX) var(--dY), rgba(255,255,255,var(--dA)), transparent 72%),
-        linear-gradient(var(--angle), var(--bg1), var(--bg2), var(--bg3), var(--bg4));
-      background-size: auto, auto, auto, auto, 200% 200%;
-      filter: contrast(1.05);
-      opacity: 1;
-      transform: translate3d(0,0,0);
-    }
-    @keyframes drift{
-      0%   { background-position: 0% 0%, 0% 0%, 0% 0%, 0% 0%, 0% 50%; }
-      50%  { background-position: 0% 0%, 0% 0%, 0% 0%, 0% 0%, 100% 50%; }
-      100% { background-position: 0% 0%, 0% 0%, 0% 0%, 0% 0%, 0% 50%; }
-    }
-    #bgLayer.moving{
-      animation: drift calc(14s / max(0.12, var(--motionSpeed))) linear infinite;
-    }
+  .hudLeft{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    min-width:0;
+  }
 
-    /* ===== HUD PANEL ===== */
-    .hud{
-      position:fixed;
-      left:var(--hudX);
-      top:var(--hudY);
-      z-index:40;
-      width: var(--hudW);
-      border:1px solid var(--line2);
-      background: var(--panelBg);
-      backdrop-filter: blur(var(--panelBlur));
-      border-radius: var(--radius);
-      padding: 10px 10px 12px;
-      user-select:none;
+  .hudRight{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    justify-content:flex-end;
+    flex-wrap:wrap;            /* wraps INSIDE box if tight */
+    min-width:0;
+    max-width:100%;
+  }
 
-      /* IMPORTANT: prevent any header overflow past container */
-      overflow: hidden;
+  .tag{
+    letter-spacing:.14em;
+    text-transform:uppercase;
+    color:rgba(255,255,255,0.78);
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    min-width:0;
+  }
 
-      transform: translateZ(0);
-      will-change: transform;
-    }
+  .sqBtn{
+    width:var(--ctrlH);
+    height:var(--ctrlH);
+    border:1px solid var(--line2);
+    background: rgba(0,0,0,0.45);
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    cursor:pointer;
+    flex:0 0 auto;
+  }
+  .sqBtn:hover{ border-color: rgba(255,255,255,0.52); background: rgba(255,255,255,0.06); }
+  .sq{ width:10px;height:10px;background:#fff;display:inline-block; }
+  .sqOutline{ width:10px;height:10px;outline:1px solid #fff;background:transparent; }
 
-    /* FIX: no more motion button drifting outside — grid locks it */
-    .hudHead{
-      display:grid;
-      grid-template-columns: 1fr auto;
-      align-items:center;
-      gap:10px;
-      padding-bottom:8px;
-      border-bottom:1px solid var(--line);
-      margin-bottom:10px;
-      min-width: 0;
-    }
-    .hudLeft{
-      display:flex;
-      gap:8px;
-      align-items:center;
-      min-width: 0;
-    }
-    .hudRight{
-      display:flex;
-      gap:8px;
-      align-items:center;
-      justify-content:flex-end;
-      flex-wrap:wrap; /* if space is tight, wrap INSIDE the container */
-      min-width: 0;
-      max-width: 100%;
-    }
+  .btn{
+    height:var(--ctrlH);
+    padding:0 10px;
+    border:1px solid var(--line2);
+    background: rgba(0,0,0,0.45);
+    color:#fff;
+    font-family: var(--font);
+    font-size: var(--ui);
+    letter-spacing:.14em;
+    text-transform:uppercase;
+    cursor:pointer;
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    white-space:nowrap;
+    max-width:100%;
+  }
+  .btn:hover{ border-color: rgba(255,255,255,0.52); background: rgba(255,255,255,0.06); }
+  .btn.on{ background: rgba(255,255,255,0.10); border-color: rgba(255,255,255,0.62); }
 
-    .lbl{
-      display:block;
-      letter-spacing:.16em;
-      text-transform:uppercase;
-      color: rgba(255,255,255,.72);
-      margin:10px 0 6px;
-    }
-    .mini2{
-      letter-spacing:.18em;
-      text-transform:uppercase;
-      color: rgba(255,255,255,.46);
-      margin-bottom:6px;
-    }
+  .lbl{
+    margin:10px 0 6px;
+    color: rgba(255,255,255,0.72);
+    letter-spacing:.14em;
+    text-transform:uppercase;
+  }
 
-    .twoCol{
-      display:grid;
-      grid-template-columns: minmax(0,1fr) minmax(0,1fr);
-      gap:10px;
-      align-items:end;
-    }
+  .grid2{
+    display:grid;
+    grid-template-columns: 1fr 1fr;
+    gap:8px;
+    align-items:stretch;
+  }
 
-    input[type="color"],
-    input[type="number"]{
-      width:100%;
-      height: var(--ctrlH);
-      border:1px solid var(--line2);
-      background:#000;
-      color:#fff;
-      padding:0 var(--ctrlPadX);
-      outline:none;
-      border-radius: var(--radius);
-      font-family: var(--uiFont);
-      font-size: var(--uiSize);
-      line-height: var(--ctrlH);
-      -webkit-appearance: none;
-      appearance: none;
-    }
-    input[type="color"]{
-      padding:0;
-      cursor:pointer;
-    }
-    input[type="color"]::-webkit-color-swatch-wrapper{ padding:0; }
-    input[type="color"]::-webkit-color-swatch{ border:none; }
-    input[type="range"]{
-      width:100%;
-      margin: 2px 0 0;
-    }
+  .mono{
+    letter-spacing:.14em;
+    text-transform:uppercase;
+    color: rgba(255,255,255,0.60);
+    margin-bottom:4px;
+  }
 
-    .btn{
-      height:var(--ctrlH);
-      padding:0 10px;
-      border:1px solid rgba(255,255,255,0.24);
-      background: rgba(0,0,0,0.45);
-      color: rgba(255,255,255,0.86);
-      letter-spacing:.16em;
-      text-transform:uppercase;
-      cursor:pointer;
-      border-radius: var(--radius);
-      white-space:nowrap;
-      display:inline-flex;
-      align-items:center;
-      justify-content:center;
-      line-height: 1;
-      font-family: var(--uiFont);
-      font-size: var(--uiSize);
-      max-width: 100%;
-    }
-    .btn:hover{ background: rgba(255,255,255,.06); border-color: rgba(255,255,255,.42); }
-    .btn.on{ background: rgba(255,255,255,.10); border-color: rgba(255,255,255,.52); }
+  input[type="range"], input[type="number"], select, input[type="color"]{
+    width:100%;
+    height:var(--ctrlH);
+    border:1px solid var(--line2);
+    background:#000;
+    color:#fff;
+    font-family: var(--font);
+    font-size: var(--ui);
+    padding:0 8px;
+    outline:none;
+    -webkit-appearance:none;
+    appearance:none;
+  }
+  input[type="range"]{ height:auto; padding:0; border:none; background:transparent; }
+  input[type="color"]{ padding:0; cursor:pointer; }
+  input[type="color"]::-webkit-color-swatch-wrapper{ padding:0; }
+  input[type="color"]::-webkit-color-swatch{ border:none; }
 
-    .noteIconBtn{
-      width:var(--ctrlH);
-      height:var(--ctrlH);
-      display:inline-flex;
-      align-items:center;
-      justify-content:center;
-      border:1px solid rgba(255,255,255,0.24);
-      background: rgba(0,0,0,0.45);
-      cursor:pointer;
-      border-radius: var(--radius);
-      flex:0 0 auto;
-    }
-    .noteIconBtn:hover{ background: rgba(255,255,255,.06); border-color: rgba(255,255,255,.42); }
-    .ketaSquare{ width:10px;height:10px;background:#fff;display:inline-block; }
+  /* MODE + TYPE: unified (no separate “type section”) */
+  .modeRow{
+    display:grid;
+    grid-template-columns: 1fr 1fr;
+    gap:8px;
+  }
 
-    /* CHANGE: type controls always visible (no toggle/hide) */
-    .textSizeBlock{ display:block; margin-top: 10px; }
+  .explainBox{
+    margin-top:10px;
+    border:1px solid rgba(255,255,255,0.12);
+    background: rgba(0,0,0,0.32);
+    padding:10px;
+    display:block;
+  }
+  body[data-explain="0"] .explainBox{ display:none; }
 
-    /* ===== KETA_NOTE ===== */
-    .ketaNote{
-      position:fixed;
-      right:16px;
-      bottom:16px;
-      z-index:40;
-      width: min(520px, calc(100vw - 32px));
-      border:1px solid rgba(255,255,255,0.58);
-      background: rgba(0,0,0,0.70);
-      backdrop-filter: blur(8px);
-      border-radius: 0;
-      display:none;
-      transform: translateZ(0);
-    }
-    .ketaHead{
-      display:flex;
-      justify-content:space-between;
-      align-items:center;
-      padding:10px 10px;
-      border-bottom:1px solid rgba(255,255,255,0.18);
-      letter-spacing:.18em;
-      text-transform:uppercase;
-      user-select:none;
-    }
-    .hbtn{
-      height:22px;
-      padding:0 8px;
-      border:1px solid rgba(255,255,255,0.24);
-      background: rgba(0,0,0,0.35);
-      color:#fff;
-      cursor:pointer;
-      letter-spacing:.12em;
-      border-radius:0;
-      display:inline-flex;
-      align-items:center;
-      justify-content:center;
-      line-height:1;
-      font-family: var(--uiFont);
-      font-size: var(--uiSize);
-    }
-    .ketaBody{
-      display:grid;
-      grid-template-columns: 26px 1fr;
-      gap:10px;
-      padding:10px;
-      align-items:stretch;
-    }
-    .ketaIconCol{ display:flex; align-items:flex-start; justify-content:center; padding-top:4px; }
-    textarea{
-      width:100%;
-      height: 180px;
-      resize:vertical;
-      background:#000;
-      color:#fff;
-      border:1px solid rgba(255,255,255,0.16);
-      outline:none;
-      padding:10px;
-      font-family: var(--uiFont);
-      font-size: var(--uiSize);
-      line-height: 1.35;
-      border-radius:0;
-    }
+  /* Center title */
+  .center{
+    position:fixed;
+    left:50%;
+    top:55%;
+    transform: translate(-50%,-50%);
+    z-index:40;
+    width: min(980px, calc(100vw - 60px));
+    text-align:center;
+    pointer-events:none;
+  }
+  .title{
+    margin:0;
+    font-weight:900;
+    letter-spacing:.12em;
+    text-transform:uppercase;
+    font-size: clamp(28px, calc(4.2vw * var(--titleScale)), calc(var(--titleMaxPx) * 1px));
+    line-height: 1.0;
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    padding-right:0.22em;
+    text-shadow: 0 0 30px rgba(255,255,255,0.06);
+  }
 
-    /* ===== LANDING ===== */
-    .landing{ position:relative; }
-    .landingTitleWrap{
-      position:absolute;
-      left: var(--titleX);
-      top: var(--titleY);
-      transform: translate(-50%, -50%);
-      text-align:center;
-      width: var(--titleMaxWidth);
-      max-width: var(--titleMaxWidth);
-      padding: 0 10px;
-    }
-    .title{
-      margin:0;
-      font-weight:900;
-      letter-spacing:.08em;
-      text-transform:uppercase;
-      font-size: clamp(28px, 4.0vw, var(--titleMaxPx)); /* small baseline */
-      line-height:.98;
-      white-space:nowrap;
-      max-width: 100%;
-      overflow: visible;
-      padding-right: 0.22em;
-      text-shadow: 0 0 30px rgba(255,255,255,.06);
-      transform: translateZ(0);
-    }
+  /* Micro hints */
+  .micro{
+    position:fixed;
+    left:16px;
+    bottom:16px;
+    z-index:70;
+    color: rgba(255,255,255,0.44);
+    letter-spacing:.14em;
+    text-transform:uppercase;
+    font-size: var(--ui);
+    user-select:none;
+  }
+  .kbd{
+    padding:2px 6px;
+    border:1px solid rgba(255,255,255,0.16);
+    background: rgba(0,0,0,0.35);
+    margin-right:6px;
+  }
 
-    .sub{
-      margin-top: 12px;
-      display:block;
-      width:100%;
-      text-align:left;
-      letter-spacing:.18em;
-      text-transform:uppercase;
-      color: rgba(255,255,255,.35);
-      font-weight:900;
-      text-decoration:none;
-      font-size: var(--uiSize);
-    }
-    .sub:hover{ color: rgba(255,255,255,.85); }
+  /* Note */
+  .note{
+    position:fixed;
+    right:16px;
+    bottom:16px;
+    width:min(540px, calc(100vw - 32px));
+    z-index:80;
+    background: rgba(0,0,0,0.72);
+    border:1px solid rgba(255,255,255,0.58);
+    display:none;
+  }
+  .noteHead{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:8px;
+    padding:10px;
+    border-bottom:1px solid rgba(255,255,255,0.18);
+    letter-spacing:.14em;
+    text-transform:uppercase;
+  }
+  .note textarea{
+    width:100%;
+    height: 180px;
+    resize:vertical;
+    padding:10px;
+    border:none;
+    outline:none;
+    background:#000;
+    color:#fff;
+    font-family: var(--font);
+    font-size: var(--ui);
+    line-height:1.25;
+  }
 
-    /* ===== DIRECTORY ===== */
-    .directory{
-      display:flex;
-      align-items:stretch;
-      justify-content:center;
-      padding: 84px 22px 72px;
-    }
-    .dirBox{
-      width: min(1100px, 100%);
-      border: 1px solid rgba(255,255,255,0.12);
-      background: rgba(0,0,0,0.46);
-      backdrop-filter: blur(8px);
-      padding: 16px 16px 10px;
-    }
-    .dirHead{
-      display:flex;
-      justify-content:space-between;
-      align-items:center;
-      padding: 6px 0 12px;
-      border-bottom: 1px solid rgba(255,255,255,0.12);
-      margin-bottom: 12px;
-    }
-    .dirHead .t{
-      letter-spacing:.18em;
-      text-transform:uppercase;
-      color: rgba(255,255,255,.86);
-      font-weight:900;
-      font-size: var(--uiSize);
-    }
-    .dirHead .mini{
-      letter-spacing:.18em;
-      text-transform:uppercase;
-      color: rgba(255,255,255,.46);
-      font-size: var(--uiSize);
-    }
-    .dirGrid{
-      display:grid;
-      grid-template-columns: 1fr;
-      gap: 12px;
-      padding-bottom: 6px;
-    }
-    .group{
-      border:1px solid rgba(255,255,255,0.10);
-      background: rgba(0,0,0,0.35);
-      padding: 12px;
-    }
-    .groupTitle{
-      letter-spacing:.18em;
-      text-transform:uppercase;
-      color: rgba(255,255,255,.62);
-      margin-bottom: 10px;
-      font-weight:800;
-      font-size: var(--uiSize);
-    }
-    .links{
-      display:flex;
-      flex-wrap:wrap;
-      gap: 10px 14px;
-      align-items:center;
-    }
-    .links a{
-      font-size: var(--linkSizePx);
-      letter-spacing:.14em;
-      text-transform:uppercase;
-      color: var(--linkRest);
-      text-decoration:none;
-      border-bottom: 1px solid rgba(255,255,255,0.0);
-      padding-bottom: 2px;
-    }
-    .links a:hover{
-      color: var(--linkHover);
-      border-bottom-color: rgba(255,255,255,0.28);
-    }
+  /* NULL */
+  body[data-null="1"] .hud,
+  body[data-null="1"] .micro,
+  body[data-null="1"] .center,
+  body[data-null="1"] .note{ display:none !important; }
 
-    .hint{
-      position:fixed;
-      left:16px;
-      bottom:16px;
-      z-index:40;
-      letter-spacing:.14em;
-      text-transform:uppercase;
-      color: rgba(255,255,255,0.38);
-      user-select:none;
-      font-size: var(--uiSize);
-    }
-    .kbd{
-      padding:2px 6px;
-      border:1px solid rgba(255,255,255,0.16);
-      background: rgba(0,0,0,0.35);
-      margin-right:6px;
-    }
-
-    body.invert{
-      filter: invert(1);
-      background:#fff;
-    }
-
-    @media (max-width: 560px){
-      :root{ --hudW: 250px; }
-      .landingTitleWrap{ padding: 0 14px; }
-      .title{ letter-spacing:.06em; }
-      .hudHead{ grid-template-columns: 1fr; }
-      .hudRight{ justify-content:flex-start; }
-    }
-  </style>
+  @media (max-width: 560px){
+    :root{ --hudW: 268px; }
+    .hudHeader{ grid-template-columns: 1fr; }
+    .hudRight{ justify-content:flex-start; }
+  }
+</style>
 </head>
 
-<body>
-  <div id="bgLayer" class="moving" aria-hidden="true"></div>
+<body data-explain="1" data-null="0">
+<canvas id="v"></canvas>
 
-  <div class="hud" id="hud">
-    <div class="hudHead">
-      <div class="hudLeft">
-        <button class="noteIconBtn" id="btnNote" type="button" title="KETA_NOTE (SHIFT+N)">
-          <span class="ketaSquare"></span>
-        </button>
-        <div style="letter-spacing:.16em; text-transform:uppercase; color:rgba(255,255,255,.78); font-weight:900; min-width:0;">
-          STUDIO
-        </div>
-      </div>
-
-      <div class="hudRight">
-        <!-- KEEP TYPE BUTTON AS A LABEL ONLY (controls are always visible now) -->
-        <button class="btn on" id="btnTextSize" type="button" title="Type controls are always visible">TYPE</button>
-        <button class="btn" id="btnMotion" type="button" title="Toggle motion (Space)">
-          <span id="motionLbl">MOTION: ON</span>
-        </button>
-      </div>
+<div class="hud" id="hud">
+  <div class="hudHeader">
+    <div class="hudLeft">
+      <button class="sqBtn" id="btnNote" title="KETA_NOTE (SHIFT+N)"><span class="sq"></span></button>
+      <div class="tag" id="hudTag">CHROMA / ACID</div>
     </div>
-
-    <span class="lbl">FIELD</span>
-    <div class="twoCol">
-      <div>
-        <div class="mini2">BG 1</div>
-        <input id="bg1" type="color" value="#000000" />
-      </div>
-      <div>
-        <div class="mini2">BG 2</div>
-        <input id="bg2" type="color" value="#151515" />
-      </div>
-    </div>
-    <div class="twoCol" style="margin-top:8px;">
-      <div>
-        <div class="mini2">BG 3</div>
-        <input id="bg3" type="color" value="#2a2a2a" />
-      </div>
-      <div>
-        <div class="mini2">BG 4</div>
-        <input id="bg4" type="color" value="#0a0a0a" />
-      </div>
-    </div>
-
-    <span class="lbl">ANGLE</span>
-    <input id="angle" type="range" min="0" max="360" step="1" value="145" />
-
-    <span class="lbl">TEXT</span>
-    <div class="twoCol">
-      <div>
-        <div class="mini2">COLOR</div>
-        <input id="txt" type="color" value="#ffffff" />
-      </div>
-      <div>
-        <div class="mini2">UI SIZE</div>
-        <input id="uiSize" type="number" min="10" max="18" step="1" value="12" />
-      </div>
-    </div>
-
-    <!-- ALWAYS VISIBLE NOW -->
-    <div class="textSizeBlock" id="textSizeBlock">
-      <span class="lbl">TYPE SCALE</span>
-      <div class="twoCol">
-        <div>
-          <div class="mini2">TITLE MAX</div>
-          <input id="titleMax" type="range" min="90" max="200" step="1" value="140" />
-        </div>
-        <div>
-          <div class="mini2">LINK SIZE</div>
-          <input id="linkSize" type="range" min="10" max="18" step="1" value="12" />
-        </div>
-      </div>
-    </div>
-
-    <span class="lbl">SPEED</span>
-    <input id="speed" type="range" min="0" max="1" step="0.01" value="0.55" />
-  </div>
-
-  <div class="ketaNote" id="ketaNote">
-    <div class="ketaHead" id="ketaHead">
-      <div>KETA_NOTE</div>
-      <button class="hbtn" id="btnHideNote" type="button">-</button>
-    </div>
-    <div class="ketaBody">
-      <div class="ketaIconCol"><span class="ketaSquare"></span></div>
-      <textarea id="ketaText" placeholder="GLOBAL NOTE" spellcheck="false"></textarea>
+    <div class="hudRight">
+      <button class="sqBtn" id="btnNull" title="NULL (SHIFT+M)"><span class="sqOutline"></span></button>
+      <button class="btn on" id="btnMotion">MOTION: ON</button>
+      <button class="btn" id="btnInvert">INVERT</button>
     </div>
   </div>
 
-  <section class="landing" id="top">
-    <div class="landingTitleWrap" id="titleWrap">
-      <h1 class="title" id="title">KETADATA [STUDIO]</h1>
-      <a class="sub" href="#directory">[DIRECTORY]</a>
-    </div>
-  </section>
-
-  <section class="directory" id="directory">
-    <div class="dirBox">
-      <div class="dirHead">
-        <div class="t">STUDIO DIRECTORY</div>
-        <div class="mini">LINKS ONLY</div>
-      </div>
-      <div class="dirGrid" id="dirGrid"></div>
-    </div>
-  </section>
-
-  <div class="hint">
-    <span class="kbd">SPACE</span> MOTION
-    <span class="kbd">SHIFT+I</span> INVERT
-    <span class="kbd">SHIFT+N</span> NOTE
+  <div class="lbl">MODE</div>
+  <div class="modeRow">
+    <select id="modeSel">
+      <option value="MIND">MIND</option>
+      <option value="FLOW">FLOW</option>
+      <option value="EXCHANGE">EXCHANGE</option>
+      <option value="TYPE">TYPE</option>
+    </select>
+    <select id="palSel">
+      <option value="ACID">ACID</option>
+      <option value="VOID">VOID</option>
+      <option value="CHROME">CHROME</option>
+      <option value="INFRA">INFRA</option>
+      <option value="AQUA">AQUA</option>
+    </select>
   </div>
 
-  <script>
-    const FILE_ID = "KETADATA_STUDIO";
-    const ROOM_ID = "STUDIO";
-    const VERSION_ID = "studio.v10_headlock_type_always_visible";
-    const STORAGE_KEY = `KDT::STATE::${FILE_ID}::${ROOM_ID}::${VERSION_ID}`;
-    const GLOBAL_KETA_NOTE_KEY = "KDT_GLOBAL_KETA_NOTE_V1";
+  <div class="lbl">LIGHTS</div>
+  <div class="grid2">
+    <select id="lightSel">
+      <option value="1">1</option><option value="2">2</option><option value="3">3</option>
+      <option value="4" selected>4</option><option value="5">5</option><option value="6">6</option>
+    </select>
+    <button class="btn on" id="btnExplain">EXPLAIN: ON</button>
+  </div>
 
-    const DIRECTORY = [
-      { group:"CORE", items:[
-        ["[SYSTEM.HTML]","system.html"],
-        ["[ROOM.HTML]","room.html"],
-        ["[MAP.HTML]","map.html"],
-        ["[KDTV1.HTML]","kdtv1.html"],
-        ["[CRUNCH1.HTML]","crunch1.html"]
-      ]},
-      { group:"STUDIO TOOLS", items:[
-        ["[TESTER3.HTML]","tester3.html"],
-        ["[LABYRINTH.HTML]","labyrinth.html"]
-      ]}
-    ];
+  <div class="lbl">SURFACE</div>
+  <div class="grid2">
+    <div>
+      <div class="mono">SPEED</div>
+      <input id="speed" type="range" min="0" max="1" step="0.01" value="0.60" />
+    </div>
+    <div>
+      <div class="mono">ABERR</div>
+      <input id="aberr" type="range" min="0" max="4" step="0.05" value="1.80" />
+    </div>
+  </div>
 
-    const els = {
-      bgLayer: document.getElementById("bgLayer"),
-      btnMotion: document.getElementById("btnMotion"),
-      motionLbl: document.getElementById("motionLbl"),
-      btnNote: document.getElementById("btnNote"),
-      ketaNote: document.getElementById("ketaNote"),
-      ketaText: document.getElementById("ketaText"),
-      btnHideNote: document.getElementById("btnHideNote"),
+  <div class="grid2" style="margin-top:8px;">
+    <div>
+      <div class="mono">GRAIN</div>
+      <input id="grain" type="range" min="0" max="0.35" step="0.01" value="0.10" />
+    </div>
+    <div>
+      <div class="mono">SCAN</div>
+      <input id="scan" type="range" min="0" max="0.35" step="0.01" value="0.12" />
+    </div>
+  </div>
 
-      bg1: document.getElementById("bg1"),
-      bg2: document.getElementById("bg2"),
-      bg3: document.getElementById("bg3"),
-      bg4: document.getElementById("bg4"),
-      angle: document.getElementById("angle"),
-      speed: document.getElementById("speed"),
-      txt: document.getElementById("txt"),
-      uiSize: document.getElementById("uiSize"),
+  <div class="lbl">TYPE (ALWAYS HERE)</div>
+  <div class="grid2">
+    <div>
+      <div class="mono">TITLE MAX</div>
+      <input id="titleMax" type="range" min="90" max="200" step="1" value="140" />
+    </div>
+    <div>
+      <div class="mono">TITLE SCALE</div>
+      <input id="titleScale" type="range" min="0.60" max="1.40" step="0.01" value="1.00" />
+    </div>
+  </div>
 
-      btnTextSize: document.getElementById("btnTextSize"),
-      textSizeBlock: document.getElementById("textSizeBlock"),
-      titleMax: document.getElementById("titleMax"),
-      linkSize: document.getElementById("linkSize"),
+  <div class="grid2" style="margin-top:8px;">
+    <div>
+      <div class="mono">UI SIZE</div>
+      <input id="uiSize" type="number" min="10" max="18" step="1" value="12" />
+    </div>
+    <div>
+      <div class="mono">LINK SIZE</div>
+      <input id="linkSize" type="number" min="10" max="18" step="1" value="12" />
+    </div>
+  </div>
 
-      dirGrid: document.getElementById("dirGrid"),
-      title: document.getElementById("title"),
-      titleWrap: document.getElementById("titleWrap"),
+  <div class="lbl">STATE IO</div>
+  <div class="grid2">
+    <button class="btn" id="btnExport">EXPORT</button>
+    <label class="btn" for="importFile" style="cursor:pointer;">IMPORT</label>
+    <input id="importFile" type="file" accept="application/json" style="display:none;" />
+  </div>
+
+  <div class="explainBox" id="explainBox">
+    <div class="mono" id="exTitle">INTERPRETIVE FEED</div>
+    <div style="margin-top:8px;color:rgba(255,255,255,0.64);letter-spacing:.02em;" id="exBody"></div>
+  </div>
+</div>
+
+<div class="center">
+  <h1 class="title" id="centerTitle">KETADATA [STUDIO]</h1>
+</div>
+
+<div class="note" id="note">
+  <div class="noteHead">
+    <div>KETA_NOTE</div>
+    <button class="sqBtn" id="btnNoteHide" title="HIDE"><span class="sq" style="width:12px;height:2px;"></span></button>
+  </div>
+  <textarea id="noteText" spellcheck="false" placeholder="INSTANT THOUGHT SPACE"></textarea>
+</div>
+
+<div class="micro">
+  <span class="kbd">SPACE</span> MOTION
+  <span class="kbd">SHIFT+I</span> INVERT
+  <span class="kbd">SHIFT+N</span> NOTE
+  <span class="kbd">SHIFT+M</span> NULL
+  <span class="kbd">1–6</span> LIGHT
+</div>
+
+<script>
+(() => {
+  const FILE_ID = "KETADATA_CHROMA_ACID_STUDIO";
+  const ROOM_ID = "STUDIO";
+  const VERSION_ID = "v2_controller_lock_mode_type_unified";
+  const STORAGE_KEY = `KDT::STATE::${FILE_ID}::${ROOM_ID}::${VERSION_ID}`;
+  const NOTE_KEY = "KDT_GLOBAL_KETA_NOTE_V1";
+
+  const $ = (id) => document.getElementById(id);
+  const els = {
+    c: $("v"),
+    hudTag: $("hudTag"),
+    btnNote: $("btnNote"),
+    btnNull: $("btnNull"),
+    btnMotion: $("btnMotion"),
+    btnInvert: $("btnInvert"),
+    btnExplain: $("btnExplain"),
+
+    modeSel: $("modeSel"),
+    palSel: $("palSel"),
+    lightSel: $("lightSel"),
+
+    speed: $("speed"),
+    aberr: $("aberr"),
+    grain: $("grain"),
+    scan: $("scan"),
+
+    titleMax: $("titleMax"),
+    titleScale: $("titleScale"),
+    uiSize: $("uiSize"),
+    linkSize: $("linkSize"),
+
+    btnExport: $("btnExport"),
+    importFile: $("importFile"),
+
+    explainBox: $("explainBox"),
+    exTitle: $("exTitle"),
+    exBody: $("exBody"),
+
+    centerTitle: $("centerTitle"),
+
+    note: $("note"),
+    noteText: $("noteText"),
+    btnNoteHide: $("btnNoteHide"),
+  };
+
+  const ctx = els.c.getContext("2d", { alpha:false });
+
+  const PALETTES = {
+    ACID:  { bg0:"#000000", bg1:"#0b0b0f", a0:"#7dff00", a1:"#00e5ff", a2:"#ff2bd6", a3:"#ffd400" },
+    VOID:  { bg0:"#000000", bg1:"#111111", a0:"#ffffff", a1:"#bdbdbd", a2:"#7a7a7a", a3:"#2a2a2a" },
+    CHROME:{ bg0:"#000000", bg1:"#171717", a0:"#f2f2f2", a1:"#c8c8c8", a2:"#8a8a8a", a3:"#3a3a3a" },
+    INFRA: { bg0:"#000000", bg1:"#12050a", a0:"#ff1744", a1:"#ff6d00", a2:"#ff00d4", a3:"#ffe600" },
+    AQUA:  { bg0:"#000000", bg1:"#041018", a0:"#00ffd5", a1:"#00aaff", a2:"#7dff00", a3:"#ffffff" },
+  };
+
+  const COPY = {
+    MIND: [
+      "DRIFT STABILIZED INTO A WINDOW.",
+      "BASE AS UNIVERSAL ORIGIN.",
+      "STATE AS LITERAL SUBSTANCE.",
+      "SURFACES HOLD INSTANT THOUGHT.",
+      "DEPTH IS ARRANGEMENT.",
+      "BOTH OR NEITHER.",
+      "FEEDBACK LOOP / STREAMS."
+    ],
+    FLOW: [
+      "DELTA OVER REMAKE.",
+      "TUNE THE INSTRUMENT (MOTION/INVERT/LIGHT/TYPE/STATE).",
+      "ONE GATING QUESTION MAX WHEN IT SAVES A REWRITE.",
+      "TIGHT LOOP FIRST. WIDE FIELD OPTIONAL."
+    ],
+    EXCHANGE: [
+      "PRIMITIVES NAMED. CONSTRAINTS THAT COMPOUND.",
+      "STATE/IO IS A RED LINE.",
+      "AVOID OVER-INSTRUCTION MID-FLOW.",
+      "NEW CORE = MAINTENANCE SURFACE."
+    ],
+    TYPE: [
+      "TYPE IS A CONTROL SURFACE, NOT A THEME.",
+      "KEEP TEXT SAME-SIZE RULE INTACT.",
+      "SCALE TITLE WITHOUT BREAKING THE GRID.",
+      "NO VISUAL DRIFT IN CONTROLLER."
+    ]
+  };
+
+  const state = {
+    updatedAt: new Date().toISOString(),
+    invert: 0,
+    motion: 1,
+    nullMode: 0,
+    explain: 1,
+    mode: "MIND",
+    palette: "ACID",
+    light: 4,
+    speed: 0.60,
+    aberr: 1.80,
+    grain: 0.10,
+    scan: 0.12,
+    titleMax: 140,
+    titleScale: 1.00,
+    uiSize: 12,
+    linkSize: 12,
+    seed: 42,
+  };
+
+  function setCSS(name, value){ document.documentElement.style.setProperty(name, value); }
+  function setBodyAttr(name, value){ document.body.setAttribute(name, String(value)); }
+
+  function clamp(n,a,b){ return Math.max(a, Math.min(b,n)); }
+
+  function rnd(seed){
+    let s = seed >>> 0;
+    return () => (s = (s * 1664525 + 1013904223) >>> 0) / 4294967296;
+  }
+
+  function applyPalette(name){
+    const p = PALETTES[name] || PALETTES.ACID;
+    setCSS("--bg0", p.bg0);
+    setCSS("--bg1", p.bg1);
+    setCSS("--a0",  p.a0);
+    setCSS("--a1",  p.a1);
+    setCSS("--a2",  p.a2);
+    setCSS("--a3",  p.a3);
+    setCSS("--palette", name);
+    els.hudTag.textContent = `CHROMA / ${name}`;
+  }
+
+  function applyModeText(){
+    const lines = COPY[state.mode] || COPY.MIND;
+    els.exTitle.textContent = state.mode + " FEED";
+    els.exBody.textContent = lines.join(" ");
+  }
+
+  function applyUI(){
+    setCSS("--invert", state.invert ? 1 : 0);
+    setCSS("--motion", state.motion ? 1 : 0);
+    setCSS("--null", state.nullMode ? 1 : 0);
+    setCSS("--light", state.light);
+
+    setCSS("--speed", state.speed);
+    setCSS("--aberr", state.aberr);
+    setCSS("--grain", state.grain);
+    setCSS("--scan", state.scan);
+
+    setCSS("--titleMaxPx", String(state.titleMax));
+    setCSS("--titleScale", state.titleScale);
+
+    setCSS("--ui", state.uiSize + "px");
+
+    setBodyAttr("data-explain", state.explain ? 1 : 0);
+    setBodyAttr("data-null", state.nullMode ? 1 : 0);
+
+    els.btnMotion.classList.toggle("on", !!state.motion);
+    els.btnMotion.textContent = state.motion ? "MOTION: ON" : "MOTION: OFF";
+
+    els.btnInvert.classList.toggle("on", !!state.invert);
+
+    els.btnExplain.classList.toggle("on", !!state.explain);
+    els.btnExplain.textContent = state.explain ? "EXPLAIN: ON" : "EXPLAIN: OFF";
+
+    els.modeSel.value = state.mode;
+    els.palSel.value = state.palette;
+    els.lightSel.value = String(state.light);
+
+    els.speed.value = String(state.speed);
+    els.aberr.value = String(state.aberr);
+    els.grain.value = String(state.grain);
+    els.scan.value = String(state.scan);
+
+    els.titleMax.value = String(state.titleMax);
+    els.titleScale.value = String(state.titleScale);
+    els.uiSize.value = String(state.uiSize);
+    els.linkSize.value = String(state.linkSize);
+
+    els.centerTitle.textContent = "KETADATA [STUDIO]";
+
+    applyPalette(state.palette);
+    applyModeText();
+  }
+
+  function resize(){
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    els.c.width  = Math.floor(window.innerWidth * dpr);
+    els.c.height = Math.floor(window.innerHeight * dpr);
+    els.c.style.width = window.innerWidth + "px";
+    els.c.style.height = window.innerHeight + "px";
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+  }
+
+  function hexToRgb(h){
+    const x = h.replace("#","");
+    return { r:parseInt(x.slice(0,2),16), g:parseInt(x.slice(2,4),16), b:parseInt(x.slice(4,6),16) };
+  }
+  function rgb(o,a=1){ return `rgba(${o.r},${o.g},${o.b},${a})`; }
+  function mix(a,b,t){
+    return {
+      r: Math.round(a.r + (b.r-a.r)*t),
+      g: Math.round(a.g + (b.g-a.g)*t),
+      b: Math.round(a.b + (b.b-a.b)*t),
     };
+  }
 
-    function applyCSSVar(name, value){
-      document.documentElement.style.setProperty(name, value);
+  function draw(t){
+    const w = window.innerWidth, h = window.innerHeight;
+    const dt = t * 0.001;
+
+    const p = PALETTES[state.palette] || PALETTES.ACID;
+    const rr = rnd(state.seed + Math.floor(dt * 0.35));
+
+    // base
+    const g = ctx.createLinearGradient(0,0,w,h);
+    g.addColorStop(0, p.bg0);
+    g.addColorStop(1, p.bg1);
+    ctx.fillStyle = g;
+    ctx.fillRect(0,0,w,h);
+
+    const col0 = hexToRgb(p.a0);
+    const col1 = hexToRgb(p.a1);
+    const col2 = hexToRgb(p.a2);
+    const col3 = hexToRgb(p.a3);
+
+    const L = state.light; // 1..6
+    const strength = (L/6);
+
+    const motion = state.motion ? (0.10 + state.speed * 1.35) : 0.0;
+    const ax = Math.sin(dt * 0.8 * motion + state.seed) * 0.6;
+    const ay = Math.cos(dt * 0.9 * motion + state.seed*0.7) * 0.6;
+
+    const blobs = 10 + Math.floor(strength * 12);
+
+    for (let k=0;k<blobs;k++){
+      const u = rr(), v = rr();
+      const baseX = u*w, baseY = v*h;
+      const r0 = (Math.min(w,h) * (0.10 + rr()*0.22)) * (0.75 + strength*0.85);
+
+      const wob = (k%2===0?1:-1);
+      const x = baseX + Math.sin(dt*(0.6+0.11*k)*motion + u*12.3) * (44 + 52*strength) * wob;
+      const y = baseY + Math.cos(dt*(0.5+0.10*k)*motion + v*11.1) * (40 + 48*strength) * -wob;
+
+      const sel = k % 4;
+      const A = sel===0?col0:sel===1?col1:sel===2?col2:col3;
+      const B = sel===0?col1:sel===1?col2:sel===2?col3:col0;
+
+      const aA = 0.10 + strength*0.26;
+      const aB = 0.08 + strength*0.22;
+
+      const rg = ctx.createRadialGradient(x,y,0, x,y,r0);
+      rg.addColorStop(0, rgb(A, aA));
+      rg.addColorStop(0.55, rgb(mix(A,B,0.55), aB));
+      rg.addColorStop(1, rgb(B, 0));
+
+      ctx.fillStyle = rg;
+      ctx.fillRect(x-r0,y-r0,r0*2,r0*2);
+
+      // aberration (acid)
+      const ab = state.aberr;
+      ctx.globalCompositeOperation = "screen";
+
+      ctx.fillStyle = rgb(A, 0.028 + strength*0.060);
+      ctx.beginPath();
+      ctx.ellipse(x + ab*ax*6, y + ab*ay*6, r0*0.62, r0*0.46, dt*0.20, 0, Math.PI*2);
+      ctx.fill();
+
+      ctx.fillStyle = rgb(B, 0.026 + strength*0.055);
+      ctx.beginPath();
+      ctx.ellipse(x - ab*ax*5, y - ab*ay*5, r0*0.58, r0*0.44, -dt*0.18, 0, Math.PI*2);
+      ctx.fill();
+
+      ctx.globalCompositeOperation = "source-over";
     }
 
-    function setMotion(on){
-      els.bgLayer.classList.toggle("moving", !!on);
-      els.btnMotion.classList.toggle("on", !!on);
-      els.motionLbl.textContent = on ? "MOTION: ON" : "MOTION: OFF";
+    // scanlines
+    if (state.scan > 0){
+      ctx.globalCompositeOperation = "overlay";
+      ctx.fillStyle = `rgba(255,255,255,${state.scan})`;
+      for (let y=0; y<h; y+=3){ ctx.fillRect(0,y,w,1); }
+      ctx.globalCompositeOperation = "source-over";
     }
 
-    function setInvert(on){
-      document.body.classList.toggle("invert", !!on);
+    // grain
+    if (state.grain > 0){
+      ctx.globalCompositeOperation = "overlay";
+      const n = 1200;
+      for (let i=0;i<n;i++){
+        const x = (rr()*w)|0, y = (rr()*h)|0;
+        const a = state.grain * (0.35 + rr()*0.65);
+        ctx.fillStyle = `rgba(255,255,255,${a})`;
+        ctx.fillRect(x,y,1,1);
+      }
+      ctx.globalCompositeOperation = "source-over";
     }
 
-    function toggleNote(force){
-      const isOpen = els.ketaNote.style.display === "block";
-      const next = (typeof force === "boolean") ? force : !isOpen;
-      els.ketaNote.style.display = next ? "block" : "none";
+    // center feedback ring
+    ctx.globalCompositeOperation = "screen";
+    const cx = w*0.5, cy = h*0.55;
+    const ringR = Math.min(w,h) * (0.18 + strength*0.16);
+    const ring = ctx.createRadialGradient(cx,cy, ringR*0.25, cx,cy, ringR);
+    ring.addColorStop(0, `rgba(255,255,255,0)`);
+    ring.addColorStop(0.62, `rgba(255,255,255,${0.06 + strength*0.12})`);
+    ring.addColorStop(1, `rgba(255,255,255,0)`);
+    ctx.fillStyle = ring;
+    ctx.fillRect(0,0,w,h);
+    ctx.globalCompositeOperation = "source-over";
+  }
+
+  function save(){
+    state.updatedAt = new Date().toISOString();
+    const payload = {
+      version: "KETADATA_CHROMA_STATE_v2",
+      updatedAt: state.updatedAt,
+      fileId: FILE_ID,
+      roomId: ROOM_ID,
+      versionId: VERSION_ID,
+      ui: {
+        invert: !!state.invert,
+        motion: !!state.motion,
+        nullMode: !!state.nullMode,
+        explain: !!state.explain,
+        mode: state.mode,
+        palette: state.palette,
+        light: state.light,
+        speed: state.speed,
+        aberr: state.aberr,
+        grain: state.grain,
+        scan: state.scan,
+        titleMax: state.titleMax,
+        titleScale: state.titleScale,
+        uiSize: state.uiSize,
+        linkSize: state.linkSize,
+        seed: state.seed
+      }
+    };
+    try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(payload)); }catch(e){}
+    try{ localStorage.setItem(NOTE_KEY, els.noteText.value || ""); }catch(e){}
+  }
+
+  function load(){
+    try{
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw){
+        const p = JSON.parse(raw);
+        if (p && p.ui){
+          state.invert = p.ui.invert ? 1 : 0;
+          state.motion = p.ui.motion ? 1 : 0;
+          state.nullMode = p.ui.nullMode ? 1 : 0;
+          state.explain = p.ui.explain ? 1 : 0;
+
+          state.mode = p.ui.mode || "MIND";
+          state.palette = p.ui.palette || "ACID";
+          state.light = clamp(Number(p.ui.light)||4,1,6);
+
+          state.speed = clamp(Number(p.ui.speed)||0.60,0,1);
+          state.aberr = clamp(Number(p.ui.aberr)||1.80,0,4);
+          state.grain = clamp(Number(p.ui.grain)||0.10,0,0.35);
+          state.scan = clamp(Number(p.ui.scan)||0.12,0,0.35);
+
+          state.titleMax = clamp(Number(p.ui.titleMax)||140,90,200);
+          state.titleScale = clamp(Number(p.ui.titleScale)||1.00,0.60,1.40);
+          state.uiSize = clamp(Number(p.ui.uiSize)||12,10,18);
+          state.linkSize = clamp(Number(p.ui.linkSize)||12,10,18);
+
+          state.seed = Number.isFinite(Number(p.ui.seed)) ? Number(p.ui.seed) : 42;
+        }
+      }
+    }catch(e){}
+
+    try{
+      const note = localStorage.getItem(NOTE_KEY);
+      if (typeof note === "string") els.noteText.value = note;
+    }catch(e){}
+  }
+
+  function downloadJson(filename, obj){
+    const blob = new Blob([JSON.stringify(obj, null, 2)], { type:"application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url), 500);
+  }
+
+  function doExport(){
+    const payload = {
+      version: "KETADATA_CHROMA_STATE_v2",
+      updatedAt: new Date().toISOString(),
+      fileId: FILE_ID,
+      roomId: ROOM_ID,
+      versionId: VERSION_ID,
+      ui: {
+        invert: !!state.invert,
+        motion: !!state.motion,
+        nullMode: !!state.nullMode,
+        explain: !!state.explain,
+        mode: state.mode,
+        palette: state.palette,
+        light: state.light,
+        speed: state.speed,
+        aberr: state.aberr,
+        grain: state.grain,
+        scan: state.scan,
+        titleMax: state.titleMax,
+        titleScale: state.titleScale,
+        uiSize: state.uiSize,
+        linkSize: state.linkSize,
+        seed: state.seed
+      },
+      ketaNote: els.noteText.value || ""
+    };
+    downloadJson(`KETADATA_CHROMA_ACID_${ROOM_ID}_${VERSION_ID}.json`, payload);
+  }
+
+  async function doImport(file){
+    try{
+      const txt = await file.text();
+      const p = JSON.parse(txt);
+      if (!p || !p.ui) return;
+
+      state.invert = p.ui.invert ? 1 : 0;
+      state.motion = p.ui.motion ? 1 : 0;
+      state.nullMode = p.ui.nullMode ? 1 : 0;
+      state.explain = p.ui.explain ? 1 : 0;
+
+      state.mode = p.ui.mode || "MIND";
+      state.palette = p.ui.palette || "ACID";
+      state.light = clamp(Number(p.ui.light)||4,1,6);
+
+      state.speed = clamp(Number(p.ui.speed)||0.60,0,1);
+      state.aberr = clamp(Number(p.ui.aberr)||1.80,0,4);
+      state.grain = clamp(Number(p.ui.grain)||0.10,0,0.35);
+      state.scan = clamp(Number(p.ui.scan)||0.12,0,0.35);
+
+      state.titleMax = clamp(Number(p.ui.titleMax)||140,90,200);
+      state.titleScale = clamp(Number(p.ui.titleScale)||1.00,0.60,1.40);
+      state.uiSize = clamp(Number(p.ui.uiSize)||12,10,18);
+      state.linkSize = clamp(Number(p.ui.linkSize)||12,10,18);
+
+      state.seed = Number.isFinite(Number(p.ui.seed)) ? Number(p.ui.seed) : 42;
+
+      if (typeof p.ketaNote === "string") els.noteText.value = p.ketaNote;
+
+      applyUI();
       save();
-    }
+    }catch(e){}
+  }
 
-    function renderDirectory(){
-      els.dirGrid.innerHTML = "";
-      for (const g of DIRECTORY){
-        const box = document.createElement("div");
-        box.className = "group";
+  function toggleNote(force){
+    const open = els.note.style.display === "block";
+    const next = (typeof force === "boolean") ? force : !open;
+    els.note.style.display = next ? "block" : "none";
+    save();
+  }
 
-        const t = document.createElement("div");
-        t.className = "groupTitle";
-        t.textContent = g.group;
+  function applyFromControls(){
+    state.mode = els.modeSel.value;
+    state.palette = els.palSel.value;
+    state.light = clamp(parseInt(els.lightSel.value,10),1,6);
 
-        const links = document.createElement("div");
-        links.className = "links";
+    state.speed = clamp(parseFloat(els.speed.value),0,1);
+    state.aberr = clamp(parseFloat(els.aberr.value),0,4);
+    state.grain = clamp(parseFloat(els.grain.value),0,0.35);
+    state.scan = clamp(parseFloat(els.scan.value),0,0.35);
 
-        for (const [label, href] of g.items){
-          const a = document.createElement("a");
-          a.href = href;
-          a.textContent = label;
-          links.appendChild(a);
-        }
+    state.titleMax = clamp(parseInt(els.titleMax.value,10),90,200);
+    state.titleScale = clamp(parseFloat(els.titleScale.value),0.60,1.40);
 
-        box.appendChild(t);
-        box.appendChild(links);
-        els.dirGrid.appendChild(box);
-      }
-    }
+    state.uiSize = clamp(parseInt(els.uiSize.value,10),10,18);
+    state.linkSize = clamp(parseInt(els.linkSize.value,10),10,18);
 
-    function fitTitle(){
-      const t = els.title;
-      const wrap = els.titleWrap;
-      if (!t || !wrap) return;
+    applyUI();
+    save();
+  }
 
-      t.style.fontSize = "";
-      t.style.letterSpacing = "";
+  function bind(){
+    els.btnMotion.addEventListener("click", () => {
+      state.motion = state.motion ? 0 : 1;
+      applyUI(); save();
+    });
 
-      const maxPx = Number(els.titleMax.value) || 140;
-      const minPx = 22;
-      const pad = 24;
-      const avail = Math.max(180, wrap.clientWidth - pad);
+    els.btnInvert.addEventListener("click", () => {
+      state.invert = state.invert ? 0 : 1;
+      applyUI(); save();
+    });
 
-      let lo = minPx, hi = maxPx, best = minPx;
-      for (let i=0;i<14;i++){
-        const mid = (lo+hi)/2;
-        t.style.fontSize = mid + "px";
-        const w = t.scrollWidth;
-        if (w <= avail){ best = mid; lo = mid; }
-        else { hi = mid; }
-      }
-      t.style.fontSize = best + "px";
-    }
+    els.btnExplain.addEventListener("click", () => {
+      state.explain = state.explain ? 0 : 1;
+      applyUI(); save();
+    });
 
-    function getState(){
-      return {
-        version: VERSION_ID,
-        updatedAt: new Date().toISOString(),
-        ui: {
-          invert: document.body.classList.contains("invert"),
-          motion: els.bgLayer.classList.contains("moving"),
-          css: {
-            bg1: els.bg1.value,
-            bg2: els.bg2.value,
-            bg3: els.bg3.value,
-            bg4: els.bg4.value,
-            angle: Number(els.angle.value),
-            speed: Number(els.speed.value),
-            txt: els.txt.value,
-            uiSize: Number(els.uiSize.value),
-            titleMax: Number(els.titleMax.value),
-            linkSize: Number(els.linkSize.value),
-          }
-        }
-      };
-    }
+    els.btnNull.addEventListener("click", () => {
+      state.nullMode = state.nullMode ? 0 : 1;
+      applyUI(); save();
+    });
 
-    function applyState(s){
-      if (!s || !s.ui) return;
+    [els.modeSel, els.palSel, els.lightSel].forEach(el => el.addEventListener("change", applyFromControls));
+    [els.speed, els.aberr, els.grain, els.scan, els.titleMax, els.titleScale, els.uiSize, els.linkSize]
+      .forEach(el => el.addEventListener("input", applyFromControls));
 
-      setInvert(!!s.ui.invert);
-      setMotion(!!s.ui.motion);
+    els.btnExport.addEventListener("click", () => doExport());
+    els.importFile.addEventListener("change", (e) => {
+      const f = e.target.files && e.target.files[0];
+      if (f) doImport(f);
+      e.target.value = "";
+    });
 
-      const css = (s.ui && s.ui.css) ? s.ui.css : {};
-      if (css.bg1) els.bg1.value = css.bg1;
-      if (css.bg2) els.bg2.value = css.bg2;
-      if (css.bg3) els.bg3.value = css.bg3;
-      if (css.bg4) els.bg4.value = css.bg4;
-      if (typeof css.angle === "number") els.angle.value = css.angle;
-      if (typeof css.speed === "number") els.speed.value = css.speed;
-      if (css.txt) els.txt.value = css.txt;
-      if (typeof css.uiSize === "number") els.uiSize.value = css.uiSize;
-      if (typeof css.titleMax === "number") els.titleMax.value = css.titleMax;
-      if (typeof css.linkSize === "number") els.linkSize.value = css.linkSize;
-
-      applyCSSVar("--bg1", els.bg1.value);
-      applyCSSVar("--bg2", els.bg2.value);
-      applyCSSVar("--bg3", els.bg3.value);
-      applyCSSVar("--bg4", els.bg4.value);
-      applyCSSVar("--angle", `${els.angle.value}deg`);
-      applyCSSVar("--motionSpeed", els.speed.value);
-      applyCSSVar("--txt", els.txt.value);
-      applyCSSVar("--uiSize", `${els.uiSize.value}px`);
-      applyCSSVar("--titleMaxPx", `${els.titleMax.value}px`);
-      applyCSSVar("--linkSizePx", `${els.linkSize.value}px`);
-
-      fitTitle();
-    }
-
-    function save(){
-      try{
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(getState()));
-        localStorage.setItem(GLOBAL_KETA_NOTE_KEY, els.ketaText.value || "");
-      }catch(e){}
-    }
-
-    function load(){
-      try{
-        const raw = localStorage.getItem(STORAGE_KEY);
-        if (raw){
-          applyState(JSON.parse(raw));
-        }else{
-          applyState({ ui:{ invert:false, motion:true, css:{
-            bg1: els.bg1.value, bg2: els.bg2.value, bg3: els.bg3.value, bg4: els.bg4.value,
-            angle: Number(els.angle.value), speed: Number(els.speed.value),
-            txt: els.txt.value, uiSize: Number(els.uiSize.value),
-            titleMax: Number(els.titleMax.value), linkSize: Number(els.linkSize.value)
-          }}});
-        }
-
-        const note = localStorage.getItem(GLOBAL_KETA_NOTE_KEY);
-        if (typeof note === "string") els.ketaText.value = note;
-
-        fitTitle();
-      }catch(e){}
-    }
-
-    function bind(){
-      const reapply = () => {
-        applyCSSVar("--bg1", els.bg1.value);
-        applyCSSVar("--bg2", els.bg2.value);
-        applyCSSVar("--bg3", els.bg3.value);
-        applyCSSVar("--bg4", els.bg4.value);
-        applyCSSVar("--angle", `${els.angle.value}deg`);
-        applyCSSVar("--motionSpeed", els.speed.value);
-        applyCSSVar("--txt", els.txt.value);
-        applyCSSVar("--uiSize", `${els.uiSize.value}px`);
-        applyCSSVar("--titleMaxPx", `${els.titleMax.value}px`);
-        applyCSSVar("--linkSizePx", `${els.linkSize.value}px`);
-        fitTitle();
-        save();
-      };
-
-      [els.bg1,els.bg2,els.bg3,els.bg4,els.angle,els.speed,els.txt,els.uiSize,els.titleMax,els.linkSize]
-        .forEach(el => el.addEventListener("input", reapply));
-
-      els.btnMotion.addEventListener("click", () => { setMotion(!els.bgLayer.classList.contains("moving")); save(); });
-      els.btnNote.addEventListener("click", () => toggleNote());
-      els.btnHideNote.addEventListener("click", () => toggleNote(false));
-      els.ketaText.addEventListener("input", save);
-
-      window.addEventListener("resize", () => { fitTitle(); }, { passive:true });
-    }
+    els.btnNote.addEventListener("click", () => toggleNote());
+    els.btnNoteHide.addEventListener("click", () => toggleNote(false));
+    els.noteText.addEventListener("input", () => save());
 
     window.addEventListener("keydown", (e) => {
       const tag = (document.activeElement && document.activeElement.tagName) ? document.activeElement.tagName.toLowerCase() : "";
-      if (tag === "textarea" || tag === "input") return;
+      const typing = (tag === "textarea" || tag === "input" || tag === "select");
+      if (typing) return;
 
       if (e.code === "Space"){
         e.preventDefault();
-        setMotion(!els.bgLayer.classList.contains("moving"));
-        save();
+        state.motion = state.motion ? 0 : 1;
+        applyUI(); save();
       }
       if (e.shiftKey && (e.key === "I" || e.key === "i")){
         e.preventDefault();
-        setInvert(!document.body.classList.contains("invert"));
-        save();
+        state.invert = state.invert ? 0 : 1;
+        applyUI(); save();
       }
       if (e.shiftKey && (e.key === "N" || e.key === "n")){
         e.preventDefault();
         toggleNote();
       }
+      if (e.shiftKey && (e.key === "M" || e.key === "m")){
+        e.preventDefault();
+        state.nullMode = state.nullMode ? 0 : 1;
+        applyUI(); save();
+      }
+      if (!e.shiftKey){
+        const k = e.key;
+        if (k >= "1" && k <= "6"){
+          state.light = parseInt(k,10);
+          applyUI(); save();
+        }
+      }
     });
 
-    renderDirectory();
-    load();
-    bind();
-  </script>
+    window.addEventListener("resize", resize, { passive:true });
+  }
 
-  <!-- =========================================================
-  KETADATA HTML SERIALIZATION STAMP
-  AE/EE/WB: WB
-  FILE_ID: KETADATA_STUDIO
-  ROOM_ID: STUDIO
-  VERSION: studio.v10_headlock_type_always_visible
-  UPDATED_AT: 2025-12-29T00:00:00-05:00
-  CHANGELOG:
-  - FIX: HUD HEAD LOCK (GRID) + HUD OVERFLOW HIDDEN (MOTION BUTTON CANNOT LEAK OUT)
-  - CHANGE: TYPE CONTROLS ALWAYS VISIBLE (NO HIDE)
-  - KEEP: EVERYTHING ELSE (MOTION, STATE, DIRECTORY, NOTE)
-  ========================================================= -->
+  // render loop
+  let raf = null;
+  function loop(t){ draw(t); raf = requestAnimationFrame(loop); }
+
+  // init
+  resize();
+  load();
+  applyUI();
+  bind();
+  raf = requestAnimationFrame(loop);
+})();
+</script>
+
+<!-- ============================================================
+KETADATA HTML SERIALIZATION STAMP
+AE/EE/WB: WB
+FILE_ID: KETADATA_CHROMA_ACID_STUDIO
+ROOM_ID: STUDIO
+VERSION: v2_controller_lock_mode_type_unified
+UPDATED_AT: 2025-12-29T00:00:00-05:00
+CHANGELOG:
+- REMAKE: CONTROLLER REBUILT (GRID HEADER + WRAP + OVERFLOW CLAMP) TO PREVENT ANY OFFSET/LEAK
+- CHANGE: TYPE IS PART OF MODE SYSTEM (MODE INCLUDES TYPE) AND TYPE CONTROLS LIVE IN THE SAME CONTROLLER (NO SEPARATE PANEL)
+- KEEP: EXPORT/IMPORT = REAL FILE DOWNLOAD/UPLOAD (NO PASTE-ONLY)
+- KEEP: UNIVERSALS (SPACE MOTION, SHIFT+I INVERT, SHIFT+N NOTE, SHIFT+M NULL, 1–6 LIGHTS)
+- KEEP: GLOBAL KETA_NOTE STORED (LOCALSTORAGE)
+============================================================ -->
 </body>
 </html>
+
