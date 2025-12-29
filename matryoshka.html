@@ -1,0 +1,736 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>KETADATA · MATRYOSHKA KALEIDO</title>
+  <style>
+    :root{
+      --bg:#0b0c0f;
+      --fg:#e9e9ea;
+      --muted:#9a9aa0;
+      --line:rgba(233,233,234,.18);
+      --panel:rgba(10,12,16,.72);
+      --panel2:rgba(10,12,16,.88);
+      --accent:#bfbfc6;
+      --shadow:rgba(0,0,0,.55);
+
+      --light: 3;            /* 1..6 */
+      --invert: 0;           /* 0/1 */
+      --null: 0;             /* 0/1 */
+      --motion: 1;           /* 0/1 */
+
+      --speed: 0.65;         /* 0..2 */
+      --sym: 10;             /* 3..24 */
+      --ornate: 0.72;        /* 0..1 */
+      --depth: 8;            /* 3..14 */
+      --grain: 0.18;         /* 0..0.35 */
+      --zoom: 1.0;           /* 0.6..1.6 */
+      --contrast: 1.0;       /* 0.7..1.4 */
+      --accentMode: 1;       /* 0..3 */
+    }
+
+    html,body{height:100%; margin:0; background:var(--bg); color:var(--fg); font-family: Arial, Helvetica, sans-serif;}
+    *{box-sizing:border-box}
+    .wrap{height:100%; display:grid; grid-template-rows:auto 1fr auto;}
+    .topbar,.bottombar{
+      display:flex; align-items:center; gap:10px;
+      padding:10px 12px;
+      border-bottom:1px solid var(--line);
+      background:linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,0));
+    }
+    .bottombar{border-top:1px solid var(--line); border-bottom:none;}
+    .brand{
+      display:flex; align-items:baseline; gap:10px;
+      letter-spacing: .12em;
+      text-transform:uppercase;
+      font-weight:700;
+      font-size:12px;
+      user-select:none;
+      white-space:nowrap;
+    }
+    .brand .sub{color:var(--muted); font-weight:700; font-size:11px}
+    .pill{
+      padding:6px 10px;
+      border:1px solid var(--line);
+      border-radius:0;
+      background:rgba(255,255,255,.03);
+      font-size:12px;
+      letter-spacing:.08em;
+      text-transform:uppercase;
+      cursor:pointer;
+      user-select:none;
+    }
+    .pill:active{transform:translateY(1px)}
+    .spacer{flex:1}
+    .hud{
+      display:flex; gap:8px; align-items:center; flex-wrap:wrap;
+      font-size:11px; letter-spacing:.08em; text-transform:uppercase;
+      color:var(--muted);
+    }
+    .hud b{color:var(--fg); font-weight:700}
+    .stage{
+      position:relative;
+      overflow:hidden;
+      background:var(--bg);
+    }
+    canvas{
+      position:absolute; inset:0;
+      width:100%; height:100%;
+      image-rendering:auto;
+      filter: contrast(var(--contrast));
+    }
+
+    /* panel */
+    .panel{
+      position:absolute;
+      top:12px; left:12px;
+      width:min(420px, calc(100% - 24px));
+      border:1px solid var(--line);
+      background:var(--panel);
+      box-shadow: 0 10px 30px var(--shadow);
+      padding:10px;
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+      backdrop-filter: blur(8px);
+    }
+    .panel.hidden{display:none;}
+    .row{display:flex; gap:10px; align-items:center; flex-wrap:wrap;}
+    .row .label{
+      font-size:11px; letter-spacing:.08em; text-transform:uppercase;
+      color:var(--muted);
+      min-width:110px;
+    }
+    .ctrl{
+      display:flex; align-items:center; gap:8px;
+      flex:1;
+      min-width:220px;
+    }
+    input[type="range"]{width:100%;}
+    .val{
+      width:64px;
+      text-align:right;
+      font-size:11px;
+      color:var(--fg);
+      letter-spacing:.06em;
+    }
+    .mini{
+      font-size:11px; letter-spacing:.08em; text-transform:uppercase;
+      color:var(--muted);
+      line-height:1.35;
+    }
+    .kbd{
+      border:1px solid var(--line);
+      padding:2px 6px;
+      margin-left:6px;
+      color:var(--fg);
+      background:rgba(255,255,255,.03);
+    }
+
+    /* NULL mode */
+    .null .topbar, .null .bottombar, .null .panel{display:none !important;}
+    .null .stage::after{
+      content:"NULL";
+      position:absolute; top:14px; right:14px;
+      font-size:10px; letter-spacing:.18em; text-transform:uppercase;
+      color:rgba(233,233,234,.35);
+      border:1px solid rgba(233,233,234,.14);
+      padding:4px 6px;
+    }
+
+    /* invert (simple) */
+    .invert{
+      filter: invert(1) hue-rotate(180deg);
+    }
+
+    /* light indicator */
+    .lights{display:flex; gap:6px; align-items:center;}
+    .dot{
+      width:10px; height:10px;
+      border:1px solid var(--line);
+      background:rgba(255,255,255,.03);
+    }
+    .dot.on{background:rgba(233,233,234,.72);}
+    .sep{width:1px; height:18px; background:var(--line); opacity:.9; margin:0 6px;}
+  </style>
+</head>
+<body>
+<div class="wrap" id="wrap">
+  <div class="topbar">
+    <div class="brand">
+      <div>KETADATA</div>
+      <div class="sub">MATRYOSHKA · KALEIDO</div>
+    </div>
+
+    <div class="sep"></div>
+
+    <div class="lights" id="lights"></div>
+
+    <div class="sep"></div>
+
+    <div class="pill" id="togglePanel">SYSTEM</div>
+    <div class="pill" id="btnInvert">INVERT <span class="kbd">SHIFT+I</span></div>
+    <div class="pill" id="btnNull">NULL <span class="kbd">SHIFT+N</span></div>
+    <div class="pill" id="btnFull">FULL <span class="kbd">SHIFT+F</span></div>
+
+    <div class="spacer"></div>
+
+    <div class="hud" id="hud"></div>
+  </div>
+
+  <div class="stage" id="stage">
+    <canvas id="c"></canvas>
+
+    <div class="panel" id="panel">
+      <div class="row">
+        <div class="label">PRESET</div>
+        <div class="ctrl">
+          <button class="pill" id="preset0">NEUTRAL</button>
+          <button class="pill" id="preset1">INDUSTRIAL</button>
+          <button class="pill" id="preset2">CHIC</button>
+          <button class="pill" id="preset3">VOID</button>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="label">SPEED</div>
+        <div class="ctrl"><input id="speed" type="range" min="0" max="2" step="0.01"></div>
+        <div class="val" id="speedV"></div>
+      </div>
+
+      <div class="row">
+        <div class="label">SYMMETRY</div>
+        <div class="ctrl"><input id="sym" type="range" min="3" max="24" step="1"></div>
+        <div class="val" id="symV"></div>
+      </div>
+
+      <div class="row">
+        <div class="label">ORNATE</div>
+        <div class="ctrl"><input id="ornate" type="range" min="0" max="1" step="0.01"></div>
+        <div class="val" id="ornateV"></div>
+      </div>
+
+      <div class="row">
+        <div class="label">DOLL DEPTH</div>
+        <div class="ctrl"><input id="depth" type="range" min="3" max="14" step="1"></div>
+        <div class="val" id="depthV"></div>
+      </div>
+
+      <div class="row">
+        <div class="label">GRAIN</div>
+        <div class="ctrl"><input id="grain" type="range" min="0" max="0.35" step="0.01"></div>
+        <div class="val" id="grainV"></div>
+      </div>
+
+      <div class="row">
+        <div class="label">ZOOM</div>
+        <div class="ctrl"><input id="zoom" type="range" min="0.6" max="1.6" step="0.01"></div>
+        <div class="val" id="zoomV"></div>
+      </div>
+
+      <div class="row">
+        <div class="label">CONTRAST</div>
+        <div class="ctrl"><input id="contrast" type="range" min="0.7" max="1.4" step="0.01"></div>
+        <div class="val" id="contrastV"></div>
+      </div>
+
+      <div class="row">
+        <div class="label">MOTION</div>
+        <div class="ctrl">
+          <button class="pill" id="btnMotion">TOGGLE</button>
+          <div class="mini">If OFF, visual freezes but state remains editable.</div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="label">STATE IO</div>
+        <div class="ctrl">
+          <button class="pill" id="btnExport">EXPORT</button>
+          <label class="pill" style="display:inline-flex; align-items:center; gap:8px; cursor:pointer;">
+            IMPORT<input id="fileImport" type="file" accept="application/json" style="display:none;">
+          </label>
+          <div class="mini">Exports a JSON file. Import loads from file. No textarea.</div>
+        </div>
+      </div>
+
+      <div class="mini">
+        HOTKEYS: <span class="kbd">1–6</span> LIGHT · <span class="kbd">SHIFT+I</span> INVERT · <span class="kbd">SHIFT+N</span> NULL · <span class="kbd">SHIFT+F</span> FULLSCREEN
+      </div>
+    </div>
+  </div>
+
+  <div class="bottombar">
+    <div class="hud" id="hud2"></div>
+    <div class="spacer"></div>
+    <div class="mini" style="opacity:.9;">
+      “MATRYOSHKA” = nested shells. “KALEIDO” = self-similar symmetry. No kitsch; only structure.
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const el = (id)=>document.getElementById(id);
+  const wrap = el('wrap');
+  const stage = el('stage');
+  const panel = el('panel');
+  const c = el('c');
+  const ctx = c.getContext('2d', { alpha:false });
+
+  const hud = el('hud');
+  const hud2 = el('hud2');
+  const lightsEl = el('lights');
+
+  const ui = {
+    speed: el('speed'), speedV: el('speedV'),
+    sym: el('sym'), symV: el('symV'),
+    ornate: el('ornate'), ornateV: el('ornateV'),
+    depth: el('depth'), depthV: el('depthV'),
+    grain: el('grain'), grainV: el('grainV'),
+    zoom: el('zoom'), zoomV: el('zoomV'),
+    contrast: el('contrast'), contrastV: el('contrastV'),
+
+    togglePanel: el('togglePanel'),
+    btnInvert: el('btnInvert'),
+    btnNull: el('btnNull'),
+    btnFull: el('btnFull'),
+    btnMotion: el('btnMotion'),
+    btnExport: el('btnExport'),
+    fileImport: el('fileImport'),
+
+    preset0: el('preset0'),
+    preset1: el('preset1'),
+    preset2: el('preset2'),
+    preset3: el('preset3'),
+  };
+
+  const clamp = (v,a,b)=>Math.max(a,Math.min(b,v));
+  const nowISO = ()=>new Date().toISOString();
+
+  const state = {
+    VERSION: "KETADATA_MATRYOSHKA_KALEIDO_v1",
+    updatedAt: nowISO(),
+    light: 3,
+    invert: false,
+    nullMode: false,
+    motion: true,
+    params: {
+      speed: 0.65,
+      sym: 10,
+      ornate: 0.72,
+      depth: 8,
+      grain: 0.18,
+      zoom: 1.0,
+      contrast: 1.0,
+      accentMode: 1
+    }
+  };
+
+  // lights UI
+  function renderLights(){
+    lightsEl.innerHTML = "";
+    for(let i=1;i<=6;i++){
+      const d = document.createElement('div');
+      d.className = "dot" + (i<=state.light ? " on" : "");
+      d.title = "LIGHT " + i;
+      lightsEl.appendChild(d);
+    }
+  }
+
+  function applyCSSVars(){
+    const r = document.documentElement.style;
+    r.setProperty('--light', state.light);
+    r.setProperty('--invert', state.invert?1:0);
+    r.setProperty('--null', state.nullMode?1:0);
+    r.setProperty('--motion', state.motion?1:0);
+
+    r.setProperty('--speed', state.params.speed);
+    r.setProperty('--sym', state.params.sym);
+    r.setProperty('--ornate', state.params.ornate);
+    r.setProperty('--depth', state.params.depth);
+    r.setProperty('--grain', state.params.grain);
+    r.setProperty('--zoom', state.params.zoom);
+    r.setProperty('--contrast', state.params.contrast);
+    r.setProperty('--accentMode', state.params.accentMode);
+
+    document.body.classList.toggle('invert', !!state.invert);
+    document.body.classList.toggle('null', !!state.nullMode);
+    c.style.filter = `contrast(${state.params.contrast})`;
+  }
+
+  function syncUI(){
+    ui.speed.value = state.params.speed; ui.speedV.textContent = state.params.speed.toFixed(2);
+    ui.sym.value = state.params.sym; ui.symV.textContent = String(state.params.sym);
+    ui.ornate.value = state.params.ornate; ui.ornateV.textContent = state.params.ornate.toFixed(2);
+    ui.depth.value = state.params.depth; ui.depthV.textContent = String(state.params.depth);
+    ui.grain.value = state.params.grain; ui.grainV.textContent = state.params.grain.toFixed(2);
+    ui.zoom.value = state.params.zoom; ui.zoomV.textContent = state.params.zoom.toFixed(2);
+    ui.contrast.value = state.params.contrast; ui.contrastV.textContent = state.params.contrast.toFixed(2);
+    renderLights();
+    applyCSSVars();
+    renderHUD();
+  }
+
+  function renderHUD(){
+    const t = [
+      `LIGHT <b>${state.light}</b>`,
+      `INVERT <b>${state.invert ? "ON":"OFF"}</b>`,
+      `NULL <b>${state.nullMode ? "ON":"OFF"}</b>`,
+      `MOTION <b>${state.motion ? "ON":"OFF"}</b>`,
+      `SYM <b>${state.params.sym}</b>`,
+      `SPEED <b>${state.params.speed.toFixed(2)}</b>`,
+      `DEPTH <b>${state.params.depth}</b>`
+    ].join(" · ");
+    hud.innerHTML = t;
+    hud2.innerHTML = `UPDATED <b>${state.updatedAt.replace('T',' ').replace('Z','Z')}</b> · ${t}`;
+  }
+
+  // presets (normal ketadata-ish neutrals, no candy)
+  function setPreset(mode){
+    state.params.accentMode = mode;
+    const r = document.documentElement.style;
+
+    if(mode===0){ // NEUTRAL
+      r.setProperty('--bg', '#0b0c0f');
+      r.setProperty('--fg', '#e9e9ea');
+      r.setProperty('--muted', '#9a9aa0');
+      r.setProperty('--accent', '#bfbfc6');
+      r.setProperty('--panel', 'rgba(10,12,16,.72)');
+      r.setProperty('--line', 'rgba(233,233,234,.18)');
+    }
+    if(mode===1){ // INDUSTRIAL
+      r.setProperty('--bg', '#07080b');
+      r.setProperty('--fg', '#f0f0f2');
+      r.setProperty('--muted', '#a6a6ad');
+      r.setProperty('--accent', '#d0d0d8');
+      r.setProperty('--panel', 'rgba(8,10,14,.78)');
+      r.setProperty('--line', 'rgba(240,240,242,.16)');
+    }
+    if(mode===2){ // CHIC
+      r.setProperty('--bg', '#0a0b0d');
+      r.setProperty('--fg', '#f2f2f4');
+      r.setProperty('--muted', '#a9a9b0');
+      r.setProperty('--accent', '#e3e3ea');
+      r.setProperty('--panel', 'rgba(14,14,18,.70)');
+      r.setProperty('--line', 'rgba(242,242,244,.14)');
+    }
+    if(mode===3){ // VOID
+      r.setProperty('--bg', '#000000');
+      r.setProperty('--fg', '#ffffff');
+      r.setProperty('--muted', '#bdbdc6');
+      r.setProperty('--accent', '#ffffff');
+      r.setProperty('--panel', 'rgba(0,0,0,.72)');
+      r.setProperty('--line', 'rgba(255,255,255,.18)');
+    }
+
+    state.updatedAt = nowISO();
+    renderHUD();
+  }
+
+  // resize
+  function resize(){
+    const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+    c.width = Math.floor(stage.clientWidth * dpr);
+    c.height = Math.floor(stage.clientHeight * dpr);
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+  }
+  window.addEventListener('resize', resize);
+
+  // core visual: kaleidoscopic rosette + nested doll rings
+  let t0 = performance.now();
+  function noise2D(x,y){
+    // tiny deterministic noise (cheap)
+    const s = Math.sin(x*12.9898 + y*78.233) * 43758.5453;
+    return s - Math.floor(s);
+  }
+
+  function drawFrame(ts){
+    const w = stage.clientWidth, h = stage.clientHeight;
+    const cx = w/2, cy = h/2;
+
+    // base background
+    ctx.clearRect(0,0,w,h);
+
+    // light scalar: more light -> more line energy + exposure
+    const L = state.light;
+    const lightGain = 0.55 + (L-1) * 0.12;
+
+    const speed = state.params.speed;
+    const sym = Math.floor(state.params.sym);
+    const ornate = state.params.ornate;
+    const depth = Math.floor(state.params.depth);
+    const grain = state.params.grain;
+    const zoom = state.params.zoom;
+
+    const time = (ts - t0) * 0.00025 * speed;
+
+    // tonal base
+    ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim() || '#0b0c0f';
+    ctx.fillRect(0,0,w,h);
+
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.scale(zoom, zoom);
+
+    // kaleido slices
+    const R = Math.min(w,h) * 0.46;
+    for(let k=0;k<sym;k++){
+      const a0 = (k/sym) * Math.PI*2;
+      ctx.save();
+      ctx.rotate(a0);
+
+      // slice field (procedural)
+      const steps = 120;
+      for(let i=0;i<steps;i++){
+        const p = i/(steps-1);
+        const rr = R * (0.08 + p);
+        const wob = Math.sin(time*3 + p*10 + k*0.7) * (8 + ornate*28);
+        const ang = (Math.sin(time*2 + p*6) * 0.25 + 0.15) * (1 + ornate*0.9);
+        const x = Math.cos(ang) * (rr + wob);
+        const y = Math.sin(ang) * (rr + wob);
+
+        const thick = 0.6 + ornate*1.8 + (L-1)*0.15;
+        const alpha = (0.03 + ornate*0.07) * lightGain;
+
+        ctx.beginPath();
+        ctx.lineWidth = thick;
+        ctx.strokeStyle = `rgba(233,233,234,${alpha})`;
+        ctx.moveTo(0,0);
+        ctx.lineTo(x,y);
+        ctx.stroke();
+      }
+
+      // micro filigree arc
+      ctx.beginPath();
+      const arcA = (Math.sin(time + k)*0.2 + 0.35);
+      ctx.lineWidth = 0.9 + ornate*1.2;
+      ctx.strokeStyle = `rgba(233,233,234,${(0.04+ornate*0.08)*lightGain})`;
+      ctx.arc(0,0, R*(0.58 + 0.08*Math.sin(time*1.8+k)), -arcA, arcA);
+      ctx.stroke();
+
+      ctx.restore();
+    }
+
+    // matryoshka "dolls": nested rings + shoulder cuts (no cartoon face)
+    for(let d=0; d<depth; d++){
+      const p = d/(depth-1 || 1);
+      const rr = R * (0.16 + p*0.78);
+      const cut = rr * (0.18 + 0.08*Math.sin(time*1.3 + d));
+      const wob = Math.sin(time*2.2 + d*0.9) * (2 + ornate*10);
+
+      const a = (0.02 + ornate*0.06) * lightGain;
+      ctx.lineWidth = 1 + ornate*2.1 + (L-1)*0.12;
+      ctx.strokeStyle = `rgba(233,233,234,${a})`;
+
+      // outer ring
+      ctx.beginPath();
+      ctx.arc(0,0, rr + wob, 0, Math.PI*2);
+      ctx.stroke();
+
+      // shoulder geometry (industrial notch)
+      ctx.beginPath();
+      ctx.moveTo(-cut, rr*0.45);
+      ctx.lineTo(cut, rr*0.45);
+      ctx.stroke();
+
+      // inner ring
+      ctx.beginPath();
+      ctx.arc(0,0, Math.max(2, rr*0.78 + wob*0.6), 0, Math.PI*2);
+      ctx.stroke();
+    }
+
+    ctx.restore();
+
+    // grain pass
+    if(grain > 0.001){
+      const img = ctx.getImageData(0,0,w,h);
+      const data = img.data;
+      const amt = Math.floor(255 * grain);
+      for(let i=0;i<data.length;i+=4){
+        const n = (Math.random()*2-1) * amt;
+        data[i] = clamp(data[i] + n, 0, 255);
+        data[i+1] = clamp(data[i+1] + n, 0, 255);
+        data[i+2] = clamp(data[i+2] + n, 0, 255);
+      }
+      ctx.putImageData(img,0,0);
+    }
+
+    // subtle vignette
+    ctx.save();
+    ctx.globalCompositeOperation = 'multiply';
+    const g = ctx.createRadialGradient(w/2,h/2, Math.min(w,h)*0.15, w/2,h/2, Math.min(w,h)*0.75);
+    g.addColorStop(0,'rgba(0,0,0,0)');
+    g.addColorStop(1,'rgba(0,0,0,0.35)');
+    ctx.fillStyle = g;
+    ctx.fillRect(0,0,w,h);
+    ctx.restore();
+  }
+
+  function loop(ts){
+    if(state.motion && !state.nullMode){
+      drawFrame(ts);
+    } else if(!state.motion && !state.nullMode){
+      // draw once (freeze) if we haven't yet
+      if(loop._drewOnce !== true){
+        drawFrame(ts);
+        loop._drewOnce = true;
+      }
+    }
+    requestAnimationFrame(loop);
+  }
+
+  // IO
+  function exportState(){
+    state.updatedAt = nowISO();
+    const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `KETADATA_MATRYOSHKA_STATE_${state.updatedAt.replace(/[:.]/g,'-')}.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(()=>URL.revokeObjectURL(a.href), 5000);
+    renderHUD();
+  }
+
+  async function importStateFromFile(file){
+    const text = await file.text();
+    const obj = JSON.parse(text);
+
+    if(!obj || typeof obj !== 'object') return;
+
+    // permissive load
+    state.updatedAt = nowISO();
+    if(typeof obj.light === 'number') state.light = clamp(Math.round(obj.light), 1, 6);
+    if(typeof obj.invert === 'boolean') state.invert = obj.invert;
+    if(typeof obj.nullMode === 'boolean') state.nullMode = obj.nullMode;
+    if(typeof obj.motion === 'boolean') state.motion = obj.motion;
+
+    if(obj.params && typeof obj.params === 'object'){
+      const p = obj.params;
+      if(typeof p.speed === 'number') state.params.speed = clamp(p.speed, 0, 2);
+      if(typeof p.sym === 'number') state.params.sym = clamp(Math.round(p.sym), 3, 24);
+      if(typeof p.ornate === 'number') state.params.ornate = clamp(p.ornate, 0, 1);
+      if(typeof p.depth === 'number') state.params.depth = clamp(Math.round(p.depth), 3, 14);
+      if(typeof p.grain === 'number') state.params.grain = clamp(p.grain, 0, 0.35);
+      if(typeof p.zoom === 'number') state.params.zoom = clamp(p.zoom, 0.6, 1.6);
+      if(typeof p.contrast === 'number') state.params.contrast = clamp(p.contrast, 0.7, 1.4);
+      if(typeof p.accentMode === 'number') state.params.accentMode = clamp(Math.round(p.accentMode), 0, 3);
+    }
+
+    loop._drewOnce = false;
+    setPreset(state.params.accentMode);
+    syncUI();
+  }
+
+  // events
+  ui.togglePanel.onclick = ()=> panel.classList.toggle('hidden');
+  ui.btnInvert.onclick = ()=>{ state.invert = !state.invert; state.updatedAt=nowISO(); syncUI(); };
+  ui.btnNull.onclick = ()=>{ state.nullMode = !state.nullMode; state.updatedAt=nowISO(); loop._drewOnce=false; syncUI(); };
+  ui.btnFull.onclick = ()=> toggleFullscreen();
+  ui.btnMotion.onclick = ()=>{ state.motion = !state.motion; state.updatedAt=nowISO(); loop._drewOnce=false; syncUI(); };
+
+  ui.btnExport.onclick = exportState;
+  ui.fileImport.addEventListener('change', async (e)=>{
+    const f = e.target.files && e.target.files[0];
+    if(f) await importStateFromFile(f);
+    e.target.value = "";
+  });
+
+  // sliders
+  function bindRange(r, key, fmt){
+    const out = ui[key+'V'];
+    r.addEventListener('input', ()=>{
+      const v = (r.type==='range') ? Number(r.value) : r.value;
+      state.params[key] = v;
+      out.textContent = fmt ? fmt(v) : String(v);
+      state.updatedAt = nowISO();
+      loop._drewOnce = false;
+      applyCSSVars();
+      renderHUD();
+    });
+  }
+  bindRange(ui.speed, 'speed', v=>v.toFixed(2));
+  bindRange(ui.sym, 'sym', v=>String(Math.round(v)));
+  bindRange(ui.ornate, 'ornate', v=>v.toFixed(2));
+  bindRange(ui.depth, 'depth', v=>String(Math.round(v)));
+  bindRange(ui.grain, 'grain', v=>v.toFixed(2));
+  bindRange(ui.zoom, 'zoom', v=>v.toFixed(2));
+  bindRange(ui.contrast, 'contrast', v=>v.toFixed(2));
+
+  // presets
+  ui.preset0.onclick = ()=> setPreset(0);
+  ui.preset1.onclick = ()=> setPreset(1);
+  ui.preset2.onclick = ()=> setPreset(2);
+  ui.preset3.onclick = ()=> setPreset(3);
+
+  function toggleFullscreen(){
+    const doc = document;
+    const de = doc.documentElement;
+    if(!doc.fullscreenElement){
+      (de.requestFullscreen || de.webkitRequestFullscreen || de.mozRequestFullScreen || de.msRequestFullscreen).call(de);
+    } else {
+      (doc.exitFullscreen || doc.webkitExitFullscreen || doc.mozCancelFullScreen || doc.msExitFullscreen).call(doc);
+    }
+  }
+
+  // hotkeys
+  window.addEventListener('keydown', (e)=>{
+    const k = e.key.toLowerCase();
+    const shift = e.shiftKey;
+
+    // do not hijack typing in inputs
+    const tag = (e.target && e.target.tagName) ? e.target.tagName.toLowerCase() : '';
+    const typing = (tag === 'input' || tag === 'textarea');
+
+    if(!typing && k >= '1' && k <= '6'){
+      state.light = Number(k);
+      state.updatedAt = nowISO();
+      loop._drewOnce=false;
+      syncUI();
+      return;
+    }
+
+    if(shift && k === 'i' && !typing){
+      e.preventDefault();
+      state.invert = !state.invert;
+      state.updatedAt = nowISO();
+      syncUI();
+      return;
+    }
+
+    if(shift && k === 'n' && !typing){
+      e.preventDefault();
+      state.nullMode = !state.nullMode;
+      state.updatedAt = nowISO();
+      loop._drewOnce=false;
+      syncUI();
+      return;
+    }
+
+    if(shift && k === 'f' && !typing){
+      e.preventDefault();
+      toggleFullscreen();
+      return;
+    }
+  });
+
+  // init
+  resize();
+  setPreset(1); // industrial default
+  syncUI();
+  requestAnimationFrame(loop);
+})();
+</script>
+
+<!--
+AE: MATRYOSHKA/KALEIDO (ORNATE, NO KITSCH) · EE: STATE + HOTKEYS + FILE IO · WB: SINGLE-FILE HTML
+FILE_ID: "MATRYOSHKA_KALEIDO_v1"
+ROOM_ID: "WORLD"
+VERSION: "v1"
+UPDATED_AT: "2025-12-29T16:00:00-05:00"
+CHANGELOG: "Initial matryoshka kaleido visual; controls; continuous lights 1–6; SHIFT+I invert; SHIFT+N NULL; SHIFT+F fullscreen; export/import as real files."
+-->
+</body>
+</html>
