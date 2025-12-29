@@ -1,0 +1,493 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>NON-TELEOLOGICAL HOLDER // RADICAL RAW</title>
+<style>
+  :root{
+    --bg:#000;
+    --fg:#fff;
+    --dim:rgba(255,255,255,.65);
+    --line:rgba(255,255,255,.22);
+    --line2:rgba(255,255,255,.10);
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0;background:var(--bg);color:var(--fg);font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;overflow:hidden}
+  button,input,textarea{font-family:inherit}
+  .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace}
+  .app{height:100%;display:grid;grid-template-rows:auto 1fr auto}
+
+  /* top: minimal command rail */
+  .rail{
+    display:flex;gap:8px;align-items:center;justify-content:space-between;
+    padding:8px 10px;border-bottom:1px solid var(--line);
+  }
+  .rail .left,.rail .right{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .pill{border:1px solid var(--line);padding:6px 8px;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--dim)}
+  .btn{
+    border:1px solid var(--line);
+    background:transparent;color:var(--fg);
+    padding:6px 8px;font-size:11px;letter-spacing:.08em;text-transform:uppercase;
+    cursor:pointer;border-radius:0;
+  }
+  .btn[aria-pressed="true"]{background:rgba(255,255,255,.10)}
+  .btn:active{transform:translateY(1px)}
+  .btn.danger{border-color:rgba(255,255,255,.35)}
+  .btn.primary{background:rgba(255,255,255,.08)}
+  input[type="range"]{width:160px}
+
+  /* center: full field */
+  .center{position:relative;min-height:0}
+  canvas{position:absolute;inset:0;width:100%;height:100%}
+
+  /* radical overlay: no narrative, only state marks */
+  .hud{
+    position:absolute;inset:0;pointer-events:none;
+    display:flex;flex-direction:column;justify-content:space-between;
+    padding:10px;
+    mix-blend-mode:difference;
+  }
+  .hudTop{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
+  .hudBottom{display:flex;justify-content:space-between;gap:10px;align-items:flex-end}
+  .stack{display:flex;flex-direction:column;gap:6px;max-width:48%}
+  .mark{
+    display:inline-block;
+    border:1px solid var(--line);
+    padding:6px 8px;
+    font:700 11px/1.2 system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+    letter-spacing:.12em;text-transform:uppercase;
+    background:rgba(0,0,0,.18);
+  }
+  .mark.big{font-weight:800;font-size:12px;letter-spacing:.18em}
+  .mark.mono{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace}
+
+  /* bottom: text well + io */
+  .well{
+    border-top:1px solid var(--line);
+    padding:10px;
+    display:grid;
+    grid-template-columns: 1fr 1fr;
+    gap:10px;
+    min-height:0;
+  }
+  textarea{
+    width:100%;min-height:120px;resize:vertical;
+    border:1px solid var(--line);
+    background:transparent;color:var(--fg);
+    padding:8px;font-size:12px;outline:none;border-radius:0;
+  }
+  .help{
+    color:var(--dim);font-size:11px;line-height:1.4;
+    border:1px solid var(--line2);
+    padding:8px;
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="rail">
+    <div class="left">
+      <span class="pill mono" id="sig">NTSH_V2</span>
+      <span class="pill" id="modePill">MODE: HOLD</span>
+      <span class="pill mono" id="timePill">--:--:--</span>
+    </div>
+    <div class="right">
+      <button class="btn primary" id="holdBtn" aria-pressed="true" title="SPACE">HOLD</button>
+      <button class="btn" id="invertBtn" aria-pressed="false" title="I">INVERT</button>
+      <button class="btn" id="edgeBtn" aria-pressed="true" title="E">EDGE</button>
+      <button class="btn" id="scarBtn" aria-pressed="true" title="S">SCAR</button>
+      <button class="btn" id="wipeBtn" title="W">WIPE</button>
+      <span class="pill">ENERGY</span>
+      <input id="energy" type="range" min="0" max="100" value="70" title="↑/↓ when not typing"/>
+      <span class="pill">RIGIDITY</span>
+      <input id="rigid" type="range" min="0" max="100" value="35"/>
+      <span class="pill">CHAOS</span>
+      <input id="chaos" type="range" min="0" max="100" value="55"/>
+    </div>
+  </div>
+
+  <div class="center">
+    <canvas id="cv"></canvas>
+    <div class="hud">
+      <div class="hudTop">
+        <div class="stack">
+          <span class="mark big" id="stateMark">STATE: WITHOUT OBJECT</span>
+          <span class="mark" id="ruleMark">RULE: DO NOT TURN INTO TASK</span>
+        </div>
+        <div class="stack" style="align-items:flex-end;text-align:right">
+          <span class="mark mono" id="vecMark">V: 0.00</span>
+          <span class="mark mono" id="memMark">M: 0.00</span>
+        </div>
+      </div>
+      <div class="hudBottom">
+        <div class="stack">
+          <span class="mark mono" id="noteHash">NOTE_HASH: 0000</span>
+          <span class="mark" id="phaseMark">PHASE: HOLDING</span>
+        </div>
+        <div class="stack" style="align-items:flex-end;text-align:right">
+          <span class="mark mono" id="densityMark">DENSITY: 0</span>
+          <span class="mark mono" id="pulseMark">PULSE: 0.00</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="well">
+    <div>
+      <textarea id="note" class="mono" spellcheck="false">hold the non-teleological state.
+trace without capture.
+do not convert to objective.</textarea>
+      <div class="help">
+        HOTKEYS (WHEN NOT TYPING): SPACE HOLD • I INVERT • E EDGE • S SCAR • W WIPE • P PULSE • ↑/↓ ENERGY • ENTER LOG<br/>
+        NOTE IS NOT INTERPRETED. IT MODULATES RHYTHM ONLY.
+      </div>
+    </div>
+    <div>
+      <textarea id="io" class="mono" spellcheck="false" placeholder="EXPORT / IMPORT JSON"></textarea>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
+        <button class="btn" id="exportBtn">EXPORT</button>
+        <button class="btn" id="importBtn">IMPORT</button>
+        <button class="btn danger" id="resetBtn">RESET</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const cv = $("cv");
+  const ctx = cv.getContext("2d", {alpha:false});
+
+  const S = {
+    signature:"NTSH_V2",
+    updatedAt:new Date().toISOString(),
+    hold:true,
+    invert:false,
+    edge:true,
+    scar:true,
+
+    stateLabel:"WITHOUT OBJECT",
+    ruleLabel:"DO NOT TURN INTO TASK",
+
+    // controls 0..1
+    energy:0.70,
+    rigid:0.35,
+    chaos:0.55,
+
+    // derived
+    t:0,
+    pulse:0,
+    mem:0,     // "memory pressure" (visual persistence)
+    v:0,       // "vector pressure" (movement energy)
+    density:0,
+
+    seed:Math.random()*1e6
+  };
+
+  function clamp(x,a,b){ return Math.max(a,Math.min(b,x)); }
+  const pad2 = (n)=>String(n).padStart(2,"0");
+
+  function isTyping(){
+    const a=document.activeElement;
+    if(!a) return false;
+    const tag=(a.tagName||"").toLowerCase();
+    return tag==="textarea"||tag==="input"||tag==="select";
+  }
+
+  function resize(){
+    const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+    const r = cv.getBoundingClientRect();
+    cv.width = Math.floor(r.width*dpr);
+    cv.height = Math.floor(r.height*dpr);
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+  }
+  window.addEventListener("resize", resize);
+
+  function hash16(str){
+    // 0..65535 stable hash
+    let h=2166136261;
+    for(let i=0;i<str.length;i++){
+      h ^= str.charCodeAt(i);
+      h = Math.imul(h,16777619);
+    }
+    return (h>>>0) & 0xffff;
+  }
+  function hash01(str){ return hash16(str) / 65535; }
+
+  function setInvert(){
+    document.documentElement.style.setProperty("--bg", S.invert ? "#fff" : "#000");
+    document.documentElement.style.setProperty("--fg", S.invert ? "#000" : "#fff");
+    document.documentElement.style.setProperty("--dim", S.invert ? "rgba(0,0,0,.65)" : "rgba(255,255,255,.65)");
+    document.documentElement.style.setProperty("--line", S.invert ? "rgba(0,0,0,.22)" : "rgba(255,255,255,.22)");
+    document.documentElement.style.setProperty("--line2", S.invert ? "rgba(0,0,0,.10)" : "rgba(255,255,255,.10)");
+    $("invertBtn").setAttribute("aria-pressed", String(S.invert));
+  }
+
+  function setToggles(){
+    $("holdBtn").setAttribute("aria-pressed", String(S.hold));
+    $("edgeBtn").setAttribute("aria-pressed", String(S.edge));
+    $("scarBtn").setAttribute("aria-pressed", String(S.scar));
+    $("modePill").textContent = `MODE: ${S.hold ? "HOLD" : "OPEN"}`;
+    $("phaseMark").textContent = `PHASE: ${S.hold ? "HOLDING" : "FLOWING"}`;
+  }
+
+  function pull(){
+    S.energy = $("energy").value/100;
+    S.rigid = $("rigid").value/100;
+    S.chaos = $("chaos").value/100;
+    $("stateMark").textContent = `STATE: ${S.stateLabel}`;
+    $("ruleMark").textContent = `RULE: ${S.ruleLabel}`;
+    const nh = hash16(($("note").value||"").slice(0,400)).toString(16).toUpperCase().padStart(4,"0");
+    $("noteHash").textContent = `NOTE_HASH: ${nh}`;
+  }
+
+  function wipe(){
+    ctx.fillStyle = S.invert ? "#fff" : "#000";
+    ctx.fillRect(0,0,cv.clientWidth,cv.clientHeight);
+    S.mem = 0;
+  }
+
+  function pulse(){
+    S.pulse = Math.min(1, S.pulse + 0.9);
+  }
+
+  function exportState(){
+    S.updatedAt = new Date().toISOString();
+    pull();
+    const payload = {
+      signature:S.signature,
+      version:"v2",
+      updatedAt:S.updatedAt,
+      hold:S.hold,
+      invert:S.invert,
+      edge:S.edge,
+      scar:S.scar,
+      labels:{
+        state:S.stateLabel,
+        rule:S.ruleLabel
+      },
+      controls:{
+        energy:Number(S.energy.toFixed(3)),
+        rigid:Number(S.rigid.toFixed(3)),
+        chaos:Number(S.chaos.toFixed(3))
+      },
+      note: $("note").value || ""
+    };
+    $("io").value = JSON.stringify(payload, null, 2);
+  }
+
+  function importState(){
+    let obj;
+    try{ obj = JSON.parse($("io").value || "{}"); }
+    catch(e){ alert("IMPORT FAILED: INVALID JSON"); return; }
+    if(!obj || typeof obj !== "object"){ alert("IMPORT FAILED: INVALID PAYLOAD"); return; }
+
+    if(typeof obj.hold==="boolean") S.hold=obj.hold;
+    if(typeof obj.invert==="boolean") S.invert=obj.invert;
+    if(typeof obj.edge==="boolean") S.edge=obj.edge;
+    if(typeof obj.scar==="boolean") S.scar=obj.scar;
+
+    if(obj.labels && typeof obj.labels==="object"){
+      if(typeof obj.labels.state==="string") S.stateLabel=obj.labels.state.toUpperCase();
+      if(typeof obj.labels.rule==="string") S.ruleLabel=obj.labels.rule.toUpperCase();
+    }
+    if(obj.controls && typeof obj.controls==="object"){
+      const c=obj.controls;
+      if(typeof c.energy==="number") $("energy").value = clamp(Math.round(c.energy*100),0,100);
+      if(typeof c.rigid==="number") $("rigid").value = clamp(Math.round(c.rigid*100),0,100);
+      if(typeof c.chaos==="number") $("chaos").value = clamp(Math.round(c.chaos*100),0,100);
+    }
+    if(typeof obj.note==="string") $("note").value = obj.note;
+
+    setInvert();
+    setToggles();
+    pull();
+    exportState();
+  }
+
+  function reset(){
+    S.hold=true; S.invert=false; S.edge=true; S.scar=true;
+    S.stateLabel="WITHOUT OBJECT";
+    S.ruleLabel="DO NOT TURN INTO TASK";
+    $("energy").value=70; $("rigid").value=35; $("chaos").value=55;
+    $("note").value="hold the non-teleological state.\ntrace without capture.\ndo not convert to objective.";
+    S.pulse=0;
+    setInvert(); setToggles(); pull(); wipe(); exportState();
+  }
+
+  // UI
+  ["energy","rigid","chaos","note"].forEach(id => $(id).addEventListener("input", () => { pull(); }));
+  $("holdBtn").addEventListener("click", () => { S.hold=!S.hold; setToggles(); exportState(); });
+  $("invertBtn").addEventListener("click", () => { S.invert=!S.invert; setInvert(); exportState(); });
+  $("edgeBtn").addEventListener("click", () => { S.edge=!S.edge; setToggles(); exportState(); });
+  $("scarBtn").addEventListener("click", () => { S.scar=!S.scar; setToggles(); exportState(); });
+  $("wipeBtn").addEventListener("click", () => { wipe(); });
+
+  $("exportBtn").addEventListener("click", exportState);
+  $("importBtn").addEventListener("click", importState);
+  $("resetBtn").addEventListener("click", reset);
+
+  window.addEventListener("keydown", (e) => {
+    if(isTyping()) return;
+    const k=(e.key||"").toLowerCase();
+    if(k===" "){ e.preventDefault(); S.hold=!S.hold; setToggles(); exportState(); }
+    if(k==="i"){ e.preventDefault(); S.invert=!S.invert; setInvert(); exportState(); }
+    if(k==="e"){ e.preventDefault(); S.edge=!S.edge; setToggles(); exportState(); }
+    if(k==="s"){ e.preventDefault(); S.scar=!S.scar; setToggles(); exportState(); }
+    if(k==="w"){ e.preventDefault(); wipe(); }
+    if(k==="p"){ e.preventDefault(); pulse(); }
+    if(k==="arrowup"){ e.preventDefault(); $("energy").value = clamp(parseInt($("energy").value,10)+3,0,100); pull(); }
+    if(k==="arrowdown"){ e.preventDefault(); $("energy").value = clamp(parseInt($("energy").value,10)-3,0,100); pull(); }
+    if(k==="enter"){ e.preventDefault(); exportState(); } // "log" into IO by exporting
+  }, {passive:false});
+
+  // Renderer: radical holding
+  // - uses only straight segments and abrupt "cuts"
+  // - HOLD = low delta, high persistence, not freeze
+  // - EDGE = more boundary cuts
+  // - SCAR = leaves hard marks (rectilinear scars)
+  let W=0,H=0;
+
+  function draw(now){
+    const dt = Math.min(0.033, (now - (draw._last||now))/1000);
+    draw._last = now;
+
+    // time pill
+    const d=new Date();
+    $("timePill").textContent = `${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`;
+
+    const note = ($("note").value||"");
+    const rhythm = 0.75 + 0.50 * hash01(note.slice(0,500)); // rhythm-only
+    const E = S.energy;
+    const R = S.rigid;
+    const C = S.chaos;
+
+    // speed / delta
+    const baseSpeed = (0.15 + E*1.05) * rhythm;
+    const speed = S.hold ? baseSpeed*0.10 : baseSpeed;
+
+    S.t += dt * speed;
+
+    // pulse decay
+    S.pulse = Math.max(0, S.pulse - dt*0.85);
+
+    // fade: HOLD increases memory (less fade)
+    const fade = S.hold ? (0.03 + (1-E)*0.06) : (0.10 + (1-E)*0.10);
+
+    // background fill (trail)
+    ctx.fillStyle = S.invert ? `rgba(255,255,255,${fade})` : `rgba(0,0,0,${fade})`;
+    const r = cv.getBoundingClientRect();
+    W = r.width; H = r.height;
+    ctx.fillRect(0,0,W,H);
+
+    // derived readouts
+    S.v = clamp( (E*0.7 + C*0.3) * (S.hold ? 0.35 : 1.0), 0, 1);
+    S.mem = clamp( (S.hold ? 0.75 : 0.35) + (R*0.25), 0, 1);
+
+    $("vecMark").textContent = `V: ${S.v.toFixed(2)}`;
+    $("memMark").textContent = `M: ${S.mem.toFixed(2)}`;
+    $("pulseMark").textContent = `PULSE: ${S.pulse.toFixed(2)}`;
+
+    // stroke style
+    const alpha = clamp(0.05 + E*0.18 + S.pulse*0.30, 0.05, 0.55);
+    ctx.strokeStyle = S.invert ? `rgba(0,0,0,${alpha})` : `rgba(255,255,255,${alpha})`;
+    ctx.lineWidth = 1 + E*2.2;
+
+    // density
+    const density = 80 + Math.floor(E*260);
+    S.density = density;
+    $("densityMark").textContent = `DENSITY: ${density}`;
+
+    // center + boundary
+    const cx=W*0.5, cy=H*0.5;
+    const maxR = Math.min(W,H) * (0.14 + (0.55*R) + (0.10*(1-R)));
+
+    // "Cuts" are abrupt rectilinear segments with occasional boundary clamps
+    for(let i=0;i<density;i++){
+      const u = i/density;
+
+      // base angle
+      const a = (u*Math.PI*2) + S.t*(0.55 + C*0.8);
+      const jitter = (Math.sin(S.t*1.6 + i*0.37) + Math.cos(S.t*1.1 + i*0.91))*0.5;
+
+      // position
+      const r0 = maxR * (0.35 + 0.65*u) * (1 + jitter*0.18*C);
+      let x = cx + Math.cos(a)*r0;
+      let y = cy + Math.sin(a)*r0;
+
+      // movement vector: snapped to orthogonal grid proportionally to rigidity
+      const step = 12 + E*72;
+      const ang = a + jitter*2.2*C;
+
+      let dx = Math.cos(ang)*step;
+      let dy = Math.sin(ang)*step;
+
+      // snap to axis with rigidity
+      if(R > 0.02){
+        const ax = Math.abs(dx) >= Math.abs(dy) ? 1 : 0; // choose dominant axis
+        const snap = R;
+        if(ax){
+          dy *= (1 - snap);
+          dx = Math.sign(dx) * (Math.abs(dx) * (0.65 + 0.35*snap));
+        }else{
+          dx *= (1 - snap);
+          dy = Math.sign(dy) * (Math.abs(dy) * (0.65 + 0.35*snap));
+        }
+      }
+
+      // edge cuts: clamp points to hard boundaries (radical holding)
+      if(S.edge){
+        const bx0 = cx - maxR, bx1 = cx + maxR;
+        const by0 = cy - maxR, by1 = cy + maxR;
+
+        // occasional snap to boundary walls
+        const edgeProb = 0.10 + E*0.12 + C*0.10;
+        if((u + (S.t*0.07)) % 1 < edgeProb){
+          x = clamp(x, bx0, bx1);
+          y = clamp(y, by0, by1);
+        }
+      }
+
+      const x2 = x + dx;
+      const y2 = y + dy;
+
+      ctx.beginPath();
+      ctx.moveTo(x,y);
+      ctx.lineTo(x2,y2);
+      ctx.stroke();
+
+      // scar: leave rectilinear "wounds" that persist
+      if(S.scar){
+        const scarProb = 0.06 + (1-R)*0.06 + C*0.08 + S.pulse*0.12;
+        if(((i*13 + Math.floor(S.t*10)) % 97) / 97 < scarProb){
+          const w = 6 + E*28;
+          const h = 2 + E*8;
+          ctx.strokeRect(x2 - w/2, y2 - h/2, w, h);
+        }
+      }
+    }
+
+    // draw containment boundary (square-ish, not circle)
+    ctx.globalAlpha = 1;
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = S.invert ? `rgba(0,0,0,${0.10 + R*0.18})` : `rgba(255,255,255,${0.10 + R*0.18})`;
+    const bx = cx - maxR, by = cy - maxR, bw = maxR*2, bh = maxR*2;
+    ctx.strokeRect(bx, by, bw, bh);
+
+    requestAnimationFrame(draw);
+  }
+
+  // init
+  resize();
+  setInvert();
+  setToggles();
+  pull();
+  wipe();
+  exportState();
+  requestAnimationFrame(draw);
+})();
+</script>
+</body>
+</html>
