@@ -1,0 +1,761 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>KETADATA // TRACE + HOLD // INTERPRETIVE VISUAL</title>
+<style>
+  :root{
+    --bg:#0a0b0d;
+    --fg:#f2f3f5;
+    --muted:rgba(242,243,245,.72);
+    --line:rgba(242,243,245,.22);
+    --line2:rgba(242,243,245,.12);
+
+    --panel:rgba(10,11,13,.78);
+    --panel2:rgba(10,11,13,.56);
+
+    --accent:#f2f3f5;
+
+    --light:3;          /* 1..6 */
+    --intensity:.52;    /* derived */
+    --speed:.65;        /* derived */
+    --noise:.06;        /* derived */
+    --trail:.18;        /* derived */
+  }
+
+  body.invert{
+    --bg:#f2f3f5;
+    --fg:#0a0b0d;
+    --muted:rgba(10,11,13,.70);
+    --line:rgba(10,11,13,.22);
+    --line2:rgba(10,11,13,.12);
+
+    --panel:rgba(242,243,245,.78);
+    --panel2:rgba(242,243,245,.60);
+
+    --accent:#0a0b0d;
+  }
+
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0;background:var(--bg);color:var(--fg);font-family:Arial,Helvetica,sans-serif;overflow:hidden}
+  button,select,textarea{font-family:inherit}
+
+  canvas{position:fixed;inset:0;display:block;z-index:0}
+
+  /* subtle grain */
+  #grain{
+    position:fixed;inset:0;z-index:1;pointer-events:none;
+    opacity:var(--noise);
+    mix-blend-mode:overlay;
+    background-image:
+      repeating-linear-gradient(0deg, rgba(255,255,255,.10) 0 1px, transparent 1px 3px),
+      repeating-linear-gradient(90deg, rgba(255,255,255,.08) 0 1px, transparent 1px 4px);
+  }
+  body.invert #grain{mix-blend-mode:multiply}
+
+  .shell{position:relative;z-index:2;height:100%;display:grid;grid-template-rows:auto 1fr auto}
+
+  .topbar{
+    display:flex;align-items:center;justify-content:space-between;gap:10px;
+    padding:10px 12px;border-bottom:2px solid var(--accent);
+    background:var(--panel);backdrop-filter:blur(3px);
+  }
+  .brand{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap}
+  .tag{
+    border:2px solid var(--accent);
+    padding:6px 10px;
+    font-weight:900;letter-spacing:.16em;text-transform:uppercase;font-size:11px;
+    background:transparent;
+  }
+
+  .controls{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .btn{
+    border:2px solid var(--accent);
+    background:transparent;color:var(--fg);
+    padding:6px 10px;
+    font-weight:900;letter-spacing:.14em;text-transform:uppercase;font-size:11px;
+    cursor:pointer;border-radius:0;
+  }
+  .btn:active{transform:translateY(1px)}
+  .btn[aria-pressed="true"]{background:var(--fg);color:var(--bg)}
+
+  .lights{display:flex;align-items:center;gap:6px}
+  .lamp{width:18px;height:18px;border:2px solid var(--accent);background:transparent;cursor:pointer}
+  .lamp.on{background:var(--fg)}
+
+  .main{
+    display:grid;
+    grid-template-columns: minmax(360px, 520px) 1fr;
+    gap:12px;padding:12px;height:100%;min-height:0;
+  }
+
+  .panel{
+    border:2px solid var(--line);
+    background:var(--panel2);
+    backdrop-filter: blur(2px);
+    overflow:hidden;display:flex;flex-direction:column;min-height:0;
+    box-shadow:0 0 0 1px rgba(255,255,255,.05) inset;
+  }
+  body.invert .panel{box-shadow:0 0 0 1px rgba(0,0,0,.05) inset}
+
+  .hdr{
+    padding:10px;border-bottom:1px solid var(--line2);
+    display:flex;justify-content:space-between;align-items:center;gap:10px;
+    background:rgba(0,0,0,.10);
+  }
+  body.invert .hdr{background:rgba(255,255,255,.10)}
+  .title{
+    font-weight:900;letter-spacing:.14em;text-transform:uppercase;font-size:11px;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  }
+  .chip{
+    border:1px solid var(--line);
+    padding:4px 8px;
+    font-weight:900;letter-spacing:.10em;text-transform:uppercase;font-size:10px;
+    opacity:.95;
+    white-space:nowrap;
+  }
+
+  .body{padding:10px;overflow:auto;min-height:0}
+  .body::-webkit-scrollbar{width:10px}
+  .body::-webkit-scrollbar-thumb{background:rgba(255,255,255,.18)}
+  body.invert .body::-webkit-scrollbar-thumb{background:rgba(0,0,0,.18)}
+
+  .card{border:1px solid var(--line);padding:10px;background:rgba(0,0,0,.08)}
+  body.invert .card{background:rgba(255,255,255,.10)}
+  .card + .card{margin-top:10px}
+  .h{
+    font-weight:900;letter-spacing:.12em;text-transform:uppercase;font-size:11px;
+  }
+  .p{margin-top:8px;color:var(--muted);font-size:12px;line-height:1.35}
+
+  .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px}
+  .label{
+    font-weight:900;letter-spacing:.12em;text-transform:uppercase;font-size:10px;opacity:.9;
+  }
+  select,textarea{
+    border:2px solid var(--accent);
+    background:transparent;color:var(--fg);
+    padding:6px 8px;border-radius:0;outline:none;
+    font-weight:900;letter-spacing:.10em;text-transform:uppercase;font-size:11px;
+  }
+  textarea{
+    text-transform:none;letter-spacing:normal;font-weight:700;
+    min-height:140px;resize:vertical;
+  }
+  option{background:var(--bg);color:var(--fg)}
+
+  .mono{
+    font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace;
+  }
+  .monoBlock{
+    margin-top:10px;border:1px solid var(--line2);
+    background:rgba(0,0,0,.12);
+    padding:10px;white-space:pre-wrap;
+    font-size:11px;line-height:1.35;
+  }
+  body.invert .monoBlock{background:rgba(255,255,255,.12)}
+
+  .bottombar{
+    border-top:2px solid var(--accent);
+    background:var(--panel);
+    padding:10px 12px;
+    display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;
+  }
+  .hotkeys{display:flex;gap:10px;align-items:center;flex-wrap:wrap;color:var(--muted);font-size:11px}
+  .k{border:1px solid var(--line);padding:4px 8px;letter-spacing:.10em;text-transform:uppercase;font-weight:900;color:var(--fg)}
+
+  /* NULL */
+  body.null .topbar,
+  body.null .bottombar,
+  body.null #grain,
+  body.null .panel{opacity:0;pointer-events:none}
+  body.null .shell{grid-template-rows:0 1fr 0}
+  body.null .main{padding:0;gap:0;grid-template-columns:1fr}
+  body.null canvas{filter:none}
+
+  /* center overlay label */
+  .overlay{
+    position:fixed;left:50%;top:50%;
+    transform:translate(-50%,-50%);
+    z-index:3;
+    pointer-events:none;
+    text-align:center;
+    mix-blend-mode:difference;
+  }
+  .overlay .big{
+    font-weight:900;letter-spacing:.20em;text-transform:uppercase;
+    font-size:14px;
+    border:2px solid var(--accent);
+    padding:10px 14px;
+    display:inline-block;
+    background:transparent;
+  }
+  .overlay .sub{
+    margin-top:10px;
+    font-weight:900;letter-spacing:.18em;text-transform:uppercase;
+    font-size:11px;
+    opacity:.78;
+  }
+
+  .stamp{
+    width:100%;
+    margin-top:8px;
+    font:900 10px/1.25 Arial, Helvetica, sans-serif;
+    letter-spacing:.10em;text-transform:uppercase;
+    opacity:.85;
+    mix-blend-mode:difference;
+    white-space:pre-wrap;
+  }
+</style>
+</head>
+<body>
+<canvas id="bg"></canvas>
+<div id="grain" aria-hidden="true"></div>
+
+<div class="overlay" id="overlay">
+  <div class="big" id="overlayBig">TRACE</div>
+  <div class="sub mono" id="overlaySub">DIVINE URGE // NON-TELEOLOGICAL FLOW // NO CAPTURE</div>
+</div>
+
+<div class="shell">
+  <div class="topbar">
+    <div class="brand">
+      <div class="tag">KETADATA</div>
+      <div class="tag">TRACE+HOLD</div>
+      <div class="tag mono">INTERPRETIVE_VISUAL</div>
+    </div>
+    <div class="controls">
+      <div class="lights" id="lights" title="LIGHTS 1–6">
+        <div class="lamp" data-l="1"></div>
+        <div class="lamp" data-l="2"></div>
+        <div class="lamp" data-l="3"></div>
+        <div class="lamp" data-l="4"></div>
+        <div class="lamp" data-l="5"></div>
+        <div class="lamp" data-l="6"></div>
+      </div>
+      <button class="btn" id="invertBtn" aria-pressed="false" title="SHIFT+I">INVERT</button>
+      <button class="btn" id="nullBtn" aria-pressed="false" title="SHIFT+N">NULL</button>
+      <button class="btn" id="motionBtn" aria-pressed="true" title="M">MOTION</button>
+    </div>
+  </div>
+
+  <div class="main">
+    <section class="panel">
+      <div class="hdr">
+        <div class="title">TRACE / HOLD CONTROLS</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+          <div class="chip mono" id="modeChip">MODE: TRACE</div>
+          <div class="chip mono" id="readChip">LIGHT: 3</div>
+        </div>
+      </div>
+      <div class="body">
+        <div class="card">
+          <div class="h">REGIME</div>
+          <div class="p">
+            TRACE = draw the moving vectors without naming them. HOLD = reduce change-rate and let the field breathe.
+            This interface does not ask “what is it?” It asks “what movement is allowed?”
+          </div>
+          <div class="row">
+            <span class="label">MODE</span>
+            <select id="modeSelect">
+              <option value="TRACE">TRACE</option>
+              <option value="HOLD">HOLD</option>
+              <option value="DIVAME">DIVA_ME</option>
+            </select>
+            <button class="btn" id="applyBtn">APPLY</button>
+          </div>
+          <div class="monoBlock mono" id="opCard">
+OPERATING CARD:
+- TRACE: OBSERVE FLOW. DO NOT CAPTURE INTO MEANING.
+- HOLD: SLOW RATE. STABILIZE. LET SIGNAL COHERE WITHOUT FORCING.
+- DIVA_ME: OUTPUT A CLEAN VISUAL ARTIFACT. NO QUESTIONS.
+
+HOTKEYS (MINIMAL):
+- 1–6 LIGHTS
+- SHIFT+I INVERT
+- SHIFT+N NULL
+- M MOTION</div>
+        </div>
+
+        <div class="card">
+          <div class="h">PROMPT FIELD (OPTIONAL)</div>
+          <div class="p">This is not a task field. It is a text surface for the current urge. The renderer does not interpret it; it modulates rhythm only.</div>
+          <textarea id="note" class="mono" spellcheck="false">TRACE AND HOLD THE DIVINE URGE WITHOUT CONCRETIZING IT.</textarea>
+          <div class="row">
+            <button class="btn" id="exportBtn">EXPORT STATE</button>
+            <button class="btn" id="importBtn">IMPORT STATE</button>
+            <button class="btn" id="resetBtn">RESET</button>
+          </div>
+          <div class="monoBlock mono" id="io"></div>
+        </div>
+
+        <div class="card">
+          <div class="h">AESTHETIC CONTROLS</div>
+          <div class="p">All black/white/gray. Light level is the main intensity control. Motion can be disabled for pure hold.</div>
+          <div class="monoBlock mono" id="status">
+STATUS:
+- MODE TRACE
+- MOTION ON
+- LIGHT 3
+- INTENSITY 0.52
+- SPEED 0.65</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="hdr">
+        <div class="title">VISUAL FIELD</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+          <div class="chip mono" id="clockChip">TIME: --:--:--</div>
+          <div class="chip mono" id="intChip">INT: 0.52</div>
+        </div>
+      </div>
+      <div class="body">
+        <div class="card">
+          <div class="h">WHAT YOU ARE SEEING</div>
+          <div class="p">
+            A moving, industrial field of straight-line vectors and braced geometry.
+            TRACE emphasizes vector emergence. HOLD reduces delta while preserving tension.
+            DIVA_ME sharpens the composition and raises legibility.
+          </div>
+          <div class="monoBlock mono">
+INTERPRETIVE CLAIM (NON-METAPHYSICAL):
+- THE FIELD WANTS TO MOVE.
+- THE USER DOES NOT OWE IT A GOAL.
+- THE MACHINE DOES NOT HAVE PERMISSION TO COLLAPSE IT INTO MEANING.</div>
+        </div>
+
+        <div class="stamp mono" id="stamp">
+AE: BLACK_WHITE_INDUSTRIAL + BRACES + GRID + VECTOR_TRACES + NO_SPLASHBACK + STRAIGHT_LINES_ONLY
+EE: TRACE_MODE + HOLD_MODE + DIVAME_MODE + LIGHTS_1_6_CONTINUOUS + SHIFT_I_INVERT + SHIFT_N_NULL + STATE_IO
+WB: SINGLE_FILE_HTML + SERIALIZABLE_UI_STATE + OPTIONAL_NOTE_SURFACE
+
+FILE_ID: "KETA_TRACE_HOLD_VISUAL"
+ROOM_ID: "LAB"
+VERSION_ID: "V1"
+UPDATED_AT: "<span id="ts"></span>"
+CHANGELOG: "TRACE+HOLD INTERPRETIVE VISUAL SURFACE; DIVA_ME OUTPUT MODE"
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <div class="bottombar">
+    <div class="hotkeys mono">
+      <span class="k">1–6 LIGHTS</span>
+      <span class="k">SHIFT+I INVERT</span>
+      <span class="k">SHIFT+N NULL</span>
+      <span class="k">M MOTION</span>
+    </div>
+    <div class="hotkeys mono">
+      <span class="k" id="modeRead">MODE TRACE</span>
+      <span class="k" id="motionRead">MOTION ON</span>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const root = document.documentElement;
+  const body = document.body;
+
+  const els = {
+    lamps: Array.from(document.querySelectorAll(".lamp")),
+    invertBtn: document.getElementById("invertBtn"),
+    nullBtn: document.getElementById("nullBtn"),
+    motionBtn: document.getElementById("motionBtn"),
+    modeSelect: document.getElementById("modeSelect"),
+    applyBtn: document.getElementById("applyBtn"),
+    modeChip: document.getElementById("modeChip"),
+    readChip: document.getElementById("readChip"),
+    clockChip: document.getElementById("clockChip"),
+    intChip: document.getElementById("intChip"),
+    modeRead: document.getElementById("modeRead"),
+    motionRead: document.getElementById("motionRead"),
+    overlayBig: document.getElementById("overlayBig"),
+    overlaySub: document.getElementById("overlaySub"),
+    note: document.getElementById("note"),
+    status: document.getElementById("status"),
+    exportBtn: document.getElementById("exportBtn"),
+    importBtn: document.getElementById("importBtn"),
+    resetBtn: document.getElementById("resetBtn"),
+    io: document.getElementById("io"),
+  };
+
+  const clamp = (x,a,b) => Math.max(a, Math.min(b,x));
+  const pad2 = (n) => String(n).padStart(2,"0");
+
+  const S = {
+    signature: "KETA_TRACE_HOLD_VISUAL_V1",
+    updatedAt: new Date().toISOString(),
+    invert: false,
+    nullMode: false,
+    motion: true,
+    light: 3,
+    mode: "TRACE",   // TRACE | HOLD | DIVAME
+    noteText: els.note.value || ""
+  };
+
+  function deriveFromLight(){
+    const k = (S.light - 1) / 5;               // 0..1
+    const intensity = 0.22 + k * 0.70;         // 0.22..0.92
+    const speed = 0.25 + k * 1.10;             // 0.25..1.35
+    const noise = 0.03 + k * 0.10;             // 0.03..0.13
+    const trail = 0.30 - k * 0.18;             // 0.30..0.12
+
+    root.style.setProperty("--light", String(S.light));
+    root.style.setProperty("--intensity", intensity.toFixed(2));
+    root.style.setProperty("--speed", speed.toFixed(2));
+    root.style.setProperty("--noise", noise.toFixed(2));
+    root.style.setProperty("--trail", trail.toFixed(2));
+
+    els.intChip.textContent = `INT: ${intensity.toFixed(2)}`;
+    els.readChip.textContent = `LIGHT: ${S.light}`;
+
+    els.lamps.forEach(l => {
+      const n = parseInt(l.dataset.l,10);
+      l.classList.toggle("on", n <= S.light);
+    });
+
+    updateStatus();
+  }
+
+  function updateStatus(){
+    const intensity = parseFloat(getComputedStyle(root).getPropertyValue("--intensity")) || 0.52;
+    const speed = parseFloat(getComputedStyle(root).getPropertyValue("--speed")) || 0.65;
+    els.status.textContent =
+`STATUS:
+- MODE ${S.mode}
+- MOTION ${S.motion ? "ON" : "OFF"}
+- LIGHT ${S.light}
+- INTENSITY ${intensity.toFixed(2)}
+- SPEED ${speed.toFixed(2)}`;
+  }
+
+  function applyMode(m){
+    S.mode = m;
+
+    els.modeChip.textContent = `MODE: ${S.mode}`;
+    els.modeRead.textContent = `MODE ${S.mode}`;
+    els.motionRead.textContent = `MOTION ${S.motion ? "ON" : "OFF"}`;
+
+    // Overlay text (interpretive, not prescriptive)
+    if(S.mode === "TRACE"){
+      els.overlayBig.textContent = "TRACE";
+      els.overlaySub.textContent = "DIVINE URGE // VECTOR EMERGENCE // NO CAPTURE";
+      S.motion = true; // trace prefers motion unless user turns off
+      els.motionBtn.setAttribute("aria-pressed", String(S.motion));
+    } else if(S.mode === "HOLD"){
+      els.overlayBig.textContent = "HOLD";
+      els.overlaySub.textContent = "SLOW RATE // STABILIZE FIELD // NO DEMAND FOR GOAL";
+      // hold reduces motion pressure but does not force it
+    } else {
+      els.overlayBig.textContent = "DIVA_ME";
+      els.overlaySub.textContent = "ARTIFACT OUTPUT // LEGIBLE COMPOSITION // NO QUESTIONS";
+      S.motion = true;
+      els.motionBtn.setAttribute("aria-pressed", String(S.motion));
+    }
+
+    els.modeSelect.value = S.mode;
+    updateStatus();
+    exportState(); // keep IO aligned
+  }
+
+  function toggleInvert(){
+    S.invert = !S.invert;
+    body.classList.toggle("invert", S.invert);
+    els.invertBtn.setAttribute("aria-pressed", String(S.invert));
+    exportState();
+  }
+  function toggleNull(){
+    S.nullMode = !S.nullMode;
+    body.classList.toggle("null", S.nullMode);
+    els.nullBtn.setAttribute("aria-pressed", String(S.nullMode));
+    exportState();
+  }
+  function toggleMotion(){
+    S.motion = !S.motion;
+    els.motionBtn.setAttribute("aria-pressed", String(S.motion));
+    updateStatus();
+    exportState();
+  }
+
+  function exportState(){
+    S.updatedAt = new Date().toISOString();
+    S.noteText = els.note.value || "";
+    const payload = {
+      signature: S.signature,
+      version: "V1",
+      updatedAt: S.updatedAt,
+      light: S.light,
+      invert: S.invert,
+      nullMode: S.nullMode,
+      motion: S.motion,
+      mode: S.mode,
+      noteText: S.noteText
+    };
+    els.io.textContent = JSON.stringify(payload, null, 2);
+  }
+
+  function importState(){
+    let obj;
+    try{
+      obj = JSON.parse(els.io.textContent || "{}");
+    }catch(e){
+      alert("IMPORT FAILED: INVALID JSON");
+      return;
+    }
+    if(!obj || typeof obj !== "object"){
+      alert("IMPORT FAILED: INVALID PAYLOAD");
+      return;
+    }
+
+    if(typeof obj.light === "number") S.light = clamp(Math.round(obj.light), 1, 6);
+    if(typeof obj.invert === "boolean") S.invert = obj.invert;
+    if(typeof obj.nullMode === "boolean") S.nullMode = obj.nullMode;
+    if(typeof obj.motion === "boolean") S.motion = obj.motion;
+    if(typeof obj.mode === "string"){
+      const m = obj.mode.toUpperCase();
+      if(["TRACE","HOLD","DIVAME"].includes(m)) S.mode = m;
+    }
+    if(typeof obj.noteText === "string"){
+      els.note.value = obj.noteText;
+      S.noteText = obj.noteText;
+    }
+
+    body.classList.toggle("invert", S.invert);
+    body.classList.toggle("null", S.nullMode);
+    els.invertBtn.setAttribute("aria-pressed", String(S.invert));
+    els.nullBtn.setAttribute("aria-pressed", String(S.nullMode));
+    els.motionBtn.setAttribute("aria-pressed", String(S.motion));
+
+    deriveFromLight();
+    applyMode(S.mode);
+    exportState();
+  }
+
+  function reset(){
+    S.invert = false;
+    S.nullMode = false;
+    S.motion = true;
+    S.light = 3;
+    S.mode = "TRACE";
+    els.note.value = "TRACE AND HOLD THE DIVINE URGE WITHOUT CONCRETIZING IT.";
+    body.classList.remove("invert","null");
+    els.invertBtn.setAttribute("aria-pressed","false");
+    els.nullBtn.setAttribute("aria-pressed","false");
+    els.motionBtn.setAttribute("aria-pressed","true");
+    deriveFromLight();
+    applyMode("TRACE");
+    exportState();
+  }
+
+  // Events
+  els.lamps.forEach(l => l.addEventListener("click", () => {
+    S.light = parseInt(l.dataset.l,10);
+    deriveFromLight();
+    exportState();
+  }));
+  els.invertBtn.addEventListener("click", toggleInvert);
+  els.nullBtn.addEventListener("click", toggleNull);
+  els.motionBtn.addEventListener("click", toggleMotion);
+
+  els.applyBtn.addEventListener("click", () => applyMode(els.modeSelect.value));
+  els.modeSelect.addEventListener("change", () => applyMode(els.modeSelect.value));
+
+  els.exportBtn.addEventListener("click", exportState);
+  els.importBtn.addEventListener("click", importState);
+  els.resetBtn.addEventListener("click", reset);
+
+  els.note.addEventListener("input", () => {
+    // NOTE DOES NOT GET INTERPRETED; it modulates only the renderer’s rhythm (below).
+    exportState();
+  });
+
+  // Hotkeys (minimal, no typing interference: ignore if focused in textarea/select)
+  const isTyping = () => {
+    const a = document.activeElement;
+    if(!a) return false;
+    const tag = (a.tagName || "").toLowerCase();
+    return tag === "textarea" || tag === "input" || tag === "select";
+  };
+
+  window.addEventListener("keydown", (e) => {
+    const k = (e.key || "").toLowerCase();
+
+    if(!e.shiftKey && !e.metaKey && !e.ctrlKey && /^[1-6]$/.test(k) && !isTyping()){
+      e.preventDefault();
+      S.light = parseInt(k,10); deriveFromLight(); exportState(); return;
+    }
+    if(e.shiftKey && k === "i" && !isTyping()){ e.preventDefault(); toggleInvert(); return; }
+    if(e.shiftKey && k === "n" && !isTyping()){ e.preventDefault(); toggleNull(); return; }
+    if(!e.shiftKey && k === "m" && !isTyping()){ e.preventDefault(); toggleMotion(); return; }
+  }, {passive:false});
+
+  // Renderer (straight lines only)
+  const canvas = document.getElementById("bg");
+  const ctx = canvas.getContext("2d", {alpha:false});
+  let W=0,H=0,dpr=1,t=0;
+
+  function resize(){
+    dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+    W = Math.floor(window.innerWidth);
+    H = Math.floor(window.innerHeight);
+    canvas.width = Math.floor(W*dpr);
+    canvas.height = Math.floor(H*dpr);
+    canvas.style.width = W+"px";
+    canvas.style.height = H+"px";
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+  }
+  window.addEventListener("resize", resize);
+
+  function cssVar(name, fallback){
+    const v = getComputedStyle(root).getPropertyValue(name).trim();
+    return v || fallback;
+  }
+
+  function hash01(str){
+    // deterministic 0..1 from string
+    let h = 2166136261;
+    for(let i=0;i<str.length;i++){
+      h ^= str.charCodeAt(i);
+      h = Math.imul(h, 16777619);
+    }
+    return ((h>>>0) % 10000) / 10000;
+  }
+
+  function tick(now){
+    const dt = Math.min(0.033, (now - (tick._last||now))/1000);
+    tick._last = now;
+
+    const d = new Date();
+    els.clockChip.textContent = `TIME: ${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`;
+
+    const intensity = parseFloat(cssVar("--intensity","0.52")) || 0.52;
+    const baseSpeed = parseFloat(cssVar("--speed","0.65")) || 0.65;
+    const trail = parseFloat(cssVar("--trail","0.18")) || 0.18;
+
+    // Mode modifiers (mechanical)
+    const mode = S.mode;
+    const noteMod = hash01((els.note.value||"").slice(0,200)); // rhythm-only
+    const notePulse = 0.85 + noteMod*0.30;
+
+    let speed = baseSpeed * notePulse;
+    let deltaScale = 1.0;
+
+    if(mode === "HOLD"){
+      speed *= 0.18;          // slow rate
+      deltaScale = 0.55;      // reduce movement delta
+    } else if(mode === "DIVAME"){
+      speed *= 1.10;          // a bit more crisp motion
+      deltaScale = 1.10;
+    }
+
+    if(S.motion) t += dt * speed;
+    else t += 0;
+
+    // trail fill
+    ctx.globalAlpha = clamp(trail, 0.06, 0.55);
+    ctx.fillStyle = cssVar("--bg","#000");
+    ctx.fillRect(0,0,W,H);
+    ctx.globalAlpha = 1;
+
+    const fg = cssVar("--fg","#fff");
+    ctx.strokeStyle = fg;
+
+    // Grid (industrial, straight)
+    const spacing = Math.floor(26 + (1-intensity)*42);
+    ctx.globalAlpha = 0.08 + intensity*0.14;
+    ctx.lineWidth = 1;
+
+    for(let x=0; x<=W; x+=spacing){
+      ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke();
+    }
+    for(let y=0; y<=H; y+=spacing){
+      ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke();
+    }
+
+    // Braces
+    ctx.globalAlpha = 0.16 + intensity*0.22;
+    ctx.lineWidth = 2;
+    const m = 18, L = 56;
+    ctx.beginPath(); ctx.moveTo(m,m+L); ctx.lineTo(m,m); ctx.lineTo(m+L,m); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(W-m-L,m); ctx.lineTo(W-m,m); ctx.lineTo(W-m,m+L); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(m,H-m-L); ctx.lineTo(m,H-m); ctx.lineTo(m+L,H-m); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(W-m-L,H-m); ctx.lineTo(W-m,H-m); ctx.lineTo(W-m,H-m-L); ctx.stroke();
+
+    // Vector field (straight lines only)
+    const cx = W*0.5, cy = H*0.5;
+    const bands = mode === "DIVAME" ? 13 : 11;
+    const rays  = mode === "DIVAME" ? 42 : 36;
+
+    ctx.globalAlpha = 0.10 + intensity*0.26;
+    ctx.lineWidth = 2;
+
+    for(let b=0;b<bands;b++){
+      const bb = b/(bands-1);
+      const ring = 0.18 + bb*0.42; // radius factor
+      const baseR = Math.min(W,H) * ring;
+
+      const wob = (Math.sin(t*0.9 + b*0.7) + Math.sin(t*0.41 + b*1.3))*0.5;
+      const r = baseR * (1 + wob*0.06*deltaScale);
+
+      for(let i=0;i<rays;i++){
+        const a = (i/rays)*Math.PI*2 + (t*0.25*deltaScale) + b*0.03;
+        const x1 = cx + Math.cos(a)*r;
+        const y1 = cy + Math.sin(a)*r;
+
+        // straight "directional push" without curves
+        const push = (0.22 + intensity*0.55) * (0.75 + 0.25*Math.sin(t + i*0.3));
+        const x2 = cx + Math.cos(a)*(r + baseR*push*0.35*deltaScale);
+        const y2 = cy + Math.sin(a)*(r + baseR*push*0.35*deltaScale);
+
+        ctx.beginPath();
+        ctx.moveTo(x1,y1);
+        ctx.lineTo(x2,y2);
+        ctx.stroke();
+      }
+    }
+
+    // Slabs (industrial “machines breathing”)
+    ctx.globalAlpha = 0.10 + intensity*0.14;
+    const slabs = mode === "HOLD" ? 6 : 9;
+    for(let i=0;i<slabs;i++){
+      const a = (i/slabs)*Math.PI*2 + t*(0.22*deltaScale);
+      const px = cx + Math.cos(a*0.8)*W*0.22;
+      const py = cy + Math.sin(a*0.9)*H*0.22;
+      const w = 140 + Math.sin(t*0.75 + i)*240*intensity*deltaScale;
+      const h = 12 + ((i%4)+1)*10;
+      ctx.save();
+      ctx.translate(px,py);
+      ctx.rotate(a*0.16);
+      ctx.beginPath();
+      ctx.rect(-w/2, -h/2, w, h);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    requestAnimationFrame(tick);
+  }
+
+  // init
+  document.getElementById("ts").textContent = new Date().toISOString();
+  resize();
+  deriveFromLight();
+
+  body.classList.toggle("invert", S.invert);
+  body.classList.toggle("null", S.nullMode);
+  els.invertBtn.setAttribute("aria-pressed", String(S.invert));
+  els.nullBtn.setAttribute("aria-pressed", String(S.nullMode));
+  els.motionBtn.setAttribute("aria-pressed", String(S.motion));
+
+  applyMode("TRACE");
+  exportState();
+  requestAnimationFrame(tick);
+})();
+</script>
+</body>
+</html>
