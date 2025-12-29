@@ -1,0 +1,848 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>THERMOMETER // LLM INTERACTION DIAGNOSTIC</title>
+<style>
+  :root{
+    --bg:#0a0b0d;
+    --fg:#f2f3f5;
+    --muted:#b7bcc6;
+    --line:rgba(242,243,245,.28);
+    --line2:rgba(242,243,245,.14);
+    --panel:rgba(10,11,13,.78);
+    --panel2:rgba(10,11,13,.56);
+    --glass:rgba(242,243,245,.05);
+    --accent:#f2f3f5;
+
+    --invert:0;
+    --null:0;
+    --motion:1;
+
+    --light:3;
+    --intensity:.52;
+    --grain:.06;
+    --trail:.18;
+
+    --barW: 22px;
+    --barH: 190px;
+    --tickH: 12px;
+  }
+
+  body.invert{
+    --bg:#f2f3f5;
+    --fg:#0a0b0d;
+    --muted:#23262d;
+    --line:rgba(10,11,13,.28);
+    --line2:rgba(10,11,13,.14);
+    --panel:rgba(242,243,245,.78);
+    --panel2:rgba(242,243,245,.60);
+    --glass:rgba(10,11,13,.05);
+    --accent:#0a0b0d;
+  }
+
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0;background:var(--bg);color:var(--fg);font-family:Arial,Helvetica,sans-serif;overflow:hidden}
+  a{color:inherit;text-decoration:none}
+  button,input,select,textarea{font-family:inherit}
+  .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace}
+
+  canvas{position:fixed;inset:0;display:block;z-index:0}
+  #grain{
+    position:fixed;inset:0;z-index:1;pointer-events:none;
+    opacity:var(--grain);
+    mix-blend-mode:overlay;
+    background-image:
+      repeating-linear-gradient(0deg, rgba(255,255,255,.10) 0 1px, transparent 1px 3px),
+      repeating-linear-gradient(90deg, rgba(255,255,255,.08) 0 1px, transparent 1px 4px);
+  }
+  body.invert #grain{mix-blend-mode:multiply}
+
+  .shell{position:relative;z-index:2;height:100%;display:grid;grid-template-rows:auto 1fr auto}
+
+  .topbar{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:10px 12px;border-bottom:2px solid var(--accent);
+    background:var(--panel);backdrop-filter: blur(3px);
+  }
+  .brand{display:flex;gap:10px;flex-wrap:wrap;align-items:baseline;font-weight:900;letter-spacing:.16em;text-transform:uppercase;font-size:11px}
+  .tag{border:2px solid var(--accent);padding:6px 10px;background:transparent}
+  .controls{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .btn{
+    border:2px solid var(--accent);
+    background:transparent;color:var(--fg);
+    padding:6px 10px;
+    font-weight:900;letter-spacing:.14em;text-transform:uppercase;font-size:11px;
+    cursor:pointer;border-radius:0;
+  }
+  .btn:active{transform:translateY(1px)}
+  .btn[aria-pressed="true"]{background:var(--fg);color:var(--bg)}
+  .lights{display:flex;align-items:center;gap:6px;margin-left:4px}
+  .lamp{width:18px;height:18px;border:2px solid var(--accent);background:transparent;cursor:pointer}
+  .lamp.on{background:var(--fg)}
+
+  .main{
+    display:grid;
+    grid-template-columns: minmax(360px, 460px) 1fr minmax(360px, 460px);
+    gap:12px;padding:12px;height:100%;min-height:0;
+  }
+
+  .panel{
+    border:2px solid var(--line);
+    background:var(--panel2);
+    backdrop-filter: blur(2px);
+    box-shadow:0 0 0 1px var(--glass) inset;
+    overflow:hidden;display:flex;flex-direction:column;min-height:0;
+  }
+  .hdr{
+    padding:10px 10px;border-bottom:1px solid var(--line2);
+    display:flex;align-items:center;justify-content:space-between;gap:10px;
+    background:rgba(0,0,0,.10);
+  }
+  body.invert .hdr{background:rgba(255,255,255,.10)}
+  .title{font-weight:900;letter-spacing:.14em;text-transform:uppercase;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .mini{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+  .chip{
+    border:1px solid var(--line);padding:4px 8px;
+    font-weight:900;letter-spacing:.10em;text-transform:uppercase;font-size:10px;opacity:.95;
+  }
+  .body{padding:10px;overflow:auto;min-height:0}
+
+  .card{border:1px solid var(--line);padding:10px;background:rgba(0,0,0,.08)}
+  body.invert .card{background:rgba(255,255,255,.10)}
+  .card + .card{margin-top:10px}
+  .h{font-weight:900;letter-spacing:.12em;text-transform:uppercase;font-size:11px}
+  .p{margin-top:8px;color:var(--muted);font-size:12px;line-height:1.35}
+  .monoBlock{
+    margin-top:10px;border:1px solid var(--line2);
+    background:rgba(0,0,0,.12);padding:10px;white-space:pre-wrap;
+    font-size:11px;line-height:1.35;
+  }
+  body.invert .monoBlock{background:rgba(255,255,255,.12)}
+
+  .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .label{font-weight:900;letter-spacing:.12em;text-transform:uppercase;font-size:10px;opacity:.9}
+  select,input[type="range"],input[type="number"],input[type="text"],textarea{
+    border:2px solid var(--accent);
+    background:transparent;color:var(--fg);
+    padding:6px 8px;font-weight:900;letter-spacing:.10em;text-transform:uppercase;font-size:11px;
+    border-radius:0;outline:none;
+  }
+  textarea{
+    text-transform:none;letter-spacing:normal;font-weight:700;
+    min-height:110px;resize:vertical;
+  }
+  input[type="range"]{padding:0;height:28px}
+  option{background:var(--bg);color:var(--fg)}
+
+  /* THERMOMETER */
+  .thermoWrap{display:grid;grid-template-columns: 1fr;gap:10px}
+  .thermoGrid{
+    display:grid;
+    grid-template-columns: repeat(5, minmax(110px, 1fr));
+    gap:10px;
+    align-items:stretch;
+  }
+  .thermo{
+    border:1px solid var(--line);
+    padding:10px;
+    background:rgba(0,0,0,.08);
+    display:flex;flex-direction:column;gap:10px;
+    min-height:0;
+  }
+  body.invert .thermo{background:rgba(255,255,255,.10)}
+  .thermo .name{
+    font-weight:900;letter-spacing:.12em;text-transform:uppercase;font-size:10px;
+  }
+  .barArea{
+    display:flex;gap:10px;align-items:flex-end;justify-content:space-between;
+  }
+  .bar{
+    width:var(--barW);
+    height:var(--barH);
+    border:2px solid var(--accent);
+    position:relative;
+    background:transparent;
+  }
+  .fill{
+    position:absolute;left:0;right:0;bottom:0;
+    height:0%;
+    background:var(--fg);
+  }
+  .ticks{
+    display:flex;flex-direction:column;justify-content:space-between;
+    height:var(--barH);
+    padding:2px 0;
+    min-width:46px;
+  }
+  .tick{
+    display:flex;align-items:center;gap:8px;height:var(--tickH);
+    color:var(--muted);font-size:10px;letter-spacing:.08em;text-transform:uppercase;font-weight:900;
+  }
+  .tick .dash{height:2px;flex:1;background:var(--line)}
+  .tick.on{color:var(--fg)}
+  .tick.on .dash{background:var(--fg)}
+  .val{
+    border:1px solid var(--line);
+    padding:4px 8px;
+    font-weight:900;letter-spacing:.10em;text-transform:uppercase;font-size:10px;
+    align-self:flex-start;
+  }
+
+  .actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  .btn2{
+    border:2px solid var(--accent);
+    background:transparent;color:var(--fg);
+    padding:6px 10px;
+    font-weight:900;letter-spacing:.12em;text-transform:uppercase;font-size:11px;
+    cursor:pointer;border-radius:0;
+  }
+  .btn2:active{transform:translateY(1px)}
+  .hint{color:var(--muted);font-size:11px;line-height:1.35}
+
+  .bottombar{
+    border-top:2px solid var(--accent);
+    background:var(--panel);
+    padding:10px 12px;
+    display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;
+  }
+  .hotkeys{display:flex;gap:10px;align-items:center;flex-wrap:wrap;color:var(--muted);font-size:11px}
+  .k{border:1px solid var(--line);padding:4px 8px;letter-spacing:.10em;text-transform:uppercase;font-weight:900;color:var(--fg)}
+  .stamp{
+    width:100%;
+    margin-top:8px;
+    font:900 10px/1.25 Arial, Helvetica, sans-serif;
+    letter-spacing:.10em;text-transform:uppercase;
+    opacity:.85;
+    mix-blend-mode:difference;
+    white-space:pre-wrap;
+  }
+
+  /* NULL */
+  body.null .topbar,
+  body.null .bottombar,
+  body.null #grain,
+  body.null .panel{opacity:0;pointer-events:none}
+  body.null .shell{grid-template-rows:0 1fr 0}
+  body.null .main{padding:0;gap:0;grid-template-columns:1fr}
+
+  /* scrollbars */
+  .body::-webkit-scrollbar{width:10px}
+  .body::-webkit-scrollbar-thumb{background:rgba(255,255,255,.18)}
+  body.invert .body::-webkit-scrollbar-thumb{background:rgba(0,0,0,.18)}
+</style>
+</head>
+<body>
+<canvas id="bg"></canvas>
+<div id="grain" aria-hidden="true"></div>
+
+<div class="shell">
+  <div class="topbar">
+    <div class="brand">
+      <div class="tag">THERMOMETER</div>
+      <div class="tag">LLM INTERACTION DIAGNOSTIC</div>
+      <div class="tag">INDUSTRIAL / CHIC</div>
+    </div>
+    <div class="controls">
+      <div class="lights" id="lights" title="LIGHTS 1–6">
+        <div class="lamp" data-l="1"></div>
+        <div class="lamp" data-l="2"></div>
+        <div class="lamp" data-l="3"></div>
+        <div class="lamp" data-l="4"></div>
+        <div class="lamp" data-l="5"></div>
+        <div class="lamp" data-l="6"></div>
+      </div>
+      <button class="btn" id="invertBtn" aria-pressed="false" title="SHIFT+I">INVERT</button>
+      <button class="btn" id="nullBtn" aria-pressed="false" title="SHIFT+N">NULL</button>
+      <button class="btn" id="motionBtn" aria-pressed="true" title="M">MOTION</button>
+    </div>
+  </div>
+
+  <div class="main">
+    <!-- LEFT -->
+    <section class="panel">
+      <div class="hdr">
+        <div class="title">DIAGNOSTIC</div>
+        <div class="mini">
+          <div class="chip mono" id="coreChip">RECOMMENDED: RECIPROCITY</div>
+          <div class="chip mono" id="severityChip">SEVERITY: 0.0</div>
+        </div>
+      </div>
+      <div class="body">
+        <div class="card">
+          <div class="h">AXES</div>
+          <div class="p">Five semantic thermometers. 0–5 scale. Not mood. System strain.</div>
+          <div class="monoBlock mono" id="axisGloss">
+SIGNAL_CLARITY — WHAT IS BEING SENT
+INTERPRETATION_LOAD — WHAT THE MODEL IS DOING WITH IT
+CONTROL_TENSION — WHO IS STEERING
+MEMORY_DISTORTION — WHAT PERSISTS OVER TIME
+RELATIONAL_LOAD — RELATIONSHIP PRESSURE</div>
+        </div>
+
+        <div class="card">
+          <div class="h">MODE</div>
+          <div class="row" style="margin-top:10px">
+            <span class="label">AUTO SUGGEST</span>
+            <button class="btn2" id="autoBtn" aria-pressed="true">ON</button>
+            <span class="label">CORE</span>
+            <select id="coreSelect" style="min-width:210px">
+              <option value="DIVA">DIVA</option>
+              <option value="REFLEX">REFLEX</option>
+              <option value="RECIPROCITY">RECIPROCITY</option>
+              <option value="ARCHIVE">ARCHIVE</option>
+              <option value="STRATEGY">STRATEGY</option>
+              <option value="ORIENT">ORIENT</option>
+            </select>
+          </div>
+          <div class="monoBlock mono" id="coreLaws">
+DIVA — SHIP FIRST. PROTECT AGENCY. DO NOT NEGOTIATE MOMENTUM.
+REFLEX — MODEL THE LOOP, NOT THE SELF.
+RECIPROCITY — THIS IS A TOOL, NOT A BOND.
+ARCHIVE — RECORD WITHOUT MEANING. PRESERVE WITHOUT HIERARCHY.
+STRATEGY — CHOOSE UNDER CONSTRAINT. NAME THE COST. COMMIT.
+ORIENT — NAME THE PHASE. REDUCE FALSE URGENCY.</div>
+          <div class="hint" style="margin-top:10px">
+            Core suggestion is derived from axis readings. You can override at any time.
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="h">ACTIONS</div>
+          <div class="actions" style="margin-top:10px">
+            <button class="btn2" id="exportBtn">EXPORT JSON</button>
+            <button class="btn2" id="importBtn">IMPORT JSON</button>
+            <button class="btn2" id="resetBtn">RESET</button>
+            <button class="btn2" id="logBtn">LOG SNAPSHOT</button>
+          </div>
+          <div class="hint" style="margin-top:10px">
+            Export/import is literal interface memory for the thermometer state. No hidden logic.
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- CENTER -->
+    <section class="panel">
+      <div class="hdr">
+        <div class="title">THERMOMETERS</div>
+        <div class="mini">
+          <div class="chip mono" id="phaseChip">PHASE: OBSERVE → DECIDE</div>
+          <div class="chip mono" id="timeChip">TIME: --:--:--</div>
+        </div>
+      </div>
+      <div class="body">
+        <div class="thermoWrap">
+          <div class="thermoGrid" id="thermoGrid"></div>
+
+          <div class="card">
+            <div class="h">RECOMMENDATION (MECHANICAL)</div>
+            <div class="monoBlock mono" id="recommendation">
+RULES:
+- IF SIGNAL_CLARITY ≥ 2 → GATE BEFORE REVISION (RECIPROCITY)
+- IF INTERPRETATION_LOAD ≥ 3 → SWITCH TO REFLEX
+- IF CONTROL_TENSION ≥ 3 AND SIGNAL_CLARITY ≤ 1 → SWITCH TO DIVA
+- IF MEMORY_DISTORTION ≥ 3 → SWITCH TO ARCHIVE
+- IF RELATIONAL_LOAD ≥ 3 → SWITCH TO RECIPROCITY
+- IF ORIENTATION NEEDED (USER LOST / URGENT) → SWITCH TO ORIENT
+- IF STUCK DECIDING → SWITCH TO STRATEGY
+          </div>
+          <div class="hint" style="margin-top:10px">
+            Edit axis values. Watch the recommendation change. This is the instrument panel.
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- RIGHT -->
+    <section class="panel">
+      <div class="hdr">
+        <div class="title">STATE I/O + LOG</div>
+        <div class="mini">
+          <div class="chip mono" id="sigChip">SIGNATURE: V1</div>
+        </div>
+      </div>
+      <div class="body">
+        <div class="card">
+          <div class="h">STATE JSON</div>
+          <div class="p">Paste export here to import. Export overwrites this box.</div>
+          <textarea id="io" class="mono" spellcheck="false"></textarea>
+        </div>
+
+        <div class="card">
+          <div class="h">SNAPSHOT LOG</div>
+          <div class="p">Append-only. Use this to observe drift over time.</div>
+          <div class="monoBlock mono" id="log" style="min-height:170px"></div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <div class="bottombar">
+    <div class="hotkeys mono">
+      <span class="k">1–6 LIGHTS</span>
+      <span class="k">SHIFT+I INVERT</span>
+      <span class="k">SHIFT+N NULL</span>
+      <span class="k">M MOTION</span>
+      <span class="k">R RESET</span>
+      <span class="k">E EXPORT</span>
+      <span class="k">L LOG</span>
+    </div>
+    <div class="hotkeys mono">
+      <span class="k" id="intensityReadout">INTENSITY: 0.52</span>
+    </div>
+
+    <div class="stamp mono" id="stamp">
+AE: INDUSTRIAL_CHIC + MECHANICAL_THERMOMETERS + NO_MORAL_COLORS + GLASS_GRID
+EE: AXIS_THERMOMETERS(5) + CORE_SUGGEST + STATE_IO + LOG + LIGHTS_1_6 + SHIFT_I + SHIFT_N + MOTION
+WB: SINGLE_FILE_HTML + PORTABLE_DIAGNOSTIC + SERIALIZABLE_STATE
+
+FILE_ID: "LLM_DIAGNOSTIC_THERMOMETER"
+ROOM_ID: "LAB"
+VERSION_ID: "V1"
+UPDATED_AT: "<span id='ts'></span>"
+CHANGELOG: "DIAGNOSTIC TOOL FOR INTERACTION FAILURE MODES (SIGNAL/INTERPRETATION/CONTROL/MEMORY/RELATIONSHIP)"
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const root = document.documentElement;
+  const body = document.body;
+
+  const S = {
+    version: "THERMOMETER_V1",
+    updatedAt: new Date().toISOString(),
+    invert:false,
+    nullMode:false,
+    motion:true,
+    light:3,
+    autoSuggest:true,
+    core:"RECIPROCITY",
+    axes:{
+      SIGNAL_CLARITY:2,
+      INTERPRETATION_LOAD:1,
+      CONTROL_TENSION:2,
+      MEMORY_DISTORTION:0,
+      RELATIONAL_LOAD:1
+    },
+    log:[]
+  };
+
+  const AXES = [
+    { key:"SIGNAL_CLARITY", name:"SIGNAL_CLARITY", blurb:"WHAT IS BEING SENT" },
+    { key:"INTERPRETATION_LOAD", name:"INTERPRETATION_LOAD", blurb:"WHAT THE MODEL DOES WITH IT" },
+    { key:"CONTROL_TENSION", name:"CONTROL_TENSION", blurb:"WHO IS STEERING" },
+    { key:"MEMORY_DISTORTION", name:"MEMORY_DISTORTION", blurb:"WHAT PERSISTS" },
+    { key:"RELATIONAL_LOAD", name:"RELATIONAL_LOAD", blurb:"RELATIONSHIP PRESSURE" },
+  ];
+
+  const lamps = Array.from(document.querySelectorAll(".lamp"));
+  const invertBtn = document.getElementById("invertBtn");
+  const nullBtn = document.getElementById("nullBtn");
+  const motionBtn = document.getElementById("motionBtn");
+
+  const autoBtn = document.getElementById("autoBtn");
+  const coreSelect = document.getElementById("coreSelect");
+  const coreChip = document.getElementById("coreChip");
+  const severityChip = document.getElementById("severityChip");
+  const phaseChip = document.getElementById("phaseChip");
+  const timeChip = document.getElementById("timeChip");
+  const intensityReadout = document.getElementById("intensityReadout");
+
+  const exportBtn = document.getElementById("exportBtn");
+  const importBtn = document.getElementById("importBtn");
+  const resetBtn  = document.getElementById("resetBtn");
+  const logBtn    = document.getElementById("logBtn");
+
+  const io = document.getElementById("io");
+  const logEl = document.getElementById("log");
+  const thermoGrid = document.getElementById("thermoGrid");
+
+  const pad2=n=>String(n).padStart(2,"0");
+  const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
+
+  function setIntensityFromLight(){
+    const k = (S.light-1)/5;
+    const intensity = 0.22 + k*0.70;
+    root.style.setProperty("--light", String(S.light));
+    root.style.setProperty("--intensity", intensity.toFixed(2));
+    root.style.setProperty("--grain", (0.03 + k*0.08).toFixed(2));
+    root.style.setProperty("--trail", (0.30 - k*0.18).toFixed(2));
+    intensityReadout.textContent = `INTENSITY: ${intensity.toFixed(2)}`;
+    lamps.forEach(l => {
+      const n = parseInt(l.dataset.l,10);
+      l.classList.toggle("on", n <= S.light);
+    });
+  }
+
+  function toggleInvert(){
+    S.invert = !S.invert;
+    body.classList.toggle("invert", S.invert);
+    invertBtn.setAttribute("aria-pressed", String(S.invert));
+  }
+  function toggleNull(){
+    S.nullMode = !S.nullMode;
+    body.classList.toggle("null", S.nullMode);
+    nullBtn.setAttribute("aria-pressed", String(S.nullMode));
+  }
+  function toggleMotion(){
+    S.motion = !S.motion;
+    motionBtn.setAttribute("aria-pressed", String(S.motion));
+  }
+
+  function severity(){
+    // avg + max bonus (keeps “critical spike” visible)
+    const vals = Object.values(S.axes);
+    const avg = vals.reduce((a,b)=>a+b,0)/vals.length;
+    const mx = Math.max(...vals);
+    return clamp(avg + (mx>=4 ? 0.6 : mx>=3 ? 0.3 : 0), 0, 5);
+  }
+
+  function recommendCore(){
+    const a = S.axes;
+    // Mechanical priority rules (low-violence bias):
+    if(a.MEMORY_DISTORTION >= 3) return {core:"ARCHIVE", why:"MEMORY_DISTORTION ≥ 3 → ARCHIVE"};
+    if(a.RELATIONAL_LOAD >= 3) return {core:"RECIPROCITY", why:"RELATIONAL_LOAD ≥ 3 → RECIPROCITY"};
+    if(a.SIGNAL_CLARITY >= 2)  return {core:"RECIPROCITY", why:"SIGNAL_CLARITY ≥ 2 → GATE (RECIPROCITY)"};
+    if(a.INTERPRETATION_LOAD >= 3) return {core:"REFLEX", why:"INTERPRETATION_LOAD ≥ 3 → REFLEX"};
+    if(a.CONTROL_TENSION >= 3 && a.SIGNAL_CLARITY <= 1) return {core:"DIVA", why:"CONTROL_TENSION ≥ 3 with clear signal → DIVA"};
+    // If nothing is spiking: choose by intent proxy (balanced)
+    return {core:"STRATEGY", why:"NO SPIKES → DEFAULT TO STRATEGY FOR CLEAN NEXT MOVE"};
+  }
+
+  function updateHeader(){
+    const sev = severity();
+    severityChip.textContent = `SEVERITY: ${sev.toFixed(1)}`;
+    const rec = recommendCore();
+    const shown = S.autoSuggest ? rec.core : S.core;
+    coreChip.textContent = `RECOMMENDED: ${shown}`;
+    phaseChip.textContent = `PHASE: ${shown === "DIVA" ? "EXECUTE" :
+                             shown === "REFLEX" ? "OBSERVE" :
+                             shown === "STRATEGY" ? "DECIDE" :
+                             shown === "ARCHIVE" ? "REMEMBER" :
+                             shown === "RECIPROCITY" ? "RELATE" : "ORIENT"} → (SWITCH AS NEEDED)`;
+    if(S.autoSuggest){
+      S.core = shown;
+      coreSelect.value = shown;
+    }
+  }
+
+  function axisToFillPct(v){
+    // 0..5 -> 0..100
+    return clamp((v/5)*100, 0, 100);
+  }
+
+  function renderThermometers(){
+    thermoGrid.innerHTML = "";
+    for(const ax of AXES){
+      const v = S.axes[ax.key] ?? 0;
+
+      const wrap = document.createElement("div");
+      wrap.className = "thermo";
+
+      const name = document.createElement("div");
+      name.className = "name";
+      name.textContent = ax.name;
+
+      const val = document.createElement("div");
+      val.className = "val mono";
+      val.textContent = `LEVEL: ${v} / 5`;
+
+      const barArea = document.createElement("div");
+      barArea.className = "barArea";
+
+      const bar = document.createElement("div");
+      bar.className = "bar";
+      const fill = document.createElement("div");
+      fill.className = "fill";
+      fill.style.height = axisToFillPct(v) + "%";
+      bar.appendChild(fill);
+
+      const ticks = document.createElement("div");
+      ticks.className = "ticks";
+      // ticks 5..0 top-down
+      for(let t=5;t>=0;t--){
+        const tk = document.createElement("div");
+        tk.className = "tick mono" + (t===v ? " on" : "");
+        tk.innerHTML = `<span>${t}</span><span class="dash"></span>`;
+        ticks.appendChild(tk);
+      }
+
+      barArea.appendChild(bar);
+      barArea.appendChild(ticks);
+
+      const sliderRow = document.createElement("div");
+      sliderRow.className = "row";
+      sliderRow.style.marginTop = "4px";
+      sliderRow.innerHTML = `
+        <span class="label">SET</span>
+        <input class="axRange" data-k="${ax.key}" type="range" min="0" max="5" step="1" value="${v}" style="flex:1;min-width:140px">
+        <input class="axNum mono" data-k="${ax.key}" type="number" min="0" max="5" step="1" value="${v}" style="width:70px">
+      `;
+
+      const blurb = document.createElement("div");
+      blurb.className = "p";
+      blurb.style.marginTop = "6px";
+      blurb.textContent = ax.blurb;
+
+      wrap.appendChild(name);
+      wrap.appendChild(val);
+      wrap.appendChild(barArea);
+      wrap.appendChild(sliderRow);
+      wrap.appendChild(blurb);
+
+      thermoGrid.appendChild(wrap);
+    }
+
+    // hook events
+    thermoGrid.querySelectorAll(".axRange").forEach(el => {
+      el.addEventListener("input", () => {
+        const k = el.dataset.k;
+        const v = clamp(parseInt(el.value,10)||0,0,5);
+        S.axes[k] = v;
+        const num = thermoGrid.querySelector(`.axNum[data-k="${k}"]`);
+        if(num) num.value = v;
+        renderThermometers();
+        updateHeader();
+      });
+    });
+    thermoGrid.querySelectorAll(".axNum").forEach(el => {
+      el.addEventListener("input", () => {
+        const k = el.dataset.k;
+        const v = clamp(parseInt(el.value,10)||0,0,5);
+        S.axes[k] = v;
+        const rng = thermoGrid.querySelector(`.axRange[data-k="${k}"]`);
+        if(rng) rng.value = v;
+        renderThermometers();
+        updateHeader();
+      });
+    });
+  }
+
+  function exportState(){
+    S.updatedAt = new Date().toISOString();
+    const rec = recommendCore();
+    const payload = {
+      THERMOMETER_VERSION: "v1",
+      updatedAt: S.updatedAt,
+      light: S.light,
+      invert: S.invert,
+      nullMode: S.nullMode,
+      motion: S.motion,
+      autoSuggest: S.autoSuggest,
+      core: S.core,
+      axes: {...S.axes},
+      computed: {
+        severity: Number(severity().toFixed(1)),
+        recommended: rec.core,
+        why: rec.why
+      }
+    };
+    io.value = JSON.stringify(payload, null, 2);
+  }
+
+  function importState(){
+    let obj;
+    try{ obj = JSON.parse(io.value || "{}"); }catch(e){ alert("IMPORT FAILED: INVALID JSON"); return; }
+    if(!obj || typeof obj !== "object"){ alert("IMPORT FAILED: INVALID PAYLOAD"); return; }
+    if(obj.axes && typeof obj.axes === "object"){
+      for(const k of Object.keys(S.axes)){
+        if(obj.axes[k] != null){
+          S.axes[k] = clamp(parseInt(obj.axes[k],10)||0,0,5);
+        }
+      }
+    }
+    if(typeof obj.light === "number") S.light = clamp(Math.round(obj.light),1,6);
+    if(typeof obj.invert === "boolean") S.invert = obj.invert;
+    if(typeof obj.nullMode === "boolean") S.nullMode = obj.nullMode;
+    if(typeof obj.motion === "boolean") S.motion = obj.motion;
+    if(typeof obj.autoSuggest === "boolean") S.autoSuggest = obj.autoSuggest;
+    if(typeof obj.core === "string") S.core = obj.core.toUpperCase();
+
+    body.classList.toggle("invert", S.invert);
+    body.classList.toggle("null", S.nullMode);
+    invertBtn.setAttribute("aria-pressed", String(S.invert));
+    nullBtn.setAttribute("aria-pressed", String(S.nullMode));
+    motionBtn.setAttribute("aria-pressed", String(S.motion));
+    autoBtn.setAttribute("aria-pressed", String(S.autoSuggest));
+    coreSelect.value = S.core;
+
+    setIntensityFromLight();
+    renderThermometers();
+    updateHeader();
+  }
+
+  function reset(){
+    S.axes = {
+      SIGNAL_CLARITY:2,
+      INTERPRETATION_LOAD:1,
+      CONTROL_TENSION:2,
+      MEMORY_DISTORTION:0,
+      RELATIONAL_LOAD:1
+    };
+    S.autoSuggest = true;
+    autoBtn.setAttribute("aria-pressed","true");
+    renderThermometers();
+    updateHeader();
+  }
+
+  function logSnapshot(){
+    const rec = recommendCore();
+    const snap = {
+      t: new Date().toISOString(),
+      axes: {...S.axes},
+      severity: Number(severity().toFixed(1)),
+      recommended: rec.core,
+      why: rec.why
+    };
+    S.log.push(snap);
+    const line = `${snap.t} | SEV ${snap.severity} | ${snap.recommended} | ${snap.why}
+AXES: SC ${snap.axes.SIGNAL_CLARITY} | IL ${snap.axes.INTERPRETATION_LOAD} | CT ${snap.axes.CONTROL_TENSION} | MD ${snap.axes.MEMORY_DISTORTION} | RL ${snap.axes.RELATIONAL_LOAD}
+`;
+    logEl.textContent = (logEl.textContent ? (logEl.textContent + "\n") : "") + line;
+  }
+
+  autoBtn.addEventListener("click", () => {
+    S.autoSuggest = !S.autoSuggest;
+    autoBtn.setAttribute("aria-pressed", String(S.autoSuggest));
+    updateHeader();
+  });
+
+  coreSelect.addEventListener("change", () => {
+    S.core = coreSelect.value;
+    updateHeader();
+  });
+
+  exportBtn.addEventListener("click", exportState);
+  importBtn.addEventListener("click", importState);
+  resetBtn.addEventListener("click", reset);
+  logBtn.addEventListener("click", logSnapshot);
+
+  lamps.forEach(l => l.addEventListener("click", () => {
+    S.light = parseInt(l.dataset.l,10);
+    setIntensityFromLight();
+  }));
+
+  invertBtn.addEventListener("click", toggleInvert);
+  nullBtn.addEventListener("click", toggleNull);
+  motionBtn.addEventListener("click", toggleMotion);
+
+  // hotkeys (minimal)
+  window.addEventListener("keydown", (e) => {
+    const k = (e.key || "").toLowerCase();
+
+    if(!e.shiftKey && !e.metaKey && !e.ctrlKey && /^[1-6]$/.test(k)){
+      e.preventDefault();
+      S.light = parseInt(k,10);
+      setIntensityFromLight();
+      return;
+    }
+    if(e.shiftKey && k === "i"){ e.preventDefault(); toggleInvert(); return; }
+    if(e.shiftKey && k === "n"){ e.preventDefault(); toggleNull(); return; }
+    if(!e.shiftKey && k === "m"){ e.preventDefault(); toggleMotion(); return; }
+    if(!e.shiftKey && k === "r"){ e.preventDefault(); reset(); return; }
+    if(!e.shiftKey && k === "e"){ e.preventDefault(); exportState(); return; }
+    if(!e.shiftKey && k === "l"){ e.preventDefault(); logSnapshot(); return; }
+  }, {passive:false});
+
+  // background motion
+  const canvas = document.getElementById("bg");
+  const ctx = canvas.getContext("2d", {alpha:false});
+  let W=0,H=0,dpr=1,t=0;
+
+  function resize(){
+    dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+    W = Math.floor(window.innerWidth);
+    H = Math.floor(window.innerHeight);
+    canvas.width = Math.floor(W*dpr);
+    canvas.height = Math.floor(H*dpr);
+    canvas.style.width = W+"px";
+    canvas.style.height = H+"px";
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+  }
+  window.addEventListener("resize", resize);
+
+  function bgCol(){ return getComputedStyle(root).getPropertyValue("--bg").trim() || "#000"; }
+  function fgCol(){ return getComputedStyle(root).getPropertyValue("--fg").trim() || "#fff"; }
+
+  function tick(now){
+    const dt = Math.min(0.033, (now - (tick._last||now))/1000);
+    tick._last = now;
+
+    const d = new Date();
+    timeChip.textContent = `TIME: ${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`;
+
+    if(S.motion) t += dt;
+
+    const intensity = parseFloat(getComputedStyle(root).getPropertyValue("--intensity")) || 0.52;
+    const trail = parseFloat(getComputedStyle(root).getPropertyValue("--trail")) || 0.18;
+
+    ctx.globalAlpha = clamp(trail, 0.05, 0.55);
+    ctx.fillStyle = bgCol();
+    ctx.fillRect(0,0,W,H);
+    ctx.globalAlpha = 1;
+
+    const fg = fgCol();
+    ctx.strokeStyle = fg;
+
+    // grid
+    const spacing = Math.floor(26 + (1-intensity)*38);
+    ctx.globalAlpha = 0.10 + intensity*0.14;
+    ctx.lineWidth = 1;
+    for(let x=0; x<=W; x+=spacing){ ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke(); }
+    for(let y=0; y<=H; y+=spacing){ ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke(); }
+
+    // slabs
+    ctx.globalAlpha = 0.08 + intensity*0.12;
+    const slabs = 7 + Math.floor(intensity*9);
+    for(let i=0;i<slabs;i++){
+      const a = (i/slabs)*Math.PI*2 + t*(0.25 + intensity*0.75);
+      const cx = W*0.5 + Math.cos(a*0.8)*W*0.20;
+      const cy = H*0.5 + Math.sin(a*0.9)*H*0.20;
+      const w = 120 + Math.sin(t*0.8 + i)*240*intensity;
+      const h = 10 + ((i%4)+1)*10;
+      ctx.save();
+      ctx.translate(cx,cy);
+      ctx.rotate(a*0.18);
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.rect(-w/2, -h/2, w, h);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // corner braces
+    ctx.globalAlpha = 0.18 + intensity*0.22;
+    ctx.lineWidth = 2;
+    const m = 18, L = 56;
+    ctx.beginPath(); ctx.moveTo(m,m+L); ctx.lineTo(m,m); ctx.lineTo(m+L,m); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(W-m-L,m); ctx.lineTo(W-m,m); ctx.lineTo(W-m,m+L); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(m,H-m-L); ctx.lineTo(m,H-m); ctx.lineTo(m+L,H-m); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(W-m-L,H-m); ctx.lineTo(W-m,H-m); ctx.lineTo(W-m,H-m-L); ctx.stroke();
+
+    requestAnimationFrame(tick);
+  }
+
+  // init
+  document.getElementById("ts").textContent = new Date().toISOString();
+  resize();
+  setIntensityFromLight();
+  body.classList.toggle("invert", S.invert);
+  body.classList.toggle("null", S.nullMode);
+  invertBtn.setAttribute("aria-pressed", String(S.invert));
+  nullBtn.setAttribute("aria-pressed", String(S.nullMode));
+  motionBtn.setAttribute("aria-pressed", String(S.motion));
+  autoBtn.setAttribute("aria-pressed", String(S.autoSuggest));
+  coreSelect.value = S.core;
+
+  renderThermometers();
+  updateHeader();
+  exportState();
+  requestAnimationFrame(tick);
+})();
+</script>
+</body>
+</html>
