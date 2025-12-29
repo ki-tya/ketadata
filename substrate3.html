@@ -1,0 +1,573 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>KETADATA_SUBSTRATE_V2</title>
+<style>
+  :root{
+    --bg:#0b0c0f;
+    --fg:#e9e9ea;
+    --muted:rgba(233,233,234,.62);
+    --line:rgba(233,233,234,.14);
+    --panel:rgba(11,12,15,.78);
+
+    --mode:mental;          /* mental | physical */
+    --light:4;              /* 1..6 */
+    --invert:0;             /* 0/1 */
+    --null:0;               /* 0/1 */
+    --motion:1;             /* 0/1 */
+  }
+  html,body{height:100%;margin:0;background:var(--bg);color:var(--fg);overflow:hidden}
+  *{box-sizing:border-box}
+  body{font:12px/1.35 Arial, Helvetica, sans-serif}
+  body.invert{filter:invert(1) hue-rotate(180deg)}
+  canvas{position:fixed;inset:0;width:100%;height:100%;display:block}
+
+  .wrap{position:fixed;inset:0;display:flex;flex-direction:column;pointer-events:none}
+  .bar{
+    pointer-events:auto;
+    display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+    padding:10px 10px;border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,0));
+  }
+  .pill{
+    pointer-events:auto;
+    border:1px solid var(--line);
+    background:rgba(255,255,255,.03);
+    padding:6px 8px;
+    letter-spacing:.10em;
+    text-transform:uppercase;
+    cursor:pointer;
+    user-select:none;
+  }
+  .pill:active{transform:translateY(1px)}
+  .spacer{flex:1}
+  .hud{color:var(--muted);letter-spacing:.10em;text-transform:uppercase;user-select:none}
+  .stage{flex:1 1 auto;display:flex;align-items:stretch;justify-content:center;pointer-events:none}
+  .panel{
+    pointer-events:auto;
+    margin:10px;
+    max-width:980px;
+    width:calc(100% - 20px);
+    border:1px solid var(--line);
+    background:var(--panel);
+    padding:10px;
+    display:flex;
+    gap:10px;
+  }
+  .col{flex:1;min-width:260px}
+  .box{
+    border:1px solid var(--line);
+    background:rgba(255,255,255,.02);
+    padding:10px;
+  }
+  .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .k{color:var(--muted);letter-spacing:.10em;text-transform:uppercase}
+  input[type="range"]{width:180px}
+  .txt{white-space:pre-wrap;word-break:break-word}
+  .stamp{
+    margin-top:10px;
+    padding-top:10px;
+    border-top:1px solid var(--line);
+    color:var(--muted);
+    white-space:pre-wrap;
+  }
+
+  body.null .bar, body.null .panel{display:none !important}
+  body.null .wrap{pointer-events:none}
+
+  /* NEW: hide explanation + controls, keep visual running */
+  body.hide-explain .panel{display:none !important}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<div class="wrap">
+  <div class="bar">
+    <div class="pill" id="btnMode">MODE: MENTAL</div>
+    <div class="pill" id="btnExplain">EXPLAIN: ON (SHIFT+E)</div>
+    <div class="pill" id="btnInvert">INVERT (SHIFT+I)</div>
+    <div class="pill" id="btnNull">NULL (SHIFT+N)</div>
+    <div class="pill" id="btnFull">FULL (SHIFT+F)</div>
+    <div class="pill" id="btnMotion">MOTION: ON</div>
+    <div class="pill" id="btnExport">EXPORT STATE</div>
+    <label class="pill" style="cursor:pointer;">IMPORT STATE<input id="fileImport" type="file" accept="application/json" style="display:none"></label>
+    <div class="pill" id="btnDownload">DOWNLOAD HTML</div>
+    <div class="spacer"></div>
+    <div class="hud" id="hud">SUBSTRATE V2 · STATE LITERAL · TELEOLOGY NONE · IDENTITY NONE</div>
+  </div>
+
+  <div class="stage">
+    <div class="panel" id="panel">
+      <div class="col">
+        <div class="box">
+          <div class="row">
+            <div class="k">LIGHT</div>
+            <div class="pill" data-light="1">1</div>
+            <div class="pill" data-light="2">2</div>
+            <div class="pill" data-light="3">3</div>
+            <div class="pill" data-light="4">4</div>
+            <div class="pill" data-light="5">5</div>
+            <div class="pill" data-light="6">6</div>
+          </div>
+
+          <div class="row" style="margin-top:8px">
+            <div class="k">SPEED</div><input id="speed" type="range" min="0" max="2" step="0.01"><div class="k" id="speedV"></div>
+          </div>
+          <div class="row" style="margin-top:8px">
+            <div class="k">DENSITY</div><input id="density" type="range" min="0" max="1" step="0.01"><div class="k" id="densityV"></div>
+          </div>
+          <div class="row" style="margin-top:8px">
+            <div class="k">ORNATE</div><input id="ornate" type="range" min="0" max="1" step="0.01"><div class="k" id="ornateV"></div>
+          </div>
+          <div class="row" style="margin-top:8px">
+            <div class="k">TRAIL</div><input id="trail" type="range" min="0.03" max="0.35" step="0.01"><div class="k" id="trailV"></div>
+          </div>
+          <div class="row" style="margin-top:8px">
+            <div class="k">ZOOM</div><input id="zoom" type="range" min="0.6" max="1.6" step="0.01"><div class="k" id="zoomV"></div>
+          </div>
+
+          <div class="txt" style="margin-top:10px;color:var(--muted);letter-spacing:.10em;text-transform:uppercase">
+HOTKEYS: SHIFT+I INVERT · SHIFT+N NULL · SHIFT+F FULL · SHIFT+E EXPLAIN · 1–6 LIGHT · M TOGGLE MODE · SPACE PULSE
+MENTAL = ANGULAR FIELD · PHYSICAL = CIRCULAR FIELD
+          </div>
+        </div>
+      </div>
+
+      <div class="col">
+        <div class="box">
+          <div class="txt" id="law">
+KETADATA SUBSTRATE LAW v2 (DUAL MODE: MENTAL / PHYSICAL)
+
+SUBSTRATE IS NEUTRAL.
+STATE IS LITERAL.
+NO ENFORCED TELEOLOGY.
+NO ENFORCED IDENTITY.
+REVERSIBLE BY DEFAULT.
+SEMANTIC NEUTRALITY.
+ZERO MORAL LAYER.
+NULL ALWAYS AVAILABLE.
+
+V2 ADDITION: TWO READINGS OF THE SAME SUBSTRATE.
+MENTAL MODE: REPRESENTATION BIAS TOWARD ANGULAR STRUCTURE (MIND = ANGULAR).
+PHYSICAL MODE: REPRESENTATION BIAS TOWARD CIRCULAR SENSE FIELD (SENSES = CIRCULAR).
+THIS DOES NOT CHANGE THE SUBSTRATE. IT CHANGES ONLY THE SURFACE RENDERING OF THE SAME LAWS.
+          </div>
+
+          <div class="stamp" id="stamp">
+AE: SUBSTRATE_V2_DUAL
+EE: STATE_LITERAL_DUAL_RENDER
+WB: SINGLE_FILE_HTML
+FILE_ID: KETADATA_SUBSTRATE_V2
+ROOM_ID: BASE
+VERSION: v2
+UPDATED_AT: 2025-12-29T00:00:00-05:00
+STATE_CLASS: LIMINAL
+TELEOLOGY: NONE
+EPISTEMIC_MODE: OPERATION
+CHANGELOG:
+- SUBSTRATE LAW V2: DUAL SURFACE RENDER (MENTAL ANGULAR / PHYSICAL CIRCULAR)
+- SYSTEM UNIVERSALS: INVERT (SHIFT+I), NULL (SHIFT+N), FULL (SHIFT+F), LIGHTS (1–6)
+- EXPLAIN TOGGLE: SHIFT+E (HIDE/SHOW PANEL)
+- STATE IO: EXPORT/IMPORT AS FILE
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const c = document.getElementById('c');
+  const ctx = c.getContext('2d', { alpha:false });
+  const root = document.documentElement;
+  const body = document.body;
+  const $ = (id)=>document.getElementById(id);
+
+  const ui = {
+    btnMode: $('btnMode'),
+    btnExplain: $('btnExplain'),
+    btnInvert: $('btnInvert'),
+    btnNull: $('btnNull'),
+    btnFull: $('btnFull'),
+    btnMotion: $('btnMotion'),
+    btnExport: $('btnExport'),
+    fileImport: $('fileImport'),
+    btnDownload: $('btnDownload'),
+    hud: $('hud'),
+    speed: $('speed'), speedV: $('speedV'),
+    density: $('density'), densityV: $('densityV'),
+    ornate: $('ornate'), ornateV: $('ornateV'),
+    trail: $('trail'), trailV: $('trailV'),
+    zoom: $('zoom'), zoomV: $('zoomV'),
+  };
+
+  const S = {
+    VERSION: "KETADATA_SUBSTRATE_V2_STATE",
+    updatedAt: new Date().toISOString(),
+    mode: "mental",
+    explain: true,        // NEW
+    light: 4,
+    invert: false,
+    nullMode: false,
+    motion: true,
+    params: { speed:0.75, density:0.60, ornate:0.55, trail:0.10, zoom:1.00 },
+    pulse: 0,
+    seed: Math.random()*1e6,
+    t: 0
+  };
+
+  const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+  const TAU=Math.PI*2;
+
+  function resize(){
+    const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+    c.width = Math.floor(innerWidth*dpr);
+    c.height = Math.floor(innerHeight*dpr);
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+  }
+  addEventListener('resize', resize);
+
+  function applyExplain(){
+    body.classList.toggle('hide-explain', !S.explain);
+    ui.btnExplain.textContent = "EXPLAIN: " + (S.explain ? "ON" : "OFF") + " (SHIFT+E)";
+  }
+
+  function cssSync(){
+    root.style.setProperty('--mode', S.mode);
+    root.style.setProperty('--light', String(S.light));
+    root.style.setProperty('--invert', S.invert ? 1 : 0);
+    root.style.setProperty('--null', S.nullMode ? 1 : 0);
+    root.style.setProperty('--motion', S.motion ? 1 : 0);
+
+    body.classList.toggle('invert', !!S.invert);
+    body.classList.toggle('null', !!S.nullMode);
+
+    ui.btnMode.textContent = "MODE: " + S.mode.toUpperCase();
+    ui.btnMotion.textContent = "MOTION: " + (S.motion ? "ON":"OFF");
+
+    ui.speed.value = S.params.speed; ui.speedV.textContent = S.params.speed.toFixed(2);
+    ui.density.value = S.params.density; ui.densityV.textContent = S.params.density.toFixed(2);
+    ui.ornate.value = S.params.ornate; ui.ornateV.textContent = S.params.ornate.toFixed(2);
+    ui.trail.value = S.params.trail; ui.trailV.textContent = S.params.trail.toFixed(2);
+    ui.zoom.value = S.params.zoom; ui.zoomV.textContent = S.params.zoom.toFixed(2);
+
+    applyExplain();
+
+    ui.hud.textContent =
+      "SUBSTRATE V2 · MODE " + S.mode.toUpperCase() +
+      " · LIGHT " + S.light +
+      " · STATE LITERAL · TELEOLOGY NONE · IDENTITY NONE";
+  }
+
+  function toggleFull(){
+    const d=document, el=d.documentElement;
+    if(!d.fullscreenElement){
+      (el.requestFullscreen||el.webkitRequestFullscreen||el.mozRequestFullScreen||el.msRequestFullscreen).call(el);
+    } else {
+      (d.exitFullscreen||d.webkitExitFullscreen||d.mozCancelFullScreen||d.msExitFullscreen).call(d);
+    }
+  }
+
+  function toggleMode(){
+    S.mode = (S.mode === 'mental') ? 'physical' : 'mental';
+    cssSync();
+  }
+  function toggleExplain(){
+    S.explain = !S.explain;
+    cssSync();
+  }
+  function pulse(){ S.pulse = Math.min(1, S.pulse + 0.9); }
+
+  function exportState(){
+    S.updatedAt = new Date().toISOString();
+    const blob = new Blob([JSON.stringify(S, null, 2)], {type:"application/json"});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = "KETADATA_SUBSTRATE_V2_STATE_" + S.updatedAt.replace(/[:.]/g,'-') + ".json";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(()=>URL.revokeObjectURL(a.href), 4000);
+    cssSync();
+  }
+
+  async function importState(file){
+    const txt = await file.text();
+    const obj = JSON.parse(txt);
+    if(!obj || typeof obj !== 'object') return;
+
+    if(typeof obj.mode === 'string') S.mode = (obj.mode === 'physical') ? 'physical' : 'mental';
+    if(typeof obj.explain === 'boolean') S.explain = obj.explain;
+    if(typeof obj.light === 'number') S.light = clamp(Math.round(obj.light),1,6);
+    if(typeof obj.invert === 'boolean') S.invert = obj.invert;
+    if(typeof obj.nullMode === 'boolean') S.nullMode = obj.nullMode;
+    if(typeof obj.motion === 'boolean') S.motion = obj.motion;
+
+    if(obj.params && typeof obj.params === 'object'){
+      const p = obj.params;
+      if(typeof p.speed === 'number') S.params.speed = clamp(p.speed,0,2);
+      if(typeof p.density === 'number') S.params.density = clamp(p.density,0,1);
+      if(typeof p.ornate === 'number') S.params.ornate = clamp(p.ornate,0,1);
+      if(typeof p.trail === 'number') S.params.trail = clamp(p.trail,0.03,0.35);
+      if(typeof p.zoom === 'number') S.params.zoom = clamp(p.zoom,0.6,1.6);
+    }
+
+    S.pulse = 0;
+    cssSync();
+  }
+
+  function n2(x,y){
+    const s = Math.sin(x*12.9898 + y*78.233 + S.seed) * 43758.5453123;
+    return s - Math.floor(s);
+  }
+
+  function draw(ts){
+    const dt = Math.min(0.033, (draw._last ? (ts - draw._last)/1000 : 0.016));
+    draw._last = ts;
+
+    if(!S.nullMode && S.motion){
+      S.t += dt * (0.18 + S.params.speed*1.65);
+      S.pulse = Math.max(0, S.pulse - dt*(0.85 + S.light*0.12));
+    }
+
+    if(S.nullMode){
+      ctx.fillStyle = "#0b0c0f";
+      ctx.fillRect(0,0,innerWidth,innerHeight);
+      requestAnimationFrame(draw);
+      return;
+    }
+
+    // trails
+    const trail = clamp(S.params.trail, 0.03, 0.35);
+    ctx.fillStyle = `rgba(11,12,15,${trail})`;
+    ctx.fillRect(0,0,innerWidth,innerHeight);
+
+    const cx = innerWidth/2, cy = innerHeight/2;
+    const minDim = Math.min(innerWidth, innerHeight);
+    const R = minDim * (0.46 + 0.06*Math.sin(S.t*0.25));
+    const zoom = S.params.zoom;
+
+    const light = clamp(S.light,1,6);
+    const dense = clamp(S.params.density,0,1);
+    const ornate = clamp(S.params.ornate,0,1);
+    const gain = 0.55 + (light-1)*0.13 + S.pulse*0.18;
+
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.scale(zoom, zoom);
+
+    if(S.mode === 'mental'){
+      // MENTAL: angular lattice + chords (mind = angular)
+      const grid = 18 + Math.floor(dense*34) + light*2;
+      const span = R*(0.22 + dense*0.70);
+      const step = (span*2)/grid;
+
+      ctx.lineWidth = 0.8 + ornate*2.0 + (light-1)*0.10;
+      ctx.strokeStyle = `rgba(233,233,234,${clamp(0.02 + ornate*0.09,0.02,0.16) * gain})`;
+
+      const offx = Math.cos(S.t*0.55) * step*2.2;
+      const offy = Math.sin(S.t*0.48) * step*2.2;
+
+      for(let i=-grid;i<=grid;i++){
+        const x = i*step + offx;
+        ctx.beginPath();
+        ctx.moveTo(x,-span);
+        ctx.lineTo(x, span);
+        ctx.stroke();
+      }
+      for(let j=-grid;j<=grid;j++){
+        const y = j*step + offy;
+        ctx.beginPath();
+        ctx.moveTo(-span,y);
+        ctx.lineTo( span,y);
+        ctx.stroke();
+      }
+
+      const cuts = 8 + Math.floor(dense*18) + light;
+      for(let k=0;k<cuts;k++){
+        const u = k/(cuts-1 || 1);
+        const a = (u*0.65 + 0.15) * Math.PI + Math.sin(S.t*0.7 + k)*0.08;
+        const len = span*(0.55 + u*0.55);
+        const dx = Math.cos(a)*len;
+        const dy = Math.sin(a)*len;
+        ctx.beginPath();
+        ctx.moveTo(-dx,-dy);
+        ctx.lineTo(dx,dy);
+        ctx.stroke();
+      }
+
+      const sym = 6 + Math.floor(dense*18);
+      const chords = 18 + Math.floor(dense*60);
+      const rings = 8 + Math.floor(ornate*10) + light;
+
+      ctx.strokeStyle = `rgba(233,233,234,${clamp(0.02 + ornate*0.08,0.02,0.14) * gain})`;
+
+      for(let r=0;r<rings;r++){
+        const u=r/(rings-1||1);
+        const rr = R*(0.10 + u*0.92);
+        for(let s=0;s<sym;s++){
+          const rot = (s/sym)*TAU;
+          ctx.save();
+          ctx.rotate(rot);
+          for(let i=0;i<chords;i++){
+            const p=i/(chords-1||1);
+            const ang1 = p*(Math.PI/2) + Math.sin(S.t*0.35 + r)*0.10;
+            const ang2 = ang1 + (Math.PI/2)*(0.60 + 0.40*Math.sin(S.t + p*3 + r));
+            const jitter = (n2(p*13+r*0.7, s*0.9+S.t*0.2)-0.5) * (4 + ornate*14);
+            const x1 = Math.cos(ang1)*rr + jitter;
+            const y1 = Math.sin(ang1)*rr - jitter;
+            const x2 = Math.cos(ang2)*rr - jitter;
+            const y2 = Math.sin(ang2)*rr + jitter;
+            ctx.beginPath();
+            ctx.moveTo(x1,y1);
+            ctx.lineTo(x2,y2);
+            ctx.stroke();
+          }
+          ctx.restore();
+        }
+      }
+    } else {
+      // PHYSICAL: circular ripples + orbiting nodes (senses = circular)
+      const rings = 14 + Math.floor(dense*30) + light*2;
+      const spokes = 10 + Math.floor(dense*22);
+      const aRing = clamp(0.02 + ornate*0.08,0.02,0.16) * gain;
+
+      ctx.lineWidth = 0.8 + ornate*2.0 + (light-1)*0.10;
+      ctx.strokeStyle = `rgba(233,233,234,${aRing})`;
+
+      for(let r=0;r<rings;r++){
+        const u=r/(rings-1||1);
+        const rr = R*(0.08 + u*0.96);
+        const wob = (Math.sin(S.t*0.8 + u*6) + Math.cos(S.t*0.55 + r))*0.5*(2+ornate*10);
+        ctx.beginPath();
+        ctx.arc(0,0, rr + wob, 0, TAU);
+        ctx.stroke();
+      }
+
+      const nodes = 18 + Math.floor(dense*48);
+      for(let i=0;i<nodes;i++){
+        const u=i/(nodes-1||1);
+        const rr = R*(0.18 + u*0.78);
+        const a = S.t*(0.55 + u*1.65) + i*0.35;
+        const x = Math.cos(a)*rr;
+        const y = Math.sin(a)*rr;
+        const r0 = 2 + ornate*5 + (light-1)*0.5;
+        ctx.beginPath();
+        ctx.arc(x,y,r0,0,TAU);
+        ctx.stroke();
+      }
+
+      ctx.strokeStyle = `rgba(233,233,234,${clamp(0.015 + ornate*0.06,0.015,0.12) * gain})`;
+      for(let s=0;s<spokes;s++){
+        const a = (s/spokes)*TAU + S.t*0.08;
+        const x = Math.cos(a)*R*(0.92 + 0.04*Math.sin(S.t+s));
+        const y = Math.sin(a)*R*(0.92 + 0.04*Math.sin(S.t+s));
+        ctx.beginPath();
+        ctx.moveTo(0,0);
+        ctx.lineTo(x,y);
+        ctx.stroke();
+      }
+    }
+
+    ctx.restore();
+    requestAnimationFrame(draw);
+  }
+
+  function isTyping(){
+    const a=document.activeElement;
+    if(!a) return false;
+    const tag=(a.tagName||"").toLowerCase();
+    return tag==="input" || tag==="textarea" || tag==="select";
+  }
+
+  // UI actions
+  ui.btnMode.onclick = toggleMode;
+  ui.btnExplain.onclick = toggleExplain;
+  ui.btnInvert.onclick = ()=>{ S.invert = !S.invert; cssSync(); };
+  ui.btnNull.onclick = ()=>{ S.nullMode = !S.nullMode; cssSync(); };
+  ui.btnFull.onclick = toggleFull;
+  ui.btnMotion.onclick = ()=>{ S.motion = !S.motion; cssSync(); };
+  ui.btnExport.onclick = exportState;
+
+  ui.fileImport.addEventListener('change', async (e)=>{
+    const f = e.target.files && e.target.files[0];
+    if(f) await importState(f);
+    e.target.value = "";
+  });
+
+  ui.btnDownload.onclick = ()=>{
+    const html = "<!doctype html>\n" + document.documentElement.outerHTML;
+    const blob = new Blob([html], {type:"text/html"});
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "KETADATA_SUBSTRATE_V2.html";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(()=>URL.revokeObjectURL(a.href), 4000);
+  };
+
+  document.querySelectorAll('[data-light]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      S.light = Number(btn.getAttribute('data-light'));
+      cssSync();
+    });
+  });
+
+  function bindRange(el, key){
+    el.addEventListener('input', ()=>{
+      S.params[key] = Number(el.value);
+      cssSync();
+    });
+  }
+  bindRange(ui.speed,'speed');
+  bindRange(ui.density,'density');
+  bindRange(ui.ornate,'ornate');
+  bindRange(ui.trail,'trail');
+  bindRange(ui.zoom,'zoom');
+
+  // keys
+  addEventListener('keydown', (e)=>{
+    if(isTyping()) return;
+    const k=(e.key||"").toLowerCase();
+
+    if(k>='1' && k<='6'){ S.light = Number(k); cssSync(); return; }
+    if(e.shiftKey && k==='i'){ e.preventDefault(); S.invert = !S.invert; cssSync(); return; }
+    if(e.shiftKey && k==='n'){ e.preventDefault(); S.nullMode = !S.nullMode; cssSync(); return; }
+    if(e.shiftKey && k==='f'){ e.preventDefault(); toggleFull(); return; }
+    if(e.shiftKey && k==='e'){ e.preventDefault(); toggleExplain(); return; }
+    if(k==='m'){ e.preventDefault(); toggleMode(); return; }
+    if(k===' '){ e.preventDefault(); pulse(); return; }
+  }, {passive:false});
+
+  // init
+  resize();
+  cssSync();
+  requestAnimationFrame(draw);
+})();
+</script>
+
+<!-- ============================================================
+  KETADATA HTML SERIALIZATION STAMP
+  AE/EE/WB: WB
+  FILE_ID: KETADATA_SUBSTRATE_V2
+  ROOM_ID: BASE
+  VERSION: v2
+  UPDATED_AT: 2025-12-29T00:00:00-05:00
+
+  STATE_CLASS: LIMINAL
+  TELEOLOGY: NONE
+  EPISTEMIC_MODE: OPERATION
+
+  CHANGELOG:
+  - SUBSTRATE V2: DUAL SURFACE RENDER OF SAME LAWS (MENTAL=ANGULAR, PHYSICAL=CIRCULAR)
+  - EXPLAIN TOGGLE: HIDE/SHOW PANEL (SHIFT+E)
+  - SYSTEM UNIVERSALS: INVERT (SHIFT+I), NULL (SHIFT+N), FULL (SHIFT+F), LIGHTS (1–6)
+  - STATE IO: EXPORT/IMPORT AS FILE (DOWNLOAD/UPLOAD)
+============================================================ -->
+</body>
+</html>
