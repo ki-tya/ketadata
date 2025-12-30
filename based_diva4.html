@@ -1111,6 +1111,27 @@ function persist(silent=false){
 })();
 
 /* export/import */
+function downloadJsonFile(filename, jsonText){
+  try{
+    const blob = new Blob([String(jsonText||"")], { type:"application/json;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = String(filename||"ketadata.json");
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url), 250);
+  }catch(e){
+    console.error(e);
+  }
+}
+
+function exportFilename(){
+  const iso = new Date().toISOString().replace(/[:.]/g,"-");
+  return `KETADATA_BASE_STATE_${iso}.json`;
+}
+
 function exportState(){
   ensureCorePresets();
   return JSON.stringify({ STORAGE_KEY: STORAGE_KEY_MAIN, FILE_ID, PAGE_ID, STORAGE_EPOCH, STATE }, null, 2);
@@ -1888,10 +1909,9 @@ function renderPad(){
   normalizeSetToPad16(s);
 
   panel.classList.add("open");
-  // IMPORTANT: explicitly set inline display when opening.
-  // We set inline display:none on hide; relying on CSS can be fragile if any
-  // other inline styles or future tweaks get introduced.
-  panel.style.display="flex";
+  panel.style.display="block";
+  // Clear any inline display:none set during previous hides.
+  panel.style.display="";
   title.textContent=String(s.name||"PAD");
   sid.textContent=String(s.id||"—");
   hint.textContent=STATE.ui.padEdit ? "EDIT MODE" : "CLICK = ARM";
@@ -1936,16 +1956,29 @@ function renderPad(){
       const a=document.createElement("a");
       a.href=String(it.url||"#");
       a.textContent=it.url ? it.url : "—";
-      a.target="_blank";
-      a.rel="noopener";
-      a.addEventListener("click",(ev)=>{
-        ev.preventDefault();
-        if(!it.url) return;
+      a.tabIndex=-1; // display only
+      a.addEventListener("click",(ev)=>ev.preventDefault());
+      cell.appendChild(a);
+
+      // CLICK = ARM (cell-level, not anchor-level)
+      cell.addEventListener("click",(ev)=>{
+        if(STATE.ui.padEdit) return;
+        if(!it || !it.url) return;
+        const t=ev.target;
+        if(t && (t.tagName==="INPUT" || t.tagName==="BUTTON")) return;
         setActiveRoom(nm.textContent, it.url);
-        toast("ARMED");
+        if(typeof toast==="function") toast("ARMED");
         persist();
       });
-      cell.appendChild(a);
+
+      // DOUBLE CLICK = OPEN NEW TAB
+      cell.addEventListener("dblclick",(ev)=>{
+        if(STATE.ui.padEdit) return;
+        if(!it || !it.url) return;
+        setActiveRoom(nm.textContent, it.url);
+        persist();
+        openNewTab(it.url);
+      });
     }
 
     grid.appendChild(cell);
@@ -2018,7 +2051,11 @@ function render(){
 /* =========================================================
 WB ▸ EVENTS
 ========================================================= */
-$("btnExport").addEventListener("click", ()=> copy(exportState()));
+$("btnExport").addEventListener("click", ()=>{
+  const js = exportState();
+  downloadJsonFile(exportFilename(), js);
+  if(typeof toast==="function") toast("DOWNLOADED JSON");
+});
 $("btnCopy").addEventListener("click", ()=> copy(exportState()));
 $("btnImport").addEventListener("click", ()=> $("file").click());
 $("file").addEventListener("change", async (ev)=>{
