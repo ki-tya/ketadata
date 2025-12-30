@@ -254,8 +254,11 @@ input{outline:none}
   position:absolute;
   left:14px;
   top:calc(var(--top) + 170px);
-  width:520px;
-  height:420px;
+  width:360px;
+  height:360px;
+  min-width:260px;
+  min-height:260px;
+  resize:both;
   display:none;
   z-index:31;
   border:1px solid rgba(255,255,255,0.22);
@@ -372,7 +375,9 @@ input{outline:none}
   <div id="padPanel">
     <div id="padHead">
       <span id="padTitle">PAD</span>
-      <div style="display:flex; gap:8px; align-items:center">        <button class="headBtn" id="padCloseBtn">X</button>
+      <div style="display:flex; gap:8px; align-items:center">
+        <button class="headBtn" id="padEditBtn">EDIT</button>
+        <button class="headBtn" id="padCloseBtn">X</button>
       </div>
     </div>
     <div id="padBody">
@@ -766,7 +771,8 @@ const DEFAULT={
     activeSets: [],
     activeSetId: "",
     padOpen: false,
-    padRect: { x:null, y:null, w:520, h:420 },
+    padEdit: false,
+    padRect: { x:null, y:null, w:360, h:360 },
     
     drawerOpen: false,
     noteOpen: false,
@@ -1108,27 +1114,6 @@ function persist(silent=false){
 })();
 
 /* export/import */
-function downloadJsonFile(filename, jsonText){
-  try{
-    const blob = new Blob([String(jsonText||"")], { type:"application/json;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = String(filename||"ketadata.json");
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(()=>URL.revokeObjectURL(url), 250);
-  }catch(e){
-    console.error(e);
-  }
-}
-
-function exportFilename(){
-  const iso = new Date().toISOString().replace(/[:.]/g,"-");
-  return `KETADATA_BASE_STATE_${iso}.json`;
-}
-
 function exportState(){
   ensureCorePresets();
   return JSON.stringify({ STORAGE_KEY: STORAGE_KEY_MAIN, FILE_ID, PAGE_ID, STORAGE_EPOCH, STATE }, null, 2);
@@ -1606,9 +1591,14 @@ function renderSetList(){
 
     row.addEventListener("click",()=>{
       setEditorFromSet(s);
-      STATE.ui.activeSetId=String(s.id||"");
+      ensureActiveSets();
+      const idStr=String(s.id||"");
+      if(idStr && !STATE.ui.activeSets.map(String).includes(idStr)){
+        STATE.ui.activeSets.unshift(idStr);
+      }
+      STATE.ui.activeSetId=idStr;
       STATE.ui.padOpen=true;
-      toast("SET LOADED");
+      toast("PAD OPEN");
       persist();
       render();
     });
@@ -1715,14 +1705,6 @@ function renderPinnedPanel(){
     chip.textContent=name;
     chip.draggable=true;
 
-    chip.addEventListener("click",()=>{
-      STATE.ui.activeSetId=String(idStr);
-      STATE.ui.padOpen=true;
-      toast("PAD OPEN");
-      persist();
-      render();
-    });
-
     chip.addEventListener("dragstart",(ev)=>{
       try{ev.dataTransfer.setData("text/plain","SET:"+idStr); ev.dataTransfer.effectAllowed="move";}catch(e){}
     });
@@ -1758,9 +1740,8 @@ function renderPinnedPanel(){
 
     chip.addEventListener("dblclick",(ev)=>{
       ev.preventDefault();
-      STATE.ui.activeSetId=idStr;
-      STATE.ui.padOpen=true;
-      toast("PAD OPEN");
+      togglePinSet(idStr);
+      toast("SET UNPINNED");
       persist();
       render();
     });
@@ -1841,11 +1822,10 @@ function renderActiveStrip(){
   el.style.display="flex";
   el.innerHTML="";
 
-  const label=document.createElement("span");
-  label.className="label";
-  label.textContent="ACTIVE SETS";
-  label.style.color="var(--muted)";
-  el.appendChild(label);
+  const lab=document.createElement("span");
+  lab.className="label";
+  lab.textContent="ACTIVE";
+  el.appendChild(lab);
 
   STATE.ui.activeSets.forEach(id=>{
     const s=getSetById(id);
@@ -1853,7 +1833,7 @@ function renderActiveStrip(){
 
     const chip=document.createElement("button");
     chip.className="btn";
-    chip.textContent=canonSetName(s.name||s.label||s.id||"SET");
+    chip.textContent=String(s.name||s.id||"SET");
     chip.style.padding="4px 8px";
     chip.style.fontSize="11px";
 
@@ -1865,6 +1845,14 @@ function renderActiveStrip(){
       toast("PAD OPEN");
       persist();
       render();
+    });
+
+    chip.addEventListener("dblclick",(ev)=>{
+      ev.preventDefault();
+      STATE.ui.activeSetId=String(id);
+      STATE.ui.padOpen=true;
+      toast("PAD OPEN");
+      persist();
     });
 
     el.appendChild(chip);
@@ -1879,7 +1867,6 @@ function renderActiveStrip(){
     STATE.ui.padOpen=!STATE.ui.padOpen;
     toast(STATE.ui.padOpen ? "PAD OPEN" : "PAD CLOSED");
     persist();
-    render();
   });
   el.appendChild(padBtn);
 }
@@ -1904,6 +1891,8 @@ function renderPad(){
 
   if(STATE.ui.blackout || STATE.ui.fullscreen || !STATE.ui.padOpen || !s){
     panel.classList.remove("open");
+    // Important: we set inline display:none here, so we MUST clear it when opening.
+    // Inline styles override the CSS rule in #padPanel.open.
     panel.style.display="none";
     grid.innerHTML="";
     return;
@@ -1912,10 +1901,12 @@ function renderPad(){
   normalizeSetToPad16(s);
 
   panel.classList.add("open");
+  panel.style.display="block";
+  // Clear any inline display:none set during previous hides.
   panel.style.display="";
   title.textContent=String(s.name||"PAD");
   sid.textContent=String(s.id||"—");
-  hint.textContent="CLICK = ARM";
+  hint.textContent=STATE.ui.padEdit ? "EDIT MODE" : "CLICK = ARM";
 
   grid.innerHTML="";
 
@@ -1924,41 +1915,55 @@ function renderPad(){
     const cell=document.createElement("div");
     cell.className="padCell";
 
-    const nm=document.createElement("div");
-    nm.className="nm";
-    nm.textContent=canonRoomName(it.label||"") || (it.url?deriveNameFromUrl(it.url):"—");
-    cell.appendChild(nm);
+    if(STATE.ui.padEdit){
+      const nm=document.createElement("input");
+      nm.value=String(it.label||"");
+      nm.placeholder="NAME";
+      nm.addEventListener("input",()=>{
+        upsertPadSlot(activeId, i, nm.value, (s.items[i]&&s.items[i].url)||"");
+        persist(true);
+      });
 
-    const a=document.createElement("a");
-    a.href=String(it.url||"#");
-    a.textContent=it.url ? it.url : "—";
-    a.tabIndex=-1; // display only
-    a.addEventListener("click",(ev)=>ev.preventDefault());
-    cell.appendChild(a);
+      const ur=document.createElement("input");
+      ur.value=String(it.url||"");
+      ur.placeholder="URL";
+      ur.addEventListener("input",()=>{
+        upsertPadSlot(activeId, i, (s.items[i]&&s.items[i].label)||"", ur.value);
+        persist(true);
+      });
 
-    // CLICK = ARM
-    cell.addEventListener("click",(ev)=>{
-      if(!it || !it.url) return;
-      const t=ev.target;
-      if(t && (t.tagName==="INPUT" || t.tagName==="BUTTON")) return;
-      setActiveRoom(nm.textContent, it.url);
-      if(typeof toast==="function") toast("ARMED");
-      persist();
-    });
+      ur.addEventListener("keydown",(ev)=>{
+        if(ev.key==="Enter"){ ev.preventDefault(); persist(false); }
+      });
 
-    // DOUBLE CLICK = OPEN NEW TAB
-    cell.addEventListener("dblclick",(ev)=>{
-      ev.preventDefault();
-      ev.stopPropagation();
-      if(!it || !it.url) return;
-      setActiveRoom(nm.textContent, it.url);
-      persist();
-      openNewTab(it.url);
-    });
+      cell.appendChild(nm);
+      cell.appendChild(ur);
+
+    }else{
+      const nm=document.createElement("div");
+      nm.className="nm";
+      nm.textContent=canonRoomName(it.label||"") || (it.url?deriveNameFromUrl(it.url):"—");
+      cell.appendChild(nm);
+
+      const a=document.createElement("a");
+      a.href=String(it.url||"#");
+      a.textContent=it.url ? it.url : "—";
+      a.target="_blank";
+      a.rel="noopener";
+      a.addEventListener("click",(ev)=>{
+        ev.preventDefault();
+        if(!it.url) return;
+        setActiveRoom(nm.textContent, it.url);
+        toast("ARMED");
+        persist();
+      });
+      cell.appendChild(a);
+    }
 
     grid.appendChild(cell);
   }
 }
+
 
 function render(){
   root.classList.toggle("invert", !!STATE.ui.invert);
@@ -2017,27 +2022,15 @@ function render(){
   renderRoomList();
   renderSetList();
   renderArmedBar();
-    renderPinnedPanel();
+  renderPinnedPanel();
   renderActiveStrip();
-  const padPanel = $("padPanel");
-  if(padPanel){
-    if(STATE.ui.padOpen){
-      padPanel.classList.add("open");
-      renderPad();
-    }else{
-      padPanel.classList.remove("open");
-    }
-  }
+  renderPad();
 }
 
 /* =========================================================
 WB ▸ EVENTS
 ========================================================= */
-$("btnExport").addEventListener("click", ()=>{
-  const js = exportState();
-  downloadJsonFile(exportFilename(), js);
-  if(typeof toast==="function") toast("DOWNLOADED JSON");
-});
+$("btnExport").addEventListener("click", ()=> copy(exportState()));
 $("btnCopy").addEventListener("click", ()=> copy(exportState()));
 $("btnImport").addEventListener("click", ()=> $("file").click());
 $("file").addEventListener("change", async (ev)=>{
@@ -2061,7 +2054,12 @@ $("padCloseBtn").addEventListener("click", ()=>{
   toast("PAD CLOSED");
   persist();
 });
-
+$("padEditBtn").addEventListener("click", ()=>{
+  STATE.ui.padEdit=!STATE.ui.padEdit;
+  toast(STATE.ui.padEdit ? "PAD EDIT" : "PAD VIEW");
+  persist();
+  render();
+});
 
 $("btnToggleUniversals").addEventListener("click", ()=>{
   setUniversalsCollapsed(!STATE.ui.universalsCollapsed);
@@ -2329,6 +2327,16 @@ $("btnBulkClear").addEventListener("click", ()=>{ $("bulkRoomInput").value=""; t
 
   // public hooks
   panel.addEventListener("mouseup", ()=>{ if(panel.classList.contains("open")) snap(); });
+
+  // resize observer (persist real-time resize via native handle)
+  try{
+    const ro=new ResizeObserver(()=>{
+      if(dragging) return;
+      if(!panel.classList.contains("open")) return;
+      snap();
+    });
+    ro.observe(panel);
+  }catch(_){}
 
   // initial
   apply();
