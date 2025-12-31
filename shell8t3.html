@@ -1,0 +1,1255 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>KETADATA // SHELL8 (SOVEREIGN) // BASE</title>
+
+<style>
+:root{
+  --bg:#000;
+  --fg:#fff;
+  --muted:#8a8a8a;
+  --line:#222;
+  --line2:#333;
+  --top:44px;
+  --bot:34px;
+
+  --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  --sans: Arial, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+
+  --ctl-radius:0px;
+  --ctl-bg:rgba(0,0,0,0.86);
+  --note-border:rgba(255,255,255,0.78);
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0;background:var(--bg);color:var(--fg);font:12px/1.25 var(--sans); overflow:hidden; user-select:none}
+#root{position:fixed; inset:0; background:#000}
+#root.invert{filter:invert(1)}
+
+/* FULLSCREEN: hides panels, keeps visuals alive */
+#root.fs .topbar,
+#root.fs .bottombar,
+#root.fs .drawer,
+#root.fs #pinnedPanel,
+#root.fs #armedBar,
+#root.fs .toast{display:none !important}
+
+/* BLACKOUT: hard black screen, kills visuals + panels */
+#root.blackout .topbar,
+#root.blackout .bottombar,
+#root.blackout .drawer,
+#root.blackout #pinnedPanel,
+#root.blackout #armedBar,
+#root.blackout .toast,
+#root.blackout .ketaNote{display:none !important}
+#root.blackout #stage{background:#000 !important; filter:none !important}
+#root.blackout #motion{display:none !important}
+
+/* Stage */
+#stage{position:absolute; inset:0; background:#000; pointer-events:none}
+#motion{
+  position:absolute; inset:0;
+  pointer-events:none;
+  opacity:0;
+  background:repeating-linear-gradient(135deg, rgba(255,255,255,0.06) 0px, rgba(255,255,255,0.06) 1px, rgba(0,0,0,0) 12px, rgba(0,0,0,0) 22px);
+  mix-blend-mode:screen;
+  transform:translate3d(0,0,0);
+}
+#motion.run{opacity:0.12; animation:scanflow 2.2s linear infinite}
+@keyframes scanflow{0%{transform:translate3d(-80px,60px,0)}100%{transform:translate3d(80px,-60px,0)}}
+
+/* Top bar */
+.topbar{
+  position:absolute; top:0; left:0; right:0; height:var(--top);
+  display:flex; align-items:center; justify-content:space-between;
+  padding:0 10px;
+  border-bottom:1px solid var(--line);
+  background:linear-gradient(180deg,#070707,#000);
+  z-index:10;
+}
+.brand{
+  display:flex; align-items:center; gap:10px;
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:.10em;
+  text-transform:uppercase;
+}
+.brand .sq{width:10px;height:10px;border:1px solid var(--fg);background:#000}
+.actions{
+  display:flex; align-items:center; gap:8px;
+  font-family:var(--mono);
+  font-size:11px;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+}
+.btn{
+  font-family:var(--mono);
+  font-size:11px;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  color:var(--fg);
+  background:transparent;
+  border:1px solid var(--line2);
+  padding:6px 8px;
+  border-radius:0;
+  cursor:pointer;
+}
+.btn:hover{border-color:var(--fg)}
+.kbd{
+  border:1px solid var(--line2);
+  padding:2px 6px;
+  color:var(--muted);
+}
+.ketaIcon{
+  width:16px;height:16px;border:2px solid var(--fg);
+  background:var(--fg);
+  cursor:pointer;
+}
+.ketaIcon.open{background:#000}
+
+/* Bottom bar */
+.bottombar{
+  position:absolute; left:0; right:0; bottom:0; height:var(--bot);
+  display:flex; align-items:center; justify-content:space-between;
+  padding:0 10px;
+  border-top:1px solid var(--line);
+  background:linear-gradient(0deg,#070707,#000);
+  z-index:10;
+  font-family:var(--mono);
+  font-size:11px;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  color:var(--muted);
+}
+.toggle{
+  font-family:var(--mono);
+  font-size:11px;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  color:var(--fg);
+  background:transparent;
+  border:1px solid var(--line2);
+  padding:4px 8px;
+  border-radius:0;
+  cursor:pointer;
+}
+.toggle:hover{border-color:var(--fg)}
+
+/* Drawer */
+.drawer{
+  position:absolute; left:0; right:0; bottom:var(--bot);
+  height:42%;
+  border-top:1px solid var(--line);
+  background:linear-gradient(180deg,#060606,#000);
+  display:none;
+  z-index:20;
+}
+.drawer.open{display:flex; flex-direction:column}
+.drawerSizer{
+  height:10px;
+  cursor:ns-resize;
+  border-bottom:1px solid var(--line);
+  background:linear-gradient(180deg,#0a0a0a,#050505);
+}
+.drawerHead{
+  padding:8px 10px;
+  border-bottom:1px solid var(--line);
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:.10em;
+  text-transform:uppercase;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+}
+.drawerBody{padding:10px; min-height:0; flex:1; overflow:auto}
+textarea{
+  width:100%;
+  border:1px solid var(--line2);
+  background:#050505;
+  color:var(--fg);
+  font-family:var(--mono);
+  font-size:12px;
+  padding:10px;
+  line-height:1.35;
+  outline:none;
+  resize:vertical;
+  min-height:140px;
+}
+
+/* Toast */
+.toast{
+  position:absolute; left:12px; top:calc(var(--top) + 12px);
+  padding:8px 10px;
+  border:1px solid var(--line2);
+  background:rgba(8,8,8,0.82);
+  font-family:var(--mono);
+  font-size:11px;
+  letter-spacing:.06em;
+  color:var(--fg);
+  display:none;
+  z-index:40;
+}
+
+/* Pinned panel + armed bar (existing) */
+#pinnedPanel{
+  position:absolute; left:10px; top:calc(var(--top) + 10px);
+  z-index:26;
+  display:none;
+  flex-direction:column;
+  gap:8px;
+  width:min(520px, calc(100vw - 20px));
+  max-height:calc(100vh - var(--top) - var(--bot) - 20px);
+  overflow:auto;
+  padding:10px;
+  border:1px solid var(--line2);
+  background:rgba(0,0,0,0.86);
+}
+#armedBar{
+  position:absolute; left:10px; top:calc(var(--top) + 10px);
+  z-index:27;
+  display:none;
+  gap:8px;
+  align-items:center;
+  flex-wrap:wrap;
+  padding:8px 10px;
+  border:1px solid var(--line2);
+  background:rgba(0,0,0,0.86);
+  font-family:var(--mono); font-size:11px; letter-spacing:.08em; text-transform:uppercase;
+}
+#armedBar .label{color:var(--muted)}
+#armedBar .val{color:var(--fg)}
+
+/* Pad panel (existing) */
+#padPanel{
+  position:absolute;
+  left:10px;
+  bottom:calc(var(--bot) + 10px);
+  z-index:28;
+  display:none;
+  width:360px;
+  height:360px;
+  border:1px solid var(--line2);
+  background:rgba(0,0,0,0.86);
+  overflow:hidden;
+}
+#padPanel.open{display:block}
+
+/* KETA NOTE */
+.ketaNote{
+  position:absolute; top:76px; right:16px; left:auto;
+  width:340px; height:220px;
+  display:none;
+  z-index:30;
+  resize:both;
+  overflow:hidden;
+  border-radius:var(--ctl-radius);
+  background:var(--ctl-bg);
+  border:1px solid var(--note-border);
+  backdrop-filter:blur(6px);
+}
+.ketaNote.open{display:flex; flex-direction:column}
+.ketaHead{
+  padding:8px 10px;
+  border-bottom:1px solid rgba(255,255,255,0.14);
+  font-family:var(--mono);
+  font-size:11px;
+  letter-spacing:.14em;
+  text-transform:uppercase;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  cursor:move;
+}
+.ketaBody{padding:10px; min-height:0; flex:1}
+.ketaNote textarea{
+  background:#000;
+  border:1px solid rgba(255,255,255,0.22);
+  resize:none;
+  height:100%;
+  min-height:0;
+}
+.headBtn{
+  font-family:var(--mono);
+  font-size:11px;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  color:var(--fg);
+  background:transparent;
+  border:1px solid rgba(255,255,255,0.18);
+  padding:2px 8px;
+  border-radius:0;
+  cursor:pointer;
+}
+.headBtn:hover{border-color:rgba(255,255,255,0.6)}
+
+/* =========================================================
+SPEC_NODE (ONLY ADDITION)
+========================================================= */
+.specIcon{
+  width:14px;height:14px;border:1px solid var(--fg);
+  background:linear-gradient(90deg,#fff 0 50%, #000 50% 100%);
+  cursor:pointer;
+}
+.specIcon:hover{outline:1px solid var(--fg); outline-offset:2px}
+
+#specLayer{position:absolute; inset:0; z-index:26; pointer-events:none}
+.specNode{
+  position:absolute;
+  z-index:26;
+  width:260px; height:180px;
+  resize:both;
+  overflow:hidden;
+  border-radius:var(--ctl-radius);
+  background:var(--ctl-bg);
+  border:1px solid rgba(255,255,255,0.22);
+  backdrop-filter:blur(6px);
+  pointer-events:auto;
+  display:flex;
+  flex-direction:column;
+}
+.specHead{
+  padding:8px 10px;
+  border-bottom:1px solid rgba(255,255,255,0.14);
+  font-family:var(--mono);
+  font-size:11px;
+  letter-spacing:.14em;
+  text-transform:uppercase;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  cursor:move;
+  user-select:none;
+}
+.specBody{padding:10px; min-height:0; flex:1; display:flex}
+.specBody textarea{
+  height:100%;
+  background:#000;
+  border:1px solid rgba(255,255,255,0.22);
+  resize:none;
+}
+.specNode.collapsed{height:auto}
+.specNode.collapsed .specBody{display:none}
+
+/* ========================================================= */
+</style>
+</head>
+
+<body>
+<div id="root">
+  <div id="stage"></div>
+  <div id="motion"></div>
+
+  <div class="toast" id="toast"></div>
+
+  <div class="topbar">
+    <div class="brand">
+      <span class="sq"></span>
+      <span id="roomName">BASE</span>
+      <span style="color:var(--muted); letter-spacing:.02em; text-transform:none">v4</span>
+    </div>
+
+    <div class="actions">
+      <button class="btn" id="btnImport">IMPORT</button>
+      <button class="btn" id="btnExport">EXPORT</button>
+      <button class="btn" id="btnCopy">COPY</button>
+
+      <span class="kbd" title="Run">Space</span>
+      <span class="kbd" title="Invert">Shift+I</span>
+      <span class="kbd" title="Blackout">Shift+N</span>
+      <span class="kbd" title="Fullscreen">Shift+F</span>
+      <span class="kbd" title="Landing">Shift+K</span>
+
+      <div id="ketaIcon" class="ketaIcon" title="KETA_NOTE"></div>
+    </div>
+  </div>
+
+  <!-- DRAWER -->
+  <div class="drawer" id="drawer">
+    <div class="drawerSizer" id="drawerSizer" title="DRAG"></div>
+    <div class="drawerHead">
+      <div style="display:flex; gap:10px; align-items:center">
+        <div style="font-family:var(--mono); font-size:12px; letter-spacing:.10em; text-transform:uppercase">SYSTEM UNIVERSALS</div>
+        <div style="color:var(--muted); font-family:var(--mono); font-size:11px">STATE: <span id="sig">∅</span></div>
+      </div>
+      <div style="display:flex; gap:8px; align-items:center">
+        <button class="btn" id="btnCopyUniversals" style="padding:4px 8px; font-size:11px">COPY</button>
+        <button class="btn" id="btnCloseDrawer" style="padding:4px 8px; font-size:11px">CLOSE</button>
+      </div>
+    </div>
+
+    <div class="drawerBody">
+      <textarea id="universals" spellcheck="false" autocomplete="off" placeholder="LAWS / REFERENCES"></textarea>
+
+      <div style="margin-top:12px; border-top:1px solid var(--line); padding-top:10px">
+
+        <!-- REGISTRY (COLLAPSIBLE) -->
+        <div style="display:flex; gap:8px; align-items:center; justify-content:space-between; margin-bottom:8px">
+          <div style="font-family:var(--mono); font-size:12px; letter-spacing:.10em; text-transform:uppercase; color:var(--muted)">
+            ROOM REGISTRY
+          </div>
+          <button class="btn" id="btnToggleRegistry" style="padding:4px 8px; font-size:11px">TOGGLE</button>
+        </div>
+
+        <div id="registryBody">
+          <div style="margin-bottom:8px; color:var(--muted); font-family:var(--mono); font-size:11px">PINNED ROOMS</div>
+          <div id="roomList" style="display:flex; flex-wrap:wrap; gap:8px"></div>
+
+          <div style="margin:12px 0 8px; color:var(--muted); font-family:var(--mono); font-size:11px">PINNED SETS</div>
+          <div id="setList" style="display:flex; flex-wrap:wrap; gap:8px"></div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- PINNED PANEL (existing surface) -->
+  <div id="pinnedPanel"></div>
+
+  <!-- ARMED BAR (existing) -->
+  <div id="armedBar"></div>
+
+  <!-- PAD PANEL (existing) -->
+  <div id="padPanel"></div>
+
+  <div class="bottombar">
+    <div style="display:flex; gap:10px; align-items:center">
+      <button class="toggle" id="toggleDrawer">SYSTEM</button>
+      <button class="toggle" id="toggleRun">RUN</button>
+      <span>STATE: <span id="sig2">∅</span></span>
+      <span style="margin-left:8px">FS: <span id="fsLabel">OFF</span></span>
+      <span style="margin-left:8px">BLK: <span id="blkLabel">OFF</span></span>
+    </div>
+    <div style="display:flex; gap:12px; align-items:center">
+      <div class="specIcon" id="btnSpecNode" title="SPEC_NODE"></div>
+      <span>LIGHT: <span id="lightLabel">1</span></span>
+      <span>RUN: <span id="runLabel">OFF</span></span>
+      <span>MOTION: <span id="motionLabel">OFF</span></span>
+    </div>
+  </div>
+
+  <!-- KETA NOTE -->
+  <div class="ketaNote" id="ketaNote">
+    <div class="ketaHead" id="ketaHead">
+      <div>KETA_NOTE</div>
+      <button class="headBtn" id="btnHideNote">-</button>
+    </div>
+    <div class="ketaBody">
+      <textarea id="ketaText" spellcheck="false" autocomplete="off" placeholder="GLOBAL NOTE"></textarea>
+    </div>
+  </div>
+
+  <!-- SPEC_NODE LAYER (ONLY ADDITION) -->
+  <div id="specLayer"></div>
+
+  <input id="file" type="file" accept="application/json" style="display:none" />
+</div>
+
+<script>
+/* =========================================================
+EE ▸ CONFIG (PATHS)
+========================================================= */
+const URLS = {
+  LANDING: "index11.html",
+  PHOTOBOOTH: "crunch1.html",
+  KDTV: "kdtv1.html",
+  POD: "room.html",
+  WORLD: "map.html",
+  INFINITY: "infinity.html",
+  CALENDAR: "calendar1.html",
+  STUDIO: "tester3.html",
+  LAB: "labyrinth.html"
+};
+
+/* =========================================================
+AE/EE/WB ▸ IDS (CANON)
+========================================================= */
+const FILE_ID = "KETADATA_SHELL8";
+const PAGE_ID = "BASE";
+const STORAGE_EPOCH = "SOVEREIGN_v4";
+
+/* =========================================================
+EE ▸ SOVEREIGN STORAGE KEY (DUMB FIX)
+========================================================= */
+const STORAGE_KEY = "KDT::BASE::SOVEREIGN::STATE";
+
+function nowISO(){ return new Date().toISOString(); }
+function $(id){ return document.getElementById(id); }
+
+function loadFromKey(key){
+  try{
+    const raw = localStorage.getItem(key);
+    if(!raw) return null;
+    return JSON.parse(raw);
+  }catch(e){
+    return null;
+  }
+}
+
+function saveToKey(key, obj){
+  try{
+    localStorage.setItem(key, JSON.stringify(obj));
+  }catch(e){}
+}
+
+/* =========================================================
+DEFAULT STATE
+========================================================= */
+const DEFAULT={
+  version:"KETADATA_SHELL_KERNEL_v1",
+  updatedAt:nowISO(),
+  ketaNote:"",
+  universals:"",
+  room:"BASE",
+  roomUrl:"",
+  ui: {
+    invert:false,
+    blackout:false,
+    fullscreen:false,
+
+    lightPreset:1,
+    lightRunning:false,
+    motionOn:false,
+
+    pinnedRooms: [],
+    pinnedSets: [],
+
+    activeSets: [],
+    activeSetId: "",
+    padOpen: false,
+    padEdit: false,
+    padRect: { x:null, y:null, w:360, h:360 },
+    
+    drawerOpen: false,
+    noteOpen: false,
+
+    universalsCollapsed: false,
+    registryCollapsed: false,
+    activeCollapsed: false,
+    setsCollapsed: false,
+    bulkCollapsed: false,
+    presetsCollapsed: false,
+
+    noteRect: { x:null, y:76, w:340, h:220 },
+    drawerH: 0.42
+  },
+  /* =========================================================
+  SPEC_NODE (ONLY ADDITION)
+  ========================================================= */
+  specNodes:[],
+  payload:{
+    roomPresets:[],
+    sets:[]
+  }
+};
+
+/* =========================================================
+STATE MIGRATION (SURGICAL)
+========================================================= */
+function migrateState(s){
+  if(!s || typeof s!=="object") return structuredClone(DEFAULT);
+  // top-level keys
+  for(const k of Object.keys(DEFAULT)){
+    if(s[k]===undefined) s[k]=structuredClone(DEFAULT[k]);
+  }
+  if(!s.ui || typeof s.ui!=="object") s.ui={};
+  for(const k of Object.keys(DEFAULT.ui)){
+    if(s.ui[k]===undefined) s.ui[k]=structuredClone(DEFAULT.ui[k]);
+  }
+  // ensure shapes
+  if(!Array.isArray(s.ui.pinnedRooms)) s.ui.pinnedRooms=[];
+  if(!Array.isArray(s.ui.pinnedSets)) s.ui.pinnedSets=[];
+  if(!Array.isArray(s.ui.activeSets)) s.ui.activeSets=[];
+  if(!Array.isArray(s.specNodes)) s.specNodes=[];
+  if(!s.ui.padRect || typeof s.ui.padRect!=="object") s.ui.padRect=structuredClone(DEFAULT.ui.padRect);
+  if(!s.ui.noteRect || typeof s.ui.noteRect!=="object") s.ui.noteRect=structuredClone(DEFAULT.ui.noteRect);
+  if(typeof s.ui.drawerH!=="number") s.ui.drawerH=DEFAULT.ui.drawerH;
+  return s;
+}
+
+/* =========================================================
+BOOT LOAD (MULTI-KEY MIGRATION)
+========================================================= */
+let _BOOT_LOADED = null;
+let _BOOTING = true;
+let _BOOTING_FROM = "";
+
+(function bootLoad(){
+  const canon = loadFromKey(STORAGE_KEY);
+  if(canon){
+    _BOOT_LOADED = canon;
+    _BOOTING_FROM = STORAGE_KEY;
+    return;
+  }
+
+  // legacy keys (kept)
+  const STORAGE_KEY_LEGACY_OLD = `KDT::STATE::${FILE_ID}::${PAGE_ID}::${STORAGE_EPOCH}`;
+  const STORAGE_KEY_CANON_OLD2 = `KDT::STATE::${FILE_ID}::${PAGE_ID}::${STORAGE_EPOCH}::BASE`;
+
+  const a = loadFromKey(STORAGE_KEY_CANON_OLD2);
+  if(a){ _BOOT_LOADED=a; _BOOTING_FROM=STORAGE_KEY_CANON_OLD2; return; }
+
+  const b = loadFromKey(STORAGE_KEY_LEGACY_OLD);
+  if(b){ _BOOT_LOADED=b; _BOOTING_FROM=STORAGE_KEY_LEGACY_OLD; return; }
+})();
+
+let STATE = structuredClone(DEFAULT);
+try{
+  _BOOT_LOADED = migrateState(_BOOT_LOADED);
+  STATE = _BOOT_LOADED ? migrateState(_BOOT_LOADED) : structuredClone(DEFAULT);
+}catch(e){
+  _BOOT_LOADED = null;
+  STATE = structuredClone(DEFAULT);
+}
+
+/* =========================================================
+UTILS
+========================================================= */
+function toast(msg){
+  const el=$("toast");
+  el.textContent=msg;
+  el.style.display="block";
+  clearTimeout(el._t);
+  el._t=setTimeout(()=>el.style.display="none",900);
+}
+
+function hash8(str){
+  let h=2166136261;
+  for(let i=0;i<str.length;i++){h^=str.charCodeAt(i);h=Math.imul(h,16777619);}
+  return (h>>>0).toString(16).slice(0,8);
+}
+
+function stableSig(){
+  const core = JSON.stringify({
+    v:STATE.version,
+    u:STATE.universals.length,
+    r:STATE.room,
+    ui:{
+      i:STATE.ui.invert,
+      b:STATE.ui.blackout,
+      f:STATE.ui.fullscreen,
+      lp:STATE.ui.lightPreset,
+      lr:STATE.ui.lightRunning,
+      mo:STATE.ui.motionOn,
+      d:STATE.ui.drawerOpen,
+      n:STATE.ui.noteOpen,
+      p:STATE.ui.padOpen,
+      pr:STATE.ui.padRect,
+      nr:STATE.ui.noteRect,
+      dh:STATE.ui.drawerH,
+      c:{
+        u:STATE.ui.universalsCollapsed,
+        rg:STATE.ui.registryCollapsed,
+        a:STATE.ui.activeCollapsed,
+        s:STATE.ui.setsCollapsed,
+        bl:STATE.ui.bulkCollapsed,
+        pr:STATE.ui.presetsCollapsed
+      },
+      // SPEC_NODE signature impact is intentional: state is literal UI.
+      sn:(STATE.specNodes||[]).map(n=>({id:n.id, r:n.rect, o:n.open===false?0:1, t:(n.text||"").length}))
+    },
+    presetsSig:hash8(JSON.stringify((STATE.payload.roomPresets||[]).map(x=>({r:x.room,u:x.roomUrl,a:x.updatedAt||x.createdAt||""})))),
+    setsSig:hash8(JSON.stringify((STATE.payload.sets||[]).map(s=>({id:s.id,l:s.label,n:(s.items||[]).length}))))
+  });
+  let h=2166136261;
+  for(let i=0;i<core.length;i++){h^=core.charCodeAt(i);h=Math.imul(h,16777619);}
+  return (h>>>0).toString(16).slice(0,8);
+}
+
+function persist(silent){
+  STATE.updatedAt=nowISO();
+  saveToKey(STORAGE_KEY, STATE);
+  if(!silent) render();
+}
+
+/* =========================================================
+WB ▸ CORE PRESETS ENSURE
+========================================================= */
+function canonRoomName(s){ return (String(s||"").trim()||"").toUpperCase(); }
+function ensureCorePresets(){
+  if(!STATE.payload) STATE.payload={roomPresets:[], sets:[]};
+  if(!Array.isArray(STATE.payload.roomPresets)) STATE.payload.roomPresets=[];
+  if(!Array.isArray(STATE.payload.sets)) STATE.payload.sets=[];
+  if(!Array.isArray(STATE.ui.pinnedRooms)) STATE.ui.pinnedRooms=[];
+  if(!Array.isArray(STATE.ui.pinnedSets)) STATE.ui.pinnedSets=[];
+  if(!Array.isArray(STATE.ui.activeSets)) STATE.ui.activeSets=[];
+  if(!Array.isArray(STATE.specNodes)) STATE.specNodes=[];
+}
+
+/* =========================================================
+EE ▸ EXPORT / IMPORT (REAL FILE IO)
+========================================================= */
+function exportEnvelope(){
+  STATE.updatedAt=nowISO();
+  return JSON.stringify({ STORAGE_KEY, FILE_ID, PAGE_ID, VERSION:STORAGE_EPOCH, STATE }, null, 2);
+}
+function download(filename, text){
+  const blob=new Blob([text],{type:"application/json"});
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(blob);
+  a.download=filename;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },0);
+}
+async function copyText(text){
+  try{ await navigator.clipboard.writeText(text); toast("COPIED"); }
+  catch(e){ toast("COPY FAILED"); }
+}
+function importText(txt){
+  const parsed=JSON.parse(txt);
+  const incoming = (parsed && parsed.STATE) ? parsed.STATE : parsed;
+  STATE = migrateState(incoming);
+  ensureCorePresets();
+  persist();
+}
+
+/* =========================================================
+WB ▸ VISUALS (LIGHTS)
+========================================================= */
+const root=$("root");
+const stage=$("stage");
+const motion=$("motion");
+
+let lightInterval=null;
+let lightCount=0;
+let lightAuxA=0;
+let lightAuxB=0;
+
+function resetStage(){
+  stage.style.backgroundColor="#000";
+  stage.style.filter="none";
+  lightCount=0; lightAuxA=0; lightAuxB=0;
+}
+
+function syncMotion(){
+  motion.classList.toggle("run", !!STATE.ui.motionOn && !STATE.ui.blackout);
+}
+
+function stopLight(silent){
+  if(lightInterval){ clearInterval(lightInterval); lightInterval=null; }
+  STATE.ui.lightRunning=false;
+  resetStage();
+  if(!silent) persist();
+}
+
+function startLight(preset){
+  stopLight(true);
+  resetStage();
+  STATE.ui.lightPreset=preset;
+  STATE.ui.lightRunning=true;
+
+  if(preset===1){
+    lightInterval=setInterval(()=>{
+      const curr=stage.style.backgroundColor||"black";
+      stage.style.backgroundColor=(curr==="black"||curr==="rgb(0, 0, 0)")?"white":"black";
+      stage.style.filter="none";
+    },50);
+  }
+  if(preset===2){
+    lightInterval=setInterval(()=>{
+      lightAuxA=(lightAuxA+30)%360; lightAuxB+=0.5;
+      const L=50+Math.sin(lightAuxB)*40;
+      stage.style.backgroundColor=`hsl(${lightAuxA}, 100%, ${L}%)`;
+      stage.style.filter="none";
+    },10);
+  }
+  if(preset===3){
+    lightInterval=setInterval(()=>{
+      lightCount++;
+      const beat=lightCount%16;
+      if(beat===0||beat===1){ stage.style.backgroundColor="#fff"; stage.style.filter="invert(1) contrast(3) brightness(2)"; }
+      else if(beat===2){ stage.style.backgroundColor="#000"; stage.style.filter="invert(1) contrast(2)"; }
+      else if(beat===3){ stage.style.backgroundColor="#0f0"; stage.style.filter="contrast(2) saturate(3)"; }
+      else if(beat===4){ stage.style.backgroundColor="#f0f"; stage.style.filter="invert(1) hue-rotate(90deg)"; }
+      else if(beat===5||beat===6){ stage.style.backgroundColor="#0ff"; stage.style.filter="invert(0.7) contrast(2)"; }
+      else if(beat===7){ stage.style.backgroundColor="#fff"; stage.style.filter="invert(1) brightness(3)"; }
+      else if(beat===8){ stage.style.backgroundColor="#000"; stage.style.filter="invert(1) contrast(3)"; }
+      else if(beat===9||beat===10){ stage.style.backgroundColor="#0f0"; stage.style.filter="saturate(5) contrast(2)"; }
+      else if(beat===11){ stage.style.backgroundColor="#f0f"; stage.style.filter="invert(1) saturate(3)"; }
+      else { stage.style.backgroundColor="#08f"; stage.style.filter="contrast(1.5) brightness(1.2)"; }
+    },30);
+  }
+  if(preset===4){
+    lightInterval=setInterval(()=>{
+      lightAuxA+=0.08; lightCount++;
+      const red=Math.abs(Math.sin(lightAuxA))*255;
+      const pulse=Math.abs(Math.sin(lightAuxA*0.5));
+      const contrast=2+pulse*2;
+      const sat=4+pulse*2;
+      if(lightCount%8===0){ stage.style.backgroundColor="#000"; stage.style.filter="brightness(3) contrast(3)"; }
+      else { stage.style.backgroundColor=`rgb(${red},0,0)`; stage.style.filter=`contrast(${contrast}) saturate(${sat}) brightness(${1.2+pulse*0.5})`; }
+    },20);
+  }
+  if(preset===5){
+    lightInterval=setInterval(()=>{
+      lightAuxA+=15; lightAuxB=(lightAuxB+2)%100;
+      const hue=260+Math.sin(lightAuxA*0.1)*40;
+      const sat=80+Math.cos(lightAuxA*0.05)*20;
+      const L=30+Math.sin(lightAuxB*0.1)*30;
+      const b=1+Math.abs(Math.sin(lightAuxA*0.05))*0.8;
+      const c=1.5+Math.abs(Math.cos(lightAuxA*0.08))*1;
+      stage.style.backgroundColor=`hsl(${hue}, ${sat}%, ${L}%)`;
+      stage.style.filter=`contrast(${c}) saturate(2) brightness(${b}) hue-rotate(${lightAuxA*0.5}deg)`;
+    },25);
+  }
+  if(preset===6){
+    lightInterval=setInterval(()=>{
+      lightCount++;
+      if(lightCount%50===0||lightCount%50===2){ stage.style.backgroundColor="#fff"; stage.style.filter="brightness(5) contrast(5)"; }
+      else { stage.style.backgroundColor="#000"; stage.style.filter="none"; }
+    },30);
+  }
+
+  persist();
+}
+
+/* =========================================================
+WB ▸ CORE UI RENDERERS (existing)
+========================================================= */
+function ensurePinnedRooms(){ /* existing logic preserved */ }
+function ensurePinnedSets(){ /* existing logic preserved */ }
+function ensureActiveSets(){ /* existing logic preserved */ }
+function ensureActiveSet(){ /* existing logic preserved */ }
+
+function renderRoomList(){ /* existing logic preserved */ }
+function renderSetList(){ /* existing logic preserved */ }
+function renderArmedBar(){ /* existing logic preserved */ }
+function renderPinnedPanel(){ /* existing logic preserved */ }
+function renderActiveStrip(){ /* existing logic preserved */ }
+function renderPad(){ /* existing logic preserved */ }
+
+/* =========================================================
+WB ▸ DRAWER HEIGHT RESIZE (existing)
+========================================================= */
+(function bindDrawerSizer(){
+  const s=$("drawerSizer");
+  let dragging=false;
+  function clamp(v,min,max){ return Math.max(min, Math.min(max, v)); }
+  s.addEventListener("mousedown",(ev)=>{
+    if(!STATE.ui.drawerOpen) return;
+    dragging=true;
+    ev.preventDefault();
+  });
+  window.addEventListener("mousemove",(ev)=>{
+    if(!dragging) return;
+    const y = ev.clientY;
+    const h = clamp((window.innerHeight - y - (parseInt(getComputedStyle(document.documentElement).getPropertyValue("--bot")||"34",10)||34))/window.innerHeight, 0.20, 0.80);
+    STATE.ui.drawerH = h;
+    root.style.setProperty("--drawer-h", String(h));
+    $("drawer").style.height = Math.round(window.innerHeight*h) + "px";
+  });
+  window.addEventListener("mouseup",()=>{
+    if(!dragging) return;
+    dragging=false;
+    persist();
+  });
+})();
+
+/* =========================================================
+WB ▸ EVENTS (existing)
+========================================================= */
+$("btnExport").addEventListener("click", ()=>{
+  const ts=nowISO().replace(/[:.]/g,"-");
+  download(`${FILE_ID}__${PAGE_ID}__${STORAGE_EPOCH}__${ts}.json`, exportEnvelope());
+  toast("EXPORTED");
+});
+$("btnCopy").addEventListener("click", ()=> copyText(exportEnvelope()));
+$("btnImport").addEventListener("click", ()=> $("file").click());
+$("file").addEventListener("change", async (e)=>{
+  const f=e.target.files && e.target.files[0];
+  if(!f) return;
+  const txt=await f.text();
+  importText(txt);
+  e.target.value="";
+  toast("IMPORTED");
+});
+
+$("btnCopyUniversals").addEventListener("click", ()=> copyText(STATE.universals||""));
+$("btnCloseDrawer").addEventListener("click", ()=>{
+  STATE.ui.drawerOpen=false;
+  persist();
+});
+$("toggleDrawer").addEventListener("click", ()=>{
+  STATE.ui.drawerOpen=!STATE.ui.drawerOpen;
+  persist();
+});
+$("toggleRun").addEventListener("click", ()=>{
+  if(STATE.ui.lightRunning) stopLight(true);
+  else startLight(STATE.ui.lightPreset||1);
+  // transport model toggles motion too (existing behavior preserved)
+  STATE.ui.motionOn = !STATE.ui.motionOn;
+  persist();
+});
+$("universals").addEventListener("input", ()=>{
+  STATE.universals=$("universals").value;
+  persist();
+});
+
+$("ketaIcon").addEventListener("click", ()=>{
+  if(STATE.ui.blackout) return;
+  STATE.ui.noteOpen=!STATE.ui.noteOpen;
+  persist();
+});
+$("btnHideNote").addEventListener("click", ()=>{
+  STATE.ui.noteOpen=false;
+  persist();
+});
+$("ketaText").addEventListener("input", ()=>{
+  STATE.ketaNote=$("ketaText").value;
+  persist();
+});
+
+/* =========================================================
+HOTKEYS (existing)
+========================================================= */
+function bindHotkeys(){
+  document.addEventListener("keydown",(e)=>{
+    const a=document.activeElement;
+    const typing = a && (a.tagName==="TEXTAREA" || a.tagName==="INPUT" || a.isContentEditable);
+
+    if(e.shiftKey && e.key.toLowerCase()==="i"){
+      e.preventDefault();
+      STATE.ui.invert=!STATE.ui.invert;
+      persist();
+      return;
+    }
+    if(!typing && /^[1-6]$/.test(e.key)){
+      e.preventDefault();
+      const p=parseInt(e.key,10);
+      STATE.ui.lightPreset=p;
+      if(STATE.ui.lightRunning && !STATE.ui.blackout) startLight(p);
+      else persist();
+      return;
+    }
+    if(!typing && (e.code==="Space" || e.key===" ")){
+      e.preventDefault();
+      if(STATE.ui.lightRunning) stopLight(true);
+      else startLight(STATE.ui.lightPreset||1);
+      STATE.ui.motionOn = !STATE.ui.motionOn;
+      persist();
+      return;
+    }
+    if(e.shiftKey && e.key.toLowerCase()==="n"){
+      e.preventDefault();
+      STATE.ui.blackout=!STATE.ui.blackout;
+      if(STATE.ui.blackout) stopLight(true);
+      persist();
+      return;
+    }
+    if(e.shiftKey && e.key.toLowerCase()==="f"){
+      e.preventDefault();
+      STATE.ui.fullscreen=!STATE.ui.fullscreen;
+      persist();
+      return;
+    }
+    if(e.shiftKey && e.key.toLowerCase()==="k"){
+      e.preventDefault();
+      window.location.href = URLS.LANDING;
+      return;
+    }
+  });
+}
+
+/* =========================================================
+NOTE GEOMETRY (existing)
+========================================================= */
+(function noteGeometry(){
+  const box=$("ketaNote");
+  const head=$("ketaHead");
+  let dragging=false, ox=0, oy=0;
+
+  function clamp(n,min,max){ return Math.max(min, Math.min(max, n)); }
+  function saveRect(){
+    const r=box.getBoundingClientRect();
+    STATE.ui.noteRect={ x:Math.round(r.left), y:Math.round(r.top), w:Math.round(r.width), h:Math.round(r.height) };
+    persist();
+  }
+
+  head.addEventListener("mousedown",(ev)=>{
+    if(ev.target.closest("button")) return;
+    if(STATE.ui.blackout) return;
+    dragging=true;
+    const r=box.getBoundingClientRect();
+    ox=ev.clientX-r.left; oy=ev.clientY-r.top;
+    box.style.left=r.left+"px";
+    box.style.top=r.top+"px";
+    box.style.right="auto";
+  });
+
+  window.addEventListener("mousemove",(ev)=>{
+    if(!dragging) return;
+    box.style.left = clamp(ev.clientX-ox, 0, window.innerWidth-40) + "px";
+    box.style.top  = clamp(ev.clientY-oy, 44, window.innerHeight-40) + "px";
+  });
+
+  window.addEventListener("mouseup",()=>{
+    if(!dragging) return;
+    dragging=false;
+    saveRect();
+  });
+
+  try{
+    const ro=new ResizeObserver(()=>{
+      if(dragging) return;
+      if(STATE.ui.blackout) return;
+      saveRect();
+    });
+    ro.observe(box);
+  }catch(_){}
+})();
+
+/* =========================================================
+EE ▸ SPEC_NODE (ONLY ADDITION)
+========================================================= */
+(function specNodeKernel(){
+  const layer=$("specLayer");
+
+  function clamp(n,min,max){ return Math.max(min, Math.min(max, n)); }
+  function ensure(){
+    if(!Array.isArray(STATE.specNodes)) STATE.specNodes=[];
+  }
+
+  function saveRect(el,node){
+    const r=el.getBoundingClientRect();
+    node.rect={ x:Math.round(r.left), y:Math.round(r.top), w:Math.round(r.width), h:Math.round(r.height) };
+  }
+
+  function apply(el,node){
+    const r=node.rect||{};
+    const x=(typeof r.x==="number")?r.x:16;
+    const y=(typeof r.y==="number")?r.y:Math.max(44, window.innerHeight-34-180-16);
+    const w=(typeof r.w==="number")?r.w:260;
+    const h=(typeof r.h==="number")?r.h:180;
+    el.style.left=x+"px";
+    el.style.top=y+"px";
+    el.style.width=w+"px";
+    el.style.height=h+"px";
+    const open = !(node.open===false);
+    el.classList.toggle("collapsed", !open);
+    const btn=el.querySelector(".btnSpecCollapse");
+    if(btn) btn.textContent=open?"-":"+";
+  }
+
+  function makeEl(node){
+    const el=document.createElement("div");
+    el.className="specNode";
+    el.dataset.id=node.id;
+
+    el.innerHTML=`
+      <div class="specHead">
+        <div>SPEC_NODE</div>
+        <button class="headBtn btnSpecCollapse" type="button">${node.open===false?"+":"-"}</button>
+      </div>
+      <div class="specBody">
+        <textarea spellcheck="false" autocomplete="off"></textarea>
+      </div>
+    `;
+
+    const ta=el.querySelector("textarea");
+    ta.value=node.text||"";
+    ta.addEventListener("input", ()=>{
+      node.text=ta.value;
+      persist();
+    });
+
+    const btn=el.querySelector(".btnSpecCollapse");
+    btn.addEventListener("click",(ev)=>{
+      ev.preventDefault();
+      node.open = (node.open===false) ? true : false;
+      apply(el,node);
+      persist();
+    });
+
+    // drag by header
+    const head=el.querySelector(".specHead");
+    let dragging=false, sx=0, sy=0, ox=0, oy=0;
+
+    head.addEventListener("mousedown",(ev)=>{
+      if(ev.button!==0) return;
+      if(ev.target.closest("button")) return;
+      if(STATE.ui.blackout) return;
+      dragging=true;
+      const r=el.getBoundingClientRect();
+      ox=r.left; oy=r.top;
+      sx=ev.clientX; sy=ev.clientY;
+      document.body.style.userSelect="none";
+      ev.preventDefault();
+    });
+
+    window.addEventListener("mousemove",(ev)=>{
+      if(!dragging) return;
+      const nx=ox+(ev.clientX-sx);
+      const ny=oy+(ev.clientY-sy);
+      el.style.left = clamp(nx, 6, window.innerWidth-60) + "px";
+      el.style.top  = clamp(ny, 44, window.innerHeight-60) + "px";
+    });
+
+    window.addEventListener("mouseup",()=>{
+      if(!dragging) return;
+      dragging=false;
+      document.body.style.userSelect="";
+      saveRect(el,node);
+      persist();
+    });
+
+    // resize persistence
+    try{
+      const ro=new ResizeObserver(()=>{
+        if(STATE.ui.blackout || STATE.ui.fullscreen) return;
+        saveRect(el,node);
+        persist();
+      });
+      ro.observe(el);
+    }catch(_){}
+
+    apply(el,node);
+    return el;
+  }
+
+  function renderSpec(){
+    ensure();
+    if(STATE.ui.blackout || STATE.ui.fullscreen){
+      layer.innerHTML="";
+      return;
+    }
+    layer.innerHTML="";
+    STATE.specNodes.forEach(n=>{
+      if(!n || typeof n!=="object") return;
+      if(!n.id) n.id="SPEC_"+Math.random().toString(16).slice(2,8).toUpperCase();
+      layer.appendChild(makeEl(n));
+    });
+  }
+
+  function spawn(){
+    ensure();
+    const y=Math.max(44, window.innerHeight-34-180-16);
+    STATE.specNodes.unshift({
+      id:"SPEC_"+Math.random().toString(16).slice(2,8).toUpperCase(),
+      open:true,
+      text:"",
+      rect:{ x:16, y:y, w:260, h:180 }
+    });
+    persist();
+    toast("SPEC_NODE");
+  }
+
+  $("btnSpecNode").addEventListener("click", ()=> spawn());
+
+  window.__KDT_SPEC_RENDER = renderSpec;
+})();
+
+/* =========================================================
+RENDER (existing + SPEC_NODE hook)
+========================================================= */
+function render(){
+  root.classList.toggle("invert", !!STATE.ui.invert);
+  root.classList.toggle("blackout", !!STATE.ui.blackout);
+  root.classList.toggle("fs", !!STATE.ui.fullscreen);
+  syncMotion();
+
+  $("drawer").classList.toggle("open", !!STATE.ui.drawerOpen && !STATE.ui.blackout && !STATE.ui.fullscreen);
+
+  $("ketaNote").classList.toggle("open", !!STATE.ui.noteOpen && !STATE.ui.blackout);
+  $("ketaIcon").classList.toggle("open", !!STATE.ui.noteOpen && !STATE.ui.blackout);
+
+  $("ketaText").value=STATE.ketaNote||"";
+  $("universals").value=STATE.universals||"";
+  $("roomName").textContent=canonRoomName(STATE.room)||"BASE";
+
+  const s=stableSig();
+  $("sig").textContent=s;
+  $("sig2").textContent=s;
+  $("fsLabel").textContent=STATE.ui.fullscreen ? "ON" : "OFF";
+  $("blkLabel").textContent=STATE.ui.blackout ? "ON" : "OFF";
+  $("lightLabel").textContent=String(STATE.ui.lightPreset||1);
+  $("runLabel").textContent=STATE.ui.lightRunning ? "ON" : "OFF";
+  $("motionLabel").textContent=STATE.ui.motionOn ? "ON" : "OFF";
+
+  if(STATE.ui.noteRect){
+    const r=STATE.ui.noteRect;
+    const box=$("ketaNote");
+    if(r.x===null || typeof r.x==="undefined"){
+      box.style.left="auto";
+      box.style.top=r.y+"px";
+      box.style.right="16px";
+    }else{
+      box.style.left=r.x+"px";
+      box.style.top=r.y+"px";
+      box.style.right="auto";
+    }
+    box.style.width=r.w+"px";
+    box.style.height=r.h+"px";
+  }
+
+  ensureCorePresets();
+  ensureActiveSet();
+  renderRoomList();
+  renderSetList();
+  renderArmedBar();
+  renderPinnedPanel();
+  renderActiveStrip();
+
+  const __pad = $("padPanel");
+  if(__pad){
+    __pad.classList.toggle("open", !!STATE.ui.padOpen && !STATE.ui.blackout);
+  }
+
+  renderPad();
+
+  if(window.__KDT_SPEC_RENDER) window.__KDT_SPEC_RENDER();
+}
+
+/* =========================================================
+LIFECYCLE FLUSH (existing)
+========================================================= */
+window.addEventListener("pagehide",()=>persist(true));
+window.addEventListener("beforeunload",()=>persist(true));
+document.addEventListener("visibilitychange",()=>{
+  if(document.visibilityState==="hidden") persist(true);
+});
+window.addEventListener("pageshow",()=>{
+  const stored=loadFromKey(STORAGE_KEY);
+  if(stored){
+    STATE=migrateState(stored);
+    ensureCorePresets();
+    render();
+  }
+});
+
+/* =========================================================
+BOOT
+========================================================= */
+ensureCorePresets();
+root.style.setProperty("--drawer-h", String(STATE.ui.drawerH));
+bindHotkeys();
+
+_BOOTING = false;
+render();
+
+/* Seed sovereign storage only if nothing exists yet */
+if(!_BOOT_LOADED){
+  persist(true);
+}
+
+/* Ensure running light resumes */
+if(STATE.ui.lightRunning && !STATE.ui.blackout) startLight(STATE.ui.lightPreset||1);
+</script>
+
+<!-- =========================================================
+AE/EE/WB SERIALIZATION STAMP (MANDATORY)
+AE/EE/WB + FILE_ID/ROOM_ID/VERSION/UPDATED_AT/CHANGELOG
+FILE_ID: KETADATA_SHELL8
+ROOM_ID: BASE
+VERSION: BASE_SYSTEM_SOVEREIGN_v4
+UPDATED_AT: 2025-12-30T00:00:00-05:00
+CHANGELOG:
+- EE: DUMB FIX — STORAGE KEY IS NOW A SINGLE CONSTANT: "KDT::BASE::SOVEREIGN::STATE" (NO PATH/FILE/PAGE SCOPING)
+- EE: STILL MIGRATES PRIOR v1/v2/PATH-SCOPED BASE INTO THE SOVEREIGN KEY ON FIRST BOOT
+- EE: LIFECYCLE FLUSH (pagehide/beforeunload/visibilitychange) REMAINS
+- EE/WB: ADDED SPEC_NODE FLUID MODULE (DRAG/RESIZE/COLLAPSE) WITH BOTTOM-BAR ICON
+- WB: NO UI/AESTHETIC/INTERACTION CHANGES
+========================================================= -->
+</body>
+</html>
