@@ -1,0 +1,367 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>LOCALSTORAGE AUDIT</title>
+<style>
+  html,body{margin:0;height:100%;background:#000;color:#d8d8d8;font:12px/1.35 Arial,Helvetica,sans-serif;letter-spacing:.08em;text-transform:uppercase}
+  *{box-sizing:border-box}
+  .bar{position:fixed;left:0;right:0;top:0;height:44px;display:flex;align-items:center;gap:10px;padding:0 12px;border-bottom:1px solid rgba(255,255,255,.08);background:rgba(0,0,0,.85);backdrop-filter:blur(2px);z-index:10}
+  .bar .title{opacity:.9}
+  .bar input{flex:1;min-width:160px;background:#000;border:1px solid rgba(255,255,255,.12);color:#fff;padding:8px 10px;outline:none}
+  .bar button{background:#000;border:1px solid rgba(255,255,255,.12);color:#fff;padding:8px 10px;cursor:pointer}
+  .bar button:hover{opacity:.75}
+  .main{position:fixed;top:44px;left:0;right:0;bottom:0;display:grid;grid-template-columns: 420px 1fr;gap:0}
+  .left{border-right:1px solid rgba(255,255,255,.08);overflow:auto}
+  .right{display:grid;grid-template-rows: 1fr 240px;overflow:hidden}
+  .panel{padding:10px 12px}
+  .k{opacity:.85}
+  .small{opacity:.55;font-size:11px;letter-spacing:.06em}
+  .list{width:100%;border-collapse:collapse}
+  .list tr{border-bottom:1px solid rgba(255,255,255,.06)}
+  .list td{padding:8px 10px;vertical-align:top}
+  .row{cursor:pointer}
+  .row:hover{background:rgba(255,255,255,.03)}
+  .row.active{background:rgba(255,255,255,.06)}
+  .pill{display:inline-block;padding:2px 6px;border:1px solid rgba(255,255,255,.12);opacity:.7}
+  .viewer{overflow:auto;border-bottom:1px solid rgba(255,255,255,.08)}
+  pre{margin:0;white-space:pre-wrap;word-break:break-word;text-transform:none;letter-spacing:0;font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;font-size:12px;line-height:1.35;color:#eaeaea}
+  .controls{display:flex;gap:8px;flex-wrap:wrap;padding:10px 12px;border-bottom:1px solid rgba(255,255,255,.08)}
+  .controls button{background:#000;border:1px solid rgba(255,255,255,.12);color:#fff;padding:7px 10px;cursor:pointer}
+  .controls button:hover{opacity:.75}
+  .log{overflow:auto}
+  .log .evt{border-bottom:1px solid rgba(255,255,255,.06);padding:8px 12px}
+  .log .evt .meta{display:flex;gap:10px;flex-wrap:wrap}
+  .log .evt .meta span{opacity:.75}
+  .warn{color:#ffb3b3}
+  .ok{color:#b8ffb8}
+</style>
+</head>
+<body>
+
+<div class="bar">
+  <div class="title">LOCALSTORAGE AUDIT</div>
+  <input id="q" placeholder="FILTER KEYS / CONTENT..." />
+  <button id="refresh">REFRESH</button>
+  <button id="export">EXPORT JSON</button>
+</div>
+
+<div class="main">
+  <div class="left">
+    <div class="panel small">
+      <div>ORIGIN: <span id="origin" class="k"></span></div>
+      <div>ITEMS: <span id="count" class="k"></span></div>
+      <div>TOTAL BYTES: <span id="total" class="k"></span></div>
+      <div style="margin-top:8px;opacity:.6">CLICK A ROW TO VIEW VALUE. WRITES ARE LOGGED BELOW.</div>
+    </div>
+    <table class="list" id="list"></table>
+  </div>
+
+  <div class="right">
+    <div class="viewer">
+      <div class="controls">
+        <button id="copyKey">COPY KEY</button>
+        <button id="copyVal">COPY VALUE</button>
+        <button id="pretty">PRETTY JSON</button>
+        <button id="raw">RAW</button>
+        <button id="del">DELETE KEY</button>
+      </div>
+      <div class="panel small">
+        <div>SELECTED KEY: <span id="selKey" class="k"></span></div>
+        <div>BYTES: <span id="selBytes" class="k"></span></div>
+      </div>
+      <div class="panel"><pre id="val"></pre></div>
+    </div>
+
+    <div class="log" id="log"></div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const el = (id)=>document.getElementById(id);
+
+  const state = {
+    keys: [],
+    selected: null,
+    rawValue: "",
+    prettyMode: false,
+    writeLog: []
+  };
+
+  el("origin").textContent = location.origin;
+
+  function bytes(s){ return (s||"").length; }
+  function fmtBytes(n){
+    if(n < 1024) return n + " B";
+    if(n < 1024*1024) return (n/1024).toFixed(1) + " KB";
+    return (n/(1024*1024)).toFixed(2) + " MB";
+  }
+
+  function safeGet(k){
+    try { return localStorage.getItem(k); } catch(e){ return null; }
+  }
+
+  function snapshot(){
+    const ks = [];
+    let total = 0;
+    try{
+      for(let i=0;i<localStorage.length;i++){
+        const k = localStorage.key(i);
+        const v = safeGet(k);
+        const b = bytes(v);
+        total += b;
+        ks.push({ key:k, bytes:b, preview:(v||"").slice(0,160) });
+      }
+    }catch(e){}
+    ks.sort((a,b)=>a.key.localeCompare(b.key));
+    state.keys = ks;
+    el("count").textContent = String(ks.length);
+    el("total").textContent = fmtBytes(total);
+  }
+
+  function renderList(){
+    const q = (el("q").value||"").trim().toLowerCase();
+    const rows = [];
+    for(const item of state.keys){
+      const hay = (item.key + "\n" + item.preview).toLowerCase();
+      if(q && !hay.includes(q)) continue;
+      const active = (state.selected === item.key) ? "active" : "";
+      rows.push(`
+        <tr class="row ${active}" data-key="${escapeHtml(item.key)}">
+          <td style="width:66%">
+            <div class="k">${escapeHtml(item.key)}</div>
+            <div class="small" style="opacity:.45">${escapeHtml(item.preview).replace(/\n/g," ")}</div>
+          </td>
+          <td style="width:34%;text-align:right">
+            <span class="pill">${fmtBytes(item.bytes)}</span>
+          </td>
+        </tr>
+      `);
+    }
+    el("list").innerHTML = rows.join("");
+    [...el("list").querySelectorAll(".row")].forEach(r=>{
+      r.addEventListener("click", ()=>{
+        const k = r.getAttribute("data-key");
+        selectKey(unescapeHtml(k));
+      });
+    });
+  }
+
+  function selectKey(k){
+    state.selected = k;
+    const v = safeGet(k);
+    state.rawValue = (v==null ? "" : v);
+    el("selKey").textContent = k || "";
+    el("selBytes").textContent = fmtBytes(bytes(state.rawValue));
+    renderValue();
+    renderList();
+  }
+
+  function renderValue(){
+    if(!state.selected){
+      el("val").textContent = "";
+      return;
+    }
+    if(state.prettyMode){
+      const s = tryPretty(state.rawValue);
+      el("val").textContent = s;
+    }else{
+      el("val").textContent = state.rawValue;
+    }
+  }
+
+  function tryPretty(s){
+    try{
+      const obj = JSON.parse(s);
+      return JSON.stringify(obj, null, 2);
+    }catch(e){
+      return s;
+    }
+  }
+
+  function logEvent(evt){
+    state.writeLog.unshift(evt);
+    if(state.writeLog.length > 200) state.writeLog.pop();
+    renderLog();
+  }
+
+  function renderLog(){
+    const out = [];
+    for(const e of state.writeLog){
+      const cls = e.ok ? "ok" : "warn";
+      out.push(`
+        <div class="evt">
+          <div class="meta small">
+            <span class="${cls}">${escapeHtml(e.type)}</span>
+            <span>KEY: <span class="k">${escapeHtml(e.key||"(none)")}</span></span>
+            <span>BYTES: <span class="k">${escapeHtml(e.bytes||"")}</span></span>
+            <span>TIME: <span class="k">${escapeHtml(e.time)}</span></span>
+            ${e.source ? `<span>SOURCE: <span class="k">${escapeHtml(e.source)}</span></span>` : ""}
+          </div>
+          ${e.stack ? `<pre style="margin-top:6px;opacity:.9">${escapeHtml(e.stack)}</pre>` : ""}
+        </div>
+      `);
+    }
+    el("log").innerHTML = out.join("");
+  }
+
+  function now(){
+    const d = new Date();
+    const pad = (n)=>String(n).padStart(2,"0");
+    return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+  }
+
+  function escapeHtml(s){
+    return String(s)
+      .replaceAll("&","&amp;")
+      .replaceAll("<","&lt;")
+      .replaceAll(">","&gt;")
+      .replaceAll('"',"&quot;")
+      .replaceAll("'","&#039;");
+  }
+  function unescapeHtml(s){
+    // minimal, only used for data-key roundtrip
+    return String(s)
+      .replaceAll("&amp;","&")
+      .replaceAll("&lt;","<")
+      .replaceAll("&gt;",">")
+      .replaceAll("&quot;",'"')
+      .replaceAll("&#039;","'");
+  }
+
+  // Monkeypatch writes FROM THIS PAGE FORWARD
+  const _setItem = localStorage.setItem.bind(localStorage);
+  const _removeItem = localStorage.removeItem.bind(localStorage);
+  const _clear = localStorage.clear.bind(localStorage);
+
+  localStorage.setItem = function(k,v){
+    const stack = (new Error()).stack || "";
+    try{
+      _setItem(k, v);
+      logEvent({type:"SETITEM", key:String(k), bytes: fmtBytes(bytes(String(v))), time: now(), ok:true, source:"this tab", stack: trimStack(stack)});
+    }catch(err){
+      logEvent({type:"SETITEM FAIL", key:String(k), bytes:"", time: now(), ok:false, source:"this tab", stack: (String(err) + "\n" + trimStack(stack))});
+      throw err;
+    }
+  };
+
+  localStorage.removeItem = function(k){
+    const stack = (new Error()).stack || "";
+    try{
+      _removeItem(k);
+      logEvent({type:"REMOVE", key:String(k), bytes:"", time: now(), ok:true, source:"this tab", stack: trimStack(stack)});
+    }catch(err){
+      logEvent({type:"REMOVE FAIL", key:String(k), bytes:"", time: now(), ok:false, source:"this tab", stack: (String(err) + "\n" + trimStack(stack))});
+      throw err;
+    }
+  };
+
+  localStorage.clear = function(){
+    const stack = (new Error()).stack || "";
+    try{
+      _clear();
+      logEvent({type:"CLEAR", key:"(all)", bytes:"", time: now(), ok:true, source:"this tab", stack: trimStack(stack)});
+    }catch(err){
+      logEvent({type:"CLEAR FAIL", key:"(all)", bytes:"", time: now(), ok:false, source:"this tab", stack: (String(err) + "\n" + trimStack(stack))});
+      throw err;
+    }
+  };
+
+  function trimStack(stack){
+    // keep it readable, drop first line if it’s just "Error"
+    const lines = String(stack).split("\n");
+    const out = [];
+    for(let i=0;i<lines.length;i++){
+      const ln = lines[i].trim();
+      if(!ln) continue;
+      if(i===0 && ln.toLowerCase()==="error") continue;
+      // keep only a few frames, but include callers
+      out.push(ln);
+      if(out.length>=10) break;
+    }
+    return out.join("\n");
+  }
+
+  // Cross-tab writes
+  window.addEventListener("storage", (e)=>{
+    logEvent({
+      type:"STORAGE EVENT",
+      key: e.key || "(null)",
+      bytes: e.newValue ? fmtBytes(bytes(e.newValue)) : "",
+      time: now(),
+      ok: true,
+      source: "other tab",
+      stack: ""
+    });
+
+    // refresh list; keep selection if possible
+    const keep = state.selected;
+    snapshot();
+    renderList();
+    if(keep && state.keys.some(x=>x.key===keep)){
+      selectKey(keep);
+    }
+  });
+
+  // UI buttons
+  el("refresh").addEventListener("click", ()=>{
+    snapshot();
+    renderList();
+    if(state.selected && state.keys.some(x=>x.key===state.selected)){
+      selectKey(state.selected);
+    }
+  });
+
+  el("export").addEventListener("click", ()=>{
+    const obj = {};
+    try{
+      for(let i=0;i<localStorage.length;i++){
+        const k = localStorage.key(i);
+        obj[k] = safeGet(k);
+      }
+    }catch(e){}
+    const blob = new Blob([JSON.stringify(obj, null, 2)], {type:"application/json"});
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "localStorage_export.json";
+    a.click();
+    setTimeout(()=>URL.revokeObjectURL(a.href), 500);
+  });
+
+  el("q").addEventListener("input", ()=>renderList());
+
+  el("pretty").addEventListener("click", ()=>{ state.prettyMode = true; renderValue(); });
+  el("raw").addEventListener("click", ()=>{ state.prettyMode = false; renderValue(); });
+
+  el("copyKey").addEventListener("click", async ()=>{
+    if(!state.selected) return;
+    try{ await navigator.clipboard.writeText(state.selected); }catch(e){}
+  });
+
+  el("copyVal").addEventListener("click", async ()=>{
+    if(!state.selected) return;
+    try{ await navigator.clipboard.writeText(state.rawValue); }catch(e){}
+  });
+
+  el("del").addEventListener("click", ()=>{
+    if(!state.selected) return;
+    try{ localStorage.removeItem(state.selected); }catch(e){}
+    state.selected = null;
+    state.rawValue = "";
+    el("selKey").textContent = "";
+    el("selBytes").textContent = "";
+    el("val").textContent = "";
+    snapshot(); renderList();
+  });
+
+  // init
+  snapshot();
+  renderList();
+  logEvent({type:"AUDIT READY", key:"", bytes:"", time: now(), ok:true, source:"this tab", stack:""});
+})();
+</script>
+
+</body>
+</html>
