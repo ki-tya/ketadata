@@ -647,10 +647,6 @@ EE ▸ ENGINE LAYER
 ========================================================= -->
 <script>
 
-// EE: boot guard (var to avoid TDZ issues)
-var _BOOTING = true;
-var LAST_SAVE_ERROR = null;
-
 /* =========================================================
 EE ▸ CONFIG (PATHS)
 ========================================================= */
@@ -687,24 +683,10 @@ const root=$("root");
 const stage=$("stage");
 const motion=$("motion");
 
-/* SOVEREIGN STORAGE KEYS
-   - Must be CONSTANT (no URL-derived key drift)
-   - Must be UNIQUE PER BASE FILE to avoid cross-tab overwrites between different Base variants.
-*/
-/* SOVEREIGN STORAGE KEYS
-   - CONSTANT (no URL-derived drift)
-   - UNIQUE PER PAGE (FILE_ID + PAGE_ID) to prevent cross-page overwrites.
-   - "SOVEREIGN" means: the key is stable for this file, regardless of path, tab, or navigation.
-*/
-const STORAGE_KEY_MAIN   = `KDT::SOVEREIGN::${FILE_ID}::${PAGE_ID}::STATE`;
-const STORAGE_KEY_BACKUP = `KDT::SOVEREIGN::${FILE_ID}::${PAGE_ID}::STATE::BACKUP`;
-const STORAGE_KEY_TMP    = `KDT::SOVEREIGN::${FILE_ID}::${PAGE_ID}::STATE::TMP`;
-
-/* Legacy "one key for all bases" (migration only) */
-const STORAGE_KEY_GLOBAL_MAIN   = "KDT::BASE::SOVEREIGN::STATE";
-const STORAGE_KEY_GLOBAL_BACKUP = "KDT::BASE::SOVEREIGN::STATE::BACKUP";
-const STORAGE_KEY_GLOBAL_TMP    = "KDT::BASE::SOVEREIGN::STATE::TMP";
-
+/* SOVEREIGN CANON KEYS (DUMB FIX: CONSTANT, UNCHANGING) */
+const STORAGE_KEY_MAIN   = "KDT::BASE::SOVEREIGN::STATE";
+const STORAGE_KEY_BACKUP = "KDT::BASE::SOVEREIGN::STATE::BACKUP";
+const STORAGE_KEY_TMP    = "KDT::BASE::SOVEREIGN::STATE::TMP";
 
 /* Previous keys (migration only) */
 const STORAGE_KEY_CANON_OLD = `KDT::BASE::STATE::${FILE_ID}::${PAGE_ID}::CANON_v1`;
@@ -946,34 +928,13 @@ Order:
 4) migrate older v1/legacy
 ========================================================= */
 function loadLocal(){
-  // 1) page-sovereign main
+  // 1) sovereign main
   let s = loadFromKey(STORAGE_KEY_MAIN);
   if(s) return mergeDefault(s);
 
-  // 2) page-sovereign backup
+  // 2) sovereign backup
   s = loadFromKey(STORAGE_KEY_BACKUP);
   if(s){
-    const merged = mergeDefault(s);
-    try{
-      localStorage.setItem(STORAGE_KEY_MAIN, JSON.stringify(merged));
-      localStorage.setItem(STORAGE_KEY_BACKUP, JSON.stringify(merged));
-    }catch(e){}
-    return merged;
-  }
-
-  // 3) migrate from legacy GLOBAL sovereign key (old behavior) into this page key
-  s = loadFromKey(STORAGE_KEY_GLOBAL_MAIN) || loadFromKey(STORAGE_KEY_GLOBAL_BACKUP);
-  if(s){
-    const merged = mergeDefault(s);
-    try{
-      localStorage.setItem(STORAGE_KEY_MAIN, JSON.stringify(merged));
-      localStorage.setItem(STORAGE_KEY_BACKUP, JSON.stringify(merged));
-    }catch(e){}
-    return merged;
-  }
-
-  // 4) migrate any prior path-scoped v2 (pick most recent)
-
     const merged = mergeDefault(s);
     try{
       localStorage.setItem(STORAGE_KEY_MAIN, JSON.stringify(merged));
@@ -1145,10 +1106,10 @@ EE ▸ PERSIST (SOVEREIGN, DUMB, RELIABLE)
 - write MAIN + BACKUP every time
 - also flush on lifecycle events
 ========================================================= */
-_BOOTING = true;
+let _BOOTING = true;
 
 function persist(silent=false){
-  if(_BOOTING) return false;
+  if(_BOOTING) return;
 
   STATE.updatedAt=nowISO();
   ensureCorePresets();
@@ -1160,18 +1121,9 @@ function persist(silent=false){
     localStorage.setItem(STORAGE_KEY_TMP, blob);
     localStorage.setItem(STORAGE_KEY_MAIN, blob);
     localStorage.setItem(STORAGE_KEY_BACKUP, blob);
-    LAST_SAVE_ERROR = null;
-  }catch(e){
-    LAST_SAVE_ERROR = String((e && e.message) ? e.message : e);
-    try{ console.warn("KETADATA SAVE FAILED:", LAST_SAVE_ERROR); }catch(_){}
-    if(!silent){
-      try{ toast("SAVE FAIL"); }catch(_){}
-    }
-    return false;
-  }
+  }catch(e){}
 
   if(!silent) render();
-  return true;
 }
 
 /* lifecycle flush — guarantees most recent Base survives refresh/navigation */
@@ -2468,17 +2420,13 @@ ensureCorePresets();
 root.style.setProperty("--drawer-h", String(STATE.ui.drawerH));
 bindHotkeys();
 
-/* Boot must never leave persistence disabled */
-try{
-  // no-op: wiring has already been bound
-}finally{
-  _BOOTING = false;
-}
-
-/* Always flush the loaded state once (canonicalize storage + validate write access) */
-persist(true);
-
+_BOOTING = false;
 render();
+
+/* Seed sovereign storage only if nothing exists yet */
+if(!_BOOT_LOADED){
+  persist(true);
+}
 
 /* Ensure running light resumes */
 if(STATE.ui.lightRunning && !STATE.ui.blackout) startLight(STATE.ui.lightPreset||1);
