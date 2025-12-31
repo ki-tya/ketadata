@@ -1,0 +1,643 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>KETADATA_BACKBONE</title>
+  <style>
+    :root{
+      --bg:#0b0b0b;
+      --fg:#eaeaea;
+      --mut:#9a9a9a;
+      --line:#2a2a2a;
+      --panel:#101010;
+      --panel2:#0d0d0d;
+      --accent:#ffffff;
+      --fs:12px; /* all text same size */
+    }
+    *{ box-sizing:border-box; }
+    html,body{ height:100%; margin:0; background:var(--bg); color:var(--fg); font: var(--fs)/1.25 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+    button,input,textarea{ font:inherit; color:inherit; background:transparent; border:1px solid var(--line); padding:6px 8px; border-radius:0; }
+    button{ cursor:pointer; }
+    button:hover{ border-color:#444; }
+    button:active{ opacity:0.85; }
+    .row{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+    .topbar,.bottombar{
+      position:fixed; left:0; right:0;
+      background:linear-gradient(to bottom, rgba(10,10,10,0.95), rgba(10,10,10,0.75));
+      border-bottom:1px solid var(--line);
+      padding:8px;
+      z-index:50;
+    }
+    .bottombar{
+      top:auto; bottom:0;
+      border-bottom:0;
+      border-top:1px solid var(--line);
+      background:linear-gradient(to top, rgba(10,10,10,0.95), rgba(10,10,10,0.75));
+    }
+    .spacer{ flex:1; }
+    .pill{
+      border:1px solid var(--line);
+      padding:6px 8px;
+      background:rgba(16,16,16,0.7);
+      white-space:nowrap;
+    }
+    .pill b{ font-weight:700; }
+    .dim{ opacity:0.65; }
+    .stage{
+      position:fixed; inset:0;
+      pointer-events:none; /* CRITICAL */
+      z-index:0;
+    }
+    canvas{ width:100%; height:100%; display:block; }
+    .surface{
+      position:relative;
+      height:100%;
+      padding-top:52px;   /* topbar height */
+      padding-bottom:52px;/* bottombar height */
+      z-index:1;
+    }
+    .note{
+      position:absolute;
+      width:360px;
+      background:rgba(12,12,12,0.92);
+      border:1px solid var(--line);
+      box-shadow:none;
+      border-radius:0;
+    }
+    .noteHeader{
+      display:flex; align-items:center; gap:8px;
+      padding:8px;
+      border-bottom:1px solid var(--line);
+      background:rgba(16,16,16,0.8);
+      cursor:move;
+      user-select:none;
+    }
+    .noteHeader .tag{ opacity:0.75; }
+    .noteBody{ padding:8px; }
+    textarea{
+      width:100%;
+      height:220px;
+      resize:none;
+      outline:none;
+      border:1px solid var(--line);
+      background:rgba(0,0,0,0.35);
+    }
+    .noteFooter{
+      display:flex; gap:8px; align-items:center;
+      padding:8px;
+      border-top:1px solid var(--line);
+      background:rgba(16,16,16,0.6);
+    }
+    .hide{ display:none !important; }
+
+    /* NULL mode: quiet/fullscreen chrome off */
+    body.null .topbar,
+    body.null .bottombar{
+      display:none;
+    }
+    body.null .surface{
+      padding-top:0;
+      padding-bottom:0;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="stage" aria-hidden="true">
+    <canvas id="bg"></canvas>
+  </div>
+
+  <div class="topbar">
+    <div class="row">
+      <div class="pill"><b>KETADATA</b> <span class="dim">BACKBONE</span></div>
+
+      <button id="btnImport" type="button">IMPORT</button>
+      <button id="btnExport" type="button">EXPORT</button>
+      <input id="fileInput" type="file" accept="application/json" class="hide" />
+
+      <button id="btnInvert" type="button">INVERT (SHIFT+I)</button>
+      <button id="btnNull" type="button">NULL (SHIFT+N)</button>
+      <button id="btnFullscreen" type="button">FULLSCREEN (SHIFT+F)</button>
+
+      <button id="btnMotion" type="button">MOTION</button>
+      <div class="pill dim" id="statusPill">LIGHT: 0 | MOTION: 0</div>
+
+      <div class="spacer"></div>
+
+      <div class="pill dim">1–6 LIGHTS | SPACE MOTION (GUARDED)</div>
+    </div>
+  </div>
+
+  <div class="surface" id="surface">
+    <!-- KETA_NOTE is mandatory and must exist on every surface -->
+    <div class="note" id="ketaNote">
+      <div class="noteHeader" id="ketaNoteHeader">
+        <div class="tag">KETA_NOTE</div>
+        <div class="spacer"></div>
+        <button id="btnNoteToggle" type="button" title="Toggle note visibility">HIDE</button>
+      </div>
+      <div class="noteBody" id="ketaNoteBody">
+        <textarea id="ketaNoteText" spellcheck="false"></textarea>
+      </div>
+      <div class="noteFooter">
+        <div class="pill dim" id="notePosPill">X: 0 | Y: 0</div>
+        <div class="spacer"></div>
+        <div class="pill dim">STATE = LITERAL UI</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="bottombar">
+    <div class="row">
+      <div class="pill dim">PRESETS</div>
+      <button id="btnLanding" type="button">LANDING (SHIFT+K)</button>
+      <button id="btnCrunch1" type="button">CRUNCH1 (SHIFT+X)</button>
+      <button id="btnKDTV1" type="button">KDTV1 (SHIFT+Z)</button>
+      <button id="btnPod" type="button">POD/ROOM (SHIFT+V)</button>
+      <button id="btnWorld" type="button">WORLD/MAP (SHIFT+W)</button>
+      <button id="btnInfinity" type="button">INFINITY (SHIFT+P)</button>
+
+      <div class="spacer"></div>
+
+      <div class="pill dim" id="metaPill"></div>
+    </div>
+  </div>
+
+  <script>
+    // =========================
+    // EE: STATE / DEFAULTS
+    // =========================
+    const META = {
+      FILE_ID: "KETADATA_BACKBONE_MIN",
+      ROOM_ID: "BASE",
+      VERSION_ID: "V1"
+    };
+
+    const DEFAULT_STATE = () => ({
+      version: "KETADATA_SHELL_KERNEL_v1",
+      updatedAt: new Date().toISOString(),
+      fileId: META.FILE_ID,
+      roomId: META.ROOM_ID,
+      versionId: META.VERSION_ID,
+
+      system: {
+        invert: false,
+        nullMode: false,
+        light: 0,          // 0..6
+        motionOn: true,    // motion gating toggle
+        motion: 0          // 0..6 continuous intensity (SPACE cycles when enabled)
+      },
+
+      ui: {
+        noteOpen: true,
+        notePos: { x: 24, y: 72 }
+      },
+
+      ketaNote: ""
+    });
+
+    function deepFill(target, defaults) {
+      // deep-fill missing keys so UI never renders dead
+      if (target == null || typeof target !== "object") return structuredClone(defaults);
+      const out = Array.isArray(defaults) ? [] : {};
+      for (const k of Object.keys(defaults)) {
+        const dv = defaults[k];
+        const tv = target[k];
+        if (tv === undefined) {
+          out[k] = structuredClone(dv);
+        } else if (dv && typeof dv === "object" && !Array.isArray(dv)) {
+          out[k] = deepFill(tv, dv);
+        } else {
+          out[k] = tv;
+        }
+      }
+      // keep extra keys if present (permissive)
+      for (const k of Object.keys(target)) {
+        if (out[k] === undefined) out[k] = target[k];
+      }
+      return out;
+    }
+
+    const STORAGE_KEY = `${META.FILE_ID}::STATE`;
+
+    let STATE = null;
+
+    // =========================
+    // WB: BOOT ORDER LAW
+    // =========================
+    (function boot(){
+      // 1) init defaults
+      const defaults = DEFAULT_STATE();
+
+      // 2) load persisted
+      let persisted = null;
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (raw) persisted = JSON.parse(raw);
+      } catch (_) {}
+
+      // 3) deep-fill
+      STATE = deepFill(persisted || {}, defaults);
+
+      // 4) render
+      renderFromState();
+
+      // 5) bind
+      bindEvents();
+      startBackground();
+
+      persistSoon(); // normalize storage after deep-fill
+    })();
+
+    // =========================
+    // EE: PERSISTENCE
+    // =========================
+    let persistTimer = null;
+    function persistSoon(){
+      clearTimeout(persistTimer);
+      persistTimer = setTimeout(() => {
+        STATE.updatedAt = new Date().toISOString();
+        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(STATE)); } catch(_) {}
+        updateMetaPill();
+      }, 50);
+    }
+
+    // =========================
+    // AE: RENDER
+    // =========================
+    const els = {};
+    function cacheEls(){
+      const ids = [
+        "btnImport","btnExport","fileInput",
+        "btnInvert","btnNull","btnFullscreen","btnMotion",
+        "btnLanding","btnCrunch1","btnKDTV1","btnPod","btnWorld","btnInfinity",
+        "ketaNote","ketaNoteHeader","ketaNoteBody","ketaNoteText","btnNoteToggle",
+        "statusPill","notePosPill","metaPill"
+      ];
+      for (const id of ids) els[id] = document.getElementById(id);
+    }
+    cacheEls();
+
+    function renderFromState(){
+      document.body.classList.toggle("null", !!STATE.system.nullMode);
+      document.documentElement.style.filter = STATE.system.invert ? "invert(1)" : "none";
+
+      // Note open/close
+      els.ketaNoteBody.classList.toggle("hide", !STATE.ui.noteOpen);
+      els.btnNoteToggle.textContent = STATE.ui.noteOpen ? "HIDE" : "SHOW";
+
+      // Note position
+      placeNote(STATE.ui.notePos.x, STATE.ui.notePos.y);
+
+      // Note content
+      if (els.ketaNoteText.value !== STATE.ketaNote) {
+        els.ketaNoteText.value = STATE.ketaNote || "";
+      }
+
+      // Status pills
+      updateStatusPill();
+      updateMetaPill();
+    }
+
+    function placeNote(x, y){
+      const n = els.ketaNote;
+      n.style.left = `${x}px`;
+      n.style.top  = `${y}px`;
+      els.notePosPill.textContent = `X: ${Math.round(x)} | Y: ${Math.round(y)}`;
+    }
+
+    function updateStatusPill(){
+      const l = clampInt(STATE.system.light, 0, 6);
+      const m = clampInt(STATE.system.motion, 0, 6);
+      const mon = STATE.system.motionOn ? "ON" : "OFF";
+      els.statusPill.textContent = `LIGHT: ${l} | MOTION: ${m} (${mon})`;
+      // Use light as a subtle global brightness (no layout effect)
+      document.body.style.opacity = "1";
+      document.body.style.filter = ""; // do not hijack; invert handled on html
+      // Keep brightness modulation limited and non-destructive
+      const brightness = 0.85 + (l / 6) * 0.25;
+      document.body.style.setProperty("filter", `brightness(${brightness})`);
+      if (STATE.system.invert) {
+        document.documentElement.style.filter = "invert(1)";
+      }
+    }
+
+    function updateMetaPill(){
+      els.metaPill.textContent =
+        `FILE_ID: ${STATE.fileId} | ROOM_ID: ${STATE.roomId} | VERSION_ID: ${STATE.versionId} | UPDATED_AT: ${STATE.updatedAt}`;
+    }
+
+    function clampInt(v, lo, hi){
+      v = Number.isFinite(+v) ? Math.round(+v) : lo;
+      return Math.max(lo, Math.min(hi, v));
+    }
+
+    // =========================
+    // WB: EVENT BINDING
+    // =========================
+    function bindEvents(){
+      // Buttons
+      els.btnInvert.addEventListener("click", () => { toggleInvert(); });
+      els.btnNull.addEventListener("click", () => { toggleNull(); });
+      els.btnFullscreen.addEventListener("click", () => { toggleFullscreen(); });
+      els.btnMotion.addEventListener("click", () => { toggleMotionOn(); });
+
+      els.btnNoteToggle.addEventListener("click", () => {
+        STATE.ui.noteOpen = !STATE.ui.noteOpen;
+        renderFromState();
+        persistSoon();
+      });
+
+      // Note typing
+      els.ketaNoteText.addEventListener("input", () => {
+        STATE.ketaNote = els.ketaNoteText.value;
+        persistSoon();
+      });
+
+      // Import / Export mandatory
+      els.btnExport.addEventListener("click", exportStateFile);
+      els.btnImport.addEventListener("click", () => els.fileInput.click());
+      els.fileInput.addEventListener("change", importStateFile);
+
+      // Presets (placeholder URLs; replace per surface)
+      wirePreset(els.btnLanding, "landing", "system.html");
+      wirePreset(els.btnCrunch1, "crunch1", "crunch1.html");
+      wirePreset(els.btnKDTV1, "kdtv1", "kdtv1.html");
+      wirePreset(els.btnPod, "pod", "room.html");
+      wirePreset(els.btnWorld, "world", "map.html");
+      wirePreset(els.btnInfinity, "infinity", "infinity.html");
+
+      // Drag note
+      wireDragNote();
+
+      // Hotkeys (locked)
+      window.addEventListener("keydown", (e) => {
+        // Guard: typing safety
+        if (isTypingContext()) return;
+
+        // SHIFT combos
+        if (e.shiftKey) {
+          const k = e.key.toUpperCase();
+          if (k === "I") { e.preventDefault(); toggleInvert(); return; }
+          if (k === "N") { e.preventDefault(); toggleNull(); return; }
+          if (k === "F") { e.preventDefault(); toggleFullscreen(); return; }
+          if (k === "K") { e.preventDefault(); goPreset("landing", "system.html"); return; }
+          if (k === "X") { e.preventDefault(); goPreset("crunch1", "crunch1.html"); return; }
+          if (k === "Z") { e.preventDefault(); goPreset("kdtv1", "kdtv1.html"); return; }
+          if (k === "V") { e.preventDefault(); goPreset("pod", "room.html"); return; }
+          if (k === "W") { e.preventDefault(); goPreset("world", "map.html"); return; }
+          if (k === "P") { e.preventDefault(); goPreset("infinity", "infinity.html"); return; }
+        }
+
+        // 1–6 lights (continuous levels)
+        if (/^[1-6]$/.test(e.key)) {
+          e.preventDefault();
+          STATE.system.light = clampInt(e.key, 1, 6);
+          updateStatusPill();
+          persistSoon();
+          return;
+        }
+
+        // SPACE for motion intensity (guarded, continuous)
+        if (e.code === "Space") {
+          // only if motion is enabled
+          if (!STATE.system.motionOn) return;
+          e.preventDefault();
+          const cur = clampInt(STATE.system.motion, 0, 6);
+          const next = (cur + 1) % 7; // 0..6
+          STATE.system.motion = next;
+          updateStatusPill();
+          persistSoon();
+          return;
+        }
+      });
+    }
+
+    function isTypingContext(){
+      const a = document.activeElement;
+      if (!a) return false;
+      const tag = (a.tagName || "").toLowerCase();
+      if (tag === "input" || tag === "textarea" || tag === "select") return true;
+      if (a.isContentEditable) return true;
+      return false;
+    }
+
+    function toggleInvert(){
+      STATE.system.invert = !STATE.system.invert;
+      renderFromState();
+      persistSoon();
+    }
+
+    function toggleNull(){
+      STATE.system.nullMode = !STATE.system.nullMode;
+      renderFromState();
+      persistSoon();
+    }
+
+    async function toggleFullscreen(){
+      try{
+        if (!document.fullscreenElement) {
+          await document.documentElement.requestFullscreen();
+        } else {
+          await document.exitFullscreen();
+        }
+      } catch(_) {}
+      // fullscreen state can be tracked but should not be required
+      persistSoon();
+    }
+
+    function toggleMotionOn(){
+      STATE.system.motionOn = !STATE.system.motionOn;
+      if (!STATE.system.motionOn) STATE.system.motion = 0;
+      updateStatusPill();
+      persistSoon();
+    }
+
+    function wirePreset(btn, name, url){
+      btn.addEventListener("click", () => goPreset(name, url));
+    }
+
+    function goPreset(name, url){
+      // Navigation is allowed; state must persist through traversal
+      persistSoon();
+      window.location.href = url;
+    }
+
+    // =========================
+    // EE: EXPORT / IMPORT FILE BEHAVIOR
+    // =========================
+    function exportStateFile(){
+      const payload = structuredClone(STATE);
+      payload.updatedAt = new Date().toISOString();
+
+      const ts = payload.updatedAt.replace(/[:.]/g,"-");
+      const room = payload.roomId ? `__${payload.roomId}` : "";
+      const fname = `${payload.fileId}${room}__${payload.versionId}__${ts}.json`;
+
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = fname;
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => {
+        URL.revokeObjectURL(a.href);
+        a.remove();
+      }, 0);
+
+      // persist after export
+      STATE.updatedAt = payload.updatedAt;
+      persistSoon();
+    }
+
+    function importStateFile(ev){
+      const file = ev.target.files && ev.target.files[0];
+      ev.target.value = ""; // allow re-import same file
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = () => {
+        try{
+          const incoming = JSON.parse(String(reader.result || "{}"));
+          // Deep-fill and accept permissively
+          STATE = deepFill(incoming, DEFAULT_STATE());
+          renderFromState();
+          persistSoon();
+        } catch(_) {}
+      };
+      reader.readAsText(file);
+    }
+
+    // =========================
+    // WB: DRAG NOTE (literal position is state)
+    // =========================
+    function wireDragNote(){
+      const n = els.ketaNote;
+      const h = els.ketaNoteHeader;
+
+      let dragging = false;
+      let startX = 0, startY = 0;
+      let baseX = 0, baseY = 0;
+
+      h.addEventListener("pointerdown", (e) => {
+        // do not start drag if clicking the toggle button
+        if (e.target && e.target.tagName && e.target.tagName.toLowerCase() === "button") return;
+        dragging = true;
+        n.setPointerCapture(e.pointerId);
+        startX = e.clientX;
+        startY = e.clientY;
+        baseX = STATE.ui.notePos.x;
+        baseY = STATE.ui.notePos.y;
+        e.preventDefault();
+      });
+
+      h.addEventListener("pointermove", (e) => {
+        if (!dragging) return;
+        const dx = e.clientX - startX;
+        const dy = e.clientY - startY;
+        const nx = Math.max(0, baseX + dx);
+        const ny = Math.max(0, baseY + dy);
+        STATE.ui.notePos.x = nx;
+        STATE.ui.notePos.y = ny;
+        placeNote(nx, ny);
+      });
+
+      h.addEventListener("pointerup", () => {
+        if (!dragging) return;
+        dragging = false;
+        persistSoon();
+      });
+
+      h.addEventListener("pointercancel", () => {
+        if (!dragging) return;
+        dragging = false;
+        persistSoon();
+      });
+    }
+
+    // =========================
+    // AE/EE: BACKGROUND MOTION (pointer-events none; visual only)
+    // =========================
+    const bg = document.getElementById("bg");
+    const ctx = bg.getContext("2d", { alpha: true });
+
+    function resizeCanvas(){
+      const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+      bg.width = Math.floor(window.innerWidth * dpr);
+      bg.height = Math.floor(window.innerHeight * dpr);
+      ctx.setTransform(dpr,0,0,dpr,0,0);
+    }
+    window.addEventListener("resize", resizeCanvas, { passive:true });
+
+    let t0 = performance.now();
+    function startBackground(){
+      resizeCanvas();
+      requestAnimationFrame(tick);
+    }
+
+    function tick(now){
+      const dt = (now - t0) / 1000;
+      t0 = now;
+
+      const w = window.innerWidth, h = window.innerHeight;
+
+      // clear
+      ctx.clearRect(0,0,w,h);
+
+      // Motion intensity (0..6)
+      const motion = clampInt(STATE.system.motion, 0, 6);
+      const motionOn = !!STATE.system.motionOn;
+      const speed = motionOn ? (0.03 + motion * 0.03) : 0;
+
+      // simple concentric line field (visual only)
+      const time = now / 1000;
+      const cx = w * 0.5, cy = h * 0.5;
+
+      ctx.globalAlpha = 0.25;
+      ctx.strokeStyle = "#ffffff";
+      ctx.lineWidth = 1;
+
+      const rings = 18;
+      for (let i=0;i<rings;i++){
+        const r = 40 + i*28 + Math.sin((time*speed) + i*0.35) * (motion * 6);
+        ctx.beginPath();
+        ctx.arc(cx, cy, r, 0, Math.PI*2);
+        ctx.stroke();
+      }
+
+      ctx.globalAlpha = 0.18;
+      // subtle grid
+      const step = 60;
+      for (let x = 0; x <= w; x += step){
+        ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,h); ctx.stroke();
+      }
+      for (let y = 0; y <= h; y += step){
+        ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(w,y); ctx.stroke();
+      }
+
+      requestAnimationFrame(tick);
+    }
+  </script>
+
+  <!--
+  =========================
+  KETADATA HTML SERIALIZATION STAMP
+  =========================
+
+  AE:
+  - Uniform text size, minimal chrome, NULL hides chrome, industrial baseline.
+  EE:
+  - Literal state model + deep-fill + localStorage; Import/Export always present with real file IO.
+  WB:
+  - Locked hotkeys with typing guards; SPACE controls Motion intensity (guarded); pointer-events discipline.
+
+  FILE_ID: KETADATA_BACKBONE_MIN
+  ROOM_ID: BASE
+  VERSION_ID: V1
+  UPDATED_AT: 2025-12-30T00:00:00.000Z
+  CHANGELOG:
+  - Initial backbone: state, KETA_NOTE, import/export, universals, guarded motion/lighting, non-intercepting stage.
+  -->
+</body>
+</html>
