@@ -1,0 +1,1213 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>KETADATA_BASE_SYSTEM</title>
+
+<style>
+:root{
+  --bg:#000; --fg:#fff; --muted:#8a8a8a; --line:#222; --line2:#333;
+  --top:44px; --bot:34px;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace;
+  --sans: Arial, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+  --ctl-radius:0px;
+  --ctl-alpha:0.82;
+  --ctl-bg: rgba(0,0,0,var(--ctl-alpha));
+  --note-border: rgba(255,255,255,0.78);
+  --drawer-h: 0.42;
+}
+*{box-sizing:border-box}
+html,body{height:100%; margin:0}
+body{background:var(--bg); color:var(--fg); font-family:var(--sans); overflow:hidden; user-select:none}
+#root{position:fixed; inset:0; background:#000}
+#root.invert{filter:invert(1)}
+#root.fs .topbar,#root.fs .bottombar,#root.fs .drawer,#root.fs #pinnedPanel,#root.fs #armedBar,#root.fs .toast{display:none !important}
+#root.blackout .topbar,#root.blackout .bottombar,#root.blackout .drawer,#root.blackout #pinnedPanel,#root.blackout #armedBar,#root.blackout .toast,#root.blackout .ketaNote{display:none !important}
+#root.blackout #stage{background:#000 !important; filter:none !important}
+#root.blackout #motion{display:none !important}
+
+#stage{position:absolute; inset:0; background:#000; pointer-events:none}
+#motion{position:absolute; inset:0; pointer-events:none; opacity:0; background:repeating-linear-gradient(135deg, rgba(255,255,255,0.06) 0px, rgba(255,255,255,0.06) 1px, rgba(0,0,0,0) 12px, rgba(0,0,0,0) 22px); mix-blend-mode:screen; transform:translate3d(0,0,0)}
+#motion.run{opacity:0.12; animation:scanflow 2.2s linear infinite}
+@keyframes scanflow{0%{transform:translate3d(-80px,60px,0)}100%{transform:translate3d(80px,-60px,0)}}
+
+.topbar{position:absolute; top:0; left:0; right:0; height:var(--top); display:flex; align-items:center; justify-content:space-between; padding:0 10px; border-bottom:1px solid var(--line); background:linear-gradient(180deg,#070707,#000); z-index:10}
+.brand{display:flex; align-items:center; gap:10px; font-family:var(--mono); font-size:12px; letter-spacing:.10em; text-transform:uppercase}
+.brand .sq{width:10px; height:10px; border:1px solid var(--fg); background:#000}
+.roomBadge{display:flex; gap:8px; align-items:center; font-family:var(--mono); font-size:11px; letter-spacing:.10em; text-transform:uppercase; color:var(--muted); border:1px solid var(--line2); padding:4px 8px}
+.actions{display:flex; align-items:center; gap:8px; font-family:var(--mono); font-size:12px}
+.btn{background:transparent; color:var(--fg); border:1px solid var(--line2); padding:6px 10px; font-family:var(--mono); font-size:12px; letter-spacing:.08em; text-transform:uppercase; cursor:pointer}
+.btn:hover{border-color:var(--fg)}
+.btn:active{transform:translateY(1px)}
+.kbd{border:1px solid var(--line2); padding:2px 6px; color:var(--muted); font-size:11px}
+.ketaIcon{width:16px; height:16px; border:2px solid var(--fg); background:var(--fg); cursor:pointer}
+.ketaIcon.open{background:#000}
+
+.bottombar{position:absolute; left:0; right:0; bottom:0; height:var(--bot); display:flex; align-items:center; justify-content:space-between; padding:0 10px; border-top:1px solid var(--line); background:linear-gradient(0deg,#070707,#000); z-index:10; font-family:var(--mono); font-size:11px; color:var(--muted)}
+.toggle{border:1px solid var(--line2); background:transparent; color:var(--fg); padding:4px 8px; font-family:var(--mono); font-size:11px; letter-spacing:.08em; text-transform:uppercase; cursor:pointer}
+.toggle:hover{border-color:var(--fg)}
+
+.drawer{position:absolute; left:0; right:0; bottom:var(--bot); height:calc((100vh - var(--top) - var(--bot)) * var(--drawer-h)); min-height:200px; border-top:1px solid var(--line); background:linear-gradient(180deg,#060606,#000); display:none; z-index:20}
+.drawer.open{display:flex; flex-direction:column}
+.drawerSizer{height:10px; cursor:ns-resize; border-bottom:1px solid var(--line); background:linear-gradient(180deg,#0a0a0a,#050505)}
+.drawerHead{padding:8px 10px; border-bottom:1px solid var(--line); font-family:var(--mono); font-size:12px; letter-spacing:.10em; text-transform:uppercase; display:flex; justify-content:space-between; align-items:center}
+.drawerBody{padding:10px; min-height:0; flex:1; overflow:auto}
+
+textarea{width:100%; border:1px solid var(--line2); background:#050505; color:var(--fg); font-family:var(--mono); font-size:12px; padding:10px; line-height:1.35; outline:none; resize:vertical; min-height:140px}
+input{outline:none}
+
+.ketaNote{position:absolute; top:76px; right:16px; left:auto; width:340px; height:220px; display:none; z-index:30; resize:both; overflow:hidden; border-radius:var(--ctl-radius); background:var(--ctl-bg); border:1px solid var(--note-border); backdrop-filter:blur(6px)}
+.ketaNote.open{display:flex; flex-direction:column}
+.ketaHead{padding:8px 10px; border-bottom:1px solid rgba(255,255,255,0.14); font-family:var(--mono); font-size:11px; letter-spacing:.14em; text-transform:uppercase; display:flex; justify-content:space-between; align-items:center; cursor:move}
+.ketaBody{padding:10px; min-height:0; flex:1}
+.ketaNote textarea{background:#000; color:#fff; border:1px solid rgba(255,255,255,0.22); width:100%; height:100%; resize:none; padding:10px; outline:none}
+.headBtn{background:transparent; color:var(--fg); border:1px solid rgba(255,255,255,0.18); padding:2px 8px; font-family:var(--mono); font-size:12px; letter-spacing:.08em; text-transform:uppercase; cursor:pointer}
+.headBtn:hover{border-color:rgba(255,255,255,0.6)}
+
+#armedBar{position:absolute; left:10px; top:calc(var(--top) + 10px); z-index:27; display:none; gap:8px; align-items:center; flex-wrap:wrap; padding:8px 10px; border:1px solid var(--line2); background:rgba(0,0,0,0.86); font-family:var(--mono); font-size:11px; letter-spacing:.08em; text-transform:uppercase}
+#armedBar .label{color:var(--muted)}
+#armedBar .val{color:var(--fg)}
+#armedBar input{background:#000; color:#fff; border:1px solid var(--line2); padding:6px 8px; font-family:var(--mono); font-size:11px; letter-spacing:.08em; width:340px; max-width:calc(100vw - 40px)}
+
+#pinnedPanel{position:absolute; left:10px; top:calc(var(--top) + 64px); z-index:26; display:none; gap:8px; flex-wrap:wrap; align-items:flex-start; padding:8px 10px; border:1px solid var(--line2); background:rgba(0,0,0,0.86); font-family:var(--mono); font-size:11px; letter-spacing:.08em; text-transform:uppercase}
+#activeStrip{position:absolute; left:10px; top:calc(var(--top) + 122px); z-index:25; display:none; gap:8px; flex-wrap:wrap; align-items:center; padding:8px 10px; border:1px solid var(--line2); background:rgba(0,0,0,0.86); font-family:var(--mono); font-size:11px; letter-spacing:.08em; text-transform:uppercase}
+#activeStrip .label{color:var(--muted)}
+
+#padPanel{position:absolute; left:14px; top:calc(var(--top) + 170px); width:360px; height:360px; display:none; z-index:31; border:1px solid rgba(255,255,255,0.22); border-radius:var(--ctl-radius); background:rgba(0,0,0,0.86); backdrop-filter:blur(6px); overflow:hidden; resize:both; min-width:340px; min-height:260px}
+#padPanel.open{display:flex; flex-direction:column}
+#padHead{padding:8px 10px; border-bottom:1px solid rgba(255,255,255,0.14); font-family:var(--mono); font-size:11px; letter-spacing:.14em; text-transform:uppercase; display:flex; justify-content:space-between; align-items:center; cursor:move}
+#padBody{padding:10px; min-height:0; flex:1; display:flex; flex-direction:column; gap:10px}
+#padGrid{flex:1; display:grid; grid-template-columns:repeat(4, 1fr); grid-template-rows:repeat(4, 1fr); gap:8px; min-height:0}
+.padCell{border:1px solid rgba(255,255,255,0.18); background:rgba(0,0,0,0.35); padding:8px; overflow:hidden; display:flex; flex-direction:column; gap:6px; min-width:0}
+.padCell .nm{font-family:var(--mono); font-size:11px; letter-spacing:.08em; text-transform:uppercase; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.padCell a{color:var(--fg); font-family:var(--mono); font-size:11px; letter-spacing:.02em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; text-decoration:none; border-bottom:1px solid rgba(255,255,255,0.18); padding-bottom:2px}
+.padCell a:hover{border-bottom-color:rgba(255,255,255,0.55)}
+.padCell input{width:100%; background:#000; color:#fff; border:1px solid rgba(255,255,255,0.22); padding:6px 8px; font-family:var(--mono); font-size:11px; letter-spacing:.06em; outline:none; min-width:0}
+
+.toast{position:absolute; left:12px; top:calc(var(--top) + 12px); padding:8px 10px; border:1px solid var(--line2); background:rgba(8,8,8,0.82); font-family:var(--mono); font-size:11px; letter-spacing:.06em; color:var(--fg); display:none; z-index:40}
+</style>
+</head>
+
+<body>
+<div id="root">
+  <div id="stage"></div>
+  <div id="motion" aria-hidden="true"></div>
+
+  <div id="armedBar">
+    <span class="label">ARMED</span><span class="val" id="armedName">—</span>
+    <button class="btn" id="armedGo" style="padding:4px 8px; font-size:11px">GO</button>
+    <button class="btn" id="armedNewTab" style="padding:4px 8px; font-size:11px">NEW TAB</button>
+    <button class="btn" id="armedCopy" style="padding:4px 8px; font-size:11px">COPY URL</button>
+    <input id="armedUrl" readonly value="—" />
+  </div>
+
+  <div id="pinnedPanel"></div>
+  <div id="activeStrip"></div>
+
+  <div id="padPanel">
+    <div id="padHead">
+      <span id="padTitle">PAD</span>
+      <div style="display:flex; gap:8px; align-items:center">
+        <button class="headBtn" id="padEditBtn">EDIT</button>
+        <button class="headBtn" id="padCloseBtn">X</button>
+      </div>
+    </div>
+    <div id="padBody">
+      <div id="padGrid"></div>
+      <div style="display:flex; gap:8px; align-items:center; justify-content:space-between; font-family:var(--mono); font-size:11px; color:var(--muted); letter-spacing:.08em; text-transform:uppercase">
+        <span id="padHint">CLICK = ARM</span><span id="padSetId" style="opacity:.7">—</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <div class="topbar">
+    <div style="display:flex; gap:10px; align-items:center">
+      <div class="brand"><span class="sq"></span><span>KETADATA // BASE // DIVA9</span><span style="color:var(--muted); letter-spacing:.02em; text-transform:none">v2</span></div>
+      <div class="roomBadge"><span>ROOM</span><span id="roomName">BASE</span></div>
+    </div>
+    <div class="actions">
+      <button class="btn" id="btnImport">IMPORT</button>
+      <button class="btn" id="btnExport">EXPORT</button>
+      <button class="btn" id="btnCopy">COPY</button>
+      <span class="kbd" title="Run">Space</span>
+      <span class="kbd" title="Invert">Shift+I</span>
+      <span class="kbd" title="Blackout">Shift+N</span>
+      <span class="kbd" title="Fullscreen">Shift+F</span>
+      <span class="kbd" title="Landing">Shift+K</span>
+      <div id="ketaIcon" class="ketaIcon" title="KETA_NOTE"></div>
+    </div>
+  </div>
+
+  <div class="drawer" id="drawer">
+    <div class="drawerSizer" id="drawerSizer" title="DRAG"></div>
+    <div class="drawerHead">
+      <div>SYSTEM</div>
+      <div style="display:flex; gap:8px; align-items:center">
+        <span id="sig" style="color:var(--muted); font-family:var(--mono); font-size:11px">∅</span>
+        <button class="btn" id="btnToggleMotion">MOTION</button>
+        <button class="btn" id="btnCopyUniversals">COPY</button>
+        <button class="btn" id="btnCloseDrawer">CLOSE</button>
+      </div>
+    </div>
+    <div class="drawerBody">
+      <div style="display:flex; gap:8px; align-items:center; justify-content:space-between; margin-bottom:8px">
+        <div style="font-family:var(--mono); font-size:12px; letter-spacing:.10em; text-transform:uppercase; color:var(--muted)">SYSTEM UNIVERSALS</div>
+        <button class="btn" id="btnToggleUniversals" style="padding:4px 8px; font-size:11px">TOGGLE</button>
+      </div>
+      <textarea id="universals" spellcheck="false" autocomplete="off" placeholder="LAWS / REFERENCES"></textarea>
+
+      <div style="margin-top:12px; border-top:1px solid var(--line); padding-top:10px">
+        <div style="display:flex; gap:8px; align-items:center; justify-content:space-between; margin-bottom:8px">
+          <div style="font-family:var(--mono); font-size:12px; letter-spacing:.10em; text-transform:uppercase; color:var(--muted)">ROOM REGISTRY</div>
+          <button class="btn" id="btnToggleRegistry" style="padding:4px 8px; font-size:11px">TOGGLE</button>
+        </div>
+
+        <div id="registryBody">
+          <div style="margin-top:8px; display:flex; gap:8px; align-items:center; font-family:var(--mono); font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted)">
+            <span>ROOM</span>
+            <input id="roomInput" spellcheck="false" autocomplete="off" style="flex:1; background:#000; color:#fff; border:1px solid var(--line2); padding:6px 8px; font-family:var(--mono);" placeholder="NAME" />
+          </div>
+          <div style="margin-top:8px; display:flex; gap:8px; align-items:center; font-family:var(--mono); font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted)">
+            <span>URL</span>
+            <input id="roomUrlInput" spellcheck="false" autocomplete="off" style="flex:1; background:#000; color:#fff; border:1px solid var(--line2); padding:6px 8px; font-family:var(--mono);" placeholder="ANY LINK / PATH" />
+          </div>
+          <div style="margin-top:8px; display:flex; gap:8px; align-items:center">
+            <button class="btn" id="btnSaveRoom">SAVE</button>
+            <button class="btn" id="btnSetActiveRoom">SET ACTIVE</button>
+            <button class="btn" id="btnDeleteRoom">DELETE</button>
+            <button class="btn" id="btnTogglePins">PINS</button>
+          </div>
+        </div>
+
+        <div style="margin-top:10px; border-top:1px solid var(--line); padding-top:10px">
+          <div style="display:flex; gap:8px; align-items:center; justify-content:space-between; margin-bottom:8px">
+            <div style="font-family:var(--mono); font-size:12px; letter-spacing:.10em; text-transform:uppercase; color:var(--muted)">ACTIVE</div>
+            <button class="btn" id="btnToggleActive" style="padding:4px 8px; font-size:11px">TOGGLE</button>
+          </div>
+          <div id="activeBody">
+            <div style="display:flex; gap:8px; align-items:center; font-family:var(--mono); font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted)">
+              <span style="min-width:44px">ROOM</span>
+              <input id="activeRoomBox" readonly style="flex:1; background:#000; color:#fff; border:1px solid var(--line2); padding:6px 8px; font-family:var(--mono);" placeholder="—" />
+            </div>
+            <div style="margin-top:8px; display:flex; gap:8px; align-items:center; font-family:var(--mono); font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted)">
+              <span style="min-width:44px">URL</span>
+              <input id="activeUrlBox" readonly style="flex:1; background:#000; color:#fff; border:1px solid var(--line2); padding:6px 8px; font-family:var(--mono);" placeholder="—" />
+            </div>
+            <div style="margin-top:8px; display:flex; gap:8px; align-items:center">
+              <button class="btn" id="btnGoActive">GO</button>
+              <button class="btn" id="btnNewTabActive">NEW TAB</button>
+              <button class="btn" id="btnCopyActiveUrl">COPY URL</button>
+            </div>
+            <div style="margin-top:8px; color:var(--muted); font-family:var(--mono); font-size:11px">CLICK = ARM. GO = COMMIT.</div>
+          </div>
+        </div>
+
+        <div id="setsBox" style="margin-top:10px; border-top:1px solid var(--line); padding-top:10px">
+          <div style="display:flex; gap:8px; align-items:center; justify-content:space-between; margin-bottom:8px">
+            <div style="font-family:var(--mono); font-size:12px; letter-spacing:.10em; text-transform:uppercase; color:var(--muted)">SETS</div>
+            <button class="btn" id="btnToggleSets" style="padding:4px 8px; font-size:11px">TOGGLE</button>
+          </div>
+          <div id="setsBody">
+            <div style="margin-top:8px; display:flex; gap:8px; align-items:center; font-family:var(--mono); font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted)">
+              <span>SET</span>
+              <input id="setNameInput" spellcheck="false" autocomplete="off" style="flex:1; background:#000; color:#fff; border:1px solid var(--line2); padding:6px 8px; font-family:var(--mono);" placeholder="NAME" />
+            </div>
+            <div style="margin-top:8px; display:flex; gap:8px; align-items:center">
+              <button class="btn" id="btnCreateSet">CREATE</button>
+              <button class="btn" id="btnRenameSet">RENAME</button>
+              <button class="btn" id="btnDeleteSet">DELETE</button>
+              <button class="btn" id="btnPinSet">PIN/UNPIN</button>
+            </div>
+            <div style="margin-top:8px; color:var(--muted); font-family:var(--mono); font-size:11px">SET EDITOR (BULK): ONE PER LINE: NAME | URL  OR URL</div>
+            <textarea id="setItemsInput" spellcheck="false" autocomplete="off" style="min-height:120px; margin-top:8px" placeholder="ITEMS:
+NAME | URL
+OR URL"></textarea>
+            <div style="margin-top:8px; display:flex; gap:8px; align-items:center">
+              <button class="btn" id="btnSaveSetItems">SAVE ITEMS</button>
+              <button class="btn" id="btnClearSetItems">CLEAR</button>
+            </div>
+            <div style="margin-top:10px; border-top:1px solid var(--line); padding-top:10px">
+              <div style="font-family:var(--mono); font-size:12px; letter-spacing:.10em; text-transform:uppercase; color:var(--muted); margin-bottom:8px">SET LIST</div>
+              <div id="setList" style="display:flex; flex-direction:column; gap:6px"></div>
+              <div style="margin-top:8px; color:var(--muted); font-family:var(--mono); font-size:11px">CLICK SET = LOAD EDITOR. CLICK ITEM = ARM.</div>
+            </div>
+          </div>
+        </div>
+
+        <div style="margin-top:10px; border-top:1px solid var(--line); padding-top:10px">
+          <div style="display:flex; gap:8px; align-items:center; justify-content:space-between; margin-bottom:8px">
+            <div style="font-family:var(--mono); font-size:12px; letter-spacing:.10em; text-transform:uppercase; color:var(--muted)">BULK INPUT</div>
+            <button class="btn" id="btnToggleBulk" style="padding:4px 8px; font-size:11px">TOGGLE</button>
+          </div>
+          <div id="bulkBody">
+            <textarea id="bulkRoomInput" spellcheck="false" autocomplete="off" style="min-height:110px" placeholder="ONE PER LINE:
+NAME | URL
+OR URL
+
+# lines starting with # are ignored"></textarea>
+            <div style="margin-top:8px; display:flex; gap:8px; align-items:center">
+              <button class="btn" id="btnBulkAdd">BULK ADD</button>
+              <button class="btn" id="btnBulkClear">CLEAR</button>
+            </div>
+            <div style="margin-top:8px; color:var(--muted); font-family:var(--mono); font-size:11px">NO AUTOFILL. OVERWRITE FAST.</div>
+          </div>
+        </div>
+
+        <div style="margin-top:10px; border-top:1px solid var(--line); padding-top:10px">
+          <div style="display:flex; gap:8px; align-items:center; justify-content:space-between; margin-bottom:8px">
+            <div style="font-family:var(--mono); font-size:12px; letter-spacing:.10em; text-transform:uppercase; color:var(--muted)">PRESETS</div>
+            <button class="btn" id="btnTogglePresets" style="padding:4px 8px; font-size:11px">TOGGLE</button>
+          </div>
+          <div id="presetsBody">
+            <div id="roomList" style="display:flex; flex-direction:column; gap:6px"></div>
+            <div style="margin-top:8px; color:var(--muted); font-family:var(--mono); font-size:11px">CLICK = ARM. PIN = BASE.</div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <div class="bottombar">
+    <div style="display:flex; gap:10px; align-items:center">
+      <button class="toggle" id="toggleDrawer">SYSTEM</button>
+      <button class="toggle" id="toggleRun">RUN</button>
+      <span>STATE: <span id="sig2">∅</span></span>
+      <span style="margin-left:8px">FS: <span id="fsLabel">OFF</span></span>
+      <span style="margin-left:8px">BLK: <span id="blkLabel">OFF</span></span>
+    </div>
+    <div style="display:flex; gap:12px; align-items:center">
+      <span>LIGHT: <span id="lightLabel">1</span></span>
+      <span>RUN: <span id="runLabel">OFF</span></span>
+      <span>MOTION: <span id="motionLabel">OFF</span></span>
+    </div>
+  </div>
+
+  <div class="ketaNote" id="ketaNote">
+    <div class="ketaHead" id="ketaHead">
+      <div>KETA_NOTE</div>
+      <button class="headBtn" id="btnHideNote">-</button>
+    </div>
+    <div class="ketaBody"><textarea id="ketaText" spellcheck="false" autocomplete="off" placeholder="GLOBAL NOTE"></textarea></div>
+  </div>
+
+  <input id="file" type="file" accept="application/json" style="display:none" />
+</div>
+
+<script>
+/* =========================================================
+PERSISTENCE FIX (NO UI/UX CHANGES)
+- per-page storage key (prevents clobber across base variants)
+- autosave on every input
+- save-before-navigation
+- cross-tab sync
+========================================================= */
+
+const URLS={LANDING:"index11.html",PHOTOBOOTH:"crunch1.html",KDTV:"kdtv1.html",POD:"room.html",WORLD:"map.html",INFINITY:"infinity.html",CALENDAR:"calendar1.html",STUDIO:"tester3.html",LAB:"labyrinth.html"};
+const CORE_PRESETS=[{room:"CALENDAR",roomUrl:URLS.CALENDAR},{room:"POD",roomUrl:URLS.POD},{room:"WORLD",roomUrl:URLS.WORLD},{room:"KDTV",roomUrl:URLS.KDTV},{room:"PHOTOBOOTH",roomUrl:URLS.PHOTOBOOTH},{room:"STUDIO",roomUrl:URLS.STUDIO},{room:"LAB",roomUrl:URLS.LAB}];
+
+function nowISO(){return new Date().toISOString()}
+const $=id=>document.getElementById(id);
+const root=$("root"),stage=$("stage"),motion=$("motion");
+
+/* --- storage key: isolate each file unless it is the canonical system --- */
+const LEGACY_LS="KDT_BASE_SOVEREIGN_SUPREME";
+function hash8(s){
+  const str=String(s||""); let h=2166136261;
+  for(let i=0;i<str.length;i++){h^=str.charCodeAt(i); h=Math.imul(h,16777619)}
+  return (h>>>0).toString(16).slice(0,8);
+}
+function storageKey(){
+  // canonical global key for system.html (keeps your “single canonical base” behavior)
+  const p=(location.pathname||"").toLowerCase();
+  const isSystem = p.endsWith("/system.html") || p.endsWith("system.html");
+  if(isSystem) return LEGACY_LS; // keep canonical deterministic base behavior
+  // everything else gets its own key to prevent cross-page overwrite
+  const sig = hash8(location.origin + "|" + location.pathname);
+  return LEGACY_LS + "__" + sig;
+}
+const LS = storageKey();
+const BC = ("BroadcastChannel" in window) ? new BroadcastChannel("KDT_BASE_SYNC") : null;
+
+const DEFAULT={
+  version:"KETADATA_DIVA9_SUPREME_V2",
+  updatedAt:nowISO(),
+  ketaNote:"",
+  universals:"",
+  room:"BASE",
+  roomUrl:"",
+  ui:{
+    invert:false, blackout:false, fullscreen:false,
+    lightPreset:1, lightRunning:false,
+    motionOn:false,
+    pinnedRooms:[],
+    pinnedSets:[],
+    activeSets:[],
+    activeSetId:"",
+    padOpen:false, padEdit:false,
+    padRect:{x:null,y:null,w:360,h:360},
+    drawerOpen:false,
+    noteOpen:false,
+    universalsCollapsed:false,
+    registryCollapsed:false,
+    activeCollapsed:false,
+    setsCollapsed:false,
+    bulkCollapsed:false,
+    presetsCollapsed:false,
+    noteRect:{x:null,y:76,w:340,h:220},
+    drawerH:0.42
+  },
+  payload:{roomPresets:[],sets:[]},
+  armed:{name:"", url:""}
+};
+
+function deepFill(obj){
+  const out=JSON.parse(JSON.stringify(DEFAULT));
+  if(!obj||typeof obj!=="object") return out;
+  for(const k in DEFAULT){ if(obj[k]!==undefined) out[k]=obj[k]; }
+  if(obj.ui&&typeof obj.ui==="object"){ for(const k in DEFAULT.ui){ if(obj.ui[k]!==undefined) out.ui[k]=obj.ui[k]; } }
+  if(obj.payload&&typeof obj.payload==="object"){ for(const k in DEFAULT.payload){ if(obj.payload[k]!==undefined) out.payload[k]=obj.payload[k]; } }
+  if(!out.armed||typeof out.armed!=="object") out.armed={name:"",url:""};
+  if(!Array.isArray(out.ui.pinnedRooms)) out.ui.pinnedRooms=[];
+  if(!Array.isArray(out.ui.pinnedSets)) out.ui.pinnedSets=[];
+  if(!Array.isArray(out.ui.activeSets)) out.ui.activeSets=[];
+  if(!out.ui.padRect||typeof out.ui.padRect!=="object") out.ui.padRect=JSON.parse(JSON.stringify(DEFAULT.ui.padRect));
+  if(!out.ui.noteRect||typeof out.ui.noteRect!=="object") out.ui.noteRect=JSON.parse(JSON.stringify(DEFAULT.ui.noteRect));
+  if(typeof out.ui.drawerH!=="number") out.ui.drawerH=0.42;
+  if(!Array.isArray(out.payload.roomPresets)) out.payload.roomPresets=[];
+  if(!Array.isArray(out.payload.sets)) out.payload.sets=[];
+  return out;
+}
+
+function loadRaw(key){
+  try{ const raw=localStorage.getItem(key); return raw?JSON.parse(raw):null; }catch(e){ return null; }
+}
+function load(){
+  // migrate legacy -> new key (only if new key empty)
+  const cur = loadRaw(LS);
+  if(cur) return deepFill(cur);
+  const legacy = (LS===LEGACY_LS) ? null : loadRaw(LEGACY_LS);
+  if(legacy){
+    try{ localStorage.setItem(LS, JSON.stringify(legacy)); }catch(e){}
+    return deepFill(legacy);
+  }
+  return null;
+}
+
+let state = load() || JSON.parse(JSON.stringify(DEFAULT));
+
+function canonRoomName(n){ return String(n||"").trim().toUpperCase(); }
+function canonSetName(n){ return String(n||"").trim().toUpperCase(); }
+
+function ensureCorePresets(){
+  const map=new Map();
+  (state.payload.roomPresets||[]).forEach(p=>{
+    const k=canonRoomName(p.room); if(!k) return;
+    map.set(k,Object.assign({},p,{room:k}));
+  });
+  CORE_PRESETS.forEach(cp=>{
+    const k=canonRoomName(cp.room);
+    if(!map.has(k)){
+      map.set(k,{room:k,roomUrl:cp.roomUrl,createdAt:nowISO(),updatedAt:nowISO()});
+    }else{
+      const cur=map.get(k);
+      if(!String(cur.roomUrl||"").trim()) cur.roomUrl=cp.roomUrl;
+      map.set(k,cur);
+    }
+  });
+  state.payload.roomPresets=[...map.values()];
+}
+
+function ensurePinnedRooms(){
+  state.ui.pinnedRooms=(Array.isArray(state.ui.pinnedRooms)?state.ui.pinnedRooms:[])
+    .map(canonRoomName).filter(Boolean);
+}
+function ensurePinnedSets(){
+  state.ui.pinnedSets=(Array.isArray(state.ui.pinnedSets)?state.ui.pinnedSets:[])
+    .map(String).filter(Boolean);
+}
+function getSetById(id){
+  const sid=String(id||"").trim();
+  return (state.payload.sets||[]).find(s=>String(s.id)===sid) || null;
+}
+function ensureActiveSets(){
+  state.ui.activeSets=(Array.isArray(state.ui.activeSets)?state.ui.activeSets:[])
+    .map(String).filter(Boolean).filter(id=>!!getSetById(id));
+  if(state.ui.activeSetId && !getSetById(state.ui.activeSetId)) state.ui.activeSetId="";
+  if(!state.ui.activeSetId && state.ui.activeSets.length) state.ui.activeSetId=String(state.ui.activeSets[0]);
+}
+
+function getPreset(roomName){
+  const room=canonRoomName(roomName);
+  return (state.payload.roomPresets||[]).find(r=>canonRoomName(r.room)===room)||null;
+}
+
+function stableSig(){
+  const core=JSON.stringify({v:state.version,room:state.room,ls:LS,upd:state.updatedAt});
+  let h=2166136261;
+  for(let i=0;i<core.length;i++){h^=core.charCodeAt(i); h=Math.imul(h,16777619)}
+  return (h>>>0).toString(16).slice(0,8);
+}
+
+/* ---------- HARD SAVE (debounced + immediate) ---------- */
+let saveTimer=null;
+function saveNow(broadcast=true){
+  state.updatedAt=nowISO();
+  ensureCorePresets();
+  ensurePinnedRooms();
+  ensurePinnedSets();
+  ensureActiveSets();
+  root.style.setProperty("--drawer-h",String(state.ui.drawerH));
+  try{ localStorage.setItem(LS, JSON.stringify(state)); }catch(e){}
+  if(broadcast){
+    try{ localStorage.setItem(LS+"__PING", String(Date.now())); }catch(e){}
+    if(BC) try{ BC.postMessage({t:"STATE", key:LS, at:Date.now()}); }catch(e){}
+  }
+  render();
+}
+function saveSoon(){
+  if(saveTimer) clearTimeout(saveTimer);
+  saveTimer=setTimeout(()=>{ saveTimer=null; saveNow(true); }, 120);
+}
+
+/* ---------- cross-tab sync ---------- */
+window.addEventListener("storage",(ev)=>{
+  if(!ev) return;
+  if(ev.key===LS || ev.key===LS+"__PING"){
+    const incoming=loadRaw(LS);
+    if(incoming){
+      state=deepFill(incoming);
+      render();
+    }
+  }
+});
+if(BC){
+  BC.onmessage=(ev)=>{
+    const msg=ev && ev.data;
+    if(!msg || msg.key!==LS || msg.t!=="STATE") return;
+    const incoming=loadRaw(LS);
+    if(incoming){
+      state=deepFill(incoming);
+      render();
+    }
+  };
+}
+
+/* ---------- toast/copy ---------- */
+let toastTimer=null;
+function toast(msg){
+  if(state.ui.blackout||state.ui.fullscreen) return;
+  const t=$("toast");
+  t.textContent=msg;
+  t.style.display="block";
+  if(toastTimer) clearTimeout(toastTimer);
+  toastTimer=setTimeout(()=>{t.style.display="none"},900);
+}
+async function copy(text){
+  try{ await navigator.clipboard.writeText(text); toast("COPIED"); }
+  catch(e){ toast("COPY FAILED"); }
+}
+
+/* ---------- import/export/download ---------- */
+function exportState(){ ensureCorePresets(); return JSON.stringify({LS,state}, null, 2); }
+function exportFilename(){
+  const sig=stableSig();
+  const stamp=new Date().toISOString().replace(/[:.]/g,"-");
+  return `KETADATA_DIVA9_${sig}_${stamp}.json`;
+}
+function downloadJsonFile(filename,text){
+  const blob=new Blob([String(text||"")],{type:"application/json"});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement("a");
+  a.href=url; a.download=filename||"KETADATA_STATE.json";
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),250);
+}
+function importState(text){
+  const parsed=JSON.parse(text);
+  const incoming=(parsed && parsed.state) ? parsed.state : parsed;
+  state=deepFill(incoming);
+  ensureCorePresets();
+  stopLight(true);
+  if(state.ui.lightRunning && !state.ui.blackout) startLight(state.ui.lightPreset);
+  saveNow(true);
+}
+
+/* ---------- lights (minimal: preserve your running behavior) ---------- */
+let lightInterval=null, lightCount=0;
+function resetStage(){ stage.style.backgroundColor="#000"; stage.style.filter="none"; lightCount=0; }
+function stopLight(silent=false){
+  if(lightInterval){ clearInterval(lightInterval); lightInterval=null; }
+  state.ui.lightRunning=false;
+  resetStage();
+  if(!silent) saveSoon();
+}
+function startLight(preset){
+  stopLight(true);
+  resetStage();
+  state.ui.lightPreset=preset;
+  state.ui.lightRunning=true;
+  // Preset 1: hard strobe
+  if(preset===1){
+    lightInterval=setInterval(()=>{
+      const curr=stage.style.backgroundColor||"black";
+      stage.style.backgroundColor=(curr==="black"||curr==="rgb(0, 0, 0)")?"white":"black";
+      stage.style.filter="none";
+    }, 50);
+  }else{
+    // fallback: mild pulse
+    lightInterval=setInterval(()=>{
+      lightCount=(lightCount+1)%40;
+      stage.style.backgroundColor = (lightCount<20) ? "#000" : "#111";
+    }, 80);
+  }
+  saveSoon();
+}
+
+/* ---------- draggable headers (note/pad), and resize persistence ---------- */
+function clamp(n,min,max){ return Math.max(min, Math.min(max, n)); }
+function rectFromEl(el){
+  const r=el.getBoundingClientRect();
+  return {x:r.left, y:r.top, w:r.width, h:r.height};
+}
+function applyRect(el, rect){
+  if(rect.x!==null) el.style.left = rect.x+"px";
+  if(rect.y!==null) el.style.top  = rect.y+"px";
+  if(rect.w!==null) el.style.width  = rect.w+"px";
+  if(rect.h!==null) el.style.height = rect.h+"px";
+}
+function startDrag(handle, el, onDone){
+  let dragging=false, sx=0, sy=0, ox=0, oy=0;
+  handle.addEventListener("pointerdown",(e)=>{
+    if(e.button!==0) return;
+    dragging=true;
+    el.setPointerCapture(e.pointerId);
+    const r=el.getBoundingClientRect();
+    sx=e.clientX; sy=e.clientY; ox=r.left; oy=r.top;
+    e.preventDefault();
+  });
+  handle.addEventListener("pointermove",(e)=>{
+    if(!dragging) return;
+    const dx=e.clientX - sx;
+    const dy=e.clientY - sy;
+    const nx=clamp(ox+dx, 0, window.innerWidth-40);
+    const ny=clamp(oy+dy, 0, window.innerHeight-40);
+    el.style.left=nx+"px";
+    el.style.top=ny+"px";
+  });
+  function end(e){
+    if(!dragging) return;
+    dragging=false;
+    try{ el.releasePointerCapture(e.pointerId); }catch(_){}
+    onDone();
+  }
+  handle.addEventListener("pointerup", end);
+  handle.addEventListener("pointercancel", end);
+}
+function trackResize(el, onDone){
+  // Polling is cheap here; ResizeObserver does not fire on CSS resize in all browsers consistently.
+  let last=rectFromEl(el);
+  setInterval(()=>{
+    if(el.style.display==="none") return;
+    const cur=rectFromEl(el);
+    if(Math.abs(cur.w-last.w)>0.5 || Math.abs(cur.h-last.h)>0.5){
+      last=cur;
+      onDone(true);
+    }
+  }, 220);
+}
+
+/* ---------- entities: presets + sets ---------- */
+function uid8(){
+  const a=new Uint32Array(1);
+  try{ crypto.getRandomValues(a); }catch(e){ a[0]=Math.floor(Math.random()*1e9); }
+  return (a[0]>>>0).toString(16).padStart(8,"0");
+}
+function normalizeUrl(u){
+  const s=String(u||"").trim();
+  return s;
+}
+function upsertPreset(room, roomUrl){
+  const r=canonRoomName(room);
+  const url=normalizeUrl(roomUrl);
+  if(!r) return;
+  let arr=state.payload.roomPresets||[];
+  const idx=arr.findIndex(x=>canonRoomName(x.room)===r);
+  const now=nowISO();
+  const obj={room:r, roomUrl:url, updatedAt:now};
+  if(idx>=0){
+    arr[idx]=Object.assign({}, arr[idx], obj);
+  }else{
+    arr.push(Object.assign({createdAt:now}, obj));
+  }
+  state.payload.roomPresets=arr;
+  saveSoon();
+}
+function deletePreset(room){
+  const r=canonRoomName(room);
+  state.payload.roomPresets=(state.payload.roomPresets||[]).filter(x=>canonRoomName(x.room)!==r);
+  ensurePinnedRooms();
+  const i=state.ui.pinnedRooms.indexOf(r);
+  if(i>=0) state.ui.pinnedRooms.splice(i,1);
+  saveSoon();
+}
+function togglePin(room){
+  ensurePinnedRooms();
+  const r=canonRoomName(room);
+  const i=state.ui.pinnedRooms.indexOf(r);
+  if(i>=0) state.ui.pinnedRooms.splice(i,1); else state.ui.pinnedRooms.push(r);
+  saveSoon();
+}
+
+function setArmed(name,url){
+  state.armed={name:String(name||"—"), url:String(url||"—")};
+  saveSoon();
+}
+function armedGo(){
+  const url=String(state.armed.url||"").trim();
+  if(!url || url==="—"){ toast("NO URL"); return; }
+  saveNow(true); // critical: persist before nav
+  location.assign(url);
+}
+function armedNewTab(){
+  const url=String(state.armed.url||"").trim();
+  if(!url || url==="—"){ toast("NO URL"); return; }
+  saveNow(true);
+  window.open(url, "_blank", "noopener,noreferrer");
+}
+function armFromPreset(p){
+  setArmed(p.room, p.roomUrl||"");
+  toast("ARMED");
+}
+function parseBulkLines(text){
+  const out=[];
+  String(text||"").split("\n").forEach(line=>{
+    const raw=line.trim();
+    if(!raw) return;
+    if(raw.startsWith("#")) return;
+    const parts=raw.split("|").map(x=>x.trim()).filter(Boolean);
+    if(parts.length>=2) out.push({name:parts[0], url:parts.slice(1).join("|")});
+    else out.push({name:"", url:raw});
+  });
+  return out;
+}
+
+/* --- sets --- */
+function ensureSets(){
+  if(!Array.isArray(state.payload.sets)) state.payload.sets=[];
+}
+function getSetByName(name){
+  const n=canonSetName(name);
+  return (state.payload.sets||[]).find(s=>canonSetName(s.name)===n) || null;
+}
+function createSet(name){
+  ensureSets();
+  const n=canonSetName(name);
+  if(!n) return;
+  if(getSetByName(n)){ toast("SET EXISTS"); return; }
+  const id=uid8();
+  state.payload.sets.push({id, name:n, items:[], createdAt:nowISO(), updatedAt:nowISO()});
+  if(!state.ui.activeSets.includes(id)) state.ui.activeSets.push(id);
+  if(!state.ui.activeSetId) state.ui.activeSetId=id;
+  saveSoon();
+}
+function renameSet(id, newName){
+  ensureSets();
+  const s=getSetById(id); if(!s) return;
+  s.name=canonSetName(newName);
+  s.updatedAt=nowISO();
+  saveSoon();
+}
+function deleteSet(id){
+  ensureSets();
+  const sid=String(id||"").trim();
+  state.payload.sets=state.payload.sets.filter(s=>String(s.id)!==sid);
+  ensurePinnedSets();
+  state.ui.pinnedSets=state.ui.pinnedSets.filter(x=>x!==sid);
+  state.ui.activeSets=state.ui.activeSets.filter(x=>x!==sid);
+  if(state.ui.activeSetId===sid) state.ui.activeSetId=state.ui.activeSets[0]||"";
+  saveSoon();
+}
+function setItemsFromEditor(setId, text){
+  const s=getSetById(setId); if(!s) return;
+  const lines=parseBulkLines(text);
+  const items=lines.map(x=>{
+    const name = x.name ? canonSetName(x.name) : "";
+    const url = normalizeUrl(x.url);
+    return {name, url};
+  }).filter(it=>it.url);
+  s.items=items;
+  s.updatedAt=nowISO();
+  saveSoon();
+}
+
+/* ---------- pad rendering ---------- */
+function buildPadForSet(setId){
+  const grid=$("padGrid");
+  grid.innerHTML="";
+  const s=getSetById(setId);
+  const items=(s && Array.isArray(s.items)) ? s.items.slice(0,16) : [];
+  for(let i=0;i<16;i++){
+    const it=items[i] || {name:"", url:""};
+    const cell=document.createElement("div");
+    cell.className="padCell";
+
+    const nm=document.createElement("div");
+    nm.className="nm";
+    nm.textContent = it.name || "—";
+
+    if(state.ui.padEdit){
+      const in1=document.createElement("input");
+      in1.value=it.name||"";
+      in1.placeholder="NAME";
+      const in2=document.createElement("input");
+      in2.value=it.url||"";
+      in2.placeholder="LINK";
+
+      in1.addEventListener("input",()=>{
+        const s2=getSetById(setId); if(!s2) return;
+        if(!Array.isArray(s2.items)) s2.items=[];
+        while(s2.items.length<16) s2.items.push({name:"",url:""});
+        s2.items[i].name = canonSetName(in1.value);
+        s2.updatedAt=nowISO();
+        saveSoon();
+      });
+      in2.addEventListener("input",()=>{
+        const s2=getSetById(setId); if(!s2) return;
+        if(!Array.isArray(s2.items)) s2.items=[];
+        while(s2.items.length<16) s2.items.push({name:"",url:""});
+        s2.items[i].url = normalizeUrl(in2.value);
+        s2.updatedAt=nowISO();
+        saveSoon();
+      });
+
+      cell.appendChild(nm);
+      cell.appendChild(in1);
+      cell.appendChild(in2);
+    }else{
+      const a=document.createElement("a");
+      a.href=it.url || "#";
+      a.textContent=it.url || "—";
+      a.addEventListener("click",(e)=>{
+        e.preventDefault();
+        if(!it.url) return;
+        setArmed(it.name||"—", it.url);
+        toast("ARMED");
+      });
+      cell.appendChild(nm);
+      cell.appendChild(a);
+    }
+    grid.appendChild(cell);
+  }
+  $("padSetId").textContent = s ? String(s.id) : "—";
+}
+
+/* ---------- render panels ---------- */
+function renderPinned(){
+  const host=$("pinnedPanel");
+  ensurePinnedRooms();
+  const pins=state.ui.pinnedRooms;
+  if(!pins.length){ host.style.display="none"; return; }
+  host.style.display="flex";
+  host.innerHTML="";
+  pins.forEach(r=>{
+    const p=getPreset(r);
+    const b=document.createElement("button");
+    b.className="btn";
+    b.style.padding="4px 8px";
+    b.style.fontSize="11px";
+    b.textContent=r;
+    b.addEventListener("click",()=>{
+      armFromPreset(p || {room:r, roomUrl:""});
+    });
+    host.appendChild(b);
+  });
+}
+
+function renderActiveStrip(){
+  const host=$("activeStrip");
+  ensureActiveSets();
+  const ids=state.ui.activeSets||[];
+  if(!ids.length){ host.style.display="none"; return; }
+  host.style.display="flex";
+  host.innerHTML="";
+  const lbl=document.createElement("span");
+  lbl.className="label";
+  lbl.textContent="ACTIVE";
+  host.appendChild(lbl);
+
+  ids.forEach(id=>{
+    const s=getSetById(id);
+    if(!s) return;
+    const b=document.createElement("button");
+    b.className="btn";
+    b.style.padding="4px 8px";
+    b.style.fontSize="11px";
+    b.textContent=s.name;
+    b.style.opacity = (state.ui.activeSetId===id) ? "1" : "0.72";
+    b.addEventListener("click",()=>{
+      state.ui.activeSetId=id;
+      state.ui.padOpen=true;
+      buildPadForSet(id);
+      saveSoon();
+    });
+    host.appendChild(b);
+  });
+}
+
+function renderRoomList(){
+  ensureCorePresets();
+  const host=$("roomList");
+  host.innerHTML="";
+  const arr=(state.payload.roomPresets||[]).slice().sort((a,b)=>canonRoomName(a.room).localeCompare(canonRoomName(b.room)));
+  arr.forEach(p=>{
+    const row=document.createElement("div");
+    row.style.display="flex";
+    row.style.gap="8px";
+    row.style.alignItems="center";
+
+    const b=document.createElement("button");
+    b.className="btn";
+    b.style.padding="4px 8px";
+    b.style.fontSize="11px";
+    b.textContent = (isPinned(p.room) ? "PINNED " : "") + canonRoomName(p.room);
+
+    const pin=document.createElement("button");
+    pin.className="btn";
+    pin.style.padding="4px 8px";
+    pin.style.fontSize="11px";
+    pin.textContent="PIN";
+    pin.addEventListener("click",(e)=>{ e.stopPropagation(); togglePin(p.room); });
+
+    row.appendChild(b);
+    row.appendChild(pin);
+
+    b.addEventListener("click",()=>{ armFromPreset(p); });
+    b.addEventListener("dblclick",()=>{ state.ui.drawerOpen=false; saveSoon(); armedGo(); });
+
+    host.appendChild(row);
+  });
+}
+
+function isPinned(roomName){
+  ensurePinnedRooms();
+  const r=canonRoomName(roomName);
+  return state.ui.pinnedRooms.includes(r);
+}
+
+function renderSetList(){
+  ensureSets();
+  const host=$("setList");
+  host.innerHTML="";
+  const arr=(state.payload.sets||[]).slice().sort((a,b)=>canonSetName(a.name).localeCompare(canonSetName(b.name)));
+  arr.forEach(s=>{
+    const row=document.createElement("div");
+    row.style.display="flex";
+    row.style.gap="8px";
+    row.style.alignItems="center";
+
+    const b=document.createElement("button");
+    b.className="btn";
+    b.style.padding="4px 8px";
+    b.style.fontSize="11px";
+    b.textContent=s.name;
+    b.style.opacity = (state.ui.activeSetId===String(s.id)) ? "1" : "0.72";
+
+    b.addEventListener("click",()=>{
+      // load editor
+      $("setNameInput").value=s.name;
+      $("setItemsInput").value = (Array.isArray(s.items)?s.items:[])
+        .map(it=> it.name ? `${it.name} | ${it.url}` : `${it.url}`)
+        .join("\n");
+      state.ui.activeSetId=String(s.id);
+      state.ui.padOpen=true;
+      buildPadForSet(String(s.id));
+      saveSoon();
+    });
+
+    row.appendChild(b);
+    host.appendChild(row);
+  });
+}
+
+/* ---------- UI toggles ---------- */
+function applyRootClasses(){
+  root.classList.toggle("invert", !!state.ui.invert);
+  root.classList.toggle("blackout", !!state.ui.blackout);
+  root.classList.toggle("fs", !!state.ui.fullscreen);
+  $("drawer").classList.toggle("open", !!state.ui.drawerOpen);
+  $("ketaNote").classList.toggle("open", !!state.ui.noteOpen);
+  $("ketaIcon").classList.toggle("open", !!state.ui.noteOpen);
+  $("padPanel").classList.toggle("open", !!state.ui.padOpen);
+
+  $("fsLabel").textContent = state.ui.fullscreen ? "ON" : "OFF";
+  $("blkLabel").textContent = state.ui.blackout ? "ON" : "OFF";
+  $("runLabel").textContent = state.ui.lightRunning ? "ON" : "OFF";
+  $("lightLabel").textContent = String(state.ui.lightPreset||1);
+  $("motionLabel").textContent = state.ui.motionOn ? "ON" : "OFF";
+
+  $("motion").classList.toggle("run", !!state.ui.motionOn);
+}
+
+/* ---------- render ---------- */
+function render(){
+  root.style.setProperty("--drawer-h", String(state.ui.drawerH));
+  $("sig").textContent = stableSig();
+  $("sig2").textContent = stableSig();
+
+  $("roomName").textContent = canonRoomName(state.room||"BASE");
+  $("armedName").textContent = state.armed.name || "—";
+  $("armedUrl").value = state.armed.url || "—";
+  $("armedBar").style.display = (state.armed && state.armed.url && state.armed.url!=="—") ? "flex" : "none";
+
+  // textarea values
+  if($("ketaText").value !== String(state.ketaNote||"")) $("ketaText").value = String(state.ketaNote||"");
+  if($("universals").value !== String(state.universals||"")) $("universals").value = String(state.universals||"");
+
+  // apply rects
+  applyRect($("ketaNote"), state.ui.noteRect||{});
+  applyRect($("padPanel"), state.ui.padRect||{});
+
+  applyRootClasses();
+
+  renderPinned();
+  renderActiveStrip();
+  renderRoomList();
+  renderSetList();
+
+  // active display boxes
+  const ap=getPreset(state.room) || getPreset($("activeRoomBox").value) || null;
+  $("activeRoomBox").value = canonRoomName(state.room||"");
+  $("activeUrlBox").value  = String(state.roomUrl||"");
+}
+
+/* ---------- bind autosave to inputs ---------- */
+function bindAutosave(){
+  $("ketaText").addEventListener("input",()=>{ state.ketaNote=$("ketaText").value; saveSoon(); });
+  $("universals").addEventListener("input",()=>{ state.universals=$("universals").value; saveSoon(); });
+
+  $("roomInput").addEventListener("input",saveSoon);
+  $("roomUrlInput").addEventListener("input",saveSoon);
+  $("setNameInput").addEventListener("input",saveSoon);
+  $("setItemsInput").addEventListener("input",saveSoon);
+  $("bulkRoomInput").addEventListener("input",saveSoon);
+}
+
+/* ---------- event wiring ---------- */
+$("btnImport").addEventListener("click",()=>{ $("file").click(); });
+$("file").addEventListener("change",(e)=>{
+  const f=e.target.files && e.target.files[0];
+  if(!f) return;
+  const r=new FileReader();
+  r.onload=()=>{ try{ importState(String(r.result||"")); toast("IMPORTED"); }catch(err){ toast("IMPORT FAILED"); } };
+  r.readAsText(f);
+  e.target.value="";
+});
+
+$("btnExport").addEventListener("click",()=>{ saveNow(true); downloadJsonFile(exportFilename(), exportState()); });
+$("btnCopy").addEventListener("click",()=>{ saveNow(false); copy(exportState()); });
+
+$("toggleDrawer").addEventListener("click",()=>{ state.ui.drawerOpen=!state.ui.drawerOpen; saveSoon(); });
+$("btnCloseDrawer").addEventListener("click",()=>{ state.ui.drawerOpen=false; saveSoon(); });
+
+$("ketaIcon").addEventListener("click",()=>{ state.ui.noteOpen=!state.ui.noteOpen; saveSoon(); });
+$("btnHideNote").addEventListener("click",()=>{ state.ui.noteOpen=false; saveSoon(); });
+
+$("btnToggleMotion").addEventListener("click",()=>{ state.ui.motionOn=!state.ui.motionOn; saveSoon(); });
+
+$("toggleRun").addEventListener("click",()=>{
+  if(state.ui.lightRunning) stopLight(false);
+  else startLight(state.ui.lightPreset||1);
+});
+
+$("armedGo").addEventListener("click",armedGo);
+$("armedNewTab").addEventListener("click",armedNewTab);
+$("armedCopy").addEventListener("click",()=>copy(String(state.armed.url||"")));
+
+$("btnCopyUniversals").addEventListener("click",()=>copy(String(state.universals||"")));
+$("btnToggleUniversals").addEventListener("click",()=>{ state.ui.universalsCollapsed=!state.ui.universalsCollapsed; $("universals").style.display=state.ui.universalsCollapsed?"none":"block"; saveSoon(); });
+$("btnToggleRegistry").addEventListener("click",()=>{ state.ui.registryCollapsed=!state.ui.registryCollapsed; $("registryBody").style.display=state.ui.registryCollapsed?"none":"block"; saveSoon(); });
+$("btnToggleActive").addEventListener("click",()=>{ state.ui.activeCollapsed=!state.ui.activeCollapsed; $("activeBody").style.display=state.ui.activeCollapsed?"none":"block"; saveSoon(); });
+$("btnToggleSets").addEventListener("click",()=>{ state.ui.setsCollapsed=!state.ui.setsCollapsed; $("setsBody").style.display=state.ui.setsCollapsed?"none":"block"; saveSoon(); });
+$("btnToggleBulk").addEventListener("click",()=>{ state.ui.bulkCollapsed=!state.ui.bulkCollapsed; $("bulkBody").style.display=state.ui.bulkCollapsed?"none":"block"; saveSoon(); });
+$("btnTogglePresets").addEventListener("click",()=>{ state.ui.presetsCollapsed=!state.ui.presetsCollapsed; $("presetsBody").style.display=state.ui.presetsCollapsed?"none":"block"; saveSoon(); });
+
+$("btnSaveRoom").addEventListener("click",()=>{
+  upsertPreset($("roomInput").value, $("roomUrlInput").value);
+  toast("SAVED");
+});
+$("btnSetActiveRoom").addEventListener("click",()=>{
+  const r=canonRoomName($("roomInput").value);
+  const url=normalizeUrl($("roomUrlInput").value);
+  state.room=r||state.room;
+  state.roomUrl=url||state.roomUrl;
+  saveSoon();
+});
+$("btnDeleteRoom").addEventListener("click",()=>{
+  deletePreset($("roomInput").value);
+  toast("DELETED");
+});
+$("btnTogglePins").addEventListener("click",()=>{
+  togglePin($("roomInput").value);
+});
+
+$("btnGoActive").addEventListener("click",()=>{
+  // active = current state.roomUrl in this simplified wiring
+  const url=String(state.roomUrl||"").trim();
+  if(!url){ toast("NO URL"); return; }
+  saveNow(true);
+  location.assign(url);
+});
+$("btnNewTabActive").addEventListener("click",()=>{
+  const url=String(state.roomUrl||"").trim();
+  if(!url){ toast("NO URL"); return; }
+  saveNow(true);
+  window.open(url, "_blank", "noopener,noreferrer");
+});
+$("btnCopyActiveUrl").addEventListener("click",()=>copy(String(state.roomUrl||"")));
+
+$("btnCreateSet").addEventListener("click",()=>createSet($("setNameInput").value));
+$("btnRenameSet").addEventListener("click",()=>{
+  const s=getSetByName($("setNameInput").value) || getSetById(state.ui.activeSetId);
+  if(!s){ toast("NO SET"); return; }
+  renameSet(String(s.id), $("setNameInput").value);
+});
+$("btnDeleteSet").addEventListener("click",()=>{
+  const s=getSetByName($("setNameInput").value) || getSetById(state.ui.activeSetId);
+  if(!s){ toast("NO SET"); return; }
+  deleteSet(String(s.id));
+});
+$("btnPinSet").addEventListener("click",()=>{
+  // keep your UI intact; pin is maintained but not surfaced differently here
+  toast("PIN/UNPIN: USE STATE");
+});
+$("btnSaveSetItems").addEventListener("click",()=>{
+  const s=getSetByName($("setNameInput").value) || getSetById(state.ui.activeSetId);
+  if(!s){ toast("NO SET"); return; }
+  setItemsFromEditor(String(s.id), $("setItemsInput").value);
+  buildPadForSet(String(s.id));
+  toast("SAVED");
+});
+$("btnClearSetItems").addEventListener("click",()=>{ $("setItemsInput").value=""; saveSoon(); });
+
+$("btnBulkAdd").addEventListener("click",()=>{
+  const lines=parseBulkLines($("bulkRoomInput").value);
+  lines.forEach(x=>{
+    const name = x.name ? canonRoomName(x.name) : "";
+    const url = normalizeUrl(x.url);
+    if(name) upsertPreset(name, url);
+    else if(url) upsertPreset("ROOM_"+hash8(url).toUpperCase(), url);
+  });
+  toast("BULK ADDED");
+});
+$("btnBulkClear").addEventListener("click",()=>{ $("bulkRoomInput").value=""; saveSoon(); });
+
+/* ---------- pad controls ---------- */
+$("padCloseBtn").addEventListener("click",()=>{ state.ui.padOpen=false; saveSoon(); });
+$("padEditBtn").addEventListener("click",()=>{
+  state.ui.padEdit=!state.ui.padEdit;
+  $("padEditBtn").textContent = state.ui.padEdit ? "DONE" : "EDIT";
+  buildPadForSet(state.ui.activeSetId);
+  saveSoon();
+});
+
+/* ---------- hotkeys (no interference with typing) ---------- */
+function isTypingTarget(e){
+  const t=e && e.target;
+  if(!t) return false;
+  const tag=(t.tagName||"").toLowerCase();
+  return tag==="input" || tag==="textarea" || t.isContentEditable;
+}
+window.addEventListener("keydown",(e)=>{
+  if(!e) return;
+  if(e.shiftKey && e.code==="KeyI"){ e.preventDefault(); state.ui.invert=!state.ui.invert; saveSoon(); return; }
+  if(e.shiftKey && e.code==="KeyN"){ e.preventDefault(); state.ui.blackout=!state.ui.blackout; saveSoon(); return; }
+  if(e.shiftKey && e.code==="KeyF"){ e.preventDefault(); state.ui.fullscreen=!state.ui.fullscreen; saveSoon(); return; }
+  if(e.shiftKey && e.code==="KeyK"){ e.preventDefault(); saveNow(true); location.assign(URLS.LANDING); return; }
+
+  // Space runs only if NOT typing
+  if(e.code==="Space" && !isTypingTarget(e)){
+    e.preventDefault();
+    if(state.ui.lightRunning) stopLight(false);
+    else startLight(state.ui.lightPreset||1);
+    return;
+  }
+});
+
+/* ---------- drawer resizing persistence ---------- */
+(function bindDrawerSizer(){
+  const sizer=$("drawerSizer");
+  let dragging=false, sy=0, oh=0;
+  sizer.addEventListener("pointerdown",(e)=>{
+    if(e.button!==0) return;
+    dragging=true;
+    sizer.setPointerCapture(e.pointerId);
+    sy=e.clientY;
+    oh=state.ui.drawerH;
+    e.preventDefault();
+  });
+  sizer.addEventListener("pointermove",(e)=>{
+    if(!dragging) return;
+    const dy=sy - e.clientY;
+    const usable = (window.innerHeight - parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--top")) - parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--bot")));
+    const px = usable * oh + dy;
+    const nh = clamp(px / usable, 0.18, 0.92);
+    state.ui.drawerH=nh;
+    root.style.setProperty("--drawer-h", String(nh));
+  });
+  function end(e){
+    if(!dragging) return;
+    dragging=false;
+    try{ sizer.releasePointerCapture(e.pointerId); }catch(_){}
+    saveSoon();
+  }
+  sizer.addEventListener("pointerup", end);
+  sizer.addEventListener("pointercancel", end);
+})();
+
+/* ---------- persist note/pad positions + sizes ---------- */
+startDrag($("ketaHead"), $("ketaNote"), ()=>{
+  state.ui.noteRect = Object.assign(state.ui.noteRect||{}, rectFromEl($("ketaNote")));
+  saveSoon();
+});
+startDrag($("padHead"), $("padPanel"), ()=>{
+  state.ui.padRect = Object.assign(state.ui.padRect||{}, rectFromEl($("padPanel")));
+  saveSoon();
+});
+trackResize($("ketaNote"), ()=>{
+  state.ui.noteRect = Object.assign(state.ui.noteRect||{}, rectFromEl($("ketaNote")));
+  saveSoon();
+});
+trackResize($("padPanel"), ()=>{
+  state.ui.padRect = Object.assign(state.ui.padRect||{}, rectFromEl($("padPanel")));
+  saveSoon();
+});
+
+/* ---------- init ---------- */
+bindAutosave();
+ensureCorePresets();
+render();
+saveNow(true); // normalize state into new key immediately
+</script>
+
+<!--
+AE / EE / WB SERIALIZATION STAMP
+AE: KETADATA_BASE_SYSTEM
+EE: PERSISTENCE_FIX_PER_PAGE_KEY + AUTOSAVE + SAVE_BEFORE_NAV + SYNC
+WB: SINGLE_FILE_HTML
+FILE_ID: "KETADATA_BASE_SYSTEM_DIVA9_V2_PERSISTENCE_FIX"
+ROOM_ID: "BASE"
+VERSION: "V2.1"
+UPDATED_AT: "2025-12-31T00:00:00.000Z"
+CHANGELOG:
+- per-page localStorage key (prevents clobber across multiple base pages)
+- migrated legacy key into page key when needed
+- autosave on inputs + drag/resize persistence
+- save-before-navigation on GO/NEW TAB
+- cross-tab sync via storage + BroadcastChannel
+-->
+</body>
+</html>
