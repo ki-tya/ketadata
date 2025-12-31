@@ -1,0 +1,561 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>KETADATA_MANIFESTO</title>
+  <style>
+    :root{
+      --bg:#0b0b0b; --fg:#eaeaea; --mut:#9a9a9a; --line:#2a2a2a;
+      --panel:rgba(12,12,12,0.92);
+      --fs:12px; /* uniform text size law */
+    }
+    *{ box-sizing:border-box; }
+    html,body{
+      height:100%; margin:0;
+      background:var(--bg); color:var(--fg);
+      font: var(--fs)/1.25 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    }
+    button,input,textarea{ font:inherit; color:inherit; background:transparent; border:1px solid var(--line); padding:6px 8px; border-radius:0; }
+    button{ cursor:pointer; }
+    button:hover{ border-color:#444; }
+    .row{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+    .pill{ border:1px solid var(--line); padding:6px 8px; background:rgba(16,16,16,0.7); white-space:nowrap; }
+    .dim{ opacity:0.65; }
+    .hide{ display:none !important; }
+
+    /* Stage must never intercept */
+    .stage{ position:fixed; inset:0; pointer-events:none; z-index:0; }
+    canvas{ width:100%; height:100%; display:block; }
+
+    .surface{ position:relative; height:100%; z-index:1; }
+
+    /* Standalone chrome (only when not embedded in Shell) */
+    .standaloneTop, .standaloneBottom{
+      position:fixed; left:0; right:0;
+      background:rgba(10,10,10,0.85);
+      border-bottom:1px solid var(--line);
+      padding:8px;
+      z-index:50;
+    }
+    .standaloneBottom{
+      top:auto; bottom:0;
+      border-bottom:0;
+      border-top:1px solid var(--line);
+    }
+    body.hasStandaloneTop{ padding-top:52px; }
+    body.hasStandaloneBottom{ padding-bottom:52px; }
+
+    /* Manifest panel */
+    .panel{
+      position:absolute;
+      left:16px; top:16px;
+      width: min(720px, calc(100% - 32px));
+      background:var(--panel);
+      border:1px solid var(--line);
+    }
+    .panelHeader{
+      padding:8px;
+      border-bottom:1px solid var(--line);
+      display:flex; align-items:center; gap:8px;
+      background:rgba(16,16,16,0.75);
+      user-select:none;
+      cursor:move;
+    }
+    .panelBody{ padding:8px; }
+    .panelBody textarea{
+      width:100%;
+      height: min(520px, calc(100vh - 220px));
+      resize:none; outline:none;
+      background:rgba(0,0,0,0.35);
+    }
+    .panelFooter{
+      padding:8px;
+      border-top:1px solid var(--line);
+      display:flex; gap:8px; align-items:center; flex-wrap:wrap;
+      background:rgba(16,16,16,0.55);
+    }
+
+    /* KETA_NOTE */
+    .note{
+      position:absolute;
+      width:360px;
+      background:var(--panel);
+      border:1px solid var(--line);
+    }
+    .noteHeader{
+      display:flex; align-items:center; gap:8px;
+      padding:8px;
+      border-bottom:1px solid var(--line);
+      background:rgba(16,16,16,0.75);
+      cursor:move;
+      user-select:none;
+    }
+    .noteBody{ padding:8px; }
+    .noteBody textarea{
+      width:100%;
+      height:220px;
+      resize:none; outline:none;
+      background:rgba(0,0,0,0.35);
+    }
+  </style>
+</head>
+
+<body>
+  <div class="stage" aria-hidden="true"><canvas id="bg"></canvas></div>
+
+  <!-- Standalone-only IO + status (Shell should already provide IO when embedded, but standalone must remain valid) -->
+  <div class="standaloneTop hide" id="standaloneTop">
+    <div class="row">
+      <div class="pill"><b>KETADATA</b> <span class="dim">MANIFESTO</span></div>
+      <button id="btnImport" type="button">IMPORT</button>
+      <button id="btnExport" type="button">EXPORT</button>
+      <input id="fileInput" type="file" accept="application/json" class="hide" />
+      <div class="pill dim" id="modePill">STANDALONE</div>
+      <div style="flex:1"></div>
+      <div class="pill dim" id="metaPillTop"></div>
+    </div>
+  </div>
+
+  <div class="surface" id="surface">
+    <!-- MANIFESTO PANEL (movable, literal state) -->
+    <div class="panel" id="manifestPanel">
+      <div class="panelHeader" id="manifestHeader">
+        <div class="dim">MANIFESTO_SURFACE</div>
+        <div style="flex:1"></div>
+        <button id="btnManifestToggle" type="button">HIDE</button>
+      </div>
+      <div class="panelBody" id="manifestBody">
+        <textarea id="manifestText" spellcheck="false"></textarea>
+      </div>
+      <div class="panelFooter">
+        <div class="pill dim" id="posPill">PANEL: X 0 Y 0</div>
+        <div class="pill dim" id="embedPill">EMBED: ?</div>
+        <div style="flex:1"></div>
+        <div class="pill dim">IMPORT/EXPORT ALWAYS PRESENT</div>
+        <div class="pill dim">STATE = LITERAL UI</div>
+      </div>
+    </div>
+
+    <!-- KETA_NOTE (mandatory, movable, literal state) -->
+    <div class="note" id="ketaNote">
+      <div class="noteHeader" id="ketaNoteHeader">
+        <div class="dim">KETA_NOTE</div>
+        <div style="flex:1"></div>
+        <button id="btnNoteToggle" type="button">HIDE</button>
+      </div>
+      <div class="noteBody" id="ketaNoteBody">
+        <textarea id="ketaNoteText" spellcheck="false"></textarea>
+      </div>
+    </div>
+  </div>
+
+  <div class="standaloneBottom hide" id="standaloneBottom">
+    <div class="row">
+      <div class="pill dim" id="metaPillBottom"></div>
+      <div style="flex:1"></div>
+      <div class="pill dim">STAGE: POINTER-EVENTS NONE</div>
+    </div>
+  </div>
+
+  <script>
+    // =========================
+    // EE: META
+    // =========================
+    const META = {
+      FILE_ID: "KETADATA_MANIFESTO_SURFACE",
+      ROOM_ID: "BASE",
+      VERSION_ID: "V1"
+    };
+    const STORAGE_KEY = `${META.FILE_ID}::STATE`;
+
+    // =========================
+    // WB: EMBED DETECTION (Shell-first)
+    // =========================
+    const IN_SHELL = (() => {
+      try { return window.parent && window.parent !== window; } catch(_) { return false; }
+    })();
+
+    function shellPost(type, payload){
+      if (!IN_SHELL) return;
+      window.parent.postMessage({ __KETADATA_ROOM__: true, type, payload }, "*");
+    }
+
+    // =========================
+    // EE: DEFAULT MANIFESTO CONTENT (CANONICAL)
+    // =========================
+    const DEFAULT_MANIFESTO_TEXT =
+`KETADATA MANIFESTO (INSIDE-SYSTEM)
+
+1) THE SHELL IS STRUCTURE
+- Do not rebuild system chrome inside a surface.
+- Surfaces plug into the Shell. Surfaces are instruments.
+
+2) THE SURFACE IS THE STATE
+- State is literal UI arrangement only: positions, visibility, values, intensities.
+- No hidden authority layers. No inferred meaning. No workflow enforcement.
+
+3) NO ENFORCED IDENTITY / ROLE / MODE
+- No “writer/designer/analyst” modes.
+- No “correct usage.” No onboarding coercion.
+- Meaning is optional and emerges through use.
+
+4) SEPARATION: STRUCTURE VS EXPERIENCE
+- Structure: navigation, universals, state IO, persistence.
+- Experience: visuals, sensation, experiments, instability.
+- Structure never interprets experience. Experience never enforces structure.
+
+5) TIGHT CIRCUIT MUST BE FRICTIONLESS
+- Base/Pod/World + core utilities must be fast, stable, and minimal.
+- Bureaucracy is wrong unless it delivers disproportionate value.
+- FUN = frictionless agency and uninterrupted selfhood.
+
+6) IMPORT/EXPORT IS NOT A FEATURE
+- Import/Export must always be present on every surface.
+- Real file download + file picker only.
+- If state cannot leave the surface, it is not KETADATA.
+
+7) KETA_NOTE IS MANDATORY
+- KETA_NOTE exists everywhere, optional to use, never suppressed.
+- KETA_NOTE is part of state.
+
+8) UNIVERSALS ARE LOCKED
+- Do not add hotkeys.
+- Respect typing guards.
+- Visual layers must never block clicks (pointer-events:none).
+
+9) MULTIPLICITY IS ALLOWED
+- Multiple Bases allowed.
+- Proliferation of surfaces is normal. Do not converge to “final version.”
+
+10) SURGICAL DELTAS ONLY
+- When editing: touch only requested parts.
+- Preserve Shell doctrine, universals, IO, clickability, state replay.
+
+FINAL LINE
+YOU DO NOT EXPLAIN KETADATA.
+YOU REPRODUCE IT FAITHFULLY.
+YOU LEAVE TRACES IN IT.`;
+
+    // =========================
+    // EE: DEFAULT STATE
+    // =========================
+    const DEFAULT_STATE = () => ({
+      version: "KETADATA_SHELL_KERNEL_v1",
+      updatedAt: new Date().toISOString(),
+      fileId: META.FILE_ID,
+      roomId: META.ROOM_ID,
+      versionId: META.VERSION_ID,
+
+      ui: {
+        standaloneChrome: true,
+        manifestoOpen: true,
+        noteOpen: true,
+        manifestoPos: { x: 16, y: 16 },
+        notePos: { x: 16, y: 16 + 40 + 560 } // default below manifesto roughly
+      },
+
+      manifestoText: DEFAULT_MANIFESTO_TEXT,
+      ketaNote: ""
+    });
+
+    function deepFill(target, defaults){
+      if (target == null || typeof target !== "object") return structuredClone(defaults);
+      const out = Array.isArray(defaults) ? [] : {};
+      for (const k of Object.keys(defaults)) {
+        const dv = defaults[k];
+        const tv = target[k];
+        if (tv === undefined) out[k] = structuredClone(dv);
+        else if (dv && typeof dv === "object" && !Array.isArray(dv)) out[k] = deepFill(tv, dv);
+        else out[k] = tv;
+      }
+      for (const k of Object.keys(target)) if (out[k] === undefined) out[k] = target[k];
+      return out;
+    }
+
+    let STATE = null;
+
+    // =========================
+    // WB: BOOT ORDER LAW
+    // =========================
+    (function boot(){
+      const defaults = DEFAULT_STATE();                 // 1) defaults
+
+      let persisted = null;                             // 2) load persisted (standalone)
+      if (!IN_SHELL) {
+        try {
+          const raw = localStorage.getItem(STORAGE_KEY);
+          if (raw) persisted = JSON.parse(raw);
+        } catch(_) {}
+      }
+
+      STATE = deepFill(persisted || {}, defaults);      // 3) deep-fill
+
+      render();                                         // 4) render
+
+      bind();                                           // 5) bind
+      startBackground();
+
+      if (IN_SHELL) {
+        shellPost("ROOM_READY", { fileId: META.FILE_ID, roomId: META.ROOM_ID, versionId: META.VERSION_ID });
+        shellPost("ROOM_STATE_REQUEST", null);
+      } else {
+        persistSoon();
+      }
+    })();
+
+    // =========================
+    // WB: SHELL BRIDGE (OPTIONAL)
+    // =========================
+    window.addEventListener("message", (ev) => {
+      const msg = ev.data;
+      if (!msg || msg.__KETADATA_SHELL__ !== true) return;
+
+      if (msg.type === "ROOM_STATE_PUSH") {
+        const incoming = msg.payload || {};
+        STATE = deepFill(incoming, DEFAULT_STATE());
+        render();
+        persistSoon();
+      }
+
+      if (msg.type === "ROOM_SAVE_REQUEST") {
+        shellPost("ROOM_STATE_REPLY", STATE);
+      }
+    });
+
+    // =========================
+    // EE: PERSISTENCE
+    // =========================
+    let persistTimer = null;
+    function persistSoon(){
+      clearTimeout(persistTimer);
+      persistTimer = setTimeout(() => {
+        STATE.updatedAt = new Date().toISOString();
+
+        if (IN_SHELL) {
+          shellPost("ROOM_DIRTY", { fileId: META.FILE_ID, updatedAt: STATE.updatedAt });
+          shellPost("ROOM_STATE_REPLY", STATE);
+        } else {
+          try { localStorage.setItem(STORAGE_KEY, JSON.stringify(STATE)); } catch(_) {}
+        }
+        updateMeta();
+      }, 50);
+    }
+
+    // =========================
+    // AE: RENDER
+    // =========================
+    const el = (id) => document.getElementById(id);
+
+    function render(){
+      // Standalone chrome visibility
+      const showStandalone = (!IN_SHELL) && !!STATE.ui.standaloneChrome;
+      document.body.classList.toggle("hasStandaloneTop", showStandalone);
+      document.body.classList.toggle("hasStandaloneBottom", showStandalone);
+      el("standaloneTop").classList.toggle("hide", !showStandalone);
+      el("standaloneBottom").classList.toggle("hide", !showStandalone);
+
+      // Toggle bodies
+      el("manifestBody").classList.toggle("hide", !STATE.ui.manifestoOpen);
+      el("btnManifestToggle").textContent = STATE.ui.manifestoOpen ? "HIDE" : "SHOW";
+
+      el("ketaNoteBody").classList.toggle("hide", !STATE.ui.noteOpen);
+      el("btnNoteToggle").textContent = STATE.ui.noteOpen ? "HIDE" : "SHOW";
+
+      // Text content
+      if (el("manifestText").value !== STATE.manifestoText) el("manifestText").value = STATE.manifestoText || "";
+      if (el("ketaNoteText").value !== STATE.ketaNote) el("ketaNoteText").value = STATE.ketaNote || "";
+
+      // Positions
+      place(el("manifestPanel"), STATE.ui.manifestoPos.x, STATE.ui.manifestoPos.y);
+      place(el("ketaNote"), STATE.ui.notePos.x, STATE.ui.notePos.y);
+
+      // Pills
+      el("embedPill").textContent = IN_SHELL ? "EMBED: SHELL" : "EMBED: NONE";
+      updatePosPill();
+      updateMeta();
+    }
+
+    function place(node, x, y){
+      node.style.left = `${Math.max(0, x)}px`;
+      node.style.top  = `${Math.max(0, y)}px`;
+    }
+
+    function updatePosPill(){
+      el("posPill").textContent = `PANEL: X ${Math.round(STATE.ui.manifestoPos.x)} Y ${Math.round(STATE.ui.manifestoPos.y)}`;
+    }
+
+    function updateMeta(){
+      const m = `FILE_ID:${STATE.fileId} ROOM_ID:${STATE.roomId} VERSION:${STATE.versionId} UPDATED_AT:${STATE.updatedAt}`;
+      const t = el("metaPillTop"); if (t) t.textContent = m;
+      const b = el("metaPillBottom"); if (b) b.textContent = m;
+      el("modePill").textContent = IN_SHELL ? "EMBEDDED (SHELL)" : "STANDALONE";
+    }
+
+    // =========================
+    // WB: BIND
+    // =========================
+    function bind(){
+      // Mandatory IO (always present)
+      // If embedded, Shell should already expose IO; we still keep standalone IO visible only when standalone to avoid duplicating Shell chrome.
+      if (!IN_SHELL) {
+        el("btnExport").addEventListener("click", exportFile);
+        el("btnImport").addEventListener("click", () => el("fileInput").click());
+        el("fileInput").addEventListener("change", importFile);
+      }
+
+      // Manifest edits
+      el("manifestText").addEventListener("input", () => {
+        STATE.manifestoText = el("manifestText").value;
+        persistSoon();
+      });
+
+      // Note edits
+      el("ketaNoteText").addEventListener("input", () => {
+        STATE.ketaNote = el("ketaNoteText").value;
+        persistSoon();
+      });
+
+      // Toggle bodies
+      el("btnManifestToggle").addEventListener("click", () => {
+        STATE.ui.manifestoOpen = !STATE.ui.manifestoOpen;
+        render();
+        persistSoon();
+      });
+      el("btnNoteToggle").addEventListener("click", () => {
+        STATE.ui.noteOpen = !STATE.ui.noteOpen;
+        render();
+        persistSoon();
+      });
+
+      // Drag
+      wireDrag(el("manifestPanel"), el("manifestHeader"), "manifestoPos", updatePosPill);
+      wireDrag(el("ketaNote"), el("ketaNoteHeader"), "notePos", () => {});
+
+      // Lifecycle flush (standalone)
+      if (!IN_SHELL) {
+        window.addEventListener("pagehide", () => persistSoon(), { capture:true });
+        window.addEventListener("beforeunload", () => persistSoon(), { capture:true });
+        document.addEventListener("visibilitychange", () => { if (document.hidden) persistSoon(); }, { capture:true });
+      }
+    }
+
+    function wireDrag(node, handle, key, onMove){
+      let on=false, sx=0, sy=0, bx=0, by=0;
+      handle.addEventListener("pointerdown", (e) => {
+        if (e.target && (e.target.tagName||"").toLowerCase()==="button") return;
+        on=true; node.setPointerCapture(e.pointerId);
+        sx=e.clientX; sy=e.clientY;
+        bx=STATE.ui[key].x; by=STATE.ui[key].y;
+        e.preventDefault();
+      });
+      handle.addEventListener("pointermove", (e) => {
+        if (!on) return;
+        const nx = Math.max(0, bx + (e.clientX - sx));
+        const ny = Math.max(0, by + (e.clientY - sy));
+        STATE.ui[key].x = nx; STATE.ui[key].y = ny;
+        node.style.left = nx + "px";
+        node.style.top  = ny + "px";
+        if (onMove) onMove();
+      });
+      handle.addEventListener("pointerup", () => { if (!on) return; on=false; persistSoon(); });
+      handle.addEventListener("pointercancel", () => { if (!on) return; on=false; persistSoon(); });
+    }
+
+    // =========================
+    // EE: REAL FILE IO (standalone)
+    // =========================
+    function exportFile(){
+      const payload = structuredClone(STATE);
+      payload.updatedAt = new Date().toISOString();
+      const ts = payload.updatedAt.replace(/[:.]/g,"-");
+      const fname = `${payload.fileId}__${payload.roomId}__${payload.versionId}__${ts}.json`;
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type:"application/json" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = fname;
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 0);
+      STATE.updatedAt = payload.updatedAt;
+      persistSoon();
+    }
+
+    function importFile(ev){
+      const f = ev.target.files && ev.target.files[0];
+      ev.target.value = "";
+      if (!f) return;
+      const r = new FileReader();
+      r.onload = () => {
+        try{
+          const incoming = JSON.parse(String(r.result||"{}"));
+          STATE = deepFill(incoming, DEFAULT_STATE());
+          render();
+          persistSoon();
+        } catch(_) {}
+      };
+      r.readAsText(f);
+    }
+
+    // =========================
+    // AE: BACKGROUND (VISUAL ONLY)
+    // =========================
+    const bg = document.getElementById("bg");
+    const ctx = bg.getContext("2d", { alpha:true });
+
+    function resize(){
+      const dpr = Math.max(1, Math.min(2, window.devicePixelRatio||1));
+      bg.width = Math.floor(innerWidth*dpr);
+      bg.height = Math.floor(innerHeight*dpr);
+      ctx.setTransform(dpr,0,0,dpr,0,0);
+    }
+    addEventListener("resize", resize, { passive:true });
+
+    function startBackground(){
+      resize();
+      requestAnimationFrame(tick);
+    }
+
+    function tick(now){
+      const w=innerWidth, h=innerHeight;
+      ctx.clearRect(0,0,w,h);
+
+      // Minimal non-dominant motion; does not affect clickability or layout
+      ctx.globalAlpha = 0.18;
+      ctx.strokeStyle = "#ffffff";
+      ctx.lineWidth = 1;
+
+      const t = now/1000;
+      const cx=w*0.5, cy=h*0.5;
+      for (let i=0;i<16;i++){
+        const r = 40 + i*26 + Math.sin(t*0.25 + i*0.35) * 10;
+        ctx.beginPath();
+        ctx.arc(cx, cy, r, 0, Math.PI*2);
+        ctx.stroke();
+      }
+
+      requestAnimationFrame(tick);
+    }
+  </script>
+
+  <!--
+  =========================
+  KETADATA HTML SERIALIZATION STAMP
+  =========================
+
+  AE:
+  - Uniform text size, minimal spacing, manifesto as plain text surface.
+  EE:
+  - Mandatory Import/Export (standalone real file IO) + deep-fill; literal UI state (panel/note pos + visibility + text).
+  WB:
+  - Stage pointer-events:none; Shell bridge hooks (ROOM_READY/ROOM_STATE_REQUEST/ROOM_STATE_REPLY), drag wiring.
+
+  FILE_ID: KETADATA_MANIFESTO_SURFACE
+  ROOM_ID: BASE
+  VERSION_ID: V1
+  UPDATED_AT: 2025-12-30T00:00:00.000Z
+  CHANGELOG:
+  - Initial manifesto surface for AI pre-read. Shell-first (embedded) + standalone-valid (IO + persistence).
+  -->
+</body>
+</html>
