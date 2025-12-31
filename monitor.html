@@ -1,0 +1,336 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>KETADATA_PULSE_MONITOR</title>
+
+<style>
+:root{
+  --bg:#000; --fg:#fff; --muted:#8a8a8a; --line:#222; --line2:#333;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace;
+}
+*{box-sizing:border-box}
+html,body{height:100%; margin:0}
+body{background:var(--bg); color:var(--fg); font-family:var(--mono); overflow:hidden; user-select:none; font-size:13px}
+#root{position:fixed; inset:0; display:flex; flex-direction:column}
+#root.invert{filter:invert(1)}
+
+.header{
+  height:44px; border-bottom:1px solid var(--line);
+  display:flex; align-items:center; justify-content:space-between;
+  padding:0 12px; background:linear-gradient(180deg,#070707,#000);
+}
+.brand{
+  font-size:13px; letter-spacing:.10em; text-transform:uppercase;
+  display:flex; align-items:center; gap:10px;
+}
+.sq{width:8px; height:8px; border:1px solid var(--fg); background:#000}
+.actions{display:flex; gap:8px; align-items:center}
+.btn{
+  background:transparent; color:var(--fg); border:1px solid var(--line2);
+  padding:6px 10px; font-size:13px; letter-spacing:.08em;
+  text-transform:uppercase; cursor:pointer;
+}
+.btn:hover{border-color:var(--fg)}
+
+.main{flex:1; overflow:auto; padding:12px}
+.main::-webkit-scrollbar{width:8px}
+.main::-webkit-scrollbar-track{background:var(--bg)}
+.main::-webkit-scrollbar-thumb{background:var(--line2)}
+
+.section{margin-bottom:20px}
+.section:last-child{margin-bottom:0}
+.sectionLabel{
+  font-size:13px; letter-spacing:.10em; text-transform:uppercase;
+  color:var(--muted); margin-bottom:8px; padding-bottom:6px;
+  border-bottom:1px solid var(--line);
+}
+
+.keyList{display:flex; flex-direction:column; gap:6px}
+.keyRow{
+  border:1px solid var(--line2); padding:8px 10px;
+  display:flex; justify-content:space-between; align-items:center;
+  cursor:pointer; transition:border-color 0.15s;
+}
+.keyRow:hover{border-color:var(--fg)}
+.keyRow.active{border-color:var(--fg); background:rgba(255,255,255,0.02)}
+
+.keyName{font-size:13px; letter-spacing:.02em; flex:1}
+.keyMeta{
+  display:flex; gap:12px; font-size:13px; color:var(--muted);
+  letter-spacing:.02em;
+}
+
+.detail{
+  border:1px solid var(--line2); padding:10px;
+  background:rgba(255,255,255,0.01); margin-top:8px;
+}
+.detailLabel{
+  font-size:13px; letter-spacing:.08em; text-transform:uppercase;
+  color:var(--muted); margin-bottom:6px;
+}
+.detailValue{
+  font-size:13px; color:var(--fg); word-break:break-all;
+  line-height:1.4; max-height:200px; overflow:auto;
+}
+
+.stat{
+  display:flex; gap:16px; font-size:13px; color:var(--muted);
+  padding:8px 0; border-bottom:1px solid var(--line);
+  margin-bottom:12px;
+}
+.stat span{color:var(--fg)}
+
+.empty{
+  font-size:13px; color:var(--muted); padding:20px;
+  text-align:center; letter-spacing:.08em; text-transform:uppercase;
+}
+</style>
+</head>
+
+<body>
+<div id="root">
+  <div class="header">
+    <div class="brand">
+      <span class="sq"></span>
+      <span>KETADATA // PULSE // MONITOR</span>
+    </div>
+    <div class="actions">
+      <button class="btn" id="btnRefresh">REFRESH</button>
+      <button class="btn" id="btnClear">CLEAR ALL</button>
+      <button class="btn" id="btnInvert">INVERT</button>
+      <a href="based_diva9.html" class="btn">BASE</a>
+    </div>
+  </div>
+
+  <div class="main">
+    <div class="stat">
+      <div>TOTAL KEYS: <span id="totalKeys">0</span></div>
+      <div>SIZE: <span id="totalSize">0 KB</span></div>
+      <div>LAST UPDATE: <span id="lastUpdate">—</span></div>
+    </div>
+
+    <div class="section">
+      <div class="sectionLabel">KETADATA KEYS</div>
+      <div id="ketaKeys" class="keyList"></div>
+    </div>
+
+    <div class="section">
+      <div class="sectionLabel">OTHER KEYS</div>
+      <div id="otherKeys" class="keyList"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const $=id=>document.getElementById(id);
+const root=$("root");
+
+function nowISO(){return new Date().toISOString()}
+
+function hash8(str){
+  const s=String(str||"");
+  let h=2166136261;
+  for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619)}
+  return(h>>>0).toString(16).slice(0,8);
+}
+
+function formatBytes(bytes){
+  if(bytes<1024)return bytes+" B";
+  if(bytes<1048576)return(bytes/1024).toFixed(1)+" KB";
+  return(bytes/1048576).toFixed(1)+" MB";
+}
+
+function formatTime(iso){
+  try{
+    const d=new Date(iso);
+    const h=String(d.getHours()).padStart(2,"0");
+    const m=String(d.getMinutes()).padStart(2,"0");
+    const s=String(d.getSeconds()).padStart(2,"0");
+    return`${h}:${m}:${s}`;
+  }catch(e){
+    return"—";
+  }
+}
+
+let activeKey=null;
+
+function scan(){
+  const ketaKeys=[];
+  const otherKeys=[];
+  let totalSize=0;
+  let lastUpdate=null;
+
+  for(let i=0;i<localStorage.length;i++){
+    const key=localStorage.key(i);
+    if(!key)continue;
+
+    const value=localStorage.getItem(key)||"";
+    const size=new Blob([value]).size;
+    totalSize+=size;
+
+    const isKeta=key.startsWith("KDT")||key.startsWith("KETA")||key.includes("KETADATA");
+
+    let timestamp="—";
+    let sig="—";
+
+    try{
+      const parsed=JSON.parse(value);
+      if(parsed.updatedAt)timestamp=parsed.updatedAt;
+      else if(parsed.timestamp)timestamp=parsed.timestamp;
+      sig=hash8(value);
+
+      if(timestamp&&timestamp!=="—"&&(!lastUpdate||new Date(timestamp)>new Date(lastUpdate))){
+        lastUpdate=timestamp;
+      }
+    }catch(e){
+      sig=hash8(value);
+    }
+
+    const obj={key,size,timestamp,sig,value};
+    if(isKeta)ketaKeys.push(obj);
+    else otherKeys.push(obj);
+  }
+
+  ketaKeys.sort((a,b)=>b.key.localeCompare(a.key));
+  otherKeys.sort((a,b)=>b.key.localeCompare(a.key));
+
+  $("totalKeys").textContent=localStorage.length;
+  $("totalSize").textContent=formatBytes(totalSize);
+  $("totalUpdate").textContent=lastUpdate?formatTime(lastUpdate):"—";
+
+  render(ketaKeys,otherKeys);
+}
+
+function render(ketaKeys,otherKeys){
+  const ketaEl=$("ketaKeys");
+  const otherEl=$("otherKeys");
+
+  ketaEl.innerHTML="";
+  otherEl.innerHTML="";
+
+  if(!ketaKeys.length){
+    ketaEl.innerHTML='<div class="empty">NO KETADATA KEYS</div>';
+  }else{
+    ketaKeys.forEach(k=>ketaEl.appendChild(createKeyRow(k)));
+  }
+
+  if(!otherKeys.length){
+    otherEl.innerHTML='<div class="empty">NO OTHER KEYS</div>';
+  }else{
+    otherKeys.forEach(k=>otherEl.appendChild(createKeyRow(k)));
+  }
+}
+
+function createKeyRow(k){
+  const row=document.createElement("div");
+  row.className="keyRow";
+  if(activeKey===k.key)row.classList.add("active");
+
+  const name=document.createElement("div");
+  name.className="keyName";
+  name.textContent=k.key;
+
+  const meta=document.createElement("div");
+  meta.className="keyMeta";
+
+  const sizeSpan=document.createElement("span");
+  sizeSpan.textContent=formatBytes(k.size);
+
+  const sigSpan=document.createElement("span");
+  sigSpan.textContent=k.sig;
+
+  const timeSpan=document.createElement("span");
+  timeSpan.textContent=k.timestamp!=="—"?formatTime(k.timestamp):"—";
+
+  meta.appendChild(sizeSpan);
+  meta.appendChild(sigSpan);
+  meta.appendChild(timeSpan);
+
+  row.appendChild(name);
+  row.appendChild(meta);
+
+  row.addEventListener("click",()=>{
+    if(activeKey===k.key){
+      activeKey=null;
+      scan();
+    }else{
+      activeKey=k.key;
+      scan();
+      showDetail(k);
+    }
+  });
+
+  return row;
+}
+
+function showDetail(k){
+  const parent=document.querySelector(`[data-key="${k.key}"]`);
+  if(parent)parent.remove();
+
+  const existing=Array.from(document.querySelectorAll(".keyRow")).find(el=>el.textContent.includes(k.key));
+  if(!existing)return;
+
+  const detail=document.createElement("div");
+  detail.className="detail";
+  detail.dataset.key=k.key;
+
+  const label=document.createElement("div");
+  label.className="detailLabel";
+  label.textContent="RAW VALUE";
+
+  const value=document.createElement("div");
+  value.className="detailValue";
+  value.textContent=k.value;
+
+  detail.appendChild(label);
+  detail.appendChild(value);
+
+  existing.parentNode.insertBefore(detail,existing.nextSibling);
+}
+
+$("btnRefresh").addEventListener("click",()=>{activeKey=null;scan()});
+
+$("btnClear").addEventListener("click",()=>{
+  if(!confirm("CLEAR ALL LOCALSTORAGE? THIS CANNOT BE UNDONE."))return;
+  localStorage.clear();
+  activeKey=null;
+  scan();
+});
+
+$("btnInvert").addEventListener("click",()=>{
+  root.classList.toggle("invert");
+});
+
+window.addEventListener("storage",()=>{
+  scan();
+});
+
+window.addEventListener("keydown",e=>{
+  if(e.shiftKey&&e.key.toLowerCase()==="i"){
+    e.preventDefault();
+    root.classList.toggle("invert");
+  }
+});
+
+scan();
+setInterval(scan,2000);
+</script>
+
+<!--
+EE: PULSE MONITOR (PURE OBSERVATION, NO CONTROL)
+EE: SCANS ALL LOCALSTORAGE KEYS, SHOWS SIZE/SIG/TIMESTAMP
+WB: CLICK KEY TO EXPAND RAW VALUE
+WB: AUTO-REFRESH EVERY 2S + STORAGE EVENT LISTENER
+AE: KETADATA BRAND COMPLIANT (BLACK/WHITE/GREY, ONE SIZE, MONO)
+FILE_ID: KETADATA_PULSE_MONITOR
+VERSION: v1.0
+UPDATED_AT: 2025-12-31T00:00:00Z
+CHANGELOG:
+- EE: SYSTEM MONITOR FOR ALL LOCALSTORAGE ACTIVITY
+- WB: CLICK TO INSPECT, NO EDITING
+- AE: INDUSTRIAL SHARP, VOID CHROME
+-->
+</body>
+</html>
