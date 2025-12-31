@@ -1,1 +1,619 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>KETADATA_BASE_SYSTEM</title>
+<style>
+:root{
+  --bg:#000; --fg:#fff; --muted:#8a8a8a; --line:#222; --line2:#333;
+  --top:44px; --bot:34px;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace;
+  --sans: Arial, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+  --ctl-radius:0px;
+  --ctl-alpha:0.82;
+  --ctl-bg: rgba(0,0,0,var(--ctl-alpha));
+  --note-border: rgba(255,255,255,0.78);
+  --drawer-h: 0.42;
+}
+*{box-sizing:border-box}
+html,body{height:100%; margin:0}
+body{background:var(--bg); color:var(--fg); font-family:var(--sans); overflow:hidden; user-select:none}
+#root{position:fixed; inset:0; background:#000}
+#root.invert{filter:invert(1)}
+#root.fs .topbar,#root.fs .bottombar,#root.fs .drawer,#root.fs #pinnedPanel,#root.fs #armedBar,#root.fs .toast,#root.fs #activeStrip{display:none !important}
+#root.blackout .topbar,#root.blackout .bottombar,#root.blackout .drawer,#root.blackout #pinnedPanel,#root.blackout #armedBar,#root.blackout .toast,#root.blackout .ketaNote,#root.blackout #activeStrip{display:none !important}
+#root.blackout #stage{background:#000 !important; filter:none !important}
+#root.blackout #motion{display:none !important}
+#stage{position:absolute; inset:0; background:#000; pointer-events:none}
+#motion{position:absolute; inset:0; pointer-events:none; opacity:0; background:repeating-linear-gradient(135deg, rgba(255,255,255,0.06) 0px, rgba(255,255,255,0.06) 1px, rgba(0,0,0,0) 12px, rgba(0,0,0,0) 22px); mix-blend-mode:screen; transform:translate3d(0,0,0)}
+#motion.run{opacity:0.12; animation:scanflow 2.2s linear infinite}
+@keyframes scanflow{0%{transform:translate3d(-80px,60px,0)}100%{transform:translate3d(80px,-60px,0)}}
+.topbar{position:absolute; top:0; left:0; right:0; height:var(--top); display:flex; align-items:center; justify-content:space-between; padding:0 10px; border-bottom:1px solid var(--line); background:linear-gradient(180deg,#070707,#000); z-index:10}
+.brand{display:flex; align-items:center; gap:10px; font-family:var(--mono); font-size:12px; letter-spacing:.10em; text-transform:uppercase}
+.brand .sq{width:10px; height:10px; border:1px solid var(--fg); background:#000}
+.roomBadge{display:flex; gap:8px; align-items:center; font-family:var(--mono); font-size:11px; letter-spacing:.10em; text-transform:uppercase; color:var(--muted); border:1px solid var(--line2); padding:4px 8px}
+.actions{display:flex; align-items:center; gap:8px; font-family:var(--mono); font-size:12px}
+.btn{background:transparent; color:var(--fg); border:1px solid var(--line2); padding:6px 10px; font-family:var(--mono); font-size:12px; letter-spacing:.08em; text-transform:uppercase; cursor:pointer}
+.btn:hover{border-color:var(--fg)}
+.btn:active{transform:translateY(1px)}
+.kbd{border:1px solid var(--line2); padding:2px 6px; color:var(--muted); font-size:11px}
+.ketaIcon{width:16px; height:16px; border:2px solid var(--fg); background:var(--fg); cursor:pointer}
+.ketaIcon.open{background:#000}
+.bottombar{position:absolute; left:0; right:0; bottom:0; height:var(--bot); display:flex; align-items:center; justify-content:space-between; padding:0 10px; border-top:1px solid var(--line); background:linear-gradient(0deg,#070707,#000); z-index:10; font-family:var(--mono); font-size:11px; color:var(--muted)}
+.toggle{border:1px solid var(--line2); background:transparent; color:var(--fg); padding:4px 8px; font-family:var(--mono); font-size:11px; letter-spacing:.08em; text-transform:uppercase; cursor:pointer}
+.toggle:hover{border-color:var(--fg)}
+.drawer{position:absolute; left:0; right:0; bottom:var(--bot); height:calc((100vh - var(--top) - var(--bot)) * var(--drawer-h)); min-height:200px; border-top:1px solid var(--line); background:linear-gradient(180deg,#060606,#000); display:none; z-index:20}
+.drawer.open{display:flex; flex-direction:column}
+.drawerSizer{height:10px; cursor:ns-resize; border-bottom:1px solid var(--line); background:linear-gradient(180deg,#0a0a0a,#050505)}
+.drawerHead{padding:8px 10px; border-bottom:1px solid var(--line); font-family:var(--mono); font-size:12px; letter-spacing:.10em; text-transform:uppercase; display:flex; justify-content:space-between; align-items:center}
+.drawerBody{padding:10px; min-height:0; flex:1; overflow:auto}
+textarea{width:100%; border:1px solid var(--line2); background:#050505; color:var(--fg); font-family:var(--mono); font-size:12px; padding:10px; line-height:1.35; outline:none; resize:vertical; min-height:140px}
+input{outline:none}
+.ketaNote{position:absolute; top:76px; right:16px; left:auto; width:340px; height:220px; display:none; z-index:30; resize:both; overflow:hidden; border-radius:var(--ctl-radius); background:var(--ctl-bg); border:1px solid var(--note-border); backdrop-filter:blur(6px)}
+.ketaNote.open{display:flex; flex-direction:column}
+.ketaHead{padding:8px 10px; border-bottom:1px solid rgba(255,255,255,0.14); font-family:var(--mono); font-size:11px; letter-spacing:.14em; text-transform:uppercase; display:flex; justify-content:space-between; align-items:center; cursor:move}
+.ketaBody{padding:10px; min-height:0; flex:1}
+.ketaNote textarea{background:#000; color:#fff; border:1px solid rgba(255,255,255,0.22); width:100%; height:100%; resize:none; padding:10px; outline:none}
+.headBtn{background:transparent; color:var(--fg); border:1px solid rgba(255,255,255,0.18); padding:2px 8px; font-family:var(--mono); font-size:12px; letter-spacing:.08em; text-transform:uppercase; cursor:pointer}
+.headBtn:hover{border-color:rgba(255,255,255,0.6)}
+#armedBar{position:absolute; left:10px; top:calc(var(--top) + 10px); z-index:27; display:none; gap:8px; align-items:center; flex-wrap:wrap; padding:8px 10px; border:1px solid var(--line2); background:rgba(0,0,0,0.86); font-family:var(--mono); font-size:11px; letter-spacing:.08em; text-transform:uppercase}
+#armedBar .label{color:var(--muted)}
+#armedBar .val{color:var(--fg)}
+#armedBar input{background:#000; color:#fff; border:1px solid var(--line2); padding:6px 8px; font-family:var(--mono); font-size:11px; letter-spacing:.08em; width:340px; max-width:calc(100vw - 40px)}
+#pinnedPanel{position:absolute; left:10px; top:calc(var(--top) + 64px); z-index:26; display:none; gap:8px; flex-wrap:wrap; align-items:flex-start; padding:8px 10px; border:1px solid var(--line2); background:rgba(0,0,0,0.86); font-family:var(--mono); font-size:11px; letter-spacing:.08em; text-transform:uppercase}
+#activeStrip{position:absolute; left:10px; top:calc(var(--top) + 122px); z-index:25; display:none; gap:8px; flex-wrap:wrap; align-items:center; padding:8px 10px; border:1px solid var(--line2); background:rgba(0,0,0,0.86); font-family:var(--mono); font-size:11px; letter-spacing:.08em; text-transform:uppercase}
+#activeStrip .label{color:var(--muted)}
+#padPanel{position:absolute; left:14px; top:calc(var(--top) + 170px); width:360px; height:360px; display:none; z-index:31; border:1px solid rgba(255,255,255,0.22); border-radius:var(--ctl-radius); background:rgba(0,0,0,0.86); backdrop-filter:blur(6px); overflow:hidden; resize:both; min-width:340px; min-height:260px}
+#padPanel.open{display:flex; flex-direction:column}
+#padHead{padding:8px 10px; border-bottom:1px solid rgba(255,255,255,0.14); font-family:var(--mono); font-size:11px; letter-spacing:.14em; text-transform:uppercase; display:flex; justify-content:space-between; align-items:center; cursor:move}
+#padBody{padding:10px; min-height:0; flex:1; display:flex; flex-direction:column; gap:10px}
+#padGrid{flex:1; display:grid; grid-template-columns:repeat(4, 1fr); grid-template-rows:repeat(4, 1fr); gap:8px; min-height:0}
+.padCell{border:1px solid rgba(255,255,255,0.18); background:rgba(0,0,0,0.35); padding:8px; overflow:hidden; display:flex; flex-direction:column; gap:6px; min-width:0}
+.padCell .nm{font-family:var(--mono); font-size:11px; letter-spacing:.08em; text-transform:uppercase; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.padCell a{color:var(--fg); font-family:var(--mono); font-size:11px; letter-spacing:.02em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; text-decoration:none; border-bottom:1px solid rgba(255,255,255,0.18); padding-bottom:2px}
+.padCell a:hover{border-bottom-color:rgba(255,255,255,0.55)}
+.padCell input{width:100%; background:#000; color:#fff; border:1px solid rgba(255,255,255,0.22); padding:6px 8px; font-family:var(--mono); font-size:11px; letter-spacing:.06em; outline:none; min-width:0}
+.toast{position:absolute; left:12px; top:calc(var(--top) + 12px); padding:8px 10px; border:1px solid var(--line2); background:rgba(8,8,8,0.82); font-family:var(--mono); font-size:11px; letter-spacing:.06em; color:var(--fg); display:none; z-index:40}
+</style>
+</head>
 
+<body>
+<div id="root">
+  <div id="stage"></div>
+  <div id="motion" aria-hidden="true"></div>
+
+  <div id="armedBar">
+    <span class="label">ARMED</span>
+    <span class="val" id="armedName">—</span>
+    <button class="btn" id="armedGo" style="padding:4px 8px; font-size:11px">GO</button>
+    <button class="btn" id="armedNewTab" style="padding:4px 8px; font-size:11px">NEW TAB</button>
+    <button class="btn" id="armedCopy" style="padding:4px 8px; font-size:11px">COPY URL</button>
+    <input id="armedUrl" readonly value="—" />
+  </div>
+
+  <div id="pinnedPanel"></div>
+  <div id="activeStrip"></div>
+
+  <div id="padPanel">
+    <div id="padHead">
+      <span id="padTitle">PAD</span>
+      <div style="display:flex; gap:8px; align-items:center">
+        <button class="headBtn" id="padEditBtn">EDIT</button>
+        <button class="headBtn" id="padCloseBtn">X</button>
+      </div>
+    </div>
+    <div id="padBody">
+      <div id="padGrid"></div>
+      <div style="display:flex; gap:8px; align-items:center; justify-content:space-between; font-family:var(--mono); font-size:11px; color:var(--muted); letter-spacing:.08em; text-transform:uppercase">
+        <span id="padHint">CLICK = ARM</span>
+        <span id="padSetId" style="opacity:.7">—</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <div class="topbar">
+    <div style="display:flex; gap:10px; align-items:center">
+      <div class="brand">
+        <span class="sq"></span>
+        <span>KETADATA // SHELL8 // KERNEL</span>
+        <span style="color:var(--muted); letter-spacing:.02em; text-transform:none">v1</span>
+      </div>
+      <div class="roomBadge">
+        <span>ROOM</span>
+        <span id="roomName">BASE</span>
+      </div>
+    </div>
+
+    <div class="actions">
+      <button class="btn" id="btnImport">IMPORT</button>
+      <button class="btn" id="btnExport">EXPORT</button>
+      <button class="btn" id="btnCopy">COPY</button>
+      <span class="kbd" title="Run">Space</span>
+      <span class="kbd" title="Invert">Shift+I</span>
+      <span class="kbd" title="Blackout">Shift+N</span>
+      <span class="kbd" title="Fullscreen">Shift+F</span>
+      <span class="kbd" title="Landing">Shift+K</span>
+      <div id="ketaIcon" class="ketaIcon" title="KETA_NOTE"></div>
+    </div>
+  </div>
+
+  <div class="drawer" id="drawer">
+    <div class="drawerSizer" id="drawerSizer" title="DRAG"></div>
+    <div class="drawerHead">
+      <div>SYSTEM</div>
+      <div style="display:flex; gap:8px; align-items:center">
+        <span id="sig" style="color:var(--muted); font-family:var(--mono); font-size:11px">∅</span>
+        <button class="btn" id="btnToggleMotion">MOTION</button>
+        <button class="btn" id="btnCopyUniversals">COPY</button>
+        <button class="btn" id="btnCloseDrawer">CLOSE</button>
+      </div>
+    </div>
+
+    <div class="drawerBody">
+      <div style="display:flex; gap:8px; align-items:center; justify-content:space-between; margin-bottom:8px">
+        <div style="font-family:var(--mono); font-size:12px; letter-spacing:.10em; text-transform:uppercase; color:var(--muted)">
+          SYSTEM UNIVERSALS
+        </div>
+        <button class="btn" id="btnToggleUniversals" style="padding:4px 8px; font-size:11px">TOGGLE</button>
+      </div>
+      <textarea id="universals" spellcheck="false" autocomplete="off" placeholder="LAWS / REFERENCES"></textarea>
+
+      <div style="margin-top:12px; border-top:1px solid var(--line); padding-top:10px">
+        <div style="display:flex; gap:8px; align-items:center; justify-content:space-between; margin-bottom:8px">
+          <div style="font-family:var(--mono); font-size:12px; letter-spacing:.10em; text-transform:uppercase; color:var(--muted)">
+            ROOM REGISTRY
+          </div>
+          <button class="btn" id="btnToggleRegistry" style="padding:4px 8px; font-size:11px">TOGGLE</button>
+        </div>
+
+        <div id="registryBody">
+          <div style="margin-top:8px; display:flex; gap:8px; align-items:center; font-family:var(--mono); font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted)">
+            <span>ROOM</span>
+            <input id="roomInput" spellcheck="false" autocomplete="off"
+              style="flex:1; background:#000; color:#fff; border:1px solid var(--line2); padding:6px 8px; font-family:var(--mono);"
+              placeholder="NAME" />
+          </div>
+
+          <div style="margin-top:8px; display:flex; gap:8px; align-items:center; font-family:var(--mono); font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted)">
+            <span>URL</span>
+            <input id="roomUrlInput" spellcheck="false" autocomplete="off"
+              style="flex:1; background:#000; color:#fff; border:1px solid var(--line2); padding:6px 8px; font-family:var(--mono);"
+              placeholder="ANY LINK / PATH" />
+          </div>
+
+          <div style="margin-top:8px; display:flex; gap:8px; align-items:center">
+            <button class="btn" id="btnSaveRoom">SAVE</button>
+            <button class="btn" id="btnSetActiveRoom">SET ACTIVE</button>
+            <button class="btn" id="btnDeleteRoom">DELETE</button>
+            <button class="btn" id="btnTogglePins">PINS</button>
+          </div>
+        </div>
+
+        <div style="margin-top:10px; border-top:1px solid var(--line); padding-top:10px">
+          <div style="display:flex; gap:8px; align-items:center; justify-content:space-between; margin-bottom:8px">
+            <div style="font-family:var(--mono); font-size:12px; letter-spacing:.10em; text-transform:uppercase; color:var(--muted)">
+              ACTIVE
+            </div>
+            <button class="btn" id="btnToggleActive" style="padding:4px 8px; font-size:11px">TOGGLE</button>
+          </div>
+
+          <div id="activeBody">
+            <div style="display:flex; gap:8px; align-items:center; font-family:var(--mono); font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted)">
+              <span style="min-width:44px">ROOM</span>
+              <input id="activeRoomBox" readonly
+                style="flex:1; background:#000; color:#fff; border:1px solid var(--line2); padding:6px 8px; font-family:var(--mono);"
+                placeholder="—" />
+            </div>
+
+            <div style="margin-top:8px; display:flex; gap:8px; align-items:center; font-family:var(--mono); font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted)">
+              <span style="min-width:44px">URL</span>
+              <input id="activeUrlBox" readonly
+                style="flex:1; background:#000; color:#fff; border:1px solid var(--line2); padding:6px 8px; font-family:var(--mono);"
+                placeholder="—" />
+            </div>
+
+            <div style="margin-top:8px; display:flex; gap:8px; align-items:center">
+              <button class="btn" id="btnGoActive">GO</button>
+              <button class="btn" id="btnNewTabActive">NEW TAB</button>
+              <button class="btn" id="btnCopyActiveUrl">COPY URL</button>
+            </div>
+
+            <div style="margin-top:8px; color:var(--muted); font-family:var(--mono); font-size:11px">
+              CLICK = ARM. GO = COMMIT.
+            </div>
+          </div>
+        </div>
+
+        <div id="setsBox" style="margin-top:10px; border-top:1px solid var(--line); padding-top:10px">
+          <div style="display:flex; gap:8px; align-items:center; justify-content:space-between; margin-bottom:8px">
+            <div style="font-family:var(--mono); font-size:12px; letter-spacing:.10em; text-transform:uppercase; color:var(--muted)">
+              SETS
+            </div>
+            <button class="btn" id="btnToggleSets" style="padding:4px 8px; font-size:11px">TOGGLE</button>
+          </div>
+
+          <div id="setsBody">
+            <div style="margin-top:8px; display:flex; gap:8px; align-items:center; font-family:var(--mono); font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted)">
+              <span>SET</span>
+              <input id="setNameInput" spellcheck="false" autocomplete="off"
+                style="flex:1; background:#000; color:#fff; border:1px solid var(--line2); padding:6px 8px; font-family:var(--mono);"
+                placeholder="NAME" />
+            </div>
+
+            <div style="margin-top:8px; display:flex; gap:8px; align-items:center">
+              <button class="btn" id="btnCreateSet">CREATE</button>
+              <button class="btn" id="btnRenameSet">RENAME</button>
+              <button class="btn" id="btnDeleteSet">DELETE</button>
+              <button class="btn" id="btnPinSet">PIN/UNPIN</button>
+            </div>
+
+            <div style="margin-top:8px; color:var(--muted); font-family:var(--mono); font-size:11px">
+              SET EDITOR (BULK): ONE PER LINE: NAME | URL  OR URL
+            </div>
+
+            <textarea id="setItemsInput" spellcheck="false" autocomplete="off" style="min-height:120px; margin-top:8px"
+              placeholder="ITEMS:
+NAME | URL
+OR URL"></textarea>
+
+            <div style="margin-top:8px; display:flex; gap:8px; align-items:center">
+              <button class="btn" id="btnSaveSetItems">SAVE ITEMS</button>
+              <button class="btn" id="btnClearSetItems">CLEAR</button>
+            </div>
+
+            <div style="margin-top:10px; border-top:1px solid var(--line); padding-top:10px">
+              <div style="font-family:var(--mono); font-size:12px; letter-spacing:.10em; text-transform:uppercase; color:var(--muted); margin-bottom:8px">
+                SET LIST
+              </div>
+              <div id="setList" style="display:flex; flex-direction:column; gap:6px"></div>
+              <div style="margin-top:8px; color:var(--muted); font-family:var(--mono); font-size:11px">
+                CLICK SET = LOAD EDITOR. CLICK ITEM = ARM.
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div style="margin-top:10px; border-top:1px solid var(--line); padding-top:10px">
+          <div style="display:flex; gap:8px; align-items:center; justify-content:space-between; margin-bottom:8px">
+            <div style="font-family:var(--mono); font-size:12px; letter-spacing:.10em; text-transform:uppercase; color:var(--muted)">
+              BULK INPUT
+            </div>
+            <button class="btn" id="btnToggleBulk" style="padding:4px 8px; font-size:11px">TOGGLE</button>
+          </div>
+
+          <div id="bulkBody">
+            <textarea id="bulkRoomInput" spellcheck="false" autocomplete="off" style="min-height:110px"
+              placeholder="ONE PER LINE:
+NAME | URL
+OR URL
+
+# lines starting with # are ignored"></textarea>
+
+            <div style="margin-top:8px; display:flex; gap:8px; align-items:center">
+              <button class="btn" id="btnBulkAdd">BULK ADD</button>
+              <button class="btn" id="btnBulkClear">CLEAR</button>
+            </div>
+
+            <div style="margin-top:8px; color:var(--muted); font-family:var(--mono); font-size:11px">
+              NO AUTOFILL. OVERWRITE FAST.
+            </div>
+          </div>
+        </div>
+
+        <div style="margin-top:10px; border-top:1px solid var(--line); padding-top:10px">
+          <div style="display:flex; gap:8px; align-items:center; justify-content:space-between; margin-bottom:8px">
+            <div style="font-family:var(--mono); font-size:12px; letter-spacing:.10em; text-transform:uppercase; color:var(--muted)">
+              PRESETS
+            </div>
+            <button class="btn" id="btnTogglePresets" style="padding:4px 8px; font-size:11px">TOGGLE</button>
+          </div>
+
+          <div id="presetsBody">
+            <div id="roomList" style="display:flex; flex-direction:column; gap:6px"></div>
+            <div style="margin-top:8px; color:var(--muted); font-family:var(--mono); font-size:11px">
+              CLICK = ARM. PIN = BASE.
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <div class="bottombar">
+    <div style="display:flex; gap:10px; align-items:center">
+      <button class="toggle" id="toggleDrawer">SYSTEM</button>
+      <button class="toggle" id="toggleRun">RUN</button>
+      <span>STATE: <span id="sig2">∅</span></span>
+      <span style="margin-left:8px">FS: <span id="fsLabel">OFF</span></span>
+      <span style="margin-left:8px">BLK: <span id="blkLabel">OFF</span></span>
+    </div>
+    <div style="display:flex; gap:12px; align-items:center">
+      <span>LIGHT: <span id="lightLabel">1</span></span>
+      <span>RUN: <span id="runLabel">OFF</span></span>
+      <span>MOTION: <span id="motionLabel">OFF</span></span>
+    </div>
+  </div>
+
+  <div class="ketaNote" id="ketaNote">
+    <div class="ketaHead" id="ketaHead">
+      <div>KETA_NOTE</div>
+      <button class="headBtn" id="btnHideNote">-</button>
+    </div>
+    <div class="ketaBody">
+      <textarea id="ketaText" spellcheck="false" autocomplete="off" placeholder="GLOBAL NOTE"></textarea>
+    </div>
+  </div>
+
+  <input id="file" type="file" accept="application/json" style="display:none" />
+</div>
+
+<script>
+const KEY="KDT::BASE::SOVEREIGN::STATE";
+const $=id=>document.getElementById(id);
+const root=$("root"),stage=$("stage"),motion=$("motion");
+
+const URLS={LANDING:"index11.html",PHOTOBOOTH:"crunch1.html",KDTV:"kdtv1.html",POD:"room.html",WORLD:"map.html",INFINITY:"infinity.html",CALENDAR:"calendar1.html",STUDIO:"tester3.html",LAB:"labyrinth.html"};
+const CORE=[{room:"CALENDAR",roomUrl:URLS.CALENDAR},{room:"POD",roomUrl:URLS.POD},{room:"WORLD",roomUrl:URLS.WORLD},{room:"KDTV",roomUrl:URLS.KDTV},{room:"PHOTOBOOTH",roomUrl:URLS.PHOTOBOOTH},{room:"STUDIO",roomUrl:URLS.STUDIO},{room:"LAB",roomUrl:URLS.LAB}];
+
+function canon(n){return String(n||"").trim().toUpperCase()}
+function uid(){return Math.random().toString(16).slice(2,10)}
+function deriveNameFromUrl(url){try{const u=new URL(url,location.href);const path=(u.pathname||"").split("/").filter(Boolean);const last=path.length?path[path.length-1]:(u.hostname||"LINK");return String(last).replace(/\.(html?|php|aspx|jsp)$/i,"").replace(/[-_]+/g," ").trim().toUpperCase()||"LINK"}catch(e){return String(url||"LINK").trim().slice(0,28).toUpperCase()||"LINK"}}
+
+let S=localStorage.getItem(KEY);
+if(S){S=JSON.parse(S)}else{S={note:"",sys:"",room:"BASE",url:"",drawerOpen:false,noteOpen:false,drawerH:0.42,noteX:null,noteY:76,noteW:340,noteH:220,invert:false,blackout:false,fs:false,light:1,lightRun:false,motion:false,pins:["CALENDAR","POD","WORLD","KDTV","PHOTOBOOTH","STUDIO","LAB"],pinSets:[],activeSets:[],activeSetId:"",padOpen:false,padEdit:false,padX:14,padY:214,padW:360,padH:360,uniC:false,regC:false,actC:false,setC:false,bulkC:false,preC:false,presets:CORE.map(c=>({room:c.room,url:c.roomUrl})),sets:[]}}
+
+function save(){localStorage.setItem(KEY,JSON.stringify(S));render()}
+
+function render(){
+  root.classList.toggle("invert",S.invert);
+  root.classList.toggle("blackout",S.blackout);
+  root.classList.toggle("fs",S.fs);
+  motion.classList.toggle("run",S.motion);
+  $("drawer").classList.toggle("open",S.drawerOpen&&!S.blackout&&!S.fs);
+  $("ketaNote").classList.toggle("open",S.noteOpen&&!S.blackout);
+  $("ketaIcon").classList.toggle("open",S.noteOpen&&!S.blackout);
+  $("ketaText").value=S.note;
+  $("universals").value=S.sys;
+  $("roomName").textContent=S.room;
+  $("universals").style.display=S.uniC?"none":"block";
+  $("registryBody").style.display=S.regC?"none":"block";
+  $("activeBody").style.display=S.actC?"none":"block";
+  $("setsBody").style.display=S.setC?"none":"block";
+  $("bulkBody").style.display=S.bulkC?"none":"block";
+  $("presetsBody").style.display=S.preC?"none":"block";
+  $("activeRoomBox").value=S.room;
+  $("activeUrlBox").value=S.url||"";
+  $("fsLabel").textContent=S.fs?"ON":"OFF";
+  $("blkLabel").textContent=S.blackout?"ON":"OFF";
+  $("lightLabel").textContent=S.light;
+  $("runLabel").textContent=S.lightRun?"ON":"OFF";
+  $("motionLabel").textContent=S.motion?"ON":"OFF";
+  root.style.setProperty("--drawer-h",S.drawerH);
+  const n=$("ketaNote");
+  if(S.noteX===null){n.style.left="auto";n.style.right="16px"}else{n.style.left=S.noteX+"px";n.style.right="auto"}
+  n.style.top=S.noteY+"px";n.style.width=S.noteW+"px";n.style.height=S.noteH+"px";
+  renderArmed();renderPins();renderActive();renderSets();renderPresets();renderPad();
+}
+
+function renderArmed(){const b=$("armedBar");if(S.blackout||S.fs){b.style.display="none";return}b.style.display="flex";$("armedName").textContent=S.room;$("armedUrl").value=S.url||"—"}
+
+function renderPins(){
+  const el=$("pinnedPanel");
+  if(S.blackout||S.fs||(!S.pins.length&&!S.pinSets.length)){el.style.display="none";el.innerHTML="";return}
+  el.style.display="flex";el.innerHTML="";
+  S.pins.forEach(name=>{
+    const p=S.presets.find(r=>canon(r.room)===name);
+    if(!p)return;
+    const chip=document.createElement("button");
+    chip.className="btn";
+    chip.textContent=name;
+    chip.addEventListener("click",()=>{S.room=name;S.url=p.url||"";save()});
+    if(S.room===name)chip.style.borderColor="var(--fg)";
+    el.appendChild(chip);
+  });
+  S.pinSets.forEach(id=>{
+    const s=S.sets.find(x=>x.id===id);
+    if(!s)return;
+    const chip=document.createElement("button");
+    chip.className="btn";
+    chip.textContent=canon(s.label||"SET");
+    chip.addEventListener("click",()=>{if(!S.activeSets.includes(id))S.activeSets.unshift(id);S.activeSetId=id;S.padOpen=true;save()});
+    if(S.activeSetId===id)chip.style.borderColor="var(--fg)";
+    el.appendChild(chip);
+  });
+}
+
+function renderActive(){
+  const el=$("activeStrip");
+  if(S.blackout||S.fs||!S.activeSets.length){el.style.display="none";el.innerHTML="";return}
+  el.style.display="flex";el.innerHTML="";
+  const lab=document.createElement("span");lab.className="label";lab.textContent="ACTIVE";el.appendChild(lab);
+  S.activeSets.forEach(id=>{
+    const s=S.sets.find(x=>x.id===id);
+    if(!s)return;
+    const chip=document.createElement("button");
+    chip.className="btn";
+    chip.textContent=canon(s.label||"SET");
+    chip.style.padding="4px 8px";chip.style.fontSize="11px";
+    if(S.activeSetId===id)chip.style.borderColor="var(--fg)";
+    chip.addEventListener("click",()=>{S.activeSetId=id;S.padOpen=true;save()});
+    el.appendChild(chip);
+  });
+  const padBtn=document.createElement("button");
+  padBtn.className="btn";
+  padBtn.textContent=S.padOpen?"PAD ON":"PAD";
+  padBtn.style.padding="4px 8px";padBtn.style.fontSize="11px";
+  padBtn.addEventListener("click",()=>{S.padOpen=!S.padOpen;save()});
+  el.appendChild(padBtn);
+}
+
+function renderSets(){
+  const el=$("setList");el.innerHTML="";
+  S.sets.forEach(s=>{
+    const row=document.createElement("div");
+    row.style.display="flex";row.style.gap="8px";row.style.alignItems="center";
+    row.style.border="1px solid var(--line2)";row.style.padding="8px 10px";
+    row.style.fontFamily="var(--mono)";row.style.fontSize="11px";row.style.cursor="pointer";
+    const left=document.createElement("div");left.style.flex="1";left.textContent=canon(s.label||"SET");
+    const pin=document.createElement("button");pin.className="btn";pin.style.padding="4px 8px";pin.style.fontSize="11px";
+    pin.textContent=S.pinSets.includes(s.id)?"UNPIN":"PIN";
+    pin.addEventListener("click",ev=>{
+      ev.stopPropagation();
+      const i=S.pinSets.indexOf(s.id);
+      if(i>=0)S.pinSets.splice(i,1);else S.pinSets.push(s.id);
+      save();
+    });
+    row.addEventListener("click",()=>{
+      $("setNameInput").value=canon(s.label||"SET");
+      const lines=(s.items||[]).map(it=>`${canon(it.label||"")||deriveNameFromUrl(it.url)} | ${it.url}`);
+      $("setItemsInput").value=lines.join("\n");
+      S.activeSetId=s.id;
+      save();
+    });
+    row.appendChild(left);row.appendChild(pin);el.appendChild(row);
+  });
+}
+
+function renderPresets(){
+  const el=$("roomList");el.innerHTML="";
+  S.presets.forEach(p=>{
+    const row=document.createElement("div");
+    row.style.display="flex";row.style.gap="8px";row.style.alignItems="center";
+    row.style.border="1px solid var(--line2)";row.style.padding="8px 10px";
+    row.style.fontFamily="var(--mono)";row.style.fontSize="11px";row.style.cursor="pointer";
+    const left=document.createElement("div");left.style.flex="1";left.textContent=p.room;
+    const pin=document.createElement("button");pin.className="btn";pin.style.padding="4px 8px";pin.style.fontSize="11px";
+    pin.textContent=S.pins.includes(p.room)?"UNPIN":"PIN";
+    pin.addEventListener("click",ev=>{
+      ev.stopPropagation();
+      const i=S.pins.indexOf(p.room);
+      if(i>=0)S.pins.splice(i,1);else S.pins.push(p.room);
+      save();
+    });
+    row.addEventListener("click",()=>{
+      $("roomInput").value=p.room;
+      $("roomUrlInput").value=p.url||"";
+      S.room=p.room;S.url=p.url||"";
+      save();
+    });
+    if(S.room===p.room)row.style.borderColor="var(--fg)";
+    row.appendChild(left);row.appendChild(pin);el.appendChild(row);
+  });
+}
+
+function renderPad(){
+  const panel=$("padPanel");
+  const s=S.sets.find(x=>x.id===S.activeSetId);
+  if(S.blackout||!S.padOpen||!s){panel.classList.remove("open");panel.style.display="none";return}
+  if(!s.items)s.items=[];
+  while(s.items.length<16)s.items.push({label:"",url:""});
+  panel.classList.add("open");panel.style.display="";
+  $("padTitle").textContent=canon(s.label||"PAD");
+  $("padHint").textContent=S.padEdit?"EDIT MODE":"CLICK = ARM";
+  const grid=$("padGrid");grid.innerHTML="";
+  for(let i=0;i<16;i++){
+    const it=s.items[i];
+    const cell=document.createElement("div");cell.className="padCell";
+    if(S.padEdit){
+      const nm=document.createElement("input");nm.value=it.label||"";nm.placeholder="NAME";
+      nm.addEventListener("input",()=>{it.label=nm.value;save()});
+      const ur=document.createElement("input");ur.value=it.url||"";ur.placeholder="URL";
+      ur.addEventListener("input",()=>{it.url=ur.value;save()});
+      cell.appendChild(nm);cell.appendChild(ur);
+    }else{
+      const nm=document.createElement("div");nm.className="nm";
+      nm.textContent=canon(it.label||"")||(it.url?deriveNameFromUrl(it.url):"—");
+      const a=document.createElement("a");a.href=it.url||"#";a.textContent=it.url||"—";
+      a.addEventListener("click",ev=>{ev.preventDefault();if(!it.url)return;S.room=nm.textContent;S.url=it.url;save()});
+      cell.appendChild(nm);cell.appendChild(a);
+    }
+    grid.appendChild(cell);
+  }
+}
+
+$("ketaText").addEventListener("input",()=>{S.note=$("ketaText").value;save()});
+$("universals").addEventListener("input",()=>{S.sys=$("universals").value;save()});
+$("ketaIcon").addEventListener("click",()=>{if(S.blackout)return;S.noteOpen=!S.noteOpen;if(S.noteOpen)S.noteX=null;save()});
+$("btnHideNote").addEventListener("click",()=>{S.noteOpen=false;save()});
+$("toggleDrawer").addEventListener("click",()=>{if(S.blackout||S.fs)return;S.drawerOpen=!S.drawerOpen;save()});
+$("btnCloseDrawer").addEventListener("click",()=>{S.drawerOpen=false;save()});
+$("toggleRun").addEventListener("click",()=>{if(S.blackout)return;const c=stage.style.backgroundColor||"#000";stage.style.backgroundColor=c==="#000"||c==="rgb(0, 0, 0)"?"#fff":"#000"});
+$("btnToggleMotion").addEventListener("click",()=>{S.motion=!S.motion;save()});
+$("padCloseBtn").addEventListener("click",()=>{S.padOpen=false;save()});
+$("padEditBtn").addEventListener("click",()=>{S.padEdit=!S.padEdit;save()});
+$("btnToggleUniversals").addEventListener("click",()=>{S.uniC=!S.uniC;save()});
+$("btnToggleRegistry").addEventListener("click",()=>{S.regC=!S.regC;save()});
+$("btnToggleActive").addEventListener("click",()=>{S.actC=!S.actC;save()});
+$("btnToggleSets").addEventListener("click",()=>{S.setC=!S.setC;save()});
+$("btnToggleBulk").addEventListener("click",()=>{S.bulkC=!S.bulkC;save()});
+$("btnTogglePresets").addEventListener("click",()=>{S.preC=!S.preC;save()});
+
+$("btnSaveRoom").addEventListener("click",()=>{
+  const r=canon($("roomInput").value||"LINK");
+  const u=$("roomUrlInput").value||"";
+  const idx=S.presets.findIndex(p=>canon(p.room)===r);
+  if(idx>=0)S.presets[idx].url=u;else S.presets.push({room:r,url:u});
+  save();
+});
+$("btnSetActiveRoom").addEventListener("click",()=>{
+  const r=canon($("roomInput").value||"BASE");
+  const u=$("roomUrlInput").value||"";
+  const idx=S.presets.findIndex(p=>canon(p.room)===r);
+  if(idx>=0)S.presets[idx].url=u;else S.presets.push({room:r,url:u});
+  S.room=r;S.url=u;
+  save();
+});
+
+$("btnGoActive").addEventListener("click",()=>{if(S.url){save();window.location.href=S.url}});
+$("btnNewTabActive").addEventListener("click",()=>{if(S.url){save();window.open(S.url,"_blank")}});
+$("armedGo").addEventListener("click",()=>{if(S.url){save();window.location.href=S.url}});
+$("armedNewTab").addEventListener("click",()=>{if(S.url){save();window.open(S.url,"_blank")}});
+
+$("btnCreateSet").addEventListener("click",()=>{
+  const id=`SET_${uid()}`;
+  S.sets.unshift({id,label:canon($("setNameInput").value||"SET"),items:[]});
+  save();
+});
+$("btnSaveSetItems").addEventListener("click",()=>{
+  const s=S.sets.find(x=>x.id===S.activeSetId);
+  if(!s)return;
+  const lines=$("setItemsInput").value.split("\n").filter(l=>l.trim()&&!l.startsWith("#"));
+  s.items=lines.map(l=>{
+    let label="",url="";
+    if(l.includes("|")){const p=l.split("|");label=p[0].trim();url=p.slice(1).join("|").trim()}else url=l.trim();
+    if(!label)label=deriveNameFromUrl(url);
+    return {label:canon(label),url};
+  });
+  save();
+});
+$("btnPinSet").addEventListener("click",()=>{
+  if(!S.activeSetId)return;
+  const i=S.pinSets.indexOf(S.activeSetId);
+  if(i>=0)S.pinSets.splice(i,1);else S.pinSets.push(S.activeSetId);
+  save();
+});
+
+window.addEventListener("keydown",ev=>{
+  if(ev.repeat)return;
+  const typing=document.activeElement&&(document.activeElement.tagName==="TEXTAREA"||document.activeElement.tagName==="INPUT");
+  if(ev.code==="Space"&&!typing){ev.preventDefault();if(!S.blackout)$("toggleRun").click()}
+  if(ev.shiftKey&&ev.key.toUpperCase()==="I"&&!typing){ev.preventDefault();S.invert=!S.invert;save()}
+  if(ev.shiftKey&&ev.key.toUpperCase()==="N"&&!typing){ev.preventDefault();S.blackout=!S.blackout;save()}
+  if(ev.shiftKey&&ev.key.toUpperCase()==="F"&&!typing){ev.preventDefault();S.fs=!S.fs;save()}
+},{passive:false});
+
+(function(){const box=$("ketaNote"),head=$("ketaHead");let drag=false,ox=0,oy=0;head.addEventListener("mousedown",ev=>{if(ev.target.closest("button")||S.blackout)return;drag=true;const r=box.getBoundingClientRect();ox=ev.clientX-r.left;oy=ev.clientY-r.top;box.style.left=r.left+"px";box.style.top=r.top+"px";box.style.right="auto"});window.addEventListener("mousemove",ev=>{if(!drag)return;box.style.left=Math.max(0,Math.min(ev.clientX-ox,window.innerWidth-40))+"px";box.style.top=Math.max(44,Math.min(ev.clientY-oy,window.innerHeight-40))+"px"});window.addEventListener("mouseup",()=>{if(!drag)return;drag=false;const r=box.getBoundingClientRect();S.noteX=Math.round(r.left);S.noteY=Math.round(r.top);S.noteW=Math.round(r.width);S.noteH=Math.round(r.height);save()});try{new ResizeObserver(()=>{if(drag||S.blackout)return;const r=box.getBoundingClientRect();S.noteX=Math.round(r.left);S.noteY=Math.round(r.top);S.noteW=Math.round(r.width);S.noteH=Math.round(r.height);save()}).observe(box)}catch(_){}})();
+
+(function(){const s=$("drawerSizer");let drag=false;s.addEventListener("mousedown",ev=>{if(!S.drawerOpen)return;drag=true;ev.preventDefault()});window.addEventListener("mousemove",ev=>{if(!drag)return;const usable=window.innerHeight-44-34;const h=Math.max(usable*0.15,Math.min(window.innerHeight-34-ev.clientY,usable*0.95));S.drawerH=h/usable;root.style.setProperty("--drawer-h",S.drawerH)});window.addEventListener("mouseup",()=>{if(!drag)return;drag=false;save()})})();
+
+window.addEventListener("beforeunload",()=>save());
+window.addEventListener("pagehide",()=>save());
+
+render();
+</script>
+</body>
+</html>
