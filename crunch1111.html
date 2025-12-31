@@ -1,0 +1,1004 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>KETADATA PHOTOBOOTH // CRUNCH // SHELL8</title>
+
+  <style>
+    :root{
+      --bg:#000;
+      --fg:#fff;
+
+      --stroke:rgba(255,255,255,0.18);
+      --stroke2:rgba(255,255,255,0.12);
+
+      --glass:rgba(255,255,255,0.06);
+      --panel:rgba(0,0,0,0.88);
+      --shadow:rgba(0,0,0,0.78);
+
+      --muted:rgba(255,255,255,0.62);
+      --muted2:rgba(255,255,255,0.45);
+
+      --node:rgba(255,255,255,0.22);
+      --nodeOn:rgba(255,255,255,0.55);
+
+      --top:44px;
+      --bot:34px;
+      --line:#222;
+      --line2:#333;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      --sans: Arial, Helvetica, sans-serif;
+      --ctl-bg: rgba(0,0,0,0.80);
+      --note-border: rgba(255,255,255,0.78);
+    }
+
+    *{box-sizing:border-box}
+    html,body{height:100%;margin:0;background:var(--bg);color:var(--fg);font-family:var(--sans);}
+    body{overflow:hidden;}
+
+    #root{position:fixed;inset:0;background:#000;overflow:hidden;}
+    #root.invert{filter:invert(1);}
+
+    #root.null .topbar,
+    #root.null .bottombar,
+    #root.null .sysDrawer,
+    #root.null .ketaNote,
+    #root.null .toast,
+    #root.null #roomJump,
+    #root.null #ccBtn,
+    #root.null #drawer{display:none !important;}
+
+    #sysStage{position:fixed;inset:0;background:#000;filter:none;z-index:0;}
+
+    #stage{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:transparent;z-index:1;}
+
+    #frame{position:relative;width:min(92vw, 980px);height:min(86vh, 720px);border:1px solid var(--stroke);background:#000;box-shadow:0 24px 90px var(--shadow);overflow:hidden;}
+
+    video, canvas{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;image-rendering:pixelated;transform:translateZ(0);}
+
+    #overlay{pointer-events:none;position:absolute;inset:0;mix-blend-mode:screen;opacity:0.18;background:repeating-linear-gradient(0deg, rgba(255,255,255,0.05) 0px, rgba(255,255,255,0.05) 1px, rgba(0,0,0,0) 2px, rgba(0,0,0,0) 4px);}
+
+    #brand{position:absolute;left:12px;top:10px;display:flex;align-items:center;gap:8px;letter-spacing:0.18em;text-transform:uppercase;font-size:11px;color:rgba(255,255,255,0.78);user-select:none;pointer-events:none;}
+    .note{width:8px;height:8px;background:#fff;display:inline-block;}
+    #status{margin-left:6px;letter-spacing:0.12em;font-size:10px;color:rgba(255,255,255,0.40);white-space:nowrap;}
+
+    #ccBtn{position:absolute;right:10px;top:10px;width:28px;height:28px;border:1px solid rgba(255,255,255,0.24);background:rgba(0,0,0,0.45);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);cursor:pointer;display:grid;place-items:center;padding:0;z-index:5;}
+    #ccBtn:hover{background:rgba(255,255,255,0.06);border-color:rgba(255,255,255,0.38);}
+    #ccGlyph{width:10px;height:10px;border:1px solid rgba(255,255,255,0.55);background:transparent;box-shadow:0 0 0 1px rgba(0,0,0,0.5) inset;opacity:0.85;}
+
+    #msg{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);color:rgba(255,255,255,0.74);font-size:11px;letter-spacing:0.20em;text-transform:uppercase;padding:10px 12px;border:1px solid rgba(255,255,255,0.20);background:rgba(0,0,0,0.70);display:none;text-align:center;max-width:84%;z-index:6;}
+
+    #nodes{position:absolute;inset:0;pointer-events:auto;z-index:4;}
+    .node{position:absolute;width:6px;height:6px;border-radius:999px;background:var(--node);opacity:0.35;border:1px solid rgba(255,255,255,0.08);cursor:default;transition:opacity 120ms linear, transform 120ms linear, background 120ms linear;}
+    .node:hover{opacity:0.75;}
+    .node.on{opacity:0.95;background:var(--nodeOn);transform:scale(1.15);border-color:rgba(255,255,255,0.25);}
+    .n1{right:12px;bottom:112px;}
+    .n2{right:12px;bottom:96px;}
+    .n3{right:12px;bottom:80px;}
+    .n4{right:12px;bottom:64px;}
+    .n5{right:12px;bottom:48px;}
+
+    #strip{position:absolute;left:12px;bottom:10px;display:flex;align-items:center;gap:10px;font-size:10px;letter-spacing:0.16em;text-transform:uppercase;color:rgba(255,255,255,0.35);user-select:none;pointer-events:none;}
+
+    #drawer{position:fixed;top:0;right:0;height:100vh;width:min(380px, 92vw);transform:translateX(100%);transition:transform 180ms ease;z-index:20;background:linear-gradient(180deg, #060606, #000);border-left:1px solid var(--line);box-shadow:-18px 0 70px rgba(0,0,0,0.78);display:flex;flex-direction:column;}
+    #drawer.open{transform:translateX(0);}
+
+    #drawerHeader{padding:14px 14px 10px 14px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;gap:10px;user-select:none;}
+    #drawerHeader .title{display:flex;align-items:center;gap:10px;margin:0;font-size:12px;letter-spacing:0.18em;text-transform:uppercase;color:rgba(255,255,255,0.82);font-family:var(--mono);}
+    #closeDrawer{width:32px;height:28px;border:1px solid var(--line2);background:transparent;cursor:pointer;color:rgba(255,255,255,0.7);letter-spacing:0.12em;text-transform:uppercase;font-size:11px;font-family:var(--mono);}
+    #closeDrawer:hover{background:rgba(255,255,255,0.06);border-color:rgba(255,255,255,0.34);}
+
+    #drawerBody{padding:14px;display:grid;gap:12px;overflow:auto;}
+
+    .section{border:1px solid var(--line2);background:rgba(255,255,255,0.04);padding:12px;}
+    .sectionTitle{margin:0 0 10px 0;font-size:11px;letter-spacing:0.18em;text-transform:uppercase;color:rgba(255,255,255,0.72);font-family:var(--mono);}
+
+    .row{display:grid;grid-template-columns:1fr auto;align-items:center;gap:12px;margin:10px 0;}
+    label{font-size:11px;letter-spacing:0.12em;text-transform:uppercase;color:rgba(255,255,255,0.60);font-family:var(--mono);}
+    input[type="range"]{width:170px;}
+
+    .chips{display:flex;flex-wrap:wrap;gap:8px;}
+    .chip{border:1px solid var(--line2);background:transparent;color:rgba(255,255,255,0.82);padding:7px 10px;font-size:11px;letter-spacing:0.14em;text-transform:uppercase;cursor:pointer;font-family:var(--mono);}
+    .chip:hover{background:rgba(255,255,255,0.06);border-color:rgba(255,255,255,0.34);}
+    .chip.on{background:rgba(255,255,255,0.08);border-color:rgba(255,255,255,0.38);}
+
+    .hint{margin-top:10px;font-size:11px;line-height:1.35;color:rgba(255,255,255,0.52);letter-spacing:0.06em;font-family:var(--mono);}
+    .keys{margin-top:10px;font-size:11px;color:rgba(255,255,255,0.55);letter-spacing:0.08em;line-height:1.45;font-family:var(--mono);}
+    kbd{display:inline-block;padding:2px 6px;border:1px solid var(--line2);background:rgba(255,255,255,0.06);font-family:var(--mono);font-size:11px;letter-spacing:0.14em;text-transform:uppercase;margin-right:6px;}
+
+    #paramHUD{position:absolute;right:12px;bottom:12px;padding:7px 9px;border:1px solid rgba(255,255,255,0.14);background:rgba(0,0,0,0.55);color:rgba(255,255,255,0.50);font-size:10px;letter-spacing:0.18em;text-transform:uppercase;user-select:none;z-index:5;opacity:0.0;transition:opacity 140ms linear;pointer-events:none;font-family:var(--mono);}
+    #paramHUD.on{opacity:1.0;}
+
+    :focus{outline:none;}
+    :focus-visible{outline:1px solid rgba(255,255,255,0.35);outline-offset:2px;}
+
+    .topbar{position:absolute;top:0;left:0;right:0;height:var(--top);display:flex;align-items:center;justify-content:space-between;padding:0 10px;border-bottom:1px solid var(--line);background:linear-gradient(180deg,#070707,#000);z-index:50;}
+    .brandSys{display:flex;align-items:center;gap:10px;font-family:var(--mono);font-size:12px;letter-spacing:.10em;text-transform:uppercase;}
+    .brandSys .sq{width:10px;height:10px;border:1px solid var(--fg);background:#000;}
+    .roomBadge{display:flex;gap:8px;align-items:center;font-family:var(--mono);font-size:11px;letter-spacing:.10em;text-transform:uppercase;color:rgba(255,255,255,0.55);border:1px solid var(--line2);padding:4px 8px;}
+    .actionsSys{display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:12px;}
+    .btnSys{background:transparent;color:var(--fg);border:1px solid var(--line2);padding:6px 10px;font-family:var(--mono);font-size:12px;letter-spacing:.08em;text-transform:uppercase;cursor:pointer;}
+    .btnSys:hover{border-color:var(--fg)}
+    .btnSys:active{transform:translateY(1px)}
+    .kbdSys{border:1px solid var(--line2);padding:2px 6px;color:rgba(255,255,255,0.55);font-size:11px;font-family:var(--mono);}
+
+    .ketaIcon{width:16px;height:16px;border:2px solid var(--fg);background:var(--fg);cursor:pointer;}
+    .ketaIcon.open{background:#000;}
+
+    .bottombar{position:absolute;left:0;right:0;bottom:0;height:var(--bot);display:flex;align-items:center;justify-content:space-between;padding:0 10px;border-top:1px solid var(--line);background:linear-gradient(0deg,#070707,#000);z-index:50;font-family:var(--mono);font-size:11px;color:rgba(255,255,255,0.55);}
+    .toggleSys{border:1px solid var(--line2);background:transparent;color:var(--fg);padding:4px 8px;font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;cursor:pointer;}
+    .toggleSys:hover{border-color:var(--fg)}
+
+    .sysDrawer{position:absolute;left:0;right:0;bottom:var(--bot);height:42%;min-height:240px;border-top:1px solid var(--line);background:linear-gradient(180deg,#060606,#000);display:none;z-index:60;}
+    .sysDrawer.open{display:flex;flex-direction:column}
+    .drawerHead{padding:8px 10px;border-bottom:1px solid var(--line);font-family:var(--mono);font-size:12px;letter-spacing:.10em;text-transform:uppercase;display:flex;justify-content:space-between;align-items:center;}
+    .drawerBody{padding:10px;min-height:0;flex:1;overflow:auto}
+    .sysDrawer textarea{width:100%;border:1px solid var(--line2);background:#050505;color:var(--fg);font-family:var(--mono);font-size:12px;padding:10px;line-height:1.35;outline:none;resize:vertical;min-height:140px;}
+
+    .ketaNote{position:absolute;top:60px;right:16px;width:340px;height:220px;display:none;z-index:70;resize:both;overflow:hidden;background:var(--ctl-bg);border:1px solid var(--note-border);backdrop-filter:blur(6px);}
+    .ketaNote.open{display:flex;flex-direction:column}
+    .ketaHead{padding:8px 10px;border-bottom:1px solid rgba(255,255,255,0.14);font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;display:flex;justify-content:space-between;align-items:center;cursor:move;}
+    .ketaBody{padding:10px;min-height:0;flex:1}
+    .ketaNote textarea{background:#000;color:#fff;border:1px solid rgba(255,255,255,0.22);width:100%;height:100%;resize:none;padding:10px;outline:none;font-family:var(--mono);}
+    .headBtn{background:transparent;color:var(--fg);border:1px solid rgba(255,255,255,0.18);padding:2px 8px;font-family:var(--mono);font-size:12px;letter-spacing:.08em;text-transform:uppercase;cursor:pointer;}
+    .headBtn:hover{border-color:rgba(255,255,255,0.6)}
+
+    .toast{position:absolute;left:12px;top:calc(var(--top) + 12px);padding:8px 10px;border:1px solid var(--line2);background:rgba(8,8,8,0.82);font-family:var(--mono);font-size:11px;letter-spacing:.06em;color:var(--fg);display:none;z-index:80;}
+
+    #roomJump{position:absolute;left:10px;top:calc(var(--top) + 10px);display:none;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--line2);background:rgba(0,0,0,0.82);z-index:75;font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;}
+    #roomJump.show{display:flex}
+
+  </style>
+</head>
+
+<body>
+  <div id="root">
+
+    <div id="sysStage" aria-hidden="true"></div>
+
+    <div id="stage">
+      <div id="frame" aria-label="Photobooth">
+        <video id="video" playsinline autoplay muted></video>
+        <canvas id="out"></canvas>
+        <div id="overlay"></div>
+
+        <div id="brand">
+          <span class="note" aria-hidden="true"></span>
+          <span>KETADATA PHOTOBOOTH</span>
+          <span id="status">CRUNCH ON // INVERT OFF</span>
+        </div>
+
+        <button id="ccBtn" type="button" aria-label="Command / Control">
+          <span id="ccGlyph" aria-hidden="true"></span>
+        </button>
+
+        <div id="nodes" aria-label="Hotkey nodes">
+          <div class="node n1" data-key="1" title="1 (Pixel)"></div>
+          <div class="node n2" data-key="2" title="2 (Posterize)"></div>
+          <div class="node n3" data-key="3" title="3 (Noise)"></div>
+          <div class="node n4" data-key="4" title="4 (Crisp)"></div>
+          <div class="node n5" data-key="5" title="5 (Chroma)"></div>
+        </div>
+
+        <div id="paramHUD" aria-hidden="true"></div>
+        <div id="strip"><span>BLACK ONLY</span><span>NO GRADIENTS</span><span>CRUNCH PRESET</span></div>
+
+        <div id="msg"></div>
+      </div>
+    </div>
+
+    <aside id="drawer" aria-label="Controls drawer">
+      <div id="drawerHeader">
+        <p class="title"><span class="note" aria-hidden="true"></span> COMMAND / CONTROL</p>
+        <button id="closeDrawer" type="button">X</button>
+      </div>
+
+      <div id="drawerBody">
+        <div class="section">
+          <p class="sectionTitle">Auto Modes</p>
+          <div class="chips">
+            <button class="chip on" id="autoOff" type="button">Manual</button>
+            <button class="chip" id="autoDrift" type="button">Drift</button>
+            <button class="chip" id="autoPulse" type="button">Pulse</button>
+            <button class="chip" id="autoScan" type="button">Scan</button>
+            <button class="chip" id="autoGlitch" type="button">Glitch</button>
+            <button class="chip" id="autoRadical" type="button">Radical</button>
+          </div>
+          <div class="hint">
+            Auto modes override manual controls with continuous KETADATA presets. Driven by invert modulation, minimal noise.
+          </div>
+        </div>
+
+        <div class="section">
+          <p class="sectionTitle">Modes</p>
+          <div class="chips">
+            <button class="chip on" id="crunchBtn" type="button">Crunch</button>
+            <button class="chip" id="invertBtn" type="button">Invert [I]</button>
+          </div>
+          <div class="hint">
+            Manual controls active when Auto = Manual.
+          </div>
+        </div>
+
+        <div class="section">
+          <p class="sectionTitle">Fry Controls</p>
+
+          <div class="row">
+            <label for="pixel">Pixel</label>
+            <input id="pixel" type="range" min="2" max="16" step="1" value="8" />
+          </div>
+
+          <div class="row">
+            <label for="poster">Posterize</label>
+            <input id="poster" type="range" min="2" max="12" step="1" value="5" />
+          </div>
+
+          <div class="row">
+            <label for="noise">Noise</label>
+            <input id="noise" type="range" min="0" max="1" step="0.01" value="0.28" />
+          </div>
+
+          <div class="row">
+            <label for="sharpen">Crisp</label>
+            <input id="sharpen" type="range" min="0" max="2" step="0.01" value="1.10" />
+          </div>
+
+          <div class="row">
+            <label for="bleed">Chroma</label>
+            <input id="bleed" type="range" min="0" max="8" step="1" value="4" />
+          </div>
+        </div>
+
+        <div class="section">
+          <p class="sectionTitle">Actions</p>
+          <div class="chips">
+            <button class="chip" id="snapBtn" type="button">Snap [Space]</button>
+            <button class="chip" id="saveBtn" type="button">Save PNG</button>
+            <button class="chip" id="resetBtn" type="button">Reset [R]</button>
+          </div>
+
+          <div class="keys">
+            <div><kbd>Space</kbd> snap</div>
+            <div><kbd>I</kbd> invert</div>
+            <div><kbd>R</kbd> reset preset</div>
+            <div><kbd>1–5</kbd> select parameter (nodes mirror these)</div>
+            <div><kbd>Shift+C</kbd> drawer toggle</div>
+            <div>Mouse X adjusts selected parameter. Press same key to deselect.</div>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <div id="roomJump">
+      <span id="roomJumpTxt">ROOM LINK DETECTED</span>
+      <button class="btnSys" id="btnGoRoom">GO</button>
+      <button class="btnSys" id="btnDismissRoom">DISMISS</button>
+    </div>
+
+    <div class="toast" id="toast"></div>
+
+    <div class="topbar">
+      <div style="display:flex; gap:10px; align-items:center">
+        <div class="brandSys">
+          <span class="sq"></span>
+          <span>KETADATA // PHOTOBOOTH // SHELL8</span>
+          <span style="color:rgba(255,255,255,0.55); letter-spacing:.02em; text-transform:none">v1</span>
+        </div>
+        <div class="roomBadge" title="Room in state">
+          <span>ROOM</span>
+          <span id="roomName">PHOTOBOOTH</span>
+        </div>
+      </div>
+      <div class="actionsSys">
+        <button class="btnSys" id="btnImport">IMPORT</button>
+        <button class="btnSys" id="btnExport">EXPORT</button>
+        <button class="btnSys" id="btnCopy">COPY</button>
+
+        <span class="kbdSys" title="System invert">Shift+I</span>
+        <span class="kbdSys" title="Null UI">Shift+N</span>
+        <span class="kbdSys" title="Base">Shift+B</span>
+        <span class="kbdSys" title="Landing">Shift+K</span>
+        <span class="kbdSys" title="Lights">1–6</span>
+
+        <button class="btnSys" id="btnNull" title="NULL MODE (SHIFT+N)">NULL</button>
+        <div id="ketaIcon" class="ketaIcon" title="KETA_NOTE"></div>
+      </div>
+    </div>
+
+    <div class="sysDrawer" id="sysDrawer">
+      <div class="drawerHead">
+        <div>SYSTEM UNIVERSALS</div>
+        <div style="display:flex; gap:8px; align-items:center">
+          <span id="sig" style="color:rgba(255,255,255,0.55); font-family:var(--mono); font-size:11px">∅</span>
+          <button class="btnSys" id="btnCopyUniversals">COPY</button>
+          <button class="btnSys" id="btnCloseSysDrawer">CLOSE</button>
+        </div>
+      </div>
+      <div class="drawerBody">
+        <textarea id="universals" placeholder="LAWS / CONSTRAINTS / REFERENCES"></textarea>
+        <div style="margin-top:8px; color:rgba(255,255,255,0.55); font-family:var(--mono); font-size:11px">
+          EE: axiom → KETADATA ⇒ KETA_NOTE ⇒ EXPORTABLE STATE
+        </div>
+      </div>
+    </div>
+
+    <div class="bottombar">
+      <div style="display:flex; gap:10px; align-items:center">
+        <button class="toggleSys" id="toggleSysDrawer">SYSTEM</button>
+        <span>STATE: <span id="sig2">∅</span></span>
+        <span style="margin-left:8px">NULL: <span id="nullLabel">OFF</span></span>
+      </div>
+      <div style="display:flex; gap:12px; align-items:center">
+        <span>LIGHT: <span id="lightLabel">1</span></span>
+        <span>RUN: <span id="runLabel">OFF</span></span>
+        <span>AUTO: <span id="autoLabel">MANUAL</span></span>
+      </div>
+    </div>
+
+    <div class="ketaNote" id="ketaNote">
+      <div class="ketaHead" id="ketaHead">
+        <div>KETA_NOTE</div>
+        <button class="headBtn" id="btnHideNote">-</button>
+      </div>
+      <div class="ketaBody">
+        <textarea id="ketaText" placeholder="GLOBAL NOTE"></textarea>
+      </div>
+    </div>
+
+    <input id="file" type="file" accept="application/json" style="display:none" />
+  </div>
+
+  <script>
+    /* SURFACE SUPREMACY — ABSOLUTE PERSISTENCE */
+    const STORAGE_KEY="KDT_PHOTOBOOTH_SUPREME";
+    const GLOBAL_KETA_NOTE_KEY="KDT_GLOBAL_KETA_NOTE_V1";
+    const URLS={BASE:"based_diva9.html",LANDING:"index11.html"};
+
+    function nowISO(){return new Date().toISOString()}
+    const $=id=>document.getElementById(id);
+    const root=$("root"),sysStage=$("sysStage");
+
+    const DEFAULT={
+      version:"KETADATA_PHOTOBOOTH_SUPREME",
+      updatedAt:nowISO(),
+      room:"PHOTOBOOTH",
+      universals:"",
+      ketaNote:"",
+      ui:{
+        invert:false,
+        nullMode:false,
+        lightPreset:1,
+        lightRunning:false,
+        drawerOpen:false,
+        autoMode:"manual"
+      },
+      booth:{
+        crunchOn:true,
+        invertOn:false,
+        pixel:8,
+        poster:5,
+        noise:0.28,
+        sharpen:1.10,
+        bleed:4,
+        activeKey:null
+      }
+    };
+
+    function deepFill(obj){
+      const out=JSON.parse(JSON.stringify(DEFAULT));
+      if(!obj||typeof obj!=="object")return out;
+      for(const k in DEFAULT){if(obj[k]!==undefined)out[k]=obj[k]}
+      if(obj.ui&&typeof obj.ui==="object"){for(const k in DEFAULT.ui){if(obj.ui[k]!==undefined)out.ui[k]=obj.ui[k]}}
+      if(obj.booth&&typeof obj.booth==="object"){for(const k in DEFAULT.booth){if(obj.booth[k]!==undefined)out.booth[k]=obj.booth[k]}}
+      return out;
+    }
+
+    function loadLocal(){
+      try{
+        const raw=localStorage.getItem(STORAGE_KEY);
+        if(!raw)return null;
+        return deepFill(JSON.parse(raw));
+      }catch(e){return null}
+    }
+
+    function loadGlobalKetaNote(){
+      try{return localStorage.getItem(GLOBAL_KETA_NOTE_KEY)||""}catch(e){return""}
+    }
+    function saveGlobalKetaNote(text){
+      try{localStorage.setItem(GLOBAL_KETA_NOTE_KEY,String(text||""))}catch(e){}
+    }
+
+    let STATE=loadLocal()||JSON.parse(JSON.stringify(DEFAULT));
+    {const g=loadGlobalKetaNote();if(g)STATE.ketaNote=g}
+
+    function stableSig(){
+      const core=JSON.stringify({v:STATE.version,r:STATE.room,i:STATE.ui.invert,n:STATE.ui.nullMode,p:STATE.ui.lightPreset,run:STATE.ui.lightRunning,k:(STATE.ketaNote||"").length,u:(STATE.universals||"").length});
+      let h=2166136261;
+      for(let i=0;i<core.length;i++){h^=core.charCodeAt(i);h=Math.imul(h,16777619)}
+      return(h>>>0).toString(16).slice(0,8);
+    }
+
+    function persist(){
+      STATE.updatedAt=nowISO();
+      saveGlobalKetaNote(STATE.ketaNote||"");
+      try{localStorage.setItem(STORAGE_KEY,JSON.stringify(STATE))}catch(e){}
+      renderShell();
+    }
+
+    function flush(){
+      try{STATE.updatedAt=nowISO();localStorage.setItem(STORAGE_KEY,JSON.stringify(STATE))}catch(e){}
+    }
+
+    window.addEventListener("pagehide",flush,{capture:true});
+    window.addEventListener("beforeunload",flush,{capture:true});
+    document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="hidden")flush()},{capture:true});
+
+    function exportState(){return JSON.stringify({STORAGE_KEY,STATE},null,2)}
+    function importState(text){
+      const parsed=JSON.parse(text);
+      const incoming=parsed&&parsed.STATE?parsed.STATE:parsed;
+      STATE=deepFill(incoming);
+      saveGlobalKetaNote(STATE.ketaNote||"");
+      stopLight(true);
+      stopAuto();
+      if(STATE.ui.lightRunning)startLight(STATE.ui.lightPreset);
+      if(STATE.ui.autoMode!=="manual")startAuto(STATE.ui.autoMode);
+      applyBoothState();
+      persist();
+    }
+
+    function setInvert(on){STATE.ui.invert=!!on;root.classList.toggle("invert",STATE.ui.invert);persist()}
+    function setNullMode(on){
+      STATE.ui.nullMode=!!on;
+      root.classList.toggle("null",STATE.ui.nullMode);
+      setSysDrawer(false);
+      setKetaNote(false);
+      toggleDrawer(false);
+      persist();
+    }
+    function toggleNullMode(){setNullMode(!STATE.ui.nullMode);toast(STATE.ui.nullMode?"NULL ON":"NULL OFF")}
+    function goHome(){window.location.href=URLS.BASE}
+    function goLanding(){window.location.href=URLS.LANDING}
+
+    /* LIGHTS */
+    let lightInterval=null,lightCount=0,lightAuxA=0,lightAuxB=0;
+    function resetSysStage(){sysStage.style.backgroundColor="#000";sysStage.style.filter="none";lightCount=0;lightAuxA=0;lightAuxB=0}
+    function startLight(preset){
+      stopLight(true);
+      resetSysStage();
+      STATE.ui.lightPreset=preset;
+      STATE.ui.lightRunning=true;
+
+      if(preset===1){lightInterval=setInterval(()=>{const curr=sysStage.style.backgroundColor||"black";sysStage.style.backgroundColor=(curr==="black"||curr==="rgb(0, 0, 0)")?"white":"black";sysStage.style.filter="none"},50)}
+      if(preset===2){lightInterval=setInterval(()=>{lightAuxA=(lightAuxA+30)%360;lightAuxB+=0.5;const l=50+Math.sin(lightAuxB)*40;sysStage.style.backgroundColor=`hsl(${lightAuxA},100%,${l}%)`;sysStage.style.filter="none"},10)}
+      if(preset===3){lightInterval=setInterval(()=>{lightCount++;const beat=lightCount%16;if(beat===0||beat===1){sysStage.style.backgroundColor="#fff";sysStage.style.filter="invert(1) contrast(3) brightness(2)"}else if(beat===2){sysStage.style.backgroundColor="#000";sysStage.style.filter="invert(1) contrast(2)"}else if(beat===3){sysStage.style.backgroundColor="#0f0";sysStage.style.filter="contrast(2) saturate(3)"}else if(beat===4){sysStage.style.backgroundColor="#f0f";sysStage.style.filter="invert(1) hue-rotate(90deg)"}else if(beat===5||beat===6){sysStage.style.backgroundColor="#0ff";sysStage.style.filter="invert(0.7) contrast(2)"}else if(beat===7){sysStage.style.backgroundColor="#fff";sysStage.style.filter="invert(1) brightness(3)"}else if(beat===8){sysStage.style.backgroundColor="#000";sysStage.style.filter="invert(1) contrast(3)"}else if(beat===9||beat===10){sysStage.style.backgroundColor="#0f0";sysStage.style.filter="saturate(5) contrast(2)"}else if(beat===11){sysStage.style.backgroundColor="#f0f";sysStage.style.filter="invert(1) saturate(3)"}else{sysStage.style.backgroundColor="#08f";sysStage.style.filter="contrast(1.5) brightness(1.2)"}},30)}
+      if(preset===4){lightInterval=setInterval(()=>{lightAuxA+=0.08;lightCount++;const red=Math.abs(Math.sin(lightAuxA))*255;const pulse=Math.abs(Math.sin(lightAuxA*0.5));const contrast=2+pulse*2;const saturation=4+pulse*2;if(lightCount%8===0){sysStage.style.backgroundColor="#000";sysStage.style.filter="brightness(3) contrast(3)"}else{sysStage.style.backgroundColor=`rgb(${red},0,0)`;sysStage.style.filter=`contrast(${contrast}) saturate(${saturation}) brightness(${1.2+pulse*0.5})`}},20)}
+      if(preset===5){lightInterval=setInterval(()=>{lightAuxA+=15;lightAuxB=(lightAuxB+2)%100;const hue=260+Math.sin(lightAuxA*0.1)*40;const saturation=80+Math.cos(lightAuxA*0.05)*20;const lightness=30+Math.sin(lightAuxB*0.1)*30;const spiralBrightness=1+Math.abs(Math.sin(lightAuxA*0.05))*0.8;const spiralContrast=1.5+Math.abs(Math.cos(lightAuxA*0.08))*1;sysStage.style.backgroundColor=`hsl(${hue},${saturation}%,${lightness}%)`;sysStage.style.filter=`contrast(${spiralContrast}) saturate(2) brightness(${spiralBrightness}) hue-rotate(${lightAuxA*0.5}deg)`},25)}
+      if(preset===6){lightInterval=setInterval(()=>{lightCount++;if(lightCount%50===0||lightCount%50===2){sysStage.style.backgroundColor="#fff";sysStage.style.filter="brightness(5) contrast(5)"}else{sysStage.style.backgroundColor="#000";sysStage.style.filter="none"}},30)}
+      persist();
+    }
+    function stopLight(silent=false){if(lightInterval){clearInterval(lightInterval);lightInterval=null}STATE.ui.lightRunning=false;resetSysStage();if(!silent)persist()}
+    function selectPreset(preset){STATE.ui.lightPreset=preset;if(STATE.ui.lightRunning)startLight(preset);else persist()}
+
+    function setSysDrawer(open){$("sysDrawer").classList.toggle("open",!!open)}
+    function setKetaNote(open){$("ketaNote").classList.toggle("open",!!open);$("ketaIcon").classList.toggle("open",!!open)}
+
+    let toastTimer=null;
+    function toast(msg){
+      if(STATE.ui.nullMode)return;
+      const t=$("toast");
+      t.textContent=msg;
+      t.style.display="block";
+      if(toastTimer)clearTimeout(toastTimer);
+      toastTimer=setTimeout(()=>{t.style.display="none"},900);
+    }
+
+    function download(filename,text){
+      const blob=new Blob([text],{type:"application/json"});
+      const a=document.createElement("a");
+      a.href=URL.createObjectURL(blob);
+      a.download=filename;
+      a.click();
+      setTimeout(()=>URL.revokeObjectURL(a.href),800);
+    }
+
+    async function copy(text){
+      try{await navigator.clipboard.writeText(text);toast("COPIED")}
+      catch(e){toast("COPY FAILED")}
+    }
+
+    function renderShell(){
+      root.classList.toggle("invert",!!STATE.ui.invert);
+      root.classList.toggle("null",!!STATE.ui.nullMode);
+      $("roomName").textContent="PHOTOBOOTH";
+      $("ketaText").value=STATE.ketaNote||"";
+      $("universals").value=STATE.universals||"";
+      const s=stableSig();
+      $("sig").textContent=s;
+      $("sig2").textContent=s;
+      $("lightLabel").textContent=String(STATE.ui.lightPreset);
+      $("runLabel").textContent=STATE.ui.lightRunning?"ON":"OFF";
+      $("nullLabel").textContent=STATE.ui.nullMode?"ON":"OFF";
+      $("autoLabel").textContent=STATE.ui.autoMode.toUpperCase();
+      drawer.classList.toggle("open",!!STATE.ui.drawerOpen);
+
+      $("autoOff").classList.toggle("on",STATE.ui.autoMode==="manual");
+      $("autoDrift").classList.toggle("on",STATE.ui.autoMode==="drift");
+      $("autoPulse").classList.toggle("on",STATE.ui.autoMode==="pulse");
+      $("autoScan").classList.toggle("on",STATE.ui.autoMode==="scan");
+      $("autoGlitch").classList.toggle("on",STATE.ui.autoMode==="glitch");
+      $("autoRadical").classList.toggle("on",STATE.ui.autoMode==="radical");
+    }
+
+    $("btnImport").addEventListener("click",()=>$("file").click());
+    $("file").addEventListener("change",async e=>{const f=e.target.files&&e.target.files[0];if(!f)return;const txt=await f.text();importState(txt);e.target.value="";toast("STATE IMPORTED")});
+    $("btnExport").addEventListener("click",()=>{download("KETADATA_PHOTOBOOTH_state.json",exportState());toast("STATE EXPORTED")});
+    $("btnCopy").addEventListener("click",()=>copy(exportState()));
+    $("toggleSysDrawer").addEventListener("click",()=>{if(STATE.ui.nullMode)return;setSysDrawer(!$("sysDrawer").classList.contains("open"))});
+    $("btnCloseSysDrawer").addEventListener("click",()=>setSysDrawer(false));
+    $("btnCopyUniversals").addEventListener("click",()=>copy(STATE.universals||""));
+    $("universals").addEventListener("input",()=>{STATE.universals=$("universals").value;flush()});
+    $("ketaIcon").addEventListener("click",()=>{if(STATE.ui.nullMode)return;const open=!$("ketaNote").classList.contains("open");setKetaNote(open);toast(open?"KETA_NOTE OPEN":"KETA_NOTE CLOSED")});
+    $("btnHideNote").addEventListener("click",()=>setKetaNote(false));
+    $("ketaText").addEventListener("input",()=>{STATE.ketaNote=$("ketaText").value;saveGlobalKetaNote(STATE.ketaNote);flush()});
+    $("btnNull").addEventListener("click",()=>toggleNullMode());
+    $("btnGoRoom").addEventListener("click",()=>{});
+    $("btnDismissRoom").addEventListener("click",()=>{$("roomJump").classList.remove("show")});
+
+    (function dragNote(){
+      const box=$("ketaNote"),head=$("ketaHead");
+      let dragging=false,ox=0,oy=0;
+      head.addEventListener("mousedown",e=>{if(e.target.closest("button"))return;dragging=true;const r=box.getBoundingClientRect();ox=e.clientX-r.left;oy=e.clientY-r.top;box.style.left=r.left+"px";box.style.top=r.top+"px";box.style.right="auto"});
+      window.addEventListener("mousemove",e=>{if(!dragging)return;box.style.left=(e.clientX-ox)+"px";box.style.top=(e.clientY-oy)+"px"});
+      window.addEventListener("mouseup",()=>dragging=false);
+    })();
+
+    /* PHOTOBOOTH ENGINE */
+    const video=$("video"),out=$("out"),octx=out.getContext("2d",{willReadFrequently:true});
+    const drawer=$("drawer"),ccBtn=$("ccBtn"),closeDrawer=$("closeDrawer");
+    const crunchBtn=$("crunchBtn"),invertBtn=$("invertBtn");
+    const pixel=$("pixel"),poster=$("poster"),noise=$("noise"),sharpen=$("sharpen"),bleed=$("bleed");
+    const snapBtn=$("snapBtn"),saveBtn=$("saveBtn"),resetBtn=$("resetBtn");
+    const statusEl=$("status"),msgEl=$("msg"),nodes=[...document.querySelectorAll(".node")],hud=$("paramHUD");
+
+    const buf2=document.createElement("canvas"),b2=buf2.getContext("2d",{willReadFrequently:true});
+    const work=document.createElement("canvas"),wctx=work.getContext("2d",{willReadFrequently:true});
+
+    let lastMouseX=0;
+
+    function clamp(n,a,b){return Math.max(a,Math.min(b,n))}
+    function lerp(a,b,t){return a+(b-a)*t}
+
+    function showMsg(text,ms=700){
+      msgEl.textContent=text;
+      msgEl.style.display="block";
+      clearTimeout(showMsg._t);
+      showMsg._t=setTimeout(()=>{msgEl.style.display="none"},ms);
+    }
+
+    function setHUD(text){
+      if(!text){hud.classList.remove("on");hud.textContent="";return}
+      hud.textContent=text;
+      hud.classList.add("on");
+    }
+
+    function updateNodes(){nodes.forEach(n=>n.classList.toggle("on",n.dataset.key===STATE.booth.activeKey))}
+
+    function updateStatus(){
+      statusEl.textContent=`CRUNCH ${STATE.booth.crunchOn?"ON":"OFF"} // INVERT ${STATE.booth.invertOn?"ON":"OFF"}`;
+      invertBtn.classList.toggle("on",STATE.booth.invertOn);
+      crunchBtn.classList.toggle("on",STATE.booth.crunchOn);
+      if(STATE.booth.activeKey){
+        const map={"1":"PIXEL","2":"POSTER","3":"NOISE","4":"CRISP","5":"CHROMA"};
+        const val=STATE.booth.activeKey==="1"?STATE.booth.pixel:STATE.booth.activeKey==="2"?STATE.booth.poster:STATE.booth.activeKey==="3"?Number(STATE.booth.noise).toFixed(2):STATE.booth.activeKey==="4"?Number(STATE.booth.sharpen).toFixed(2):STATE.booth.bleed;
+        setHUD(`${map[STATE.booth.activeKey]} ${val}`);
+      }else{setHUD("")}
+    }
+
+    function applyBoothState(){
+      pixel.value=STATE.booth.pixel;
+      poster.value=STATE.booth.poster;
+      noise.value=STATE.booth.noise;
+      sharpen.value=STATE.booth.sharpen;
+      bleed.value=STATE.booth.bleed;
+      updateNodes();
+      updateStatus();
+    }
+
+    function toggleDrawer(force){
+      const willOpen=typeof force==="boolean"?force:!drawer.classList.contains("open");
+      STATE.ui.drawerOpen=willOpen;
+      drawer.classList.toggle("open",willOpen);
+      flush();
+    }
+
+    ccBtn.addEventListener("click",()=>toggleDrawer());
+    closeDrawer.addEventListener("click",()=>toggleDrawer(false));
+
+    window.addEventListener("keydown",e=>{if(e.key==="Escape"&&drawer.classList.contains("open"))toggleDrawer(false)});
+
+    function posterizeChannel(v,levels){const step=255/(levels-1);return Math.round(v/step)*step}
+
+    function addNoiseInvertPoster(img,levels,nAmt,doInvert){
+      const d=img.data;
+      for(let i=0;i<d.length;i+=4){
+        let r=d[i],g=d[i+1],b=d[i+2];
+        if(nAmt>0){const n=(Math.random()*2-1)*255*nAmt;r=clamp(r+n,0,255);g=clamp(g+n,0,255);b=clamp(b+n,0,255)}
+        if(doInvert){r=255-r;g=255-g;b=255-b}
+        r=posterizeChannel(r,levels);g=posterizeChannel(g,levels);b=posterizeChannel(b,levels);
+        d[i]=r;d[i+1]=g;d[i+2]=b;
+      }
+    }
+
+    function chromaShift(data,w,h,shift){
+      if(shift<=0)return;
+      const src=new Uint8ClampedArray(data);
+      const idx=(x,y)=>(y*w+x)*4;
+      for(let y=0;y<h;y++){
+        for(let x=0;x<w;x++){
+          const i=idx(x,y);
+          const xr=clamp(x+shift,0,w-1);
+          const xb=clamp(x-shift,0,w-1);
+          data[i+0]=src[idx(xr,y)+0];
+          data[i+2]=src[idx(xb,y)+2];
+        }
+      }
+    }
+
+    function applySharpen(data,w,h,amount){
+      if(amount<=0)return;
+      const src=new Uint8ClampedArray(data);
+      const a=amount;
+      const idx=(x,y)=>(y*w+x)*4;
+      for(let y=1;y<h-1;y++){
+        for(let x=1;x<w-1;x++){
+          const i=idx(x,y);
+          for(let c=0;c<3;c++){
+            const center=src[i+c];
+            const up=src[idx(x,y-1)+c];
+            const dn=src[idx(x,y+1)+c];
+            const lf=src[idx(x-1,y)+c];
+            const rt=src[idx(x+1,y)+c];
+            const v=center*(1+4*a)-(up+dn+lf+rt)*a;
+            data[i+c]=clamp(v,0,255);
+          }
+        }
+      }
+    }
+
+    function pixelateInto(destCtx,srcCanvas,w,h,px){
+      buf2.width=Math.max(1,Math.floor(w/px));
+      buf2.height=Math.max(1,Math.floor(h/px));
+      b2.imageSmoothingEnabled=false;
+      destCtx.imageSmoothingEnabled=false;
+      b2.clearRect(0,0,buf2.width,buf2.height);
+      b2.drawImage(srcCanvas,0,0,w,h,0,0,buf2.width,buf2.height);
+      destCtx.clearRect(0,0,w,h);
+      destCtx.drawImage(buf2,0,0,buf2.width,buf2.height,0,0,w,h);
+    }
+
+    function resize(){
+      const rect=out.getBoundingClientRect();
+      out.width=Math.max(2,Math.floor(rect.width));
+      out.height=Math.max(2,Math.floor(rect.height));
+      work.width=out.width;
+      work.height=out.height;
+      updateStatus();
+    }
+    window.addEventListener("resize",resize);
+
+    async function startCamera(){
+      try{
+        const stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:"user"},audio:false});
+        video.srcObject=stream;
+        await video.play();
+        showMsg("CAMERA ON",900);
+      }catch(err){
+        showMsg("CAMERA DENIED",1600);
+        console.error(err);
+      }
+    }
+
+    /* AUTO MODE ENGINE (INVERT-DRIVEN, MINIMAL NOISE) */
+    let autoRAF=null;
+    let autoPhase={t:0};
+
+    function getAutoParams(mode,t){
+      if(mode==="drift"){
+        return{
+          crunchOn:true,
+          invertOn:Math.sin(t*0.35)>0,
+          pixel:Math.floor(5+Math.abs(Math.sin(t*0.18))*9),
+          poster:Math.floor(4+Math.abs(Math.sin(t*0.14))*7),
+          noise:0.05,
+          sharpen:0.6+Math.abs(Math.sin(t*0.20))*1.2,
+          bleed:Math.floor(Math.abs(Math.sin(t*0.22))*6)
+        };
+      }
+      if(mode==="pulse"){
+        const pulse=Math.abs(Math.sin(t*0.9));
+        return{
+          crunchOn:true,
+          invertOn:pulse>0.5,
+          pixel:Math.floor(5+pulse*9),
+          poster:Math.floor(4+pulse*7),
+          noise:0.08,
+          sharpen:0.7+pulse*1.1,
+          bleed:Math.floor(pulse*5)
+        };
+      }
+      if(mode==="scan"){
+        const scan=(Math.sin(t*0.6)+1)*0.5;
+        return{
+          crunchOn:true,
+          invertOn:Math.floor(t*0.5)%2===0,
+          pixel:12,
+          poster:Math.floor(3+scan*8),
+          noise:0.03,
+          sharpen:1.4,
+          bleed:Math.floor((1-scan)*7)
+        };
+      }
+      if(mode==="glitch"){
+        const glitch=Math.random()<0.18?1:0;
+        return{
+          crunchOn:true,
+          invertOn:glitch===1?true:(Math.sin(t*0.45)>0),
+          pixel:glitch===1?16:Math.floor(6+Math.abs(Math.sin(t*0.28))*7),
+          poster:glitch===1?2:Math.floor(5+Math.abs(Math.sin(t*0.22))*5),
+          noise:glitch===1?0.15:0.06,
+          sharpen:glitch===1?0.1:0.9+Math.abs(Math.sin(t*0.26))*0.9,
+          bleed:glitch===1?8:Math.floor(Math.abs(Math.sin(t*0.32))*5)
+        };
+      }
+      if(mode==="radical"){
+        const wave=Math.sin(t*1.2);
+        const extreme=wave>0?1:0;
+        return{
+          crunchOn:true,
+          invertOn:wave>0,
+          pixel:extreme?16:2,
+          poster:extreme?12:2,
+          noise:0.04,
+          sharpen:extreme?2:0,
+          bleed:extreme?8:0
+        };
+      }
+      return null;
+    }
+
+    function startAuto(mode){
+      stopAuto();
+      STATE.ui.autoMode=mode;
+      autoPhase.t=0;
+
+      let t0=performance.now();
+
+      function autoTick(now){
+        const dt=(now-t0)/1000;
+        t0=now;
+        autoPhase.t+=dt;
+
+        const params=getAutoParams(mode,autoPhase.t);
+        if(!params){stopAuto();return}
+
+        STATE.booth.crunchOn=params.crunchOn;
+        STATE.booth.invertOn=params.invertOn;
+        STATE.booth.pixel=params.pixel;
+        STATE.booth.poster=params.poster;
+        STATE.booth.noise=params.noise;
+        STATE.booth.sharpen=params.sharpen;
+        STATE.booth.bleed=params.bleed;
+
+        pixel.value=STATE.booth.pixel;
+        poster.value=STATE.booth.poster;
+        noise.value=Number(STATE.booth.noise).toFixed(2);
+        sharpen.value=Number(STATE.booth.sharpen).toFixed(2);
+        bleed.value=STATE.booth.bleed;
+
+        updateStatus();
+
+        autoRAF=requestAnimationFrame(autoTick);
+      }
+
+      autoRAF=requestAnimationFrame(autoTick);
+      persist();
+    }
+
+    function stopAuto(){
+      if(autoRAF){cancelAnimationFrame(autoRAF);autoRAF=null}
+      STATE.ui.autoMode="manual";
+      persist();
+    }
+
+    $("autoOff").addEventListener("click",()=>{stopAuto();toast("MANUAL")});
+    $("autoDrift").addEventListener("click",()=>{startAuto("drift");toast("AUTO: DRIFT")});
+    $("autoPulse").addEventListener("click",()=>{startAuto("pulse");toast("AUTO: PULSE")});
+    $("autoScan").addEventListener("click",()=>{startAuto("scan");toast("AUTO: SCAN")});
+    $("autoGlitch").addEventListener("click",()=>{startAuto("glitch");toast("AUTO: GLITCH")});
+    $("autoRadical").addEventListener("click",()=>{startAuto("radical");toast("AUTO: RADICAL")});
+
+    function render(){
+      const w=out.width,h=out.height;
+      if(video.readyState>=2&&w&&h){
+        wctx.imageSmoothingEnabled=true;
+        wctx.clearRect(0,0,w,h);
+        wctx.drawImage(video,0,0,w,h);
+
+        if(STATE.booth.crunchOn){
+          const px=Number(STATE.booth.pixel);
+          pixelateInto(octx,work,w,h,px);
+          const img=octx.getImageData(0,0,w,h);
+          chromaShift(img.data,w,h,Number(STATE.booth.bleed));
+          addNoiseInvertPoster(img,Number(STATE.booth.poster),Number(STATE.booth.noise),STATE.booth.invertOn);
+          applySharpen(img.data,w,h,Number(STATE.booth.sharpen));
+          octx.putImageData(img,0,0);
+        }else{
+          octx.imageSmoothingEnabled=true;
+          octx.clearRect(0,0,w,h);
+          octx.drawImage(work,0,0);
+          if(STATE.booth.invertOn){
+            const img=octx.getImageData(0,0,w,h);
+            addNoiseInvertPoster(img,12,0,true);
+            octx.putImageData(img,0,0);
+          }
+        }
+      }
+      requestAnimationFrame(render);
+    }
+
+    function snapshot(){showMsg("SNAP",450)}
+
+    function savePng(){
+      const a=document.createElement("a");
+      const ts=new Date().toISOString().replace(/[:.]/g,"-");
+      a.download=`ketadata-photobooth-${ts}.png`;
+      a.href=out.toDataURL("image/png");
+      a.click();
+      showMsg("SAVED",650);
+    }
+
+    snapBtn.addEventListener("click",snapshot);
+    saveBtn.addEventListener("click",savePng);
+
+    function resetPreset(){
+      stopAuto();
+      STATE.booth.crunchOn=true;
+      STATE.booth.invertOn=false;
+      STATE.booth.pixel=8;
+      STATE.booth.poster=5;
+      STATE.booth.noise=0.28;
+      STATE.booth.sharpen=1.10;
+      STATE.booth.bleed=4;
+      STATE.booth.activeKey=null;
+      applyBoothState();
+      flush();
+      showMsg("RESET",550);
+    }
+    resetBtn.addEventListener("click",resetPreset);
+
+    crunchBtn.addEventListener("click",()=>{
+      if(STATE.ui.autoMode!=="manual")stopAuto();
+      STATE.booth.crunchOn=!STATE.booth.crunchOn;
+      updateStatus();
+      flush();
+    });
+
+    invertBtn.addEventListener("click",()=>{
+      if(STATE.ui.autoMode!=="manual")stopAuto();
+      STATE.booth.invertOn=!STATE.booth.invertOn;
+      updateStatus();
+      flush();
+      showMsg(STATE.booth.invertOn?"INVERT ON":"INVERT OFF",500);
+    });
+
+    [pixel,poster,noise,sharpen,bleed].forEach(el=>el.addEventListener("input",()=>{
+      if(STATE.ui.autoMode!=="manual")stopAuto();
+      STATE.booth.pixel=Number(pixel.value);
+      STATE.booth.poster=Number(poster.value);
+      STATE.booth.noise=Number(noise.value);
+      STATE.booth.sharpen=Number(sharpen.value);
+      STATE.booth.bleed=Number(bleed.value);
+      updateStatus();
+      flush();
+    }));
+
+    function selectKey(k){
+      if(STATE.ui.autoMode!=="manual")stopAuto();
+      if(STATE.booth.activeKey===k){
+        STATE.booth.activeKey=null;
+        updateNodes();
+        updateStatus();
+        flush();
+        showMsg("DESELECT",350);
+        return;
+      }
+      STATE.booth.activeKey=k;
+      updateNodes();
+      updateStatus();
+      flush();
+      const map={"1":"PIXEL","2":"POSTER","3":"NOISE","4":"CRISP","5":"CHROMA"};
+      showMsg(`SELECT ${map[k]}`,450);
+    }
+
+    nodes.forEach(n=>{n.addEventListener("click",e=>{e.preventDefault();selectKey(n.dataset.key)})});
+
+    function adjustByMouse(x){
+      if(!STATE.booth.activeKey)return;
+      if(STATE.ui.autoMode!=="manual")stopAuto();
+      const dx=x-lastMouseX;
+      lastMouseX=x;
+      const step=dx/240;
+      if(STATE.booth.activeKey==="1"){STATE.booth.pixel=clamp(Math.round(Number(STATE.booth.pixel)+step*10),2,16);pixel.value=STATE.booth.pixel}
+      else if(STATE.booth.activeKey==="2"){STATE.booth.poster=clamp(Math.round(Number(STATE.booth.poster)+step*8),2,12);poster.value=STATE.booth.poster}
+      else if(STATE.booth.activeKey==="3"){STATE.booth.noise=clamp(Number(STATE.booth.noise)+step*0.35,0,1);noise.value=Number(STATE.booth.noise).toFixed(2)}
+      else if(STATE.booth.activeKey==="4"){STATE.booth.sharpen=clamp(Number(STATE.booth.sharpen)+step*0.8,0,2);sharpen.value=Number(STATE.booth.sharpen).toFixed(2)}
+      else if(STATE.booth.activeKey==="5"){STATE.booth.bleed=clamp(Math.round(Number(STATE.booth.bleed)+step*12),0,8);bleed.value=STATE.booth.bleed}
+      updateStatus();
+      flush();
+    }
+
+    window.addEventListener("mousedown",e=>{lastMouseX=e.clientX});
+    window.addEventListener("mousemove",e=>adjustByMouse(e.clientX));
+
+    /* KEYBOARD ARBITRATION */
+    window.addEventListener("keydown",e=>{
+      const tag=(e.target&&e.target.tagName)?e.target.tagName.toLowerCase():"";
+      const typing=(tag==="textarea"||tag==="input");
+
+      if(e.shiftKey&&e.key.toLowerCase()==="i"){e.preventDefault();e.stopImmediatePropagation();setInvert(!STATE.ui.invert);toast(STATE.ui.invert?"INVERT ON":"INVERT OFF");return}
+      if(e.shiftKey&&e.key.toLowerCase()==="n"){e.preventDefault();e.stopImmediatePropagation();toggleNullMode();return}
+      if(e.shiftKey&&e.key.toLowerCase()==="b"){e.preventDefault();e.stopImmediatePropagation();goHome();return}
+      if(e.shiftKey&&e.key.toLowerCase()==="k"){e.preventDefault();e.stopImmediatePropagation();goLanding();return}
+      if(e.shiftKey&&e.key.toLowerCase()==="c"){e.preventDefault();e.stopImmediatePropagation();if(!STATE.ui.nullMode)toggleDrawer();return}
+      if(e.key==="6"&&!typing&&!e.shiftKey){e.preventDefault();e.stopImmediatePropagation();selectPreset(6);toast("LIGHT 6");return}
+      if(e.shiftKey&&/^[1-6]$/.test(e.key)){e.preventDefault();e.stopImmediatePropagation();selectPreset(parseInt(e.key,10));toast(`LIGHT ${e.key}`);return}
+      if(e.key==="Escape"){setSysDrawer(false);setKetaNote(false);stopLight(true);STATE.ui.nullMode=false;root.classList.remove("null");persist();return}
+    },true);
+
+    window.addEventListener("keydown",e=>{
+      if(e.shiftKey)return;
+      const k=e.key;
+      const kl=k.toLowerCase();
+
+      if(kl===" "){e.preventDefault();snapshot();return}
+      if(kl==="i"){e.preventDefault();if(STATE.ui.autoMode!=="manual")stopAuto();STATE.booth.invertOn=!STATE.booth.invertOn;updateStatus();flush();showMsg(STATE.booth.invertOn?"INVERT ON":"INVERT OFF",500);return}
+      if(kl==="r"){e.preventDefault();resetPreset();return}
+      if(["1","2","3","4","5"].includes(k)){e.preventDefault();selectKey(k);return}
+      if(kl==="h"){e.preventDefault();toggleDrawer();return}
+    });
+
+    function bootShell(){
+      $("toggleSysDrawer").addEventListener("click",()=>{if(STATE.ui.nullMode)return;setSysDrawer(!$("sysDrawer").classList.contains("open"))});
+      $("btnCloseSysDrawer").addEventListener("click",()=>setSysDrawer(false));
+      resetSysStage();
+      if(STATE.ui.lightRunning)startLight(STATE.ui.lightPreset);
+      if(STATE.ui.autoMode!=="manual")startAuto(STATE.ui.autoMode);
+      renderShell();
+    }
+
+    applyBoothState();
+    resize();
+    bootShell();
+    startCamera().then(()=>{resize();render()});
+  </script>
+</body>
+</html>
+
+<!--
+SURFACE SUPREMACY — PHOTOBOOTH
+DELTA:
+- NEW AUTO MODE: RADICAL
+- Radical pushes all params (except noise) to extremes
+- pixel: 2 ↔ 16
+- poster: 2 ↔ 12
+- sharpen: 0 ↔ 2
+- bleed: 0 ↔ 8
+- invert: toggles with wave
+- noise: minimal (0.04)
+- 1.2 Hz oscillation (fast, dramatic swings)
+FILE_ID: KETADATA_PHOTOBOOTH_SUPREME
+VERSION: v3.2
+UPDATED_AT: 2025-12-31T00:00:00Z
+-->
