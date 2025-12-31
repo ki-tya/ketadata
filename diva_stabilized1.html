@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>KETADATA_DIVA_9_STABILIZED.html</title>
+
+<style>
+:root{
+  --bg:#000; --fg:#fff; --muted:#8a8a8a; --line:#222; --line2:#333;
+  --top:44px; --bot:34px;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  --sans: Arial, system-ui, -apple-system, sans-serif;
+  --ctl-bg: rgba(0,0,0,0.85);
+  --note-border: rgba(255,255,255,0.78);
+  --drawer-h: 0.42;
+}
+*{box-sizing:border-box}
+html,body{height:100%; margin:0; background:#000; color:#fff; font-family:var(--sans); overflow:hidden; user-select:none}
+
+/* THE VOID (NULL MODE) - SHIFT+N */
+#root.blackout .topbar, #root.blackout .bottombar, #root.blackout .drawer, 
+#root.blackout #pinnedPanel, #root.blackout #armedBar, #root.blackout .ketaNote,
+#root.blackout #padPanel, #root.blackout #activeStrip {display:none !important}
+#root.blackout #stage {background:#000 !important}
+#root.blackout #motion {display:none !important}
+
+#stage{position:absolute; inset:0; background:#000; pointer-events:auto} /* Allow click-to-close on stage */
+#motion{
+  position:absolute; inset:0; pointer-events:none; opacity:0;
+  background:repeating-linear-gradient(135deg, rgba(255,255,255,0.06) 0px, rgba(255,255,255,0.06) 1px, transparent 12px, transparent 22px);
+  transform:translate3d(0,0,0);
+}
+#motion.run{opacity:0.12; animation:scanflow 2.2s linear infinite}
+@keyframes scanflow{0%{transform:translate3d(-80px,60px,0)}100%{transform:translate3d(80px,-60px,0)}}
+
+/* PANELS */
+.topbar, .bottombar{
+  position:absolute; left:0; right:0; background:rgba(5,5,5,0.95);
+  display:flex; align-items:center; justify-content:space-between;
+  padding:0 10px; z-index:50; border-bottom:1px solid var(--line);
+}
+.topbar{top:0; height:var(--top)}
+.bottombar{bottom:0; height:var(--bot); border-top:1px solid var(--line); font-family:var(--mono); font-size:11px; color:var(--muted)}
+
+/* INSTRUMENTS */
+#armedBar, #pinnedPanel{
+  position:absolute; left:10px; z-index:100; display:none; gap:8px;
+  padding:8px 10px; border:1px solid var(--line2); background:var(--ctl-bg);
+  font-family:var(--mono); font-size:11px; text-transform:uppercase;
+}
+#armedBar{top:calc(var(--top) + 10px); align-items:center}
+#pinnedPanel{top:calc(var(--top) + 64px); flex-wrap:wrap}
+
+#padPanel{
+  position:absolute; left:14px; top:180px; width:360px; height:400px;
+  display:none; z-index:110; border:1px solid var(--note-border);
+  background:var(--ctl-bg); backdrop-filter:blur(10px); flex-direction:column;
+  resize:both; overflow:hidden;
+}
+#padPanel.open{display:flex}
+#padGrid{flex:1; display:grid; grid-template-columns:repeat(4,1fr); grid-template-rows:repeat(4,1fr); gap:8px; padding:10px}
+.padCell{border:1px solid rgba(255,255,255,0.18); padding:8px; display:flex; flex-direction:column; justify-content:center; align-items:center; text-align:center; cursor:pointer; overflow:hidden}
+.padCell:hover{background:rgba(255,255,255,0.1); border-color:#fff}
+.padCell .nm{font-size:10px; font-weight:bold; letter-spacing:1px; white-space:nowrap}
+.padCell .url{font-size:8px; opacity:0.4; overflow:hidden; width:100%; white-space:nowrap; text-overflow:ellipsis}
+
+/* UTILITY */
+.btn{background:transparent; color:#fff; border:1px solid var(--line2); padding:6px 10px; font-family:var(--mono); font-size:11px; cursor:pointer; text-transform:uppercase}
+.btn:hover{border-color:#fff}
+input, textarea{background:#000; color:#fff; border:1px solid var(--line2); font-family:var(--mono); font-size:12px; padding:8px; outline:none}
+</style>
+</head>
+
+<body>
+<div id="root">
+  <div id="stage" onclick="handleStageClick()"></div>
+  <div id="motion"></div>
+
+  <div id="armedBar">
+    <span style="color:var(--muted)">ARMED:</span>
+    <span id="armedName">NONE</span>
+    <input id="armedUrl" style="width:240px" readonly />
+    <button class="btn" id="btnGo">GO</button>
+  </div>
+
+  <div id="pinnedPanel"></div>
+
+  <div id="padPanel">
+    <div style="padding:8px 10px; border-bottom:1px solid var(--line2); display:flex; justify-content:space-between; align-items:center; font-family:var(--mono); font-size:11px">
+      <span id="padTitle">PAD_V1</span>
+      <button class="btn" onclick="closePad()" style="padding:2px 6px">X</button>
+    </div>
+    <div id="padGrid"></div>
+  </div>
+
+  <div class="topbar">
+    <div style="font-family:var(--mono); font-size:12px; letter-spacing:2px">KETADATA // DIVA9 // CANON</div>
+    <div style="display:flex; gap:8px">
+      <button class="btn" onclick="exportData()">EXPORT</button>
+      <button class="btn" onclick="toggleBlackout()">NULL [SHIFT+N]</button>
+    </div>
+  </div>
+
+  <div class="bottombar">
+    <div>ESC: CLOSE PAD | SHIFT+N: VOID | CLICK VOID: CLOSE PAD</div>
+    <div id="sig">SIG: 00000000</div>
+  </div>
+</div>
+
+<script>
+/* =========================================================
+   EE: CORE ENGINE
+   ========================================================= */
+const STORAGE_KEY = "KDT::BASE::SOVEREIGN::STATE";
+let STATE = {
+  updatedAt: new Date().toISOString(),
+  ui: { blackout: false, motionOn: true, pinnedSets: [], activeSetId: null, padOpen: false },
+  payload: { sets: [
+    { id: "S1", label: "CANON_BASE", items: [{ name: "GOOGLE", url: "https://google.com" }] }
+  ]}
+};
+
+const $ = id => document.getElementById(id);
+
+function save() {
+  STATE.updatedAt = new Date().toISOString();
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(STATE));
+  render();
+}
+
+function render() {
+  const root = $('root');
+  root.classList.toggle('blackout', STATE.ui.blackout);
+  $('motion').classList.toggle('run', STATE.ui.motionOn && !STATE.ui.blackout);
+  
+  // Render Multi-Pin Rail
+  const rail = $('pinnedPanel');
+  rail.innerHTML = '';
+  if (STATE.payload.sets.length > 0) {
+    rail.style.display = 'flex';
+    STATE.payload.sets.forEach(set => {
+      const chip = document.createElement('button');
+      chip.className = 'btn';
+      chip.textContent = `SET: ${set.label}`;
+      chip.onclick = () => openPad(set.id);
+      rail.appendChild(chip);
+    });
+  }
+
+  // Render Pad
+  const pad = $('padPanel');
+  if (STATE.ui.padOpen) {
+    pad.classList.add('open');
+    const currentSet = STATE.payload.sets.find(s => s.id === STATE.ui.activeSetId);
+    $('padTitle').textContent = currentSet ? currentSet.label : "PAD";
+    const grid = $('padGrid');
+    grid.innerHTML = '';
+    for (let i = 0; i < 16; i++) {
+      const item = (currentSet && currentSet.items[i]) || { name: "...", url: "" };
+      const cell = document.createElement('div');
+      cell.className = 'padCell';
+      cell.innerHTML = `<div class="nm">${item.name}</div><div class="url">${item.url}</div>`;
+      cell.onclick = (e) => {
+        e.stopPropagation();
+        if (!item.url) return;
+        armUrl(item.name, item.url);
+      };
+      grid.appendChild(cell);
+    }
+  } else {
+    pad.classList.remove('open');
+  }
+  
+  $('sig').textContent = `SIG: ${STATE.updatedAt.slice(11,19)}`;
+}
+
+/* =========================================================
+   WB: WIRING & FIXES
+   ========================================================= */
+function openPad(id) {
+  STATE.ui.activeSetId = id;
+  STATE.ui.padOpen = true;
+  save();
+}
+
+function closePad() {
+  STATE.ui.padOpen = false;
+  save();
+}
+
+function handleStageClick() {
+  if (STATE.ui.padOpen) closePad();
+}
+
+function armUrl(name, url) {
+  $('armedBar').style.display = 'flex';
+  $('armedName').textContent = name.toUpperCase();
+  $('armedUrl').value = url;
+  $('btnGo').focus();
+}
+
+function toggleBlackout() {
+  STATE.ui.blackout = !STATE.ui.blackout;
+  save();
+}
+
+$('btnGo').onclick = () => {
+  const url = $('armedUrl').value;
+  if (url) window.location.href = url;
+};
+
+// Keyboard Listeners
+window.onkeydown = e => {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+  
+  if (e.key === 'Escape') closePad();
+  if (e.shiftKey && e.key.toUpperCase() === 'N') { e.preventDefault(); toggleBlackout(); }
+};
+
+// Data Management
+function exportData() {
+  const blob = new Blob([JSON.stringify(STATE)], {type: 'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `KDT_DIVA9_${Date.now()}.json`;
+  a.click();
+}
+
+// Boot
+const saved = localStorage.getItem(STORAGE_KEY);
+if (saved) { 
+  try {
+    const parsed = JSON.parse(saved);
+    STATE = {...STATE, ...parsed};
+  } catch(e) { console.error("Corrupt State Reverting"); }
+}
+render();
+</script>
+</body>
+</html>
