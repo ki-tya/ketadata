@@ -1,0 +1,480 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>KETADATA_ROOM_BACKBONE</title>
+  <style>
+    :root{
+      --bg:#0b0b0b; --fg:#eaeaea; --mut:#9a9a9a; --line:#2a2a2a;
+      --fs:12px;
+    }
+    *{ box-sizing:border-box; }
+    html,body{ height:100%; margin:0; background:var(--bg); color:var(--fg); font: var(--fs)/1.25 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+    button,input,textarea{ font:inherit; color:inherit; background:transparent; border:1px solid var(--line); padding:6px 8px; border-radius:0; }
+    button{ cursor:pointer; }
+    .row{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+    .pill{ border:1px solid var(--line); padding:6px 8px; background:rgba(16,16,16,0.7); white-space:nowrap; }
+    .dim{ opacity:0.65; }
+    .hide{ display:none !important; }
+
+    /* Stage is ALWAYS non-intercepting */
+    .stage{ position:fixed; inset:0; pointer-events:none; z-index:0; }
+    canvas{ width:100%; height:100%; display:block; }
+
+    /* Room surface layer */
+    .surface{ position:relative; height:100%; z-index:1; }
+
+    /* Standalone chrome (ONLY when not inside Shell) */
+    .standaloneTop{
+      position:fixed; left:0; right:0; top:0;
+      background:rgba(10,10,10,0.85);
+      border-bottom:1px solid var(--line);
+      padding:8px;
+      z-index:50;
+    }
+    .standaloneBottom{
+      position:fixed; left:0; right:0; bottom:0;
+      background:rgba(10,10,10,0.85);
+      border-top:1px solid var(--line);
+      padding:8px;
+      z-index:50;
+    }
+    .standalonePadTop{ padding-top:52px; }
+    .standalonePadBottom{ padding-bottom:52px; }
+
+    /* KETA_NOTE (mandatory even in room) */
+    .note{
+      position:absolute;
+      width:360px;
+      background:rgba(12,12,12,0.92);
+      border:1px solid var(--line);
+    }
+    .noteHeader{
+      display:flex; align-items:center; gap:8px;
+      padding:8px; border-bottom:1px solid var(--line);
+      background:rgba(16,16,16,0.8);
+      cursor:move; user-select:none;
+    }
+    .noteBody{ padding:8px; }
+    textarea{ width:100%; height:220px; resize:none; outline:none; }
+  </style>
+</head>
+
+<body>
+  <div class="stage" aria-hidden="true"><canvas id="bg"></canvas></div>
+
+  <!-- Standalone-only chrome (hidden when embedded in Shell) -->
+  <div class="standaloneTop hide" id="standaloneTop">
+    <div class="row">
+      <div class="pill"><b>ROOM</b> <span class="dim" id="roomTitle">KETADATA_ROOM_BACKBONE</span></div>
+      <button id="btnImport" type="button">IMPORT</button>
+      <button id="btnExport" type="button">EXPORT</button>
+      <input id="fileInput" type="file" accept="application/json" class="hide" />
+      <div class="pill dim" id="standaloneStatus">STANDALONE</div>
+    </div>
+  </div>
+
+  <div class="surface" id="surface">
+    <!-- KETA_NOTE must exist on every surface -->
+    <div class="note" id="ketaNote">
+      <div class="noteHeader" id="ketaNoteHeader">
+        <div class="dim">KETA_NOTE</div>
+        <div style="flex:1"></div>
+        <button id="btnNoteToggle" type="button">HIDE</button>
+      </div>
+      <div class="noteBody" id="ketaNoteBody">
+        <textarea id="ketaNoteText" spellcheck="false"></textarea>
+      </div>
+    </div>
+  </div>
+
+  <div class="standaloneBottom hide" id="standaloneBottom">
+    <div class="row">
+      <div class="pill dim" id="metaPill"></div>
+      <div style="flex:1"></div>
+      <div class="pill dim">STAGE: POINTER-EVENTS NONE</div>
+    </div>
+  </div>
+
+  <script>
+    // =========================
+    // EE: META + DEFAULT STATE
+    // =========================
+    const META = {
+      FILE_ID: "KETADATA_ROOM_BACKBONE",
+      ROOM_ID: "ROOM",
+      VERSION_ID: "V1"
+    };
+    const STORAGE_KEY = `${META.FILE_ID}::STATE`;
+
+    const DEFAULT_STATE = () => ({
+      version: "KETADATA_SHELL_KERNEL_v1",
+      updatedAt: new Date().toISOString(),
+      fileId: META.FILE_ID,
+      roomId: META.ROOM_ID,
+      versionId: META.VERSION_ID,
+
+      // Room-local experience knobs (Shell may also inject its own universals)
+      room: {
+        motion: 0,        // 0..6 (driven by Shell SPACE if embedded)
+        light: 0,         // 0..6 (driven by Shell 1–6 if embedded)
+        invert: false,    // if standalone, we can still support invert visually
+        nullMode: false   // if standalone, minimal null
+      },
+
+      ui: {
+        standaloneChrome: true,
+        noteOpen: true,
+        notePos: { x: 24, y: 24 }
+      },
+
+      ketaNote: ""
+    });
+
+    function deepFill(target, defaults){
+      if (target == null || typeof target !== "object") return structuredClone(defaults);
+      const out = Array.isArray(defaults) ? [] : {};
+      for (const k of Object.keys(defaults)) {
+        const dv = defaults[k];
+        const tv = target[k];
+        if (tv === undefined) out[k] = structuredClone(dv);
+        else if (dv && typeof dv === "object" && !Array.isArray(dv)) out[k] = deepFill(tv, dv);
+        else out[k] = tv;
+      }
+      for (const k of Object.keys(target)) if (out[k] === undefined) out[k] = target[k];
+      return out;
+    }
+
+    let STATE = null;
+
+    // =========================
+    // WB: SHELL DETECTION + BRIDGE
+    // =========================
+    const IN_SHELL = (() => {
+      try { return window.parent && window.parent !== window; } catch(_) { return false; }
+    })();
+
+    function shellPost(type, payload){
+      if (!IN_SHELL) return;
+      window.parent.postMessage({ __KETADATA_ROOM__: true, type, payload }, "*");
+    }
+
+    function requestShellState(){
+      shellPost("ROOM_READY", { fileId: META.FILE_ID, roomId: META.ROOM_ID, versionId: META.VERSION_ID });
+      shellPost("ROOM_STATE_REQUEST", null);
+    }
+
+    window.addEventListener("message", (ev) => {
+      const msg = ev.data;
+      if (!msg || msg.__KETADATA_SHELL__ !== true) return;
+
+      if (msg.type === "ROOM_STATE_PUSH") {
+        // Shell sends canonical state slice for this room
+        const incoming = msg.payload || {};
+        STATE = deepFill(incoming, DEFAULT_STATE());
+        render();
+        persistSoon();
+      }
+
+      if (msg.type === "ROOM_UNIVERSALS_PUSH") {
+        // Shell sends universals (lights/motion/invert/null) so room can reflect them visually
+        const u = msg.payload || {};
+        STATE = STATE || deepFill({}, DEFAULT_STATE());
+        STATE.room.light = clampInt(u.light, 0, 6);
+        STATE.room.motion = clampInt(u.motion, 0, 6);
+        STATE.room.invert = !!u.invert;
+        STATE.room.nullMode = !!u.nullMode;
+        renderExperience();
+        persistSoon();
+      }
+
+      if (msg.type === "ROOM_SAVE_REQUEST") {
+        // Shell requests current room state
+        shellPost("ROOM_STATE_REPLY", STATE);
+      }
+    });
+
+    // =========================
+    // WB: BOOT ORDER LAW
+    // =========================
+    (function boot(){
+      // 1) defaults
+      const defaults = DEFAULT_STATE();
+
+      // 2) persisted (standalone only)
+      let persisted = null;
+      if (!IN_SHELL) {
+        try {
+          const raw = localStorage.getItem(STORAGE_KEY);
+          if (raw) persisted = JSON.parse(raw);
+        } catch(_) {}
+      }
+
+      // 3) deep-fill
+      STATE = deepFill(persisted || {}, defaults);
+
+      // 4) render
+      render();
+
+      // 5) bind
+      bind();
+
+      // if embedded, request Shell state
+      if (IN_SHELL) requestShellState();
+      else persistSoon();
+    })();
+
+    // =========================
+    // EE: PERSISTENCE
+    // =========================
+    let persistTimer = null;
+    function persistSoon(){
+      clearTimeout(persistTimer);
+      persistTimer = setTimeout(() => {
+        STATE.updatedAt = new Date().toISOString();
+
+        if (IN_SHELL) {
+          // Let Shell decide persistence; we only report state
+          shellPost("ROOM_DIRTY", { fileId: META.FILE_ID, updatedAt: STATE.updatedAt });
+          shellPost("ROOM_STATE_REPLY", STATE);
+        } else {
+          try { localStorage.setItem(STORAGE_KEY, JSON.stringify(STATE)); } catch(_) {}
+        }
+        updateMeta();
+      }, 50);
+    }
+
+    // =========================
+    // AE: RENDER
+    // =========================
+    const el = (id) => document.getElementById(id);
+
+    function render(){
+      // Standalone chrome only when not in Shell
+      el("standaloneTop").classList.toggle("hide", IN_SHELL || !STATE.ui.standaloneChrome);
+      el("standaloneBottom").classList.toggle("hide", IN_SHELL || !STATE.ui.standaloneChrome);
+
+      document.body.classList.toggle("standalonePadTop", !IN_SHELL && STATE.ui.standaloneChrome);
+      document.body.classList.toggle("standalonePadBottom", !IN_SHELL && STATE.ui.standaloneChrome);
+
+      // Note open/close
+      el("ketaNoteBody").classList.toggle("hide", !STATE.ui.noteOpen);
+      el("btnNoteToggle").textContent = STATE.ui.noteOpen ? "HIDE" : "SHOW";
+
+      // Note content
+      if (el("ketaNoteText").value !== STATE.ketaNote) el("ketaNoteText").value = STATE.ketaNote || "";
+
+      // Note position
+      placeNote(STATE.ui.notePos.x, STATE.ui.notePos.y);
+
+      renderExperience();
+      updateMeta();
+    }
+
+    function renderExperience(){
+      // Room can reflect invert/null visually even when driven by Shell
+      document.documentElement.style.filter = STATE.room.invert ? "invert(1)" : "none";
+
+      // Null is Shell-owned when embedded; in standalone we can approximate by hiding standalone chrome
+      if (!IN_SHELL) {
+        const nullOn = !!STATE.room.nullMode;
+        el("standaloneTop").classList.toggle("hide", nullOn);
+        el("standaloneBottom").classList.toggle("hide", nullOn);
+      }
+    }
+
+    function placeNote(x,y){
+      const n = el("ketaNote");
+      n.style.left = `${Math.max(0,x)}px`;
+      n.style.top = `${Math.max(0,y)}px`;
+    }
+
+    function updateMeta(){
+      const m = `FILE_ID:${STATE.fileId} ROOM_ID:${STATE.roomId} VERSION:${STATE.versionId} UPDATED_AT:${STATE.updatedAt} ${IN_SHELL ? "| EMBEDDED" : "| STANDALONE"}`;
+      const mp = el("metaPill"); if (mp) mp.textContent = m;
+      const sp = el("standaloneStatus"); if (sp) sp.textContent = IN_SHELL ? "EMBEDDED (SHELL)" : "STANDALONE";
+    }
+
+    function clampInt(v, lo, hi){
+      v = Number.isFinite(+v) ? Math.round(+v) : lo;
+      return Math.max(lo, Math.min(hi, v));
+    }
+
+    // =========================
+    // WB: BIND EVENTS
+    // =========================
+    function bind(){
+      // KETA_NOTE typing
+      el("ketaNoteText").addEventListener("input", () => {
+        STATE.ketaNote = el("ketaNoteText").value;
+        persistSoon();
+      });
+
+      // Note toggle
+      el("btnNoteToggle").addEventListener("click", () => {
+        STATE.ui.noteOpen = !STATE.ui.noteOpen;
+        render();
+        persistSoon();
+      });
+
+      // Drag note
+      wireDrag(el("ketaNote"), el("ketaNoteHeader"));
+
+      // Import/Export ALWAYS PRESENT on every surface:
+      // If embedded, Shell should already expose Import/Export; we still keep local IO available when opened alone.
+      if (!IN_SHELL) {
+        el("btnExport").addEventListener("click", exportFile);
+        el("btnImport").addEventListener("click", () => el("fileInput").click());
+        el("fileInput").addEventListener("change", importFile);
+      }
+
+      // Standalone-only: minimal hotkeys (Shell owns universals when embedded)
+      if (!IN_SHELL) {
+        window.addEventListener("keydown", (e) => {
+          if (isTyping()) return;
+
+          if (e.shiftKey && e.key.toUpperCase() === "I") { e.preventDefault(); STATE.room.invert = !STATE.room.invert; renderExperience(); persistSoon(); }
+          if (e.shiftKey && e.key.toUpperCase() === "N") { e.preventDefault(); STATE.room.nullMode = !STATE.room.nullMode; renderExperience(); persistSoon(); }
+          if (/^[1-6]$/.test(e.key)) { e.preventDefault(); STATE.room.light = clampInt(e.key, 1, 6); persistSoon(); }
+          if (e.code === "Space") { e.preventDefault(); STATE.room.motion = (clampInt(STATE.room.motion, 0, 6) + 1) % 7; persistSoon(); }
+        });
+      }
+
+      startBackground();
+      // Lifecycle flush (standalone)
+      if (!IN_SHELL) {
+        window.addEventListener("pagehide", () => persistSoon(), { capture:true });
+        window.addEventListener("beforeunload", () => persistSoon(), { capture:true });
+        document.addEventListener("visibilitychange", () => { if (document.hidden) persistSoon(); }, { capture:true });
+      }
+    }
+
+    function isTyping(){
+      const a = document.activeElement;
+      if (!a) return false;
+      const t = (a.tagName || "").toLowerCase();
+      return t === "input" || t === "textarea" || a.isContentEditable;
+    }
+
+    function wireDrag(node, handle){
+      let on=false, sx=0, sy=0, bx=0, by=0;
+      handle.addEventListener("pointerdown", (e) => {
+        if (e.target && (e.target.tagName||"").toLowerCase()==="button") return;
+        on=true; node.setPointerCapture(e.pointerId);
+        sx=e.clientX; sy=e.clientY; bx=STATE.ui.notePos.x; by=STATE.ui.notePos.y;
+        e.preventDefault();
+      });
+      handle.addEventListener("pointermove", (e) => {
+        if (!on) return;
+        const nx = Math.max(0, bx + (e.clientX - sx));
+        const ny = Math.max(0, by + (e.clientY - sy));
+        STATE.ui.notePos.x = nx; STATE.ui.notePos.y = ny;
+        placeNote(nx, ny);
+      });
+      handle.addEventListener("pointerup", () => { if (!on) return; on=false; persistSoon(); });
+      handle.addEventListener("pointercancel", () => { if (!on) return; on=false; persistSoon(); });
+    }
+
+    // =========================
+    // EE: STANDALONE IMPORT/EXPORT (REAL FILE IO)
+    // =========================
+    function exportFile(){
+      const payload = structuredClone(STATE);
+      payload.updatedAt = new Date().toISOString();
+      const ts = payload.updatedAt.replace(/[:.]/g,"-");
+      const fname = `${payload.fileId}__${payload.roomId}__${payload.versionId}__${ts}.json`;
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type:"application/json" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = fname;
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 0);
+      STATE.updatedAt = payload.updatedAt;
+      persistSoon();
+    }
+
+    function importFile(ev){
+      const f = ev.target.files && ev.target.files[0];
+      ev.target.value = "";
+      if (!f) return;
+      const r = new FileReader();
+      r.onload = () => {
+        try{
+          const incoming = JSON.parse(String(r.result||"{}"));
+          STATE = deepFill(incoming, DEFAULT_STATE());
+          render();
+          persistSoon();
+        } catch(_) {}
+      };
+      r.readAsText(f);
+    }
+
+    // =========================
+    // AE: VISUAL BACKGROUND (EXPERIENCE ONLY)
+    // =========================
+    const bg = document.getElementById("bg");
+    const ctx = bg.getContext("2d", { alpha:true });
+
+    function resize(){
+      const dpr = Math.max(1, Math.min(2, window.devicePixelRatio||1));
+      bg.width = Math.floor(innerWidth*dpr);
+      bg.height = Math.floor(innerHeight*dpr);
+      ctx.setTransform(dpr,0,0,dpr,0,0);
+    }
+    addEventListener("resize", resize, { passive:true });
+
+    function startBackground(){
+      resize();
+      requestAnimationFrame(tick);
+    }
+
+    function tick(now){
+      const w=innerWidth, h=innerHeight;
+      ctx.clearRect(0,0,w,h);
+
+      // Experience driven by room.motion + room.light (Shell may inject)
+      const motion = clampInt(STATE.room.motion, 0, 6);
+      const light  = clampInt(STATE.room.light, 0, 6);
+      const speed = 0.02 + motion*0.03;
+      const alpha = 0.10 + light*0.03;
+
+      ctx.globalAlpha = alpha;
+      ctx.strokeStyle = "#ffffff";
+      ctx.lineWidth = 1;
+
+      const t = now/1000;
+      const cx=w*0.5, cy=h*0.5;
+      for (let i=0;i<18;i++){
+        const r = 40 + i*28 + Math.sin((t*speed)+i*0.35) * (motion*6);
+        ctx.beginPath();
+        ctx.arc(cx,cy,r,0,Math.PI*2);
+        ctx.stroke();
+      }
+
+      requestAnimationFrame(tick);
+    }
+  </script>
+
+  <!--
+  =========================
+  KETADATA HTML SERIALIZATION STAMP
+  =========================
+
+  AE:
+  - Room module styling, uniform text size, non-intercepting stage.
+  EE:
+  - Literal room state + deep-fill; mandatory IO preserved (standalone); Shell bridge for embedded mode.
+  WB:
+  - Shell postMessage bridge; standalone minimal hotkeys guarded; note drag + lifecycle flush.
+
+  FILE_ID: KETADATA_ROOM_BACKBONE
+  ROOM_ID: ROOM
+  VERSION_ID: V1
+  UPDATED_AT: 2025-12-30T00:00:00.000Z
+  CHANGELOG:
+  - Shell-first room backbone: embedded uses Shell structure; standalone remains fully KETADATA-valid.
+  -->
+</body>
+</html>
