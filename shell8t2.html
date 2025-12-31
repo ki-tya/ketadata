@@ -1,0 +1,745 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>KETADATA // SPEC_NODE (FLUID MODULE) // SHELL8-DRAWER</title>
+
+<style>
+:root{
+  --bg:#000; --fg:#fff; --mut:#8a8a8a; --line:#222; --line2:#333;
+  --top:44px; --bot:34px;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  --sans: Arial, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+  --fs:12px; /* uniform text size law */
+  --ctl-alpha:0.78;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0;background:var(--bg);color:var(--fg);font:var(--fs)/1.25 var(--sans);overflow:hidden}
+button,input,textarea{font:inherit;color:inherit;background:transparent;border:1px solid var(--line2);padding:6px 8px;border-radius:0}
+button{cursor:pointer}
+button:hover{border-color:var(--fg)}
+textarea{width:100%;height:100%;resize:none;outline:none;background:#050505;border:1px solid var(--line2);font-family:var(--mono);line-height:1.35}
+
+#root{position:fixed;inset:0;background:#000}
+#root.invert{filter:invert(1)}
+
+#stage{
+  position:absolute;inset:0;background:#000;
+  pointer-events:none; /* WB: stage never blocks clicks */
+}
+#motion{
+  position:absolute;inset:0;pointer-events:none;opacity:0;
+  background: repeating-linear-gradient(135deg, rgba(255,255,255,0.06) 0px, rgba(255,255,255,0.06) 1px, rgba(0,0,0,0) 12px, rgba(0,0,0,0) 22px);
+  mix-blend-mode: screen;
+  transform: translate3d(0,0,0);
+}
+#motion.run{opacity:0.12;animation:scanflow 2.2s linear infinite}
+@keyframes scanflow{0%{transform:translate3d(-80px,60px,0)}100%{transform:translate3d(80px,-60px,0)}}
+
+/* TOP BAR */
+.topbar{
+  position:absolute;top:0;left:0;right:0;height:var(--top);
+  display:flex;align-items:center;justify-content:space-between;
+  padding:0 10px;border-bottom:1px solid var(--line);
+  background:linear-gradient(180deg,#070707,#000);
+  z-index:10;
+}
+.brand{display:flex;align-items:center;gap:10px;font-family:var(--mono);letter-spacing:.10em;text-transform:uppercase}
+.brand .sq{width:10px;height:10px;border:1px solid var(--fg);background:#000}
+.actions{display:flex;align-items:center;gap:8px;font-family:var(--mono);letter-spacing:.08em;text-transform:uppercase}
+.btn{font-family:var(--mono);letter-spacing:.08em;text-transform:uppercase}
+.ketaIcon{width:16px;height:16px;border:2px solid var(--fg);background:var(--fg);cursor:pointer}
+.ketaIcon.open{background:#000}
+
+/* BOTTOM BAR + DRAWER */
+.bottombar{
+  position:absolute;left:0;right:0;bottom:0;height:var(--bot);
+  display:flex;align-items:center;justify-content:space-between;
+  padding:0 10px;border-top:1px solid var(--line);
+  background:linear-gradient(0deg,#070707,#000);
+  z-index:10;font-family:var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--mut)
+}
+.toggle{padding:4px 8px;font-family:var(--mono);letter-spacing:.08em;text-transform:uppercase}
+
+.drawer{
+  position:absolute;left:0;right:0;bottom:var(--bot);
+  height:38%;min-height:220px;border-top:1px solid var(--line);
+  background:linear-gradient(180deg,#060606,#000);
+  display:none;z-index:20;
+}
+.drawer.open{display:flex;flex-direction:column}
+.drawerHead{
+  padding:8px 10px;border-bottom:1px solid var(--line);
+  font-family:var(--mono);letter-spacing:.10em;text-transform:uppercase;
+  display:flex;justify-content:space-between;align-items:center
+}
+.drawerBody{padding:10px;min-height:0;flex:1;overflow:auto}
+.kbd{border:1px solid var(--line2);padding:2px 6px;color:var(--mut);font-family:var(--mono);letter-spacing:.08em;text-transform:uppercase}
+.small{font-family:var(--mono);color:var(--mut)}
+
+/* KETA_NOTE */
+.ketaNote{
+  position:absolute;top:60px;right:16px;width:340px;height:220px;
+  display:none;z-index:30;resize:both;overflow:hidden;
+  background:rgba(0,0,0,var(--ctl-alpha));border:1px solid rgba(255,255,255,0.78)
+}
+.ketaNote.open{display:flex;flex-direction:column}
+.ketaHead{
+  padding:8px 10px;border-bottom:1px solid rgba(255,255,255,0.14);
+  font-family:var(--mono);letter-spacing:.14em;text-transform:uppercase;
+  display:flex;justify-content:space-between;align-items:center;cursor:move;user-select:none
+}
+.ketaBody{padding:10px;min-height:0;flex:1}
+.ketaNote textarea{background:#000;border:1px solid rgba(255,255,255,0.22);height:100%}
+.headBtn{border:1px solid rgba(255,255,255,0.18);padding:2px 8px;font-family:var(--mono);letter-spacing:.08em;text-transform:uppercase}
+.headBtn:hover{border-color:rgba(255,255,255,0.6)}
+
+/* TOAST */
+.toast{
+  position:absolute;left:12px;top:calc(var(--top) + 12px);
+  padding:8px 10px;border:1px solid var(--line2);background:rgba(8,8,8,0.82);
+  font-family:var(--mono);letter-spacing:.06em;color:var(--fg);display:none;z-index:40
+}
+
+/* SPEC_NODE (fluid module) */
+.surface{position:absolute;inset:0;z-index:1}
+.node{
+  position:absolute;pointer-events:auto;border:1px solid var(--line);
+  background:rgba(0,0,0,var(--ctl-alpha));
+}
+.nodeHead{
+  display:flex;gap:8px;align-items:center;padding:8px;border-bottom:1px solid var(--line);
+  font-family:var(--mono);letter-spacing:.10em;text-transform:uppercase;user-select:none;cursor:move;touch-action:none
+}
+.nodeHead .tag{color:var(--mut);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:58%}
+.nodeHead button{margin-left:auto}
+.nodeBody{padding:8px;min-height:0;height:calc(100% - 41px)}
+.nodeBody.closed{display:none!important}
+.grip{position:absolute;right:-1px;bottom:-1px;width:14px;height:14px;border:1px solid var(--line2);background:rgba(16,16,16,0.6);cursor:nwse-resize;touch-action:none}
+.node textarea{height:100%}
+
+/* SPEC_NODE bottom-bar icon: half white / half black square */
+.specIcon{
+  width:18px;height:18px;border:1px solid var(--fg);cursor:pointer;
+  background:linear-gradient(90deg, #fff 0 50%, #000 50% 100%);
+}
+.specIcon:hover{outline:1px solid var(--fg);outline-offset:2px}
+</style>
+</head>
+
+<body>
+<div id="root">
+  <div id="stage" aria-hidden="true"></div>
+  <div id="motion" aria-hidden="true"></div>
+
+  <div class="toast" id="toast"></div>
+
+  <div class="topbar">
+    <div class="brand">
+      <span class="sq"></span>
+      <span>KETADATA // SHELL // SPEC_NODE</span>
+      <span style="color:var(--mut);letter-spacing:.02em;text-transform:none">v1</span>
+    </div>
+    <div class="actions">
+      <button class="btn" id="btnImport">IMPORT</button>
+      <button class="btn" id="btnExport">EXPORT</button>
+      <button class="btn" id="btnCopy">COPY</button>
+      <div id="ketaIcon" class="ketaIcon" title="KETA_NOTE"></div>
+    </div>
+  </div>
+
+  <!-- SYSTEM DRAWER (universals live here, like shell8_prev) -->
+  <div class="drawer" id="drawer">
+    <div class="drawerHead">
+      <div>SYSTEM UNIVERSALS</div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <span id="sig" class="small">∅</span>
+        <button class="btn" id="btnCopyUniversals">COPY</button>
+        <button class="btn" id="btnCloseDrawer">CLOSE</button>
+      </div>
+    </div>
+    <div class="drawerBody">
+      <textarea id="universals" placeholder="LAWS / CONSTRAINTS / REFERENCES"></textarea>
+
+      <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <span class="kbd">SHIFT+I</span><span class="small">INVERT</span>
+        <span class="kbd">1–6</span><span class="small">LIGHT PRESET</span>
+        <span class="kbd">SPACE</span><span class="small">TRANSPORT (LIGHT+MOTION) — BLOCKED WHILE TYPING</span>
+      </div>
+
+      <div style="margin-top:10px" class="small">
+        SPEC_NODE: fluid module primitive. Movable / resizable / collapsible by default.
+      </div>
+    </div>
+  </div>
+
+  <div class="bottombar">
+    <div style="display:flex;gap:10px;align-items:center">
+      <button class="toggle" id="toggleDrawer">SYSTEM</button>
+      <span>STATE: <span id="sig2">∅</span></span>
+    </div>
+
+    <div style="display:flex;gap:12px;align-items:center">
+      <div class="specIcon" id="specNodeBtn" title="SPAWN SPEC_NODE"></div>
+      <span>LIGHT: <span id="lightLabel">1</span></span>
+      <span>RUN: <span id="runLabel">OFF</span></span>
+      <span>MOTION: <span id="motionLabel">OFF</span></span>
+    </div>
+  </div>
+
+  <!-- KETA NOTE -->
+  <div class="ketaNote" id="ketaNote">
+    <div class="ketaHead" id="ketaHead">
+      <div>KETA_NOTE</div>
+      <button class="headBtn" id="btnHideNote">-</button>
+    </div>
+    <div class="ketaBody">
+      <textarea id="ketaText" placeholder="GLOBAL NOTE"></textarea>
+    </div>
+  </div>
+
+  <input id="file" type="file" accept="application/json" style="display:none" />
+
+  <!-- SPEC_NODE SURFACE -->
+  <div class="surface" id="surface"></div>
+</div>
+
+<script>
+/* Reference: shell8_prev drawer-universals pattern from your uploaded shell file. :contentReference[oaicite:0]{index=0} */
+
+/* =========================================================
+WB ▸ SOVEREIGN STORAGE KEY
+========================================================= */
+const FILE_ID="KETADATA_SPEC_NODE_SHELL";
+const ROOM_ID="BASE";
+const VERSION_ID="V1";
+const STORAGE_KEY=`KDT::STATE::${FILE_ID}::${ROOM_ID}::${VERSION_ID}`;
+const GLOBAL_KETA_NOTE_KEY="KDT_GLOBAL_KETA_NOTE_V1";
+
+/* =========================================================
+EE ▸ DEFAULT STATE (literal UI)
+========================================================= */
+const DEFAULT = () => ({
+  version:"KETADATA_SHELL_KERNEL_v1",
+  updatedAt:new Date().toISOString(),
+  ketaNote:"",
+  universals:
+`KETADATA LAWS (MINIMAL)
+
+- STATE IS LITERAL UI.
+- EXPORT/IMPORT ALWAYS PRESENT.
+- STAGE NEVER BLOCKS INPUT.
+- SPEC_NODE IS DEFAULT PHYSICS: MOVE / RESIZE / COLLAPSE.
+- NO NEW HOTKEYS WITHOUT EXPLICIT REQUEST.
+- NO WORKFLOWS. NO ROLES. NO FORCED MEANING.`,
+  ui:{ invert:false, lightPreset:1, lightRunning:false, motionOn:false, drawerOpen:false, noteOpen:false },
+  nodes:[
+    { id: "SPEC_1", title:"SPEC_NODE", tag:"FLUID MODULE", x:18, y:60, w:520, h:340, open:true,
+      text:
+`THIS PAGE IS A PRIMITIVE.
+
+YOU CLICK THE HALF-WHITE/HALF-BLACK SQUARE TO SPAWN MORE SPEC_NODES.
+
+EACH SPEC_NODE:
+- DRAGS BY HEADER
+- RESIZES BY CORNER GRIP
+- COLLAPSES BY TOGGLE
+
+IT IS NOT A FEATURE.
+IT IS THE DEFAULT MATERIAL.` }
+  ]
+});
+
+let STATE = loadLocal() || DEFAULT();
+STATE = deepFill(STATE, DEFAULT());
+
+/* =========================================================
+UTIL
+========================================================= */
+const $=id=>document.getElementById(id);
+const q=(s,r=document)=>r.querySelector(s);
+const qa=(s,r=document)=>Array.from(r.querySelectorAll(s));
+const surface=$("surface");
+const root=$("root");
+const stage=$("stage");
+const motion=$("motion");
+const toastEl=$("toast");
+
+function nowISO(){ return new Date().toISOString(); }
+function clamp(n,lo,hi){ return Math.max(lo, Math.min(hi,n)); }
+function isTyping(){
+  const a=document.activeElement;
+  if(!a) return false;
+  const t=(a.tagName||"").toLowerCase();
+  return (t==="textarea"||t==="input"||t==="select"||a.isContentEditable);
+}
+function toast(msg){
+  toastEl.textContent=msg;
+  toastEl.style.display="block";
+  clearTimeout(toastEl._t);
+  toastEl._t=setTimeout(()=>toastEl.style.display="none",900);
+}
+function stableSig(){
+  const core = JSON.stringify({
+    v:STATE.version,
+    i:STATE.ui.invert,
+    p:STATE.ui.lightPreset,
+    r:STATE.ui.lightRunning,
+    m:STATE.ui.motionOn,
+    n:(STATE.nodes||[]).length,
+    u:(STATE.universals||"").length,
+    k:(STATE.ketaNote||"").length
+  });
+  let h=2166136261;
+  for(let i=0;i<core.length;i++){ h^=core.charCodeAt(i); h=Math.imul(h,16777619); }
+  return (h>>>0).toString(16).slice(0,8);
+}
+function deepFill(t,d){
+  if(t==null||typeof t!=="object") return structuredClone(d);
+  const out = Array.isArray(d)?[]:{};
+  for(const k of Object.keys(d)){
+    const dv=d[k], tv=t[k];
+    if(tv===undefined) out[k]=structuredClone(dv);
+    else if(dv && typeof dv==="object" && !Array.isArray(dv)) out[k]=deepFill(tv,dv);
+    else out[k]=tv;
+  }
+  for(const k of Object.keys(t)) if(out[k]===undefined) out[k]=t[k];
+  return out;
+}
+
+/* =========================================================
+WB ▸ STORAGE
+========================================================= */
+function loadLocal(){
+  try{
+    const raw=localStorage.getItem(STORAGE_KEY);
+    return raw?JSON.parse(raw):null;
+  }catch(_){ return null; }
+}
+function loadGlobalKetaNote(){
+  try{ return localStorage.getItem(GLOBAL_KETA_NOTE_KEY) ?? ""; }catch(_){ return ""; }
+}
+function saveGlobalKetaNote(text){
+  try{ localStorage.setItem(GLOBAL_KETA_NOTE_KEY, String(text??"")); }catch(_){}
+}
+(function bootGlobalNote(){
+  const g=loadGlobalKetaNote();
+  if(g) STATE.ketaNote=g;
+})();
+
+function persist(){
+  STATE.updatedAt=nowISO();
+  saveGlobalKetaNote(STATE.ketaNote||"");
+  try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(STATE)); }catch(_){}
+  render();
+}
+
+/* =========================================================
+EE ▸ EXPORT/IMPORT (REAL FILE IO)
+========================================================= */
+function exportEnvelope(){
+  STATE.updatedAt=nowISO();
+  return JSON.stringify({ STORAGE_KEY, FILE_ID, ROOM_ID, VERSION_ID, STATE }, null, 2);
+}
+function download(filename, text){
+  const blob=new Blob([text],{type:"application/json"});
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(blob);
+  a.download=filename;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },0);
+}
+async function copy(text){
+  try{ await navigator.clipboard.writeText(text); toast("COPIED"); }
+  catch(_){ toast("COPY FAILED"); }
+}
+function importText(txt){
+  const parsed=JSON.parse(txt);
+  const incoming = (parsed && parsed.STATE) ? parsed.STATE : parsed;
+  STATE = deepFill(incoming, DEFAULT());
+  if(STATE.ketaNote!=null) saveGlobalKetaNote(STATE.ketaNote||"");
+  stopLight(true);
+  if(STATE.ui.lightRunning) startLight(STATE.ui.lightPreset);
+  persist();
+}
+
+/* =========================================================
+SPEC_NODE PRIMITIVE (MOVE/RESIZE/COLLAPSE)
+========================================================= */
+function makeNodeEl(node){
+  const el=document.createElement("div");
+  el.className="node";
+  el.dataset.nodeId=node.id;
+
+  el.innerHTML = `
+    <div class="nodeHead">
+      <span>${escapeHtml(node.title||"SPEC_NODE")}</span>
+      <span class="tag">${escapeHtml(node.tag||"")}</span>
+      <button type="button" class="btnToggle">−</button>
+    </div>
+    <div class="nodeBody">
+      <textarea spellcheck="false"></textarea>
+    </div>
+    <div class="grip" aria-hidden="true"></div>
+  `;
+
+  const body=q(".nodeBody",el);
+  const btn=q(".btnToggle",el);
+  const ta=q("textarea",el);
+
+  // apply current state
+  applyNode(el,node);
+
+  // collapse
+  btn.addEventListener("click",(e)=>{
+    e.preventDefault();
+    node.open=!node.open;
+    applyNode(el,node);
+    persist();
+  });
+
+  // text
+  ta.value = node.text || "";
+  ta.addEventListener("input", ()=>{
+    node.text = ta.value;
+    persist();
+  });
+
+  // drag
+  const head=q(".nodeHead",el);
+  let dragging=false, sx=0, sy=0, bx=0, by=0;
+  head.addEventListener("pointerdown",(e)=>{
+    if(isTyping()) return;
+    if(e.target && e.target.closest("button")) return;
+    dragging=true;
+    sx=e.clientX; sy=e.clientY;
+    bx=node.x; by=node.y;
+    try{ el.setPointerCapture(e.pointerId);}catch(_){}
+    e.preventDefault();
+  });
+  head.addEventListener("pointermove",(e)=>{
+    if(!dragging) return;
+    node.x=Math.max(0, bx + (e.clientX-sx));
+    node.y=Math.max(0, by + (e.clientY-sy));
+    el.style.left=node.x+"px";
+    el.style.top=node.y+"px";
+  });
+  head.addEventListener("pointerup",()=>{
+    if(!dragging) return;
+    dragging=false;
+    persist();
+  });
+  head.addEventListener("pointercancel",()=>{ if(dragging){ dragging=false; persist(); } });
+
+  // resize
+  const grip=q(".grip",el);
+  let resizing=false, rsx=0, rsy=0, bw=0, bh=0;
+  grip.addEventListener("pointerdown",(e)=>{
+    if(isTyping()) return;
+    resizing=true;
+    rsx=e.clientX; rsy=e.clientY;
+    bw=node.w; bh=node.h;
+    try{ grip.setPointerCapture(e.pointerId);}catch(_){}
+    e.preventDefault();
+  });
+  grip.addEventListener("pointermove",(e)=>{
+    if(!resizing) return;
+    node.w=clamp(bw+(e.clientX-rsx),260,innerWidth);
+    node.h=clamp(bh+(e.clientY-rsy),180,innerHeight);
+    el.style.width=node.w+"px";
+    el.style.height=node.h+"px";
+  });
+  grip.addEventListener("pointerup",()=>{
+    if(!resizing) return;
+    resizing=false;
+    persist();
+  });
+  grip.addEventListener("pointercancel",()=>{ if(resizing){ resizing=false; persist(); } });
+
+  return el;
+}
+
+function applyNode(el,node){
+  el.style.left=(node.x||16)+"px";
+  el.style.top=(node.y||60)+"px";
+  el.style.width=(node.w||420)+"px";
+  el.style.height=(node.h||260)+"px";
+  const body=q(".nodeBody",el);
+  const btn=q(".btnToggle",el);
+  body.classList.toggle("closed", !node.open);
+  btn.textContent = node.open ? "−" : "+";
+}
+
+function renderNodes(){
+  surface.innerHTML="";
+  (STATE.nodes||[]).forEach(n=>{
+    if(!n.id) n.id = "SPEC_"+Math.random().toString(16).slice(2,8).toUpperCase();
+    surface.appendChild(makeNodeEl(n));
+  });
+}
+
+function spawnSpecNode(){
+  const n = {
+    id: "SPEC_"+Math.random().toString(16).slice(2,8).toUpperCase(),
+    title:"SPEC_NODE",
+    tag:"FLUID MODULE",
+    x: Math.round(18 + Math.random()*120),
+    y: Math.round(60 + Math.random()*120),
+    w: 520,
+    h: 320,
+    open:true,
+    text:""
+  };
+  STATE.nodes = Array.isArray(STATE.nodes) ? STATE.nodes : [];
+  STATE.nodes.unshift(n);
+  persist();
+  toast("SPEC_NODE SPAWNED");
+}
+
+/* =========================================================
+EE ▸ LIGHTS 1–6 + TRANSPORT (SPACE) + INVERT (SHIFT+I)
+========================================================= */
+let lightInterval=null, lightCount=0, lightAuxA=0, lightAuxB=0;
+
+function resetStage(){
+  stage.style.backgroundColor="#000";
+  stage.style.filter="none";
+  lightCount=0; lightAuxA=0; lightAuxB=0;
+}
+function stopLight(silent=false){
+  if(lightInterval){ clearInterval(lightInterval); lightInterval=null; }
+  STATE.ui.lightRunning=false;
+  resetStage();
+  if(!silent) persist();
+}
+function startLight(preset){
+  stopLight(true);
+  resetStage();
+  STATE.ui.lightPreset=preset;
+  STATE.ui.lightRunning=true;
+
+  if(preset===1){
+    lightInterval=setInterval(()=>{
+      const curr=stage.style.backgroundColor||"black";
+      stage.style.backgroundColor=(curr==="black"||curr==="rgb(0, 0, 0)")?"white":"black";
+      stage.style.filter="none";
+    },50);
+  }
+  if(preset===2){
+    lightInterval=setInterval(()=>{
+      lightAuxA=(lightAuxA+30)%360; lightAuxB+=0.5;
+      const L=50+Math.sin(lightAuxB)*40;
+      stage.style.backgroundColor=`hsl(${lightAuxA}, 100%, ${L}%)`;
+      stage.style.filter="none";
+    },10);
+  }
+  if(preset===3){
+    lightInterval=setInterval(()=>{
+      lightCount++;
+      const beat=lightCount%16;
+      if(beat===0||beat===1){ stage.style.backgroundColor="#fff"; stage.style.filter="invert(1) contrast(3) brightness(2)"; }
+      else if(beat===2){ stage.style.backgroundColor="#000"; stage.style.filter="invert(1) contrast(2)"; }
+      else if(beat===3){ stage.style.backgroundColor="#0f0"; stage.style.filter="contrast(2) saturate(3)"; }
+      else if(beat===4){ stage.style.backgroundColor="#f0f"; stage.style.filter="invert(1) hue-rotate(90deg)"; }
+      else if(beat===5||beat===6){ stage.style.backgroundColor="#0ff"; stage.style.filter="invert(0.7) contrast(2)"; }
+      else if(beat===7){ stage.style.backgroundColor="#fff"; stage.style.filter="invert(1) brightness(3)"; }
+      else if(beat===8){ stage.style.backgroundColor="#000"; stage.style.filter="invert(1) contrast(3)"; }
+      else if(beat===9||beat===10){ stage.style.backgroundColor="#0f0"; stage.style.filter="saturate(5) contrast(2)"; }
+      else if(beat===11){ stage.style.backgroundColor="#f0f"; stage.style.filter="invert(1) saturate(3)"; }
+      else { stage.style.backgroundColor="#08f"; stage.style.filter="contrast(1.5) brightness(1.2)"; }
+    },30);
+  }
+  if(preset===4){
+    lightInterval=setInterval(()=>{
+      lightAuxA+=0.08; lightCount++;
+      const red=Math.abs(Math.sin(lightAuxA))*255;
+      const pulse=Math.abs(Math.sin(lightAuxA*0.5));
+      const contrast=2+pulse*2;
+      const sat=4+pulse*2;
+      if(lightCount%8===0){ stage.style.backgroundColor="#000"; stage.style.filter="brightness(3) contrast(3)"; }
+      else { stage.style.backgroundColor=`rgb(${red},0,0)`; stage.style.filter=`contrast(${contrast}) saturate(${sat}) brightness(${1.2+pulse*0.5})`; }
+    },20);
+  }
+  if(preset===5){
+    lightInterval=setInterval(()=>{
+      lightAuxA+=15; lightAuxB=(lightAuxB+2)%100;
+      const hue=260+Math.sin(lightAuxA*0.1)*40;
+      const sat=80+Math.cos(lightAuxA*0.05)*20;
+      const L=30+Math.sin(lightAuxB*0.1)*30;
+      const b=1+Math.abs(Math.sin(lightAuxA*0.05))*0.8;
+      const c=1.5+Math.abs(Math.cos(lightAuxA*0.08))*1;
+      stage.style.backgroundColor=`hsl(${hue}, ${sat}%, ${L}%)`;
+      stage.style.filter=`contrast(${c}) saturate(2) brightness(${b}) hue-rotate(${lightAuxA*0.5}deg)`;
+    },25);
+  }
+  if(preset===6){
+    lightInterval=setInterval(()=>{
+      lightCount++;
+      if(lightCount%50===0||lightCount%50===2){ stage.style.backgroundColor="#fff"; stage.style.filter="brightness(5) contrast(5)"; }
+      else { stage.style.backgroundColor="#000"; stage.style.filter="none"; }
+    },30);
+  }
+
+  persist();
+}
+function toggleTransport(){
+  if(STATE.ui.lightRunning) stopLight(true);
+  else startLight(STATE.ui.lightPreset);
+  STATE.ui.motionOn = !STATE.ui.motionOn;
+  toast(`TRANSPORT ${STATE.ui.lightRunning?"ON":"OFF"} / MOTION ${STATE.ui.motionOn?"ON":"OFF"}`);
+  persist();
+}
+function setInvert(on){ STATE.ui.invert=!!on; persist(); }
+function selectPreset(p){
+  STATE.ui.lightPreset=p;
+  if(STATE.ui.lightRunning) startLight(p);
+  else persist();
+}
+
+/* =========================================================
+UI WIRING (drawer universals + note)
+========================================================= */
+function setDrawer(open){ $("drawer").classList.toggle("open", !!open); STATE.ui.drawerOpen=!!open; persist(); }
+function setKetaNote(open){
+  $("ketaNote").classList.toggle("open", !!open);
+  $("ketaIcon").classList.toggle("open", !!open);
+  STATE.ui.noteOpen=!!open;
+  persist();
+}
+
+$("btnImport").addEventListener("click", ()=> $("file").click());
+$("file").addEventListener("change", async (e)=>{
+  const f=e.target.files && e.target.files[0];
+  if(!f) return;
+  const txt=await f.text();
+  importText(txt);
+  e.target.value="";
+  toast("STATE IMPORTED");
+});
+$("btnExport").addEventListener("click", ()=>{
+  const ts=nowISO().replace(/[:.]/g,"-");
+  download(`${FILE_ID}__${ROOM_ID}__${VERSION_ID}__${ts}.json`, exportEnvelope());
+  toast("STATE EXPORTED");
+});
+$("btnCopy").addEventListener("click", ()=> copy(exportEnvelope()));
+
+$("toggleDrawer").addEventListener("click", ()=> setDrawer(!$("drawer").classList.contains("open")));
+$("btnCloseDrawer").addEventListener("click", ()=> setDrawer(false));
+$("btnCopyUniversals").addEventListener("click", ()=> copy(STATE.universals||""));
+$("universals").addEventListener("input", ()=>{ STATE.universals=$("universals").value; persist(); });
+
+$("ketaIcon").addEventListener("click", ()=>{
+  const open = !$("ketaNote").classList.contains("open");
+  setKetaNote(open);
+  toast(open ? "KETA_NOTE OPEN" : "KETA_NOTE CLOSED");
+});
+$("btnHideNote").addEventListener("click", ()=> setKetaNote(false));
+$("ketaText").addEventListener("input", ()=>{ STATE.ketaNote=$("ketaText").value; saveGlobalKetaNote(STATE.ketaNote); persist(); });
+
+$("specNodeBtn").addEventListener("click", spawnSpecNode);
+
+/* Hotkeys (drawer holds the legend; behavior stays universal) */
+document.addEventListener("keydown",(e)=>{
+  const typing=isTyping();
+
+  if(e.shiftKey && e.key.toLowerCase()==="i"){
+    e.preventDefault();
+    setInvert(!STATE.ui.invert);
+    toast(STATE.ui.invert ? "INVERT ON" : "INVERT OFF");
+    return;
+  }
+  if(!typing && /^[1-6]$/.test(e.key)){
+    e.preventDefault();
+    selectPreset(parseInt(e.key,10));
+    toast(`LIGHT ${STATE.ui.lightPreset} SELECTED`);
+    return;
+  }
+  if(!typing && (e.code==="Space" || e.key===" ")){
+    e.preventDefault();
+    toggleTransport();
+    return;
+  }
+  if(e.key==="Escape"){
+    setDrawer(false);
+    setKetaNote(false);
+    stopLight(true);
+    STATE.ui.motionOn=false;
+    toast("CLOSED");
+    persist();
+    return;
+  }
+});
+
+/* Drag KETA_NOTE */
+(function dragNote(){
+  const box=$("ketaNote");
+  const head=$("ketaHead");
+  let dragging=false, ox=0, oy=0;
+  head.addEventListener("mousedown",(e)=>{
+    if(e.target.closest("button")) return;
+    dragging=true;
+    const r=box.getBoundingClientRect();
+    ox=e.clientX-r.left; oy=e.clientY-r.top;
+    box.style.left=r.left+"px";
+    box.style.top=r.top+"px";
+    box.style.right="auto";
+  });
+  window.addEventListener("mousemove",(e)=>{
+    if(!dragging) return;
+    box.style.left=(e.clientX-ox)+"px";
+    box.style.top=(e.clientY-oy)+"px";
+  });
+  window.addEventListener("mouseup",()=>dragging=false);
+})();
+
+/* Render */
+function render(){
+  root.classList.toggle("invert", !!STATE.ui.invert);
+  motion.classList.toggle("run", !!STATE.ui.motionOn);
+
+  $("universals").value = STATE.universals || "";
+  $("ketaText").value = STATE.ketaNote || "";
+
+  const s=stableSig();
+  $("sig").textContent=s;
+  $("sig2").textContent=s;
+
+  $("lightLabel").textContent=String(STATE.ui.lightPreset||1);
+  $("runLabel").textContent=STATE.ui.lightRunning ? "ON" : "OFF";
+  $("motionLabel").textContent=STATE.ui.motionOn ? "ON" : "OFF";
+
+  setDrawer(!!STATE.ui.drawerOpen);
+  $("drawer").classList.toggle("open", !!STATE.ui.drawerOpen);
+  $("ketaNote").classList.toggle("open", !!STATE.ui.noteOpen);
+  $("ketaIcon").classList.toggle("open", !!STATE.ui.noteOpen);
+
+  renderNodes();
+}
+function escapeHtml(s){ return String(s??"").replace(/[&<>"']/g, m=>({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[m])); }
+
+/* Boot */
+render();
+if(STATE.ui.lightRunning) startLight(STATE.ui.lightPreset);
+persist();
+</script>
+
+<!--
+============================================================
+KETADATA HTML SERIALIZATION STAMP
+AE: UNIFORM TEXT SIZE. INDUSTRIAL. SHARP. NO EXTRA CHROME.
+EE: EXPORT/IMPORT ALWAYS PRESENT. UNIVERSALS IN DRAWER. INVERT / LIGHTS 1–6 / SPACE TRANSPORT.
+WB: STAGE pointer-events:none. SPEC_NODE DEFAULT PHYSICS (MOVE/RESIZE/COLLAPSE). STATE = LITERAL UI.
+FILE_ID: KETADATA_SPEC_NODE_SHELL
+ROOM_ID: BASE
+VERSION_ID: V1
+UPDATED_AT: 2025-12-30T00:00:00-05:00
+CHANGELOG:
+- DRAWER RESTORED FOR SYSTEM UNIVERSALS (SHELL8-PREV PATTERN).
+- SPEC_NODE PRIMITIVE ADDED AS DEFAULT FLUID MODULE.
+- SPEC_NODE SPAWN BUTTON ADDED TO BOTTOM BAR AS HALF-WHITE/HALF-BLACK SQUARE.
+============================================================
+-->
+</body>
+</html>
