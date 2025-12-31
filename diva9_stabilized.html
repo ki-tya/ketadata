@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>KETADATA_DIVA_9_STABILIZED</title>
+<style>
+:root{
+  --bg:#000; --fg:#fff; --muted:#8a8a8a; --line:#222; --line2:#333;
+  --top:44px; --bot:34px;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  --sans: Arial, system-ui, -apple-system, sans-serif;
+  --ctl-bg: rgba(0,0,0,0.85);
+  --note-border: rgba(255,255,255,0.7);
+}
+*{box-sizing:border-box}
+html,body{height:100%; margin:0; background:#000; color:#fff; font-family:var(--sans); overflow:hidden; user-select:none}
+
+/* THE VOID (NULL MODE) */
+#root.blackout .topbar, #root.blackout .bottombar, #root.blackout .drawer, 
+#root.blackout #pinnedPanel, #root.blackout #armedBar, #root.blackout .ketaNote,
+#root.blackout #padPanel {display:none !important}
+#root.blackout #stage {background:#000 !important}
+
+#stage{position:absolute; inset:0; background:#000; pointer-events:none}
+#motion{
+  position:absolute; inset:0; pointer-events:none; opacity:0;
+  background:repeating-linear-gradient(135deg, rgba(255,255,255,0.05) 0px, rgba(255,255,255,0.05) 1px, transparent 12px, transparent 22px);
+  transform:translate3d(0,0,0);
+}
+#motion.run{opacity:0.1; animation:scanflow 3s linear infinite}
+@keyframes scanflow{0%{transform:translate3d(-50px,50px,0)}100%{transform:translate3d(50px,-50px,0)}}
+
+/* PANELS */
+.topbar, .bottombar{
+  position:absolute; left:0; right:0; background:rgba(5,5,5,0.95);
+  display:flex; align-items:center; justify-content:space-between;
+  padding:0 10px; z-index:50; border-bottom:1px solid var(--line);
+}
+.topbar{top:0; height:var(--top)}
+.bottombar{bottom:0; height:var(--bot); border-top:1px solid var(--line); font-family:var(--mono); font-size:11px; color:var(--muted)}
+
+/* INSTRUMENTS */
+#armedBar, #pinnedPanel{
+  position:absolute; left:10px; z-index:100; display:none; gap:8px;
+  padding:8px; border:1px solid var(--line2); background:var(--ctl-bg);
+  font-family:var(--mono); font-size:11px; text-transform:uppercase;
+}
+#armedBar{top:calc(var(--top) + 10px); align-items:center}
+#pinnedPanel{top:calc(var(--top) + 60px); flex-wrap:wrap}
+
+#padPanel{
+  position:absolute; left:14px; top:180px; width:360px; height:400px;
+  display:none; z-index:110; border:1px solid var(--note-border);
+  background:var(--ctl-bg); backdrop-filter:blur(10px); flex-direction:column;
+}
+#padPanel.open{display:flex}
+#padGrid{flex:1; display:grid; grid-template-columns:repeat(4,1fr); grid-template-rows:repeat(4,1fr); gap:4px; padding:10px}
+.padCell{border:1px solid var(--line2); padding:6px; display:flex; flex-direction:column; justify-content:center; align-items:center; text-align:center; cursor:pointer}
+.padCell:hover{background:rgba(255,255,255,0.1)}
+.padCell .nm{font-size:10px; font-weight:bold; margin-bottom:2px}
+.padCell .url{font-size:8px; opacity:0.5; overflow:hidden; width:100%}
+
+/* UTILITY */
+.btn{background:transparent; color:#fff; border:1px solid var(--line2); padding:4px 8px; font-family:var(--mono); font-size:11px; cursor:pointer}
+.btn:hover{border-color:#fff}
+.spacer{flex:1}
+textarea{width:100%; height:100%; background:#000; color:#fff; border:1px solid var(--line2); font-family:var(--mono); font-size:12px; padding:8px; outline:none}
+.hide{display:none}
+</style>
+</head>
+<body>
+<div id="root">
+  <div id="stage"></div>
+  <div id="motion"></div>
+
+  <div id="armedBar">
+    <span style="color:var(--muted)">ARMED:</span>
+    <span id="armedName">NONE</span>
+    <input id="armedUrl" style="background:#000; color:#fff; border:1px solid var(--line2); padding:4px; width:200px" readonly />
+    <button class="btn" id="btnGo">GO</button>
+  </div>
+
+  <div id="pinnedPanel"></div>
+
+  <div id="padPanel">
+    <div style="padding:8px; border-bottom:1px solid var(--line2); display:flex; justify-content:space-between; align-items:center; font-family:var(--mono); font-size:11px">
+      <span id="padTitle">PAD</span>
+      <button class="btn" id="btnPadClose">X</button>
+    </div>
+    <div id="padGrid"></div>
+  </div>
+
+  <div class="topbar">
+    <div style="font-family:var(--mono); font-size:12px; letter-spacing:1px">KETADATA // DIVA9 // STABILIZED</div>
+    <div style="display:flex; gap:8px">
+      <button class="btn" id="btnImport">IMPORT</button>
+      <button class="btn" id="btnExport">EXPORT</button>
+    </div>
+  </div>
+
+  <div class="bottombar">
+    <div>SHIFT+N: NULL | SHIFT+I: INVERT | ESC: CLOSE PAD</div>
+    <div id="sig" style="opacity:0.5">SIG: 00000000</div>
+  </div>
+</div>
+
+<script>
+const STORAGE_KEY = "KDT::BASE::SOVEREIGN::STATE";
+let STATE = {
+  updatedAt: new Date().toISOString(),
+  ketaNote: "",
+  ui: { invert: false, blackout: false, motionOn: true, pinnedSets: [], activeSetId: null, padOpen: false },
+  payload: { sets: [
+    { id: "S1", label: "BASE_SET", items: [{ name: "GOOGLE", url: "https://google.com" }] }
+  ]}
+};
+
+const $ = id => document.getElementById(id);
+
+function save() {
+  STATE.updatedAt = new Date().toISOString();
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(STATE));
+  render();
+}
+
+function render() {
+  const root = $('root');
+  root.classList.toggle('blackout', STATE.ui.blackout);
+  root.style.filter = STATE.ui.invert ? 'invert(1)' : 'none';
+  $('motion').classList.toggle('run', STATE.ui.motionOn && !STATE.ui.blackout);
+  
+  // Render Pinned Rail
+  const rail = $('pinnedPanel');
+  rail.innerHTML = '';
+  if (STATE.payload.sets.length > 0) {
+    rail.style.display = 'flex';
+    STATE.payload.sets.forEach(set => {
+      const b = document.createElement('button');
+      b.className = 'btn';
+      b.textContent = set.label;
+      b.onclick = () => { STATE.ui.activeSetId = set.id; STATE.ui.padOpen = true; save(); };
+      rail.appendChild(b);
+    });
+  }
+
+  // Render Pad
+  const pad = $('padPanel');
+  if (STATE.ui.padOpen) {
+    pad.classList.add('open');
+    const set = STATE.payload.sets.find(s => s.id === STATE.ui.activeSetId);
+    $('padTitle').textContent = set ? set.label : "PAD";
+    const grid = $('padGrid');
+    grid.innerHTML = '';
+    for (let i = 0; i < 16; i++) {
+      const item = (set && set.items[i]) || { name: "...", url: "" };
+      const cell = document.createElement('div');
+      cell.className = 'padCell';
+      cell.innerHTML = `<div class="nm">${item.name}</div><div class="url">${item.url}</div>`;
+      cell.onclick = () => {
+        if (!item.url) return;
+        $('armedBar').style.display = 'flex';
+        $('armedName').textContent = item.name;
+        $('armedUrl').value = item.url;
+      };
+      grid.appendChild(cell);
+    }
+  } else {
+    pad.classList.remove('open');
+  }
+  
+  $('sig').textContent = `SIG: ${STATE.updatedAt.slice(11,19)}`;
+}
+
+// Handlers
+$('btnGo').onclick = () => { window.location.href = $('armedUrl').value; };
+$('btnPadClose').onclick = () => { STATE.ui.padOpen = false; save(); };
+$('btnExport').onclick = () => {
+  const blob = new Blob([JSON.stringify(STATE)], {type: 'application/json'});
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'KDT_DIVA9.json'; a.click();
+};
+
+window.onkeydown = e => {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+  if (e.key === 'Escape') { STATE.ui.padOpen = false; save(); }
+  if (e.shiftKey && e.key.toUpperCase() === 'N') { STATE.ui.blackout = !STATE.ui.blackout; save(); }
+  if (e.shiftKey && e.key.toUpperCase() === 'I') { STATE.ui.invert = !STATE.ui.invert; save(); }
+};
+
+// Boot
+const saved = localStorage.getItem(STORAGE_KEY);
+if (saved) { 
+  const parsed = JSON.parse(saved);
+  STATE = {...STATE, ...parsed};
+  STATE.ui = {...STATE.ui, ...parsed.ui};
+}
+render();
+</script>
+</body>
+</html>
