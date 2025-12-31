@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>LOCALSTORAGE MONITOR — FULL</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<style>
+html,body{margin:0;height:100%;background:#000;color:#eaeaea;font:11px/1.35 Arial,Helvetica,sans-serif;letter-spacing:.08em;text-transform:uppercase}
+*{box-sizing:border-box}
+.bar{position:fixed;inset:0 0 auto 0;height:42px;display:flex;align-items:center;gap:8px;padding:0 10px;border-bottom:1px solid rgba(255,255,255,.08);background:rgba(0,0,0,.9);z-index:10}
+.bar .t{opacity:.9}
+.bar .meta{opacity:.55;font-size:10px}
+.bar input{flex:1;background:#000;border:1px solid rgba(255,255,255,.12);color:#fff;padding:6px 8px;text-transform:none;letter-spacing:0}
+.bar button{background:#000;border:1px solid rgba(255,255,255,.12);color:#fff;padding:6px 8px;cursor:pointer;font-size:10px}
+.main{position:fixed;top:42px;left:0;right:0;bottom:0;display:grid;grid-template-columns:420px 1fr}
+.left{border-right:1px solid rgba(255,255,255,.08);overflow:auto}
+.right{display:grid;grid-template-rows:1fr 260px}
+.panel{padding:10px}
+.small{opacity:.55;font-size:10px}
+table{width:100%;border-collapse:collapse}
+tr{border-bottom:1px solid rgba(255,255,255,.06)}
+td{padding:7px 9px;vertical-align:top}
+.row{cursor:pointer}
+.row:hover{background:rgba(255,255,255,.03)}
+.row.active{background:rgba(255,255,255,.06)}
+.pill{display:inline-block;padding:2px 6px;border:1px solid rgba(255,255,255,.12);opacity:.7}
+.viewer{overflow:auto;border-bottom:1px solid rgba(255,255,255,.08)}
+.controls{display:flex;gap:8px;flex-wrap:wrap;padding:10px;border-bottom:1px solid rgba(255,255,255,.08)}
+.controls button{background:#000;border:1px solid rgba(255,255,255,.12);color:#fff;padding:6px 9px;cursor:pointer}
+pre{margin:0;white-space:pre-wrap;word-break:break-word;text-transform:none;letter-spacing:0;
+font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px}
+.log{overflow:auto}
+.evt{border-bottom:1px solid rgba(255,255,255,.06);padding:8px 10px}
+.evt .meta{display:flex;gap:10px;flex-wrap:wrap}
+.ok{color:#b8ffb8}
+.warn{color:#ffb3b3}
+</style>
+</head>
+<body>
+
+<div class="bar">
+  <div class="t">LOCALSTORAGE MONITOR</div>
+  <div class="meta" id="origin"></div>
+  <input id="filter" placeholder="filter keys / content…" />
+  <button id="refresh">REFRESH</button>
+  <button id="export">EXPORT</button>
+</div>
+
+<div class="main">
+  <div class="left">
+    <div class="panel small">
+      <div>items: <span id="count"></span></div>
+      <div>total bytes: <span id="total"></span></div>
+      <div style="margin-top:8px;opacity:.6">shows same-tab + cross-tab writes. url shown when available.</div>
+    </div>
+    <table id="list"></table>
+  </div>
+
+  <div class="right">
+    <div class="viewer">
+      <div class="controls">
+        <button id="copyKey">COPY KEY</button>
+        <button id="copyVal">COPY VALUE</button>
+        <button id="pretty">PRETTY</button>
+        <button id="raw">RAW</button>
+        <button id="del">DELETE</button>
+      </div>
+      <div class="panel small">
+        <div>selected: <span id="selKey"></span></div>
+        <div>bytes: <span id="selBytes"></span></div>
+      </div>
+      <div class="panel"><pre id="val"></pre></div>
+    </div>
+    <div class="log" id="log"></div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  $("origin").textContent = "origin: " + location.origin;
+
+  const S = { items:[], selected:null, raw:"", pretty:false, log:[], lastSnap:null };
+
+  const bytes=s=>(s||"").length;
+  const fmt=n=>n<1024?n+" B":n<1048576?(n/1024).toFixed(1)+" KB":(n/1048576).toFixed(2)+" MB";
+  const now=()=>new Date().toISOString().replace("T"," ").slice(0,19);
+  const esc=s=>String(s).replace(/[&<>"']/g,m=>({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;" }[m]));
+  const safe=k=>{ try{return localStorage.getItem(k)}catch(e){return null} };
+
+  function snapshot(){
+    const a=[]; let t=0;
+    try{
+      for(let i=0;i<localStorage.length;i++){
+        const k=localStorage.key(i), v=safe(k)||"", b=bytes(v);
+        t+=b; a.push({key:k,bytes:b,preview:v.slice(0,160)});
+      }
+    }catch(e){}
+    a.sort((x,y)=>x.key.localeCompare(y.key));
+    S.items=a; $("count").textContent=a.length; $("total").textContent=fmt(t);
+  }
+
+  function renderList(){
+    const q=($("filter").value||"").toLowerCase();
+    $("list").innerHTML=S.items.filter(i=>{
+      return !q || (i.key+i.preview).toLowerCase().includes(q);
+    }).map(i=>`
+      <tr class="row ${S.selected===i.key?"active":""}" data-k="${esc(i.key)}">
+        <td><div>${esc(i.key)}</div><div class="small">${esc(i.preview)}</div></td>
+        <td style="text-align:right"><span class="pill">${fmt(i.bytes)}</span></td>
+      </tr>
+    `).join("");
+    [...$("list").querySelectorAll(".row")].forEach(r=>{
+      r.onclick=()=>select(r.dataset.k.replace(/&[^;]+;/g,m=>({ "&amp;":"&","&lt;":"<","&gt;":">","&quot;":'"',"&#039;":"'"}[m])));
+    });
+  }
+
+  function select(k){
+    S.selected=k; S.raw=safe(k)||"";
+    $("selKey").textContent=k; $("selBytes").textContent=fmt(bytes(S.raw));
+    renderVal(); renderList();
+  }
+
+  function renderVal(){
+    $("val").textContent = S.pretty ? (()=>{try{return JSON.stringify(JSON.parse(S.raw),null,2)}catch(e){return S.raw}})() : S.raw;
+  }
+
+  function log(e){
+    S.log.unshift(e); if(S.log.length>300)S.log.pop();
+    $("log").innerHTML=S.log.map(x=>`
+      <div class="evt">
+        <div class="meta small">
+          <span class="${x.ok?"ok":"warn"}">${esc(x.type)}</span>
+          <span>key: ${esc(x.key||"")}</span>
+          <span>bytes: ${esc(x.bytes||"")}</span>
+          <span>time: ${esc(x.time)}</span>
+          <span>url: ${esc(x.url||"(unknown)")}</span>
+          <span>source: ${esc(x.source||"")}</span>
+        </div>
+        ${x.stack?`<pre>${esc(x.stack)}</pre>`:""}
+      </div>
+    `).join("");
+  }
+
+  const _set=localStorage.setItem.bind(localStorage);
+  const _rem=localStorage.removeItem.bind(localStorage);
+  const _clr=localStorage.clear.bind(localStorage);
+
+  localStorage.setItem=(k,v)=>{
+    const st=(new Error).stack;
+    _set(k,v);
+    log({type:"SETITEM",key:k,bytes:fmt(bytes(v)),time:now(),ok:true,source:"this tab",url:location.href,stack:st});
+    snapshot(); renderList();
+  };
+  localStorage.removeItem=(k)=>{
+    const st=(new Error).stack;
+    _rem(k);
+    log({type:"REMOVE",key:k,bytes:"",time:now(),ok:true,source:"this tab",url:location.href,stack:st});
+    snapshot(); renderList();
+  };
+  localStorage.clear=()=>{
+    const st=(new Error).stack;
+    _clr();
+    log({type:"CLEAR",key:"*",bytes:"",time:now(),ok:true,source:"this tab",url:location.href,stack:st});
+    snapshot(); renderList();
+  };
+
+  window.addEventListener("storage",e=>{
+    log({type:"STORAGE EVENT",key:e.key||"",bytes:e.newValue?fmt(bytes(e.newValue)):"",time:now(),ok:true,source:"other tab",url:e.url||"(unknown)",stack:""});
+    snapshot(); renderList();
+  });
+
+  $("refresh").onclick=()=>{snapshot();renderList()};
+  $("filter").oninput=renderList;
+  $("pretty").onclick=()=>{S.pretty=true;renderVal()};
+  $("raw").onclick=()=>{S.pretty=false;renderVal()};
+  $("copyKey").onclick=()=>navigator.clipboard.writeText(S.selected||"");
+  $("copyVal").onclick=()=>navigator.clipboard.writeText(S.raw||"");
+  $("del").onclick=()=>S.selected&&localStorage.removeItem(S.selected);
+  $("export").onclick=()=>{
+    const o={}; S.items.forEach(i=>o[i.key]=safe(i.key));
+    const b=new Blob([JSON.stringify(o,null,2)],{type:"application/json"});
+    const a=document.createElement("a"); a.href=URL.createObjectURL(b); a.download="localStorage_export.json"; a.click();
+  };
+
+  snapshot(); renderList();
+  log({type:"MONITOR READY",key:"",bytes:"",time:now(),ok:true,source:"this tab",url:location.href,stack:""});
+})();
+</script>
+</body>
+</html>
