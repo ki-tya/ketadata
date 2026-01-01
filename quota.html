@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>KETADATA - QUOTA FIX</title>
+<style>
+body { background: #000; color: #0f0; font-family: monospace; padding: 20px; }
+button { padding: 10px 20px; margin: 5px; font-size: 14px; }
+pre { background: #111; padding: 10px; border: 1px solid #333; }
+.error { color: #f00; }
+.success { color: #0f0; }
+</style>
+</head>
+<body>
+
+<h1>KETADATA QUOTA FIX</h1>
+
+<h2>Storage Analysis</h2>
+<pre id="analysis"></pre>
+
+<h2>Actions</h2>
+<button onclick="analyzeStorage()">ANALYZE STORAGE</button>
+<button onclick="clearAll()">CLEAR ALL LOCALSTORAGE</button>
+<button onclick="clearKetadata()">CLEAR ONLY KETADATA KEYS</button>
+
+<h2>Log</h2>
+<pre id="log"></pre>
+
+<script>
+const log = document.getElementById('log');
+const analysis = document.getElementById('analysis');
+
+function print(msg, isError = false) {
+  const line = `[${new Date().toLocaleTimeString()}] ${msg}\n`;
+  log.textContent += line;
+  console.log(msg);
+}
+
+function estimateSize(obj) {
+  return new Blob([JSON.stringify(obj)]).size;
+}
+
+function formatBytes(bytes) {
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(2) + ' KB';
+  return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
+}
+
+function analyzeStorage() {
+  print("=== ANALYZING STORAGE ===");
+  
+  let totalSize = 0;
+  const items = [];
+  
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    const value = localStorage.getItem(key);
+    const size = estimateSize({ [key]: value });
+    
+    items.push({ key, size, valueLength: value.length });
+    totalSize += size;
+  }
+  
+  // Sort by size
+  items.sort((a, b) => b.size - a.size);
+  
+  let report = `TOTAL KEYS: ${items.length}\n`;
+  report += `TOTAL SIZE: ${formatBytes(totalSize)}\n`;
+  report += `QUOTA LIMIT: ~5-10 MB (browser-dependent)\n\n`;
+  report += `BREAKDOWN:\n`;
+  report += `${'='.repeat(60)}\n`;
+  
+  items.forEach(item => {
+    const percentage = ((item.size / totalSize) * 100).toFixed(1);
+    report += `${item.key}\n`;
+    report += `  Size: ${formatBytes(item.size)} (${percentage}%)\n`;
+    report += `  Value length: ${item.valueLength} chars\n\n`;
+  });
+  
+  analysis.textContent = report;
+  print(`Found ${items.length} keys, total ${formatBytes(totalSize)}`);
+}
+
+function clearAll() {
+  if (!confirm('Clear ALL localStorage? This affects all sites on this domain!')) return;
+  
+  const count = localStorage.length;
+  localStorage.clear();
+  
+  print(`✓ Cleared ${count} keys`, false);
+  analyzeStorage();
+}
+
+function clearKetadata() {
+  if (!confirm('Clear all KETADATA keys?')) return;
+  
+  const keys = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key && (key.includes('ketadata') || key.includes('KETADATA'))) {
+      keys.push(key);
+    }
+  }
+  
+  keys.forEach(k => localStorage.removeItem(k));
+  
+  print(`✓ Cleared ${keys.length} KETADATA keys: ${keys.join(', ')}`, false);
+  analyzeStorage();
+}
+
+// Auto-analyze on load
+window.addEventListener('load', () => {
+  analyzeStorage();
+});
+</script>
+
+</body>
+</html>
