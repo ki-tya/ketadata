@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>KETADATA_BASE_SYSTEM.html</title>
+<style>
+/* DEBUG PANEL */
+#debugPanel {
+  position: fixed;
+  bottom: 40px;
+  right: 10px;
+  background: rgba(255,0,0,0.9);
+  color: #fff;
+  padding: 10px;
+  font-family: monospace;
+  font-size: 10px;
+  max-width: 300px;
+  max-height: 200px;
+  overflow: auto;
+  z-index: 99999;
+  border: 2px solid #f00;
+}
+</style>
+</head>
+<body>
+
+<div id="debugPanel"></div>
+
+<script>
+// =============================================================================
+// DEBUG LOGGER
+// =============================================================================
+const debugLog = [];
+function debug(msg) {
+  const timestamp = new Date().toISOString().slice(11,23);
+  const line = `[${timestamp}] ${msg}`;
+  debugLog.push(line);
+  console.log(line);
+  
+  const panel = document.getElementById('debugPanel');
+  if (panel) {
+    panel.innerHTML = debugLog.slice(-10).join('<br>');
+  }
+}
+
+// =============================================================================
+// STORAGE TEST
+// =============================================================================
+const STORAGE_KEY = "ketadata_base_system_v1";
+
+debug("=== BOOT START ===");
+
+// Test localStorage availability
+try {
+  const testKey = "__localStorage_test__";
+  localStorage.setItem(testKey, "test");
+  const retrieved = localStorage.getItem(testKey);
+  localStorage.removeItem(testKey);
+  
+  if (retrieved === "test") {
+    debug("✓ localStorage WORKS");
+  } else {
+    debug("✗ localStorage BROKEN (write/read mismatch)");
+  }
+} catch(e) {
+  debug("✗ localStorage ERROR: " + e.message);
+}
+
+// =============================================================================
+// SAVE WITH VERIFICATION
+// =============================================================================
+function saveLocal(state) {
+  try {
+    const json = JSON.stringify(state);
+    debug(`Saving ${json.length} chars...`);
+    
+    localStorage.setItem(STORAGE_KEY, json);
+    
+    // VERIFY
+    const retrieved = localStorage.getItem(STORAGE_KEY);
+    if (retrieved === json) {
+      debug("✓ Save verified");
+      return true;
+    } else {
+      debug("✗ Save failed verification");
+      return false;
+    }
+  } catch(e) {
+    debug("✗ Save error: " + e.message);
+    return false;
+  }
+}
+
+function loadLocal() {
+  try {
+    debug("Loading...");
+    const raw = localStorage.getItem(STORAGE_KEY);
+    
+    if (!raw) {
+      debug("No saved state found");
+      return null;
+    }
+    
+    debug(`Found ${raw.length} chars`);
+    const parsed = JSON.parse(raw);
+    debug("✓ Parsed successfully");
+    return parsed;
+    
+  } catch(e) {
+    debug("✗ Load error: " + e.message);
+    return null;
+  }
+}
+
+// =============================================================================
+// MINIMAL TEST STATE
+// =============================================================================
+const DEFAULT_STATE = {
+  version: "v1",
+  noteText: "",
+  noteOpen: false,
+  drawerOpen: false
+};
+
+let STATE = {...DEFAULT_STATE};
+
+// Try to load
+const loaded = loadLocal();
+if (loaded) {
+  STATE = loaded;
+  debug("State loaded");
+} else {
+  debug("Using default state");
+}
+
+// Create UI
+document.body.innerHTML += `
+<div style="position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); text-align:center; color:#fff; font-family:monospace;">
+  <h1>localStorage Debug Test</h1>
+  <p>Current State:</p>
+  <pre id="stateDisplay" style="background:#222; padding:20px; text-align:left;"></pre>
+  <button onclick="testSave()" style="padding:10px 20px; margin:5px; font-size:16px;">SAVE</button>
+  <button onclick="testLoad()" style="padding:10px 20px; margin:5px; font-size:16px;">LOAD</button>
+  <button onclick="testClear()" style="padding:10px 20px; margin:5px; font-size:16px;">CLEAR</button>
+  <br>
+  <label style="display:block; margin:20px;">
+    <input type="checkbox" id="noteCheck" onchange="STATE.noteOpen=this.checked; updateDisplay();">
+    Note Open
+  </label>
+  <label style="display:block; margin:20px;">
+    <input type="checkbox" id="drawerCheck" onchange="STATE.drawerOpen=this.checked; updateDisplay();">
+    Drawer Open
+  </label>
+  <input type="text" id="noteText" oninput="STATE.noteText=this.value; updateDisplay();" 
+         style="padding:10px; width:300px; font-size:16px;" placeholder="Type something...">
+</div>
+`;
+
+function updateDisplay() {
+  document.getElementById('stateDisplay').textContent = JSON.stringify(STATE, null, 2);
+  document.getElementById('noteCheck').checked = STATE.noteOpen;
+  document.getElementById('drawerCheck').checked = STATE.drawerOpen;
+  document.getElementById('noteText').value = STATE.noteText;
+}
+
+window.testSave = function() {
+  debug("=== MANUAL SAVE ===");
+  const success = saveLocal(STATE);
+  debug(success ? "Save complete" : "Save FAILED");
+};
+
+window.testLoad = function() {
+  debug("=== MANUAL LOAD ===");
+  const loaded = loadLocal();
+  if (loaded) {
+    STATE = loaded;
+    updateDisplay();
+    debug("Load complete");
+  } else {
+    debug("Load FAILED");
+  }
+};
+
+window.testClear = function() {
+  localStorage.removeItem(STORAGE_KEY);
+  STATE = {...DEFAULT_STATE};
+  updateDisplay();
+  debug("Cleared");
+};
+
+// Auto-save on change
+setInterval(() => {
+  if (document.hidden) return;
+  saveLocal(STATE);
+}, 2000);
+
+// Save on unload
+window.addEventListener('beforeunload', () => {
+  debug("=== UNLOAD SAVE ===");
+  saveLocal(STATE);
+});
+
+updateDisplay();
+debug("=== BOOT COMPLETE ===");
+</script>
+
+</body>
+</html>
