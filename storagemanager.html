@@ -1,0 +1,513 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>KETADATA // LOCALSTORAGE MANAGER</title>
+<style>
+:root{
+  --bg:#000; --fg:#fff; --muted:#8a8a8a; --line:#222; --line2:#333;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace;
+  --sans: Arial, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+  --top:44px; --bot:34px;
+}
+*{box-sizing:border-box}
+html,body{height:100%; margin:0}
+body{background:var(--bg); color:var(--fg); font-family:var(--sans); overflow:hidden}
+#root{position:fixed; inset:0}
+#root.invert{filter:invert(1)}
+
+.topbar{
+  position:absolute; top:0; left:0; right:0; height:var(--top);
+  display:flex; align-items:center; justify-content:space-between;
+  padding:0 10px; border-bottom:1px solid var(--line);
+  background:linear-gradient(180deg,#070707,#000);
+  z-index:10;
+}
+.brand{display:flex; align-items:center; gap:10px; font-family:var(--mono); font-size:12px; letter-spacing:.10em; text-transform:uppercase}
+.brand .sq{width:10px; height:10px; border:1px solid var(--fg); background:#000}
+
+.actions{display:flex; align-items:center; gap:8px; font-family:var(--mono); font-size:12px}
+.btn{
+  background:transparent; color:var(--fg);
+  border:1px solid var(--line2);
+  padding:6px 10px;
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  cursor:pointer;
+}
+.btn:hover{border-color:var(--fg)}
+.btn:active{transform:translateY(1px)}
+.kbd{border:1px solid var(--line2); padding:2px 6px; color:var(--muted); font-size:11px}
+.sep{width:1px; height:18px; background:var(--line2); opacity:.8; margin:0 6px}
+
+.bottombar{
+  position:absolute; left:0; right:0; bottom:0; height:var(--bot);
+  display:flex; align-items:center; justify-content:space-between;
+  padding:0 10px; border-top:1px solid var(--line);
+  background:linear-gradient(0deg,#070707,#000);
+  z-index:10;
+  font-family:var(--mono); font-size:11px; color:var(--muted);
+}
+.toggle{
+  border:1px solid var(--line2);
+  background:transparent; color:var(--fg);
+  padding:4px 8px;
+  font-family:var(--mono); font-size:11px;
+  letter-spacing:.08em; text-transform:uppercase;
+  cursor:pointer;
+}
+.toggle:hover{border-color:var(--fg)}
+
+.main{
+  position:absolute; left:0; right:0; top:var(--top); bottom:var(--bot);
+  display:grid;
+  grid-template-columns: 420px 1fr;
+  gap:0;
+}
+.left{
+  border-right:1px solid var(--line);
+  min-width:300px;
+  display:flex; flex-direction:column;
+}
+.right{display:flex; flex-direction:column; min-width:0}
+
+.panelHead{
+  padding:10px;
+  border-bottom:1px solid var(--line);
+  font-family:var(--mono); font-size:12px; letter-spacing:.10em; text-transform:uppercase;
+  display:flex; gap:8px; align-items:center; flex-wrap:wrap;
+}
+.panelBody{padding:10px; overflow:auto; min-height:0; flex:1}
+.input{
+  background:#000; color:#fff; border:1px solid var(--line2);
+  padding:6px 8px; font-family:var(--mono); font-size:12px; width:100%;
+}
+.row{display:flex; gap:8px; align-items:center; flex-wrap:wrap}
+.small{color:var(--muted)}
+
+.table{width:100%; border-collapse:collapse; font-family:var(--mono); font-size:12px}
+.table th,.table td{border:1px solid var(--line2); padding:6px 8px; vertical-align:top}
+.table th{color:var(--muted); font-weight:600; text-transform:uppercase; letter-spacing:.08em}
+.table td{color:var(--fg)}
+.table tr.sel td{border-color:rgba(255,255,255,0.7)}
+.keyCell{max-width:320px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+
+textarea{
+  width:100%;
+  border:1px solid var(--line2);
+  background:#050505;
+  color:var(--fg);
+  font-family:var(--mono);
+  font-size:12px;
+  padding:10px;
+  line-height:1.35;
+  outline:none;
+  resize:none;
+  min-height:160px;
+}
+
+.toast{
+  position:absolute; left:12px; top:calc(var(--top) + 12px);
+  padding:8px 10px;
+  border:1px solid var(--line2);
+  background:rgba(8,8,8,0.86);
+  font-family:var(--mono);
+  font-size:11px;
+  letter-spacing:.06em;
+  color:var(--fg);
+  display:none;
+  z-index:40;
+}
+
+#root.fs .topbar,#root.fs .bottombar{display:none !important}
+#root.blackout .topbar,#root.blackout .bottombar,#root.blackout .toast{display:none !important}
+#root.blackout{background:#000}
+</style>
+</head>
+<body>
+<div id="root">
+  <div class="toast" id="toast"></div>
+
+  <div class="topbar">
+    <div class="brand">
+      <span class="sq"></span>
+      <span>KETADATA // LOCALSTORAGE MANAGER</span>
+      <span style="color:var(--muted); letter-spacing:.02em; text-transform:none">LOCALFIRST</span>
+    </div>
+    <div class="actions">
+      <button class="btn" id="btnRefresh">REFRESH</button>
+      <button class="btn" id="btnExportAll">EXPORT ALL</button>
+      <button class="btn" id="btnImport">IMPORT</button>
+      <span class="sep"></span>
+      <button class="btn" id="btnInvert">INVERT</button>
+      <button class="btn" id="btnBlackout">BLACKOUT</button>
+      <button class="btn" id="btnFullscreen">FULLSCREEN</button>
+      <span class="kbd">SHIFT+I</span>
+      <span class="kbd">SHIFT+N</span>
+      <span class="kbd">SHIFT+F</span>
+    </div>
+  </div>
+
+  <div class="main">
+    <div class="left">
+      <div class="panelHead">
+        <span>KEYS</span>
+        <span class="small" id="stats">—</span>
+        <span style="flex:1"></span>
+        <input class="input" id="q" placeholder="SEARCH" spellcheck="false" autocomplete="off"/>
+      </div>
+      <div class="panelBody" id="keysWrap">
+        <table class="table" id="keysTable">
+          <thead><tr><th style="width:54%">KEY</th><th style="width:23%">BYTES</th><th style="width:23%">TYPE</th></tr></thead>
+          <tbody id="keysBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="right">
+      <div class="panelHead">
+        <span>SELECTED</span>
+        <span class="small" id="selMeta">—</span>
+        <span style="flex:1"></span>
+        <button class="btn" id="btnExportOne">EXPORT</button>
+        <button class="btn" id="btnOffload">OFFLOAD+DELETE</button>
+        <button class="btn" id="btnDelete">DELETE</button>
+      </div>
+      <div class="panelBody" style="display:flex; flex-direction:column; gap:10px">
+        <div class="row">
+          <input class="input" id="selKey" placeholder="KEY" spellcheck="false" autocomplete="off"/>
+          <button class="btn" id="btnRename">RENAME</button>
+        </div>
+        <div class="row">
+          <input class="input" id="newKey" placeholder="NEW KEY NAME (FOR SAVE AS)" spellcheck="false" autocomplete="off"/>
+          <button class="btn" id="btnSaveAs">SAVE AS</button>
+        </div>
+        <textarea id="preview" spellcheck="false" placeholder="PREVIEW (READ ONLY)" readonly></textarea>
+        <div class="row" style="justify-content:space-between">
+          <span class="small">IMPORT ACCEPTS: {"items":[{"key":"...","value":"..."}]} OR {"key":"value"} OR {"storageKey":"...","state":{...}}.</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="bottombar">
+    <div style="display:flex; gap:10px; align-items:center">
+      <button class="toggle" id="toggleShowAll">SHOW ALL</button>
+      <button class="toggle" id="toggleJsonOnly">JSON ONLY</button>
+      <span>ACTIVE KEY: <span id="activeKey">—</span></span>
+    </div>
+    <div style="display:flex; gap:12px; align-items:center">
+      <span>INVERT: <span id="invLabel">OFF</span></span>
+      <span>BLK: <span id="blkLabel">OFF</span></span>
+      <span>FS: <span id="fsLabel">OFF</span></span>
+      <span>MANAGER KEY: <span id="mgrKey"></span></span>
+    </div>
+  </div>
+
+  <input id="file" type="file" accept="application/json" style="display:none"/>
+</div>
+
+<script>
+const FILE_ID = "KDT_LOCALSTORAGE_MANAGER";
+const VERSION_ID = "V1";
+const STORAGE_KEY = `ketadata_${FILE_ID}_${VERSION_ID}`;
+
+const $ = (id)=>document.getElementById(id);
+const root=$("root");
+
+let STATE = loadState() || {
+  ui: {
+    invert:false,
+    blackout:false,
+    fullscreen:false,
+    q:"",
+    jsonOnly:false,
+    showAll:true,
+    selectedKey:""
+  }
+};
+
+function nowISO(){ return new Date().toISOString(); }
+
+function toast(msg){
+  if(STATE.ui.blackout || STATE.ui.fullscreen) return;
+  const t=$("toast");
+  t.textContent=msg;
+  t.style.display="block";
+  clearTimeout(toast._t);
+  toast._t=setTimeout(()=>t.style.display="none",900);
+}
+
+function loadState(){
+  try{
+    const raw=localStorage.getItem(STORAGE_KEY);
+    if(!raw) return null;
+    return JSON.parse(raw);
+  }catch(e){return null;}
+}
+function saveState(){
+  try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(STATE)); }catch(e){}
+}
+
+function bytesOf(str){ return new Blob([str||""]).size; }
+function guessType(val){
+  if(val===null || val===undefined) return "EMPTY";
+  const s=String(val).trim();
+  if(!s) return "EMPTY";
+  if((s.startsWith("{") && s.endsWith("}")) || (s.startsWith("[") && s.endsWith("]"))){
+    try{ JSON.parse(s); return "JSON"; }catch(e){}
+  }
+  return "TEXT";
+}
+
+function listKeys(){
+  const keys=[];
+  for(let i=0;i<localStorage.length;i++){
+    const k=localStorage.key(i);
+    if(k===null) continue;
+    const v=localStorage.getItem(k);
+    keys.push({ key:k, bytes:bytesOf(v), type:guessType(v), value:v||"" });
+  }
+  keys.sort((a,b)=>a.key.localeCompare(b.key));
+  return keys;
+}
+
+function safeName(s){
+  return String(s||"key").replace(/[^a-z0-9_-]+/gi,"_").slice(0,64) || "key";
+}
+
+function download(filename, text){
+  const blob=new Blob([text],{type:"application/json"});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement("a");
+  a.href=url; a.download=filename;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),250);
+}
+
+function exportOne(k){
+  const v=localStorage.getItem(k);
+  const obj={ exportedAt: nowISO(), items:[{key:k, value:v}] };
+  download(`KDT_EXPORT_${safeName(k)}.json`, JSON.stringify(obj,null,2));
+  toast("EXPORTED");
+}
+
+function exportAll(){
+  const keys=listKeys();
+  const items=keys.map(x=>({ key:x.key, value:localStorage.getItem(x.key) }));
+  const obj={ exportedAt: nowISO(), items };
+  const stamp=new Date().toISOString().replace(/[:.]/g,"-");
+  download(`KDT_EXPORT_ALL_${stamp}.json`, JSON.stringify(obj,null,2));
+  toast("EXPORTED ALL");
+}
+
+function setSelected(key){
+  STATE.ui.selectedKey=key||"";
+  saveState();
+  render();
+}
+
+function previewValue(v, t){
+  const s=String(v??"");
+  if(t==="JSON"){
+    try{ return JSON.stringify(JSON.parse(s), null, 2).slice(0, 200000); }catch(e){ return s.slice(0,200000); }
+  }
+  return s.slice(0,200000);
+}
+
+function escapeHtml(str){
+  return String(str).replace(/[&<>"']/g, ch=>({"&":"&amp;","<":"&lt;",">":"&gt;",""":"&quot;","'":"&#39;"}[ch]));
+}
+
+function renameKey(oldKey, newKey){
+  newKey=String(newKey||"").trim();
+  if(!oldKey || !newKey) return toast("NEED KEY");
+  if(oldKey===newKey) return toast("SAME");
+  const v=localStorage.getItem(oldKey);
+  if(v===null) return toast("MISSING");
+  if(localStorage.getItem(newKey)!==null) return toast("TARGET EXISTS");
+  try{
+    localStorage.setItem(newKey, v);
+    localStorage.removeItem(oldKey);
+    toast("RENAMED");
+    setSelected(newKey);
+  }catch(e){ toast("FAILED"); }
+}
+
+function saveAsKey(srcKey, newKey){
+  newKey=String(newKey||"").trim();
+  if(!srcKey || !newKey) return toast("NEED KEY");
+  const v=localStorage.getItem(srcKey);
+  if(v===null) return toast("MISSING");
+  try{
+    localStorage.setItem(newKey, v);
+    toast("SAVED AS");
+    render();
+  }catch(e){ toast("FAILED"); }
+}
+
+function deleteKey(k){
+  if(!k) return;
+  if(k===STORAGE_KEY) return toast("NO");
+  if(!confirm(`DELETE KEY?
+
+${k}`)) return;
+  localStorage.removeItem(k);
+  toast("DELETED");
+  if(STATE.ui.selectedKey===k) STATE.ui.selectedKey="";
+  saveState();
+  render();
+}
+
+function offloadKey(k){
+  if(!k) return;
+  exportOne(k);
+  setTimeout(()=>deleteKey(k), 50);
+}
+
+function importFileText(txt){
+  let data=null;
+  try{ data=JSON.parse(txt); }catch(e){ toast("BAD JSON"); return; }
+
+  let items=[];
+  if(data && Array.isArray(data.items)){
+    items = data.items.filter(x=>x && typeof x.key==="string").map(x=>({ key:x.key, value:x.value }));
+  }else if(data && typeof data==="object"){
+    if(data.storageKey && data.state){
+      items = [{ key:String(data.storageKey), value:JSON.stringify(data.state) }];
+    }else{
+      items = Object.keys(data).map(k=>({ key:k, value: (typeof data[k]==="string") ? data[k] : JSON.stringify(data[k]) }));
+    }
+  }
+  if(!items.length) return toast("NO ITEMS");
+
+  let wrote=0, skipped=0;
+  for(const it of items){
+    const k=String(it.key||"").trim();
+    if(!k){ skipped++; continue; }
+    if(k===STORAGE_KEY){ skipped++; continue; }
+    try{
+      localStorage.setItem(k, String(it.value ?? ""));
+      wrote++;
+    }catch(e){ skipped++; }
+  }
+  toast(`IMPORTED ${wrote} / ${items.length}`);
+  render();
+}
+
+function render(){
+  root.classList.toggle("invert", !!STATE.ui.invert);
+  root.classList.toggle("blackout", !!STATE.ui.blackout);
+  root.classList.toggle("fs", !!STATE.ui.fullscreen);
+
+  $("invLabel").textContent = STATE.ui.invert ? "ON":"OFF";
+  $("blkLabel").textContent = STATE.ui.blackout ? "ON":"OFF";
+  $("fsLabel").textContent = STATE.ui.fullscreen ? "ON":"OFF";
+  $("mgrKey").textContent = STORAGE_KEY;
+
+  $("q").value = STATE.ui.q || "";
+  $("toggleJsonOnly").style.borderColor = STATE.ui.jsonOnly ? "rgba(255,255,255,0.8)" : "var(--line2)";
+  $("toggleShowAll").style.borderColor = STATE.ui.showAll ? "rgba(255,255,255,0.8)" : "var(--line2)";
+
+  const keys=listKeys();
+  const q=(STATE.ui.q||"").toLowerCase();
+  let filtered = STATE.ui.showAll ? keys : keys.filter(x=>x.key!==STORAGE_KEY);
+  if(q) filtered=filtered.filter(x=>x.key.toLowerCase().includes(q) || x.type.toLowerCase().includes(q));
+  if(STATE.ui.jsonOnly) filtered=filtered.filter(x=>x.type==="JSON");
+
+  const totalBytes = keys.reduce((a,x)=>a+x.bytes,0);
+  const filtBytes  = filtered.reduce((a,x)=>a+x.bytes,0);
+  $("stats").textContent = `${filtered.length} / ${keys.length} KEYS • ${filtBytes} / ${totalBytes} BYTES`;
+
+  const body=$("keysBody");
+  body.innerHTML="";
+  filtered.forEach(item=>{
+    const tr=document.createElement("tr");
+    if(item.key===STATE.ui.selectedKey) tr.classList.add("sel");
+    tr.innerHTML = `<td class="keyCell" title="${escapeHtml(item.key)}">${escapeHtml(item.key)}</td>
+                    <td>${item.bytes}</td>
+                    <td>${item.type}</td>`;
+    tr.addEventListener("click",()=>setSelected(item.key));
+    body.appendChild(tr);
+  });
+
+  $("activeKey").textContent = STATE.ui.selectedKey || "—";
+  $("selKey").value = STATE.ui.selectedKey || "";
+  if(!STATE.ui.selectedKey){
+    $("selMeta").textContent="—";
+    $("preview").value="";
+    return;
+  }
+  const v=localStorage.getItem(STATE.ui.selectedKey);
+  const b=bytesOf(v);
+  const t=guessType(v);
+  $("selMeta").textContent = `${b} BYTES • ${t}`;
+  $("preview").value = previewValue(v, t);
+}
+
+(function bind(){
+  $("btnRefresh").addEventListener("click",()=>render());
+  $("btnExportAll").addEventListener("click",()=>exportAll());
+  $("btnImport").addEventListener("click",()=>$("file").click());
+  $("file").addEventListener("change",(e)=>{
+    const f=e.target.files && e.target.files[0];
+    if(!f) return;
+    const r=new FileReader();
+    r.onload=()=>importFileText(String(r.result||""));
+    r.readAsText(f);
+    e.target.value="";
+  });
+
+  $("btnExportOne").addEventListener("click",()=>{
+    const k=STATE.ui.selectedKey;
+    if(!k) return toast("NO KEY");
+    exportOne(k);
+  });
+  $("btnDelete").addEventListener("click",()=>deleteKey(STATE.ui.selectedKey));
+  $("btnOffload").addEventListener("click",()=>offloadKey(STATE.ui.selectedKey));
+
+  $("btnRename").addEventListener("click",()=>renameKey(STATE.ui.selectedKey, $("selKey").value));
+  $("selKey").addEventListener("keydown",(e)=>{
+    if(e.key==="Enter") renameKey(STATE.ui.selectedKey, $("selKey").value);
+  });
+
+  $("btnSaveAs").addEventListener("click",()=>saveAsKey(STATE.ui.selectedKey, $("newKey").value));
+  $("newKey").addEventListener("keydown",(e)=>{ if(e.key==="Enter") saveAsKey(STATE.ui.selectedKey, $("newKey").value); });
+
+  $("q").addEventListener("input",(e)=>{ STATE.ui.q=e.target.value; saveState(); render(); });
+  $("toggleJsonOnly").addEventListener("click",()=>{ STATE.ui.jsonOnly=!STATE.ui.jsonOnly; saveState(); render(); });
+  $("toggleShowAll").addEventListener("click",()=>{ STATE.ui.showAll=!STATE.ui.showAll; saveState(); render(); });
+
+  $("btnInvert").addEventListener("click",()=>{ STATE.ui.invert=!STATE.ui.invert; saveState(); render(); });
+  $("btnBlackout").addEventListener("click",()=>{ STATE.ui.blackout=!STATE.ui.blackout; saveState(); render(); });
+  $("btnFullscreen").addEventListener("click",()=>{ STATE.ui.fullscreen=!STATE.ui.fullscreen; saveState(); render(); });
+
+  window.addEventListener("keydown",(ev)=>{
+    if(ev.repeat) return;
+    const ae=document.activeElement;
+    const typing = ae && (ae.tagName==="INPUT" || ae.tagName==="TEXTAREA");
+    if(ev.shiftKey && (ev.key==="I"||ev.key==="i")){ if(typing) return; ev.preventDefault(); STATE.ui.invert=!STATE.ui.invert; saveState(); render(); }
+    if(ev.shiftKey && (ev.key==="N"||ev.key==="n")){ if(typing) return; ev.preventDefault(); STATE.ui.blackout=!STATE.ui.blackout; saveState(); render(); }
+    if(ev.shiftKey && (ev.key==="F"||ev.key==="f")){ if(typing) return; ev.preventDefault(); STATE.ui.fullscreen=!STATE.ui.fullscreen; saveState(); render(); }
+  }, {passive:false});
+})();
+
+render();
+</script>
+
+<!-- =========================================================
+WB ▸ SERIALIZATION STAMP (MANDATORY)
+AE/EE/WB  FILE_ID=KDT_LOCALSTORAGE_MANAGER  ROOM_ID=BASE  VERSION=V1
+UPDATED_AT=2025-12-31
+CHANGELOG:
+- V1: localStorage inventory + search/filter + preview
+- V1: export single / export all (download)
+- V1: offload = export + delete
+- V1: import JSON (items list or key:value map or {storageKey,state})
+- V1: rename / save-as / delete
+========================================================= -->
+</body>
+</html>
