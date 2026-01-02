@@ -1,0 +1,754 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>KETADATA CAMERA UN-OBSCURA</title>
+  <style>
+    :root{
+      --bg:#050505;
+      --fg:#e8e8e8;
+      --dim:#9a9a9a;
+      --grid: rgba(255,255,255,.06);
+      --panel: rgba(255,255,255,.04);
+      --panel2: rgba(255,255,255,.07);
+      --stroke: rgba(255,255,255,.12);
+      --accent: rgba(255,255,255,.75);
+      --font: 13px;
+    }
+    *{ box-sizing:border-box; }
+    html,body{ height:100%; }
+    body{
+      margin:0;
+      background:var(--bg);
+      color:var(--fg);
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: var(--font);
+      line-height: 1.25;
+      overflow:hidden;
+      user-select:none;
+    }
+    /* uniform text sizing rule: no headers, no large text */
+    .hud{
+      position:fixed;
+      inset:0;
+      pointer-events:none;
+      background:
+        linear-gradient(to right, var(--grid) 1px, transparent 1px) 0 0/48px 48px,
+        linear-gradient(to bottom, var(--grid) 1px, transparent 1px) 0 0/48px 48px;
+      opacity:.6;
+    }
+    .chrome{
+      position:fixed;
+      inset:0;
+      display:flex;
+      flex-direction:column;
+      gap:0;
+      pointer-events:none;
+    }
+    .topbar{
+      pointer-events:none;
+      display:flex;
+      justify-content:space-between;
+      padding:10px 12px;
+      opacity:.95;
+      mix-blend-mode: normal;
+    }
+    .topbar .left, .topbar .right{
+      pointer-events:none;
+      display:flex;
+      gap:12px;
+      align-items:center;
+      white-space:nowrap;
+    }
+    .tag{
+      pointer-events:none;
+      padding:2px 6px;
+      border:1px solid var(--stroke);
+      background:var(--panel);
+    }
+    .tag.dim{ color:var(--dim); }
+    .stage{
+      pointer-events:none;
+      flex:1;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      padding:10px 12px;
+    }
+    .frame{
+      pointer-events:auto;
+      position:relative;
+      width:min(1100px, calc(100vw - 24px));
+      height:min(640px, calc(100vh - 150px));
+      border:1px solid var(--stroke);
+      background: rgba(0,0,0,.35);
+      overflow:hidden;
+    }
+    canvas{
+      display:block;
+      width:100%;
+      height:100%;
+      image-rendering: pixelated;
+      background:#000;
+    }
+    .overlay{
+      pointer-events:none;
+      position:absolute;
+      inset:0;
+      border:1px solid rgba(255,255,255,.08);
+      box-shadow: inset 0 0 0 1px rgba(0,0,0,.35);
+    }
+    .caption{
+      pointer-events:none;
+      position:absolute;
+      left:10px;
+      top:10px;
+      max-width: 520px;
+      color: var(--fg);
+      opacity:.92;
+      text-shadow: 0 1px 0 rgba(0,0,0,.65);
+    }
+    .caption .line{ margin:0; }
+    .caption .dim{ color:var(--dim); }
+    .caption .mono{
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      color: var(--accent);
+    }
+    .controls{
+      pointer-events:auto;
+      position:fixed;
+      left:12px;
+      right:12px;
+      bottom:12px;
+      border:1px solid var(--stroke);
+      background: linear-gradient(to bottom, rgba(255,255,255,.06), rgba(255,255,255,.03));
+      padding:10px;
+      display:flex;
+      gap:12px;
+      align-items:center;
+      flex-wrap:wrap;
+    }
+    .controls .group{
+      display:flex;
+      gap:8px;
+      align-items:center;
+      padding:4px 8px;
+      border:1px solid rgba(255,255,255,.08);
+      background: rgba(0,0,0,.20);
+    }
+    .controls label{
+      color:var(--dim);
+      white-space:nowrap;
+    }
+    .btn{
+      font: inherit;
+      color: var(--fg);
+      background: rgba(255,255,255,.06);
+      border:1px solid var(--stroke);
+      padding:4px 8px;
+      cursor:pointer;
+    }
+    .btn:active{ transform: translateY(1px); }
+    .btn.on{
+      background: rgba(255,255,255,.12);
+      border-color: rgba(255,255,255,.18);
+    }
+    input[type="range"]{
+      width: 170px;
+      accent-color: #fff;
+    }
+    .file{
+      display:none;
+    }
+    .status{
+      color: var(--dim);
+      white-space:nowrap;
+    }
+
+    /* NULL mode */
+    body.null .topbar,
+    body.null .controls,
+    body.null .caption{
+      display:none;
+    }
+    body.null .hud{ opacity:.12; }
+    body.null .frame{
+      width:100vw;
+      height:100vh;
+      border:none;
+    }
+    body.null .stage{ padding:0; }
+    body.null .overlay{ border:none; }
+
+    /* "lights" (1-6) as continuous intensity overlay */
+    .lightwash{
+      pointer-events:none;
+      position:absolute;
+      inset:0;
+      background: radial-gradient(circle at 50% 50%, rgba(255,255,255,var(--washA)), rgba(0,0,0,0) 55%),
+                  radial-gradient(circle at 50% 50%, rgba(0,0,0,var(--washB)), rgba(0,0,0,0) 70%);
+      mix-blend-mode: screen;
+      opacity: var(--washO);
+    }
+
+    /* file stamp at bottom (mandatory) */
+    .stamp{
+      position:fixed;
+      left:12px;
+      bottom:64px;
+      pointer-events:none;
+      color:rgba(255,255,255,.28);
+      white-space:pre;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      font-size: 12px;
+      line-height: 1.2;
+    }
+    body.null .stamp{ display:none; }
+  </style>
+</head>
+<body>
+  <div class="hud"></div>
+
+  <div class="chrome">
+    <div class="topbar">
+      <div class="left">
+        <div class="tag">KETADATA CAMERA UN-OBSCURA</div>
+        <div class="tag dim" id="fileIdTag"></div>
+        <div class="tag dim" id="originTag"></div>
+      </div>
+      <div class="right">
+        <div class="tag dim">SHIFT+I invert</div>
+        <div class="tag dim">SHIFT+N NULL</div>
+        <div class="tag dim">SHIFT+F fullscreen</div>
+        <div class="tag dim">1–6 light</div>
+      </div>
+    </div>
+
+    <div class="stage">
+      <div class="frame" id="frame">
+        <canvas id="c"></canvas>
+        <div class="lightwash" id="lightwash"></div>
+        <div class="overlay"></div>
+        <div class="caption" id="caption">
+          <p class="line"><span class="mono">APERTURE</span> = FILE_ID / URL / STORAGE KEY (the constraint)</p>
+          <p class="line"><span class="mono">CHAMBER</span> = localStorage + state (the dark room)</p>
+          <p class="line"><span class="mono">PROJECTION</span> = UI rendered as literal state (no correction)</p>
+          <p class="line dim" id="captionStatus">source: synthetic world (webcam optional)</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="controls" id="controls">
+      <div class="group">
+        <button class="btn" id="btnStartCam">webcam: start</button>
+        <button class="btn" id="btnStopCam">stop</button>
+        <span class="status" id="camStatus">idle</span>
+      </div>
+
+      <div class="group">
+        <button class="btn" id="btnInvert">invert</button>
+        <label>aperture</label>
+        <input type="range" id="rngAperture" min="1" max="40" step="1" />
+        <label>exposure</label>
+        <input type="range" id="rngExposure" min="0.2" max="2.5" step="0.05" />
+      </div>
+
+      <div class="group">
+        <label>grain</label>
+        <input type="range" id="rngGrain" min="0" max="1" step="0.02" />
+        <label>vignette</label>
+        <input type="range" id="rngVignette" min="0" max="1" step="0.02" />
+      </div>
+
+      <div class="group">
+        <label>light</label>
+        <input type="range" id="rngLight" min="0" max="6" step="1" />
+        <button class="btn" id="btnNull">NULL</button>
+        <button class="btn" id="btnFullscreen">fullscreen</button>
+      </div>
+
+      <div class="group">
+        <button class="btn" id="btnExport">export</button>
+        <button class="btn" id="btnImport">import</button>
+        <input class="file" type="file" id="fileImport" accept="application/json" />
+        <span class="status" id="ioStatus"></span>
+      </div>
+    </div>
+
+    <div class="stamp" id="stamp"></div>
+  </div>
+
+  <script>
+    (function(){
+      // ---------- IDs / storage ----------
+      const FILE_ID = "KETADATA_CAMERA_UN_OBSCURA_v1";
+      const ROOM_ID = "K_ROOM";
+      const VERSION_ID = "V1";
+      const STORAGE_KEY = `KETADATA::${FILE_ID}::STATE`;
+
+      // ---------- DOM ----------
+      const elBody = document.body;
+      const elFileIdTag = document.getElementById("fileIdTag");
+      const elOriginTag = document.getElementById("originTag");
+      const elCaptionStatus = document.getElementById("captionStatus");
+      const elCamStatus = document.getElementById("camStatus");
+      const elIOStatus = document.getElementById("ioStatus");
+
+      const btnStartCam = document.getElementById("btnStartCam");
+      const btnStopCam  = document.getElementById("btnStopCam");
+      const btnInvert   = document.getElementById("btnInvert");
+      const btnNull     = document.getElementById("btnNull");
+      const btnFullscreen = document.getElementById("btnFullscreen");
+      const btnExport   = document.getElementById("btnExport");
+      const btnImport   = document.getElementById("btnImport");
+      const fileImport  = document.getElementById("fileImport");
+
+      const rngAperture = document.getElementById("rngAperture");
+      const rngExposure = document.getElementById("rngExposure");
+      const rngGrain    = document.getElementById("rngGrain");
+      const rngVignette = document.getElementById("rngVignette");
+      const rngLight    = document.getElementById("rngLight");
+
+      const canvas = document.getElementById("c");
+      const ctx = canvas.getContext("2d", { alpha: false });
+      const lightwash = document.getElementById("lightwash");
+
+      elFileIdTag.textContent = `FILE_ID ${FILE_ID}`;
+      elOriginTag.textContent = `ORIGIN ${location.origin}`;
+
+      // ---------- state (literal UI snapshot) ----------
+      const defaultState = () => ({
+        meta: {
+          FILE_ID,
+          ROOM_ID,
+          VERSION_ID,
+          updatedAt: new Date().toISOString()
+        },
+        flags: {
+          invert: false,
+          nullMode: false,
+          fullscreen: false
+        },
+        optics: {
+          aperture: 14,     // smaller = sharper; we map to blur/pixelate
+          exposure: 1.10,
+          grain: 0.22,
+          vignette: 0.60,
+          light: 2          // 0..6
+        },
+        source: {
+          mode: "synthetic", // "synthetic" | "webcam"
+          camOn: false
+        }
+      });
+
+      function loadState(){
+        try{
+          const raw = localStorage.getItem(STORAGE_KEY);
+          if(!raw) return defaultState();
+          const parsed = JSON.parse(raw);
+          // deep fill (avoid dead UI)
+          const d = defaultState();
+          return {
+            meta: { ...d.meta, ...(parsed.meta||{}), updatedAt: new Date().toISOString() },
+            flags: { ...d.flags, ...(parsed.flags||{}) },
+            optics:{ ...d.optics, ...(parsed.optics||{}) },
+            source:{ ...d.source, ...(parsed.source||{}) }
+          };
+        }catch(e){
+          return defaultState();
+        }
+      }
+      function saveState(){
+        state.meta.updatedAt = new Date().toISOString();
+        try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+        catch(e){ /* no-op */ }
+      }
+
+      let state = loadState();
+
+      // ---------- UI bind ----------
+      function applyStateToUI(){
+        rngAperture.value = String(state.optics.aperture);
+        rngExposure.value = String(state.optics.exposure);
+        rngGrain.value = String(state.optics.grain);
+        rngVignette.value = String(state.optics.vignette);
+        rngLight.value = String(state.optics.light);
+
+        btnInvert.classList.toggle("on", !!state.flags.invert);
+        btnNull.classList.toggle("on", !!state.flags.nullMode);
+
+        elBody.classList.toggle("null", !!state.flags.nullMode);
+
+        // light wash
+        const L = Math.max(0, Math.min(6, state.optics.light|0));
+        // subtle continuous mapping
+        const washO = L === 0 ? 0 : Math.min(0.65, 0.10 + (L * 0.08));
+        const washA = Math.min(0.35, 0.06 + (L * 0.04));
+        const washB = Math.min(0.40, 0.10 + (L * 0.05));
+        lightwash.style.setProperty("--washO", washO.toFixed(3));
+        lightwash.style.setProperty("--washA", washA.toFixed(3));
+        lightwash.style.setProperty("--washB", washB.toFixed(3));
+
+        // caption status
+        elCaptionStatus.textContent = `source: ${state.source.mode}${state.source.camOn ? " (live)" : ""}`;
+
+        // stamp
+        document.getElementById("stamp").textContent =
+`AE/EE/WB STAMP
+AE: CAMERA_UN_OBSCURA
+EE: OPTICS_STATE + STORAGE_KEY
+WB: HOTKEYS + EXPORT/IMPORT
+FILE_ID: ${FILE_ID}
+ROOM_ID: ${ROOM_ID}
+VERSION: ${VERSION_ID}
+UPDATED_AT: ${state.meta.updatedAt}
+CHANGELOG: init`;
+      }
+
+      function mutate(fn){
+        fn();
+        saveState();
+        applyStateToUI();
+      }
+
+      // ---------- export / import (actual file behavior) ----------
+      function downloadJSON(filename, obj){
+        const blob = new Blob([JSON.stringify(obj, null, 2)], {type:"application/json"});
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+      }
+
+      btnExport.addEventListener("click", () => {
+        const label = `${FILE_ID}__${new Date().toISOString().replace(/[:.]/g,"-")}.json`;
+        downloadJSON(label, state);
+        elIOStatus.textContent = "exported";
+        setTimeout(()=> elIOStatus.textContent="", 1200);
+      });
+
+      btnImport.addEventListener("click", () => fileImport.click());
+      fileImport.addEventListener("change", async (e) => {
+        const f = e.target.files && e.target.files[0];
+        if(!f) return;
+        try{
+          const txt = await f.text();
+          const incoming = JSON.parse(txt);
+          // accept only compatible shapes; deep fill default
+          const d = defaultState();
+          state = {
+            meta: { ...d.meta, ...(incoming.meta||{}), updatedAt: new Date().toISOString() },
+            flags:{ ...d.flags, ...(incoming.flags||{}) },
+            optics:{ ...d.optics, ...(incoming.optics||{}) },
+            source:{ ...d.source, ...(incoming.source||{}) }
+          };
+          saveState();
+          // source switching handled later
+          applyStateToUI();
+          elIOStatus.textContent = "imported";
+          setTimeout(()=> elIOStatus.textContent="", 1200);
+        }catch(err){
+          elIOStatus.textContent = "import failed";
+          setTimeout(()=> elIOStatus.textContent="", 1600);
+        }finally{
+          fileImport.value = "";
+        }
+      });
+
+      // ---------- webcam + synthetic world ----------
+      const video = document.createElement("video");
+      video.playsInline = true;
+      video.muted = true;
+
+      let stream = null;
+
+      async function startCam(){
+        if(stream) return;
+        try{
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: "environment" },
+            audio: false
+          });
+          video.srcObject = stream;
+          await video.play();
+          mutate(() => {
+            state.source.mode = "webcam";
+            state.source.camOn = true;
+          });
+          elCamStatus.textContent = "live";
+        }catch(e){
+          stream = null;
+          mutate(() => {
+            state.source.mode = "synthetic";
+            state.source.camOn = false;
+          });
+          elCamStatus.textContent = "denied";
+        }
+      }
+
+      function stopCam(){
+        if(stream){
+          stream.getTracks().forEach(t => t.stop());
+          stream = null;
+        }
+        video.pause();
+        video.srcObject = null;
+        mutate(() => {
+          state.source.mode = "synthetic";
+          state.source.camOn = false;
+        });
+        elCamStatus.textContent = "idle";
+      }
+
+      btnStartCam.addEventListener("click", startCam);
+      btnStopCam.addEventListener("click", stopCam);
+
+      // ---------- controls ----------
+      btnInvert.addEventListener("click", () => mutate(() => { state.flags.invert = !state.flags.invert; }));
+      btnNull.addEventListener("click", () => mutate(() => { state.flags.nullMode = !state.flags.nullMode; }));
+
+      btnFullscreen.addEventListener("click", () => {
+        if(!document.fullscreenElement){
+          document.documentElement.requestFullscreen().catch(()=>{});
+          mutate(() => { state.flags.fullscreen = true; });
+        }else{
+          document.exitFullscreen().catch(()=>{});
+          mutate(() => { state.flags.fullscreen = false; });
+        }
+      });
+
+      function bindRange(el, keyPath){
+        el.addEventListener("input", () => mutate(() => {
+          const v = Number(el.value);
+          if(keyPath === "optics.aperture") state.optics.aperture = v|0;
+          if(keyPath === "optics.exposure") state.optics.exposure = v;
+          if(keyPath === "optics.grain") state.optics.grain = v;
+          if(keyPath === "optics.vignette") state.optics.vignette = v;
+          if(keyPath === "optics.light") state.optics.light = v|0;
+        }));
+      }
+      bindRange(rngAperture, "optics.aperture");
+      bindRange(rngExposure, "optics.exposure");
+      bindRange(rngGrain, "optics.grain");
+      bindRange(rngVignette, "optics.vignette");
+      bindRange(rngLight, "optics.light");
+
+      // ---------- hotkeys (system universals) ----------
+      window.addEventListener("keydown", (e) => {
+        // do not steal typing focus from inputs
+        const t = e.target;
+        const typing = t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable);
+        if(typing) return;
+
+        if(e.shiftKey && e.key.toLowerCase() === "i"){
+          e.preventDefault();
+          mutate(() => { state.flags.invert = !state.flags.invert; });
+        }
+        if(e.shiftKey && e.key.toLowerCase() === "n"){
+          e.preventDefault();
+          mutate(() => { state.flags.nullMode = !state.flags.nullMode; });
+        }
+        if(e.shiftKey && e.key.toLowerCase() === "f"){
+          e.preventDefault();
+          btnFullscreen.click();
+        }
+        // lights 1–6, 0 turns off
+        if(!e.shiftKey){
+          const k = e.key;
+          if(k >= "0" && k <= "6"){
+            mutate(() => { state.optics.light = parseInt(k,10); });
+          }
+        }
+      });
+
+      // ---------- render pipeline (pinhole-ish) ----------
+      const back = document.createElement("canvas");
+      const bctx = back.getContext("2d", { alpha:false });
+
+      let lastW=0, lastH=0;
+
+      function resize(){
+        const r = canvas.getBoundingClientRect();
+        const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+        const w = Math.max(1, Math.floor(r.width * dpr));
+        const h = Math.max(1, Math.floor(r.height * dpr));
+        if(w === lastW && h === lastH) return;
+        lastW = w; lastH = h;
+        canvas.width = w; canvas.height = h;
+        back.width = w; back.height = h;
+      }
+      window.addEventListener("resize", resize);
+
+      function drawSynthetic(t){
+        // a moving "world" that still obeys projection rules
+        const w = back.width, h = back.height;
+        bctx.fillStyle = "#000";
+        bctx.fillRect(0,0,w,h);
+
+        // horizon bands + drifting lattice
+        const time = t * 0.001;
+        for(let y=0; y<h; y+=6){
+          const a = 0.08 + 0.06*Math.sin(time + y*0.01);
+          bctx.fillStyle = `rgba(255,255,255,${a})`;
+          bctx.fillRect(0,y,w,1);
+        }
+        bctx.save();
+        bctx.translate(w/2,h/2);
+        bctx.rotate(time*0.12);
+        bctx.translate(-w/2,-h/2);
+        bctx.strokeStyle = "rgba(255,255,255,.10)";
+        for(let x=0; x<w; x+=44){
+          bctx.beginPath(); bctx.moveTo(x,0); bctx.lineTo(x,h); bctx.stroke();
+        }
+        for(let y=0; y<h; y+=44){
+          bctx.beginPath(); bctx.moveTo(0,y); bctx.lineTo(w,y); bctx.stroke();
+        }
+        bctx.restore();
+
+        // a few “objects”
+        bctx.strokeStyle = "rgba(255,255,255,.55)";
+        bctx.lineWidth = 1;
+        for(let i=0;i<6;i++){
+          const px = (w*(0.15 + 0.14*i)) + Math.sin(time*0.7 + i)*22;
+          const py = (h*(0.35 + 0.08*i)) + Math.cos(time*0.9 + i)*18;
+          bctx.beginPath();
+          bctx.arc(px, py, 22 + 8*Math.sin(time+i), 0, Math.PI*2);
+          bctx.stroke();
+        }
+      }
+
+      function drawSource(t){
+        if(state.source.mode === "webcam" && state.source.camOn && video.readyState >= 2){
+          const w = back.width, h = back.height;
+          // fill camera crop
+          const vw = video.videoWidth || 1280;
+          const vh = video.videoHeight || 720;
+          const s = Math.max(w/vw, h/vh);
+          const dw = vw*s, dh = vh*s;
+          const dx = (w - dw)/2, dy = (h - dh)/2;
+          bctx.drawImage(video, dx, dy, dw, dh);
+        }else{
+          drawSynthetic(t);
+        }
+      }
+
+      function render(t){
+        resize();
+        const w = canvas.width, h = canvas.height;
+
+        // 1) draw source into back buffer
+        drawSource(t);
+
+        // 2) "aperture": pixelate + blur (pinhole tradeoff)
+        const ap = Math.max(1, Math.min(40, state.optics.aperture|0));
+        // pixel scale: larger aperture value -> less sharp; we invert for effect
+        const scale = Math.max(0.06, Math.min(0.35, (ap / 40) * 0.35));
+        const pw = Math.max(2, Math.floor(w * scale));
+        const ph = Math.max(2, Math.floor(h * scale));
+
+        ctx.imageSmoothingEnabled = false;
+        ctx.globalCompositeOperation = "source-over";
+        ctx.fillStyle = "#000";
+        ctx.fillRect(0,0,w,h);
+
+        // downsample then upsample
+        ctx.drawImage(back, 0, 0, pw, ph);
+        // capture the tiny version
+        const tiny = ctx.getImageData(0,0,pw,ph);
+        // put back scaled up
+        ctx.putImageData(tiny, 0, 0);
+        ctx.drawImage(canvas, 0, 0, pw, ph, 0, 0, w, h);
+
+        // blur using cheap multi-draw
+        ctx.imageSmoothingEnabled = true;
+        const blurPasses = Math.max(0, Math.min(10, Math.floor((ap-1)/4)));
+        if(blurPasses > 0){
+          ctx.globalAlpha = 0.18;
+          for(let i=0;i<blurPasses;i++){
+            const o = (i+1)*0.6;
+            ctx.drawImage(canvas, -o, 0);
+            ctx.drawImage(canvas, o, 0);
+            ctx.drawImage(canvas, 0, -o);
+            ctx.drawImage(canvas, 0, o);
+          }
+          ctx.globalAlpha = 1;
+        }
+
+        // 3) exposure + invert
+        const exp = state.optics.exposure;
+        const inv = !!state.flags.invert;
+
+        const img = ctx.getImageData(0,0,w,h);
+        const data = img.data;
+
+        // 4) vignette + grain
+        const vg = state.optics.vignette;
+        const gr = state.optics.grain;
+
+        const cx = w/2, cy = h/2;
+        const maxD = Math.sqrt(cx*cx + cy*cy);
+
+        for(let i=0;i<data.length;i+=4){
+          let r = data[i], g = data[i+1], b = data[i+2];
+
+          // exposure
+          r = Math.min(255, r * exp);
+          g = Math.min(255, g * exp);
+          b = Math.min(255, b * exp);
+
+          // invert
+          if(inv){
+            r = 255 - r; g = 255 - g; b = 255 - b;
+          }
+
+          // vignette (radial darkening)
+          if(vg > 0){
+            const p = i/4;
+            const x = p % w;
+            const y = (p / w) | 0;
+            const d = Math.sqrt((x-cx)*(x-cx) + (y-cy)*(y-cy)) / maxD;
+            const v = 1 - (vg * Math.pow(d, 1.8));
+            r *= v; g *= v; b *= v;
+          }
+
+          // grain
+          if(gr > 0){
+            const n = (Math.random() - 0.5) * 255 * gr * 0.22;
+            r = Math.max(0, Math.min(255, r + n));
+            g = Math.max(0, Math.min(255, g + n));
+            b = Math.max(0, Math.min(255, b + n));
+          }
+
+          data[i]   = r;
+          data[i+1] = g;
+          data[i+2] = b;
+          data[i+3] = 255;
+        }
+        ctx.putImageData(img, 0, 0);
+
+        requestAnimationFrame(render);
+      }
+
+      // ---------- init ----------
+      applyStateToUI();
+
+      // restore webcam if state says so
+      if(state.source.mode === "webcam" && state.source.camOn){
+        startCam();
+      }
+
+      requestAnimationFrame(render);
+
+      // stop camera on unload
+      window.addEventListener("beforeunload", () => { try{ stopCam(); }catch(e){} });
+
+    })();
+  </script>
+</body>
+</html>
