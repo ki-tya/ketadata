@@ -1,0 +1,1206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+  <title>KETADATA // LIBRARY (VAULT UI + WORKING BROWSE)</title>
+
+  <style>
+    :root{
+      --bg:#000;
+      --fg:#fff;
+
+      --inkA: rgba(255,255,255,.86);
+      --inkB: rgba(255,255,255,.62);
+      --inkC: rgba(255,255,255,.42);
+
+      --hair: rgba(255,255,255,.14);
+      --hair2: rgba(255,255,255,.09);
+      --panel: rgba(0,0,0,.30);
+      --panel2: rgba(0,0,0,.42);
+
+      --grid: rgba(255,255,255,.06);
+
+      --ui: Arial, Helvetica, sans-serif;
+
+      --pad: 14px;
+      --topH: 38px;
+      --botH: 26px;
+
+      --colsLeft: 62vw;
+      --colsRight: 38vw;
+
+      --noteW: 420px;
+      --noteH: 220px;
+
+      --accent:#fff; /* no red */
+    }
+
+    *{ box-sizing:border-box; }
+    html,body{ height:100%; }
+    body{
+      margin:0;
+      background:var(--bg);
+      color:var(--fg);
+      font-family:var(--ui);
+      overflow:hidden;
+    }
+
+    /* AE: field + grid */
+    #field{
+      position:fixed; inset:0;
+      z-index:0;
+      background:
+        radial-gradient(1100px 680px at 22% 18%, rgba(255,255,255,.05), transparent 70%),
+        radial-gradient(1100px 680px at 78% 72%, rgba(255,255,255,.05), transparent 72%),
+        linear-gradient(180deg, #000, #030303 55%, #000);
+      filter: saturate(1);
+    }
+    #field::after{
+      content:"";
+      position:absolute; inset:0;
+      background:
+        linear-gradient(var(--grid) 1px, transparent 1px),
+        linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+      background-size: 52px 52px;
+      opacity:.95;
+      pointer-events:none;
+      mix-blend-mode: overlay;
+    }
+
+    /* AE: lights behind the interface */
+    #lights{
+      position:fixed; inset:0;
+      z-index:1;
+      pointer-events:none;
+      opacity:0;
+    }
+    #lights.on{ opacity:1; }
+    #lights::before{
+      content:"";
+      position:absolute; inset:-20%;
+      background: radial-gradient(closest-side at 50% 50%, rgba(255,255,255,.16), transparent 70%);
+      transform: rotate(8deg);
+      opacity:.55;
+    }
+    @keyframes strobe1 { 0%,49%{opacity:0} 50%,100%{opacity:1} }
+    @keyframes strobe2 { 0%,24%{opacity:0} 25%,49%{opacity:1} 50%,74%{opacity:0} 75%,100%{opacity:1} }
+    @keyframes strobe3 { 0%,14%{opacity:0} 15%,29%{opacity:1} 30%,44%{opacity:0} 45%,59%{opacity:1} 60%,74%{opacity:0} 75%,100%{opacity:1} }
+    @keyframes strobe4 { 0%,9%{opacity:0} 10%,19%{opacity:1} 20%,29%{opacity:0} 30%,39%{opacity:1} 40%,49%{opacity:0} 50%,59%{opacity:1} 60%,69%{opacity:0} 70%,79%{opacity:1} 80%,89%{opacity:0} 90%,100%{opacity:1} }
+    @keyframes strobe5 { 0%,7%{opacity:0} 8%,15%{opacity:1} 16%,23%{opacity:0} 24%,31%{opacity:1} 32%,39%{opacity:0} 40%,47%{opacity:1} 48%,55%{opacity:0} 56%,63%{opacity:1} 64%,71%{opacity:0} 72%,79%{opacity:1} 80%,87%{opacity:0} 88%,95%{opacity:1} 96%,100%{opacity:0} }
+    @keyframes strobe6 { 0%,3%{opacity:0} 4%,7%{opacity:1} 8%,11%{opacity:0} 12%,15%{opacity:1} 16%,19%{opacity:0} 20%,23%{opacity:1} 24%,27%{opacity:0} 28%,31%{opacity:1} 32%,35%{opacity:0} 36%,39%{opacity:1} 40%,43%{opacity:0} 44%,47%{opacity:1} 48%,51%{opacity:0} 52%,55%{opacity:1} 56%,59%{opacity:0} 60%,63%{opacity:1} 64%,67%{opacity:0} 68%,71%{opacity:1} 72%,75%{opacity:0} 76%,79%{opacity:1} 80%,83%{opacity:0} 84%,87%{opacity:1} 88%,91%{opacity:0} 92%,95%{opacity:1} 96%,100%{opacity:0} }
+
+    /* WB: system bars */
+    .topbar{
+      position:fixed; left:0; right:0; top:0;
+      z-index:40;
+      height:var(--topH);
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      padding:0 12px;
+      border-bottom:1px solid var(--hair);
+      background: rgba(0,0,0,.26);
+      backdrop-filter: blur(6px);
+      user-select:none;
+    }
+    .brandMini{
+      display:flex; align-items:center; gap:10px;
+      font-size:11px;
+      letter-spacing:.18em;
+      text-transform:uppercase;
+      color: rgba(255,255,255,.85);
+      min-width:0;
+    }
+    .brandMini .tiny{
+      display:inline-block;width:10px;height:10px;border:1px solid #fff;
+      flex:0 0 auto;
+    }
+    .brandMini .label{
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+
+    /* Global KETA_NOTE icon */
+    .noteIcon{
+      width:12px; height:12px;
+      display:inline-block;
+      border:1px solid #fff;
+      background: #fff; /* collapsed = filled */
+      cursor:pointer;
+    }
+    .noteIcon.outlined{ background: transparent; } /* open = outline only */
+
+    .topRight{ display:flex; align-items:center; gap:10px; }
+    .btn{
+      font-family:var(--ui);
+      font-size:11px;
+      letter-spacing:.18em;
+      text-transform:uppercase;
+      color: rgba(255,255,255,.82);
+      background: rgba(0,0,0,.22);
+      border:1px solid var(--hair);
+      padding:6px 10px;
+      cursor:pointer;
+    }
+    .btn:hover{ border-color: rgba(255,255,255,.28); color:#fff; }
+    .btn:active{ transform: translateY(1px); }
+
+    .footer{
+      position:fixed; left:0; right:0; bottom:0;
+      z-index:40;
+      height:var(--botH);
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      padding:0 10px;
+      border-top:1px solid var(--hair);
+      background: rgba(0,0,0,.26);
+      backdrop-filter: blur(6px);
+      font-size:10px;
+      letter-spacing:.14em;
+      text-transform:uppercase;
+      color: rgba(255,255,255,.70);
+      user-select:none;
+      gap:10px;
+    }
+    .footer b{ color:#fff; font-weight:900; }
+    .muted{ color: rgba(255,255,255,.55); }
+
+    /* layout */
+    .wrap{
+      position:fixed; inset:0;
+      z-index:10;
+      padding-top: var(--topH);
+      padding-bottom: var(--botH);
+    }
+    .grid{
+      height:100%;
+      display:grid;
+      grid-template-columns: var(--colsLeft) var(--colsRight);
+      gap: 0;
+    }
+
+    /* left: search + tag filters + cards */
+    .left{
+      border-right:1px solid var(--hair2);
+      display:flex;
+      flex-direction:column;
+      min-width: 420px;
+    }
+    .searchBlock{
+      padding: var(--pad);
+      border-bottom:1px solid var(--hair2);
+      background: rgba(0,0,0,.18);
+    }
+    .searchRow{
+      display:flex;
+      gap:10px;
+      align-items:center;
+    }
+    .searchRow input{
+      width:100%;
+      background: rgba(0,0,0,.40);
+      border:1px solid var(--hair);
+      color:#fff;
+      font-family:var(--ui);
+      font-size:12px;
+      letter-spacing:.10em;
+      padding:10px 10px;
+      outline:none;
+    }
+    .searchRow input:focus{ border-color: rgba(255,255,255,.35); }
+
+    .subRow{
+      margin-top:10px;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      font-size:10px;
+      letter-spacing:.18em;
+      text-transform:uppercase;
+      color: rgba(255,255,255,.62);
+    }
+    .subRow .count{
+      color: rgba(255,255,255,.78);
+      font-weight:900;
+    }
+    .subRow .toggles{
+      display:flex;
+      gap:8px;
+      align-items:center;
+    }
+    .chipBtn{
+      padding:5px 8px;
+      border:1px solid var(--hair);
+      background: rgba(0,0,0,.22);
+      color: rgba(255,255,255,.75);
+      cursor:pointer;
+      user-select:none;
+    }
+    .chipBtn:hover{ border-color: rgba(255,255,255,.28); color:#fff; }
+    .chipBtn.active{
+      background:#fff;
+      color:#000;
+      border-color:#fff;
+    }
+
+    .tagRow{
+      margin-top:10px;
+      display:flex;
+      flex-wrap:wrap;
+      gap:8px;
+    }
+    .tag{
+      padding:6px 10px;
+      border:1px solid var(--hair);
+      background: rgba(0,0,0,.30);
+      color: rgba(255,255,255,.70);
+      font-size:10px;
+      letter-spacing:.18em;
+      text-transform:uppercase;
+      cursor:pointer;
+      user-select:none;
+      display:flex;
+      align-items:center;
+      gap:8px;
+    }
+    .tag:hover{ border-color: rgba(255,255,255,.28); color:#fff; }
+    .tag.active{
+      background:#fff;
+      color:#000;
+      border-color:#fff;
+    }
+    .tag .n{
+      opacity:.75;
+      font-weight:900;
+      letter-spacing:.12em;
+    }
+
+    .list{
+      flex:1;
+      overflow:auto;
+      padding: var(--pad);
+    }
+    .cards{
+      display:grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 12px;
+    }
+    .card{
+      border:1px solid var(--hair);
+      background: rgba(0,0,0,.28);
+      padding: 12px 12px 10px 12px;
+      cursor:pointer;
+      transition: transform .10s linear, border-color .10s linear;
+    }
+    .card:hover{
+      border-color: rgba(255,255,255,.30);
+      transform: translateY(-1px);
+    }
+    .card.selected{
+      border-color:#fff;
+      background: rgba(255,255,255,.06);
+    }
+    .title{
+      font-size: 12.5px;
+      letter-spacing:.06em;
+      font-weight:900;
+      text-transform:uppercase;
+      color: rgba(255,255,255,.92);
+      line-height:1.35;
+    }
+    .meta{
+      margin-top:8px;
+      font-size:11px;
+      letter-spacing:.08em;
+      color: rgba(255,255,255,.56);
+      line-height:1.45;
+    }
+    .tagMini{
+      margin-top:10px;
+      display:flex;
+      flex-wrap:wrap;
+      gap:6px;
+    }
+    .pill{
+      border:1px solid var(--hair2);
+      padding:3px 7px;
+      font-size:9px;
+      letter-spacing:.16em;
+      text-transform:uppercase;
+      color: rgba(255,255,255,.55);
+      background: rgba(0,0,0,.26);
+    }
+
+    /* right: document overview */
+    .right{
+      display:flex;
+      flex-direction:column;
+      min-width: 360px;
+    }
+    .docHead{
+      padding: var(--pad);
+      border-bottom:1px solid var(--hair2);
+      background: rgba(0,0,0,.18);
+      display:flex;
+      align-items:flex-start;
+      justify-content:space-between;
+      gap: 12px;
+    }
+    .docTitle{
+      font-weight:900;
+      text-transform:uppercase;
+      letter-spacing:.14em;
+      font-size: 12px;
+      line-height:1.25;
+      color: rgba(255,255,255,.92);
+    }
+    .docSub{
+      margin-top:8px;
+      font-size:11px;
+      letter-spacing:.08em;
+      color: rgba(255,255,255,.58);
+      line-height:1.45;
+      max-width: 520px;
+    }
+    .docBody{
+      flex:1;
+      overflow:auto;
+      padding: var(--pad);
+    }
+    .block{
+      border:1px solid var(--hair);
+      background: rgba(0,0,0,.28);
+      padding: 12px;
+      margin-bottom: 12px;
+    }
+    .block h3{
+      margin:0 0 10px 0;
+      font-size:10px;
+      letter-spacing:.22em;
+      text-transform:uppercase;
+      color: rgba(255,255,255,.78);
+      font-weight:900;
+      padding-bottom:8px;
+      border-bottom:1px solid var(--hair2);
+    }
+    .block p{
+      margin:0;
+      font-size:12px;
+      color: rgba(255,255,255,.62);
+      line-height:1.55;
+      letter-spacing:.02em;
+      white-space:pre-wrap;
+    }
+    .kv{
+      display:grid;
+      grid-template-columns: 140px 1fr;
+      gap: 8px 12px;
+      font-size: 11px;
+      letter-spacing:.08em;
+      color: rgba(255,255,255,.62);
+    }
+    .kv .k{
+      color: rgba(255,255,255,.50);
+      text-transform:uppercase;
+      letter-spacing:.18em;
+      font-size:10px;
+    }
+    .linkRow{
+      display:flex;
+      gap:10px;
+      align-items:center;
+      flex-wrap:wrap;
+      margin-top: 10px;
+    }
+    .mono{
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      font-size:11px;
+      letter-spacing:.06em;
+      color: rgba(255,255,255,.70);
+      word-break:break-all;
+    }
+
+    .emptyState{
+      border:1px dashed var(--hair);
+      background: rgba(0,0,0,.22);
+      padding: 14px;
+      color: rgba(255,255,255,.60);
+      letter-spacing:.10em;
+      font-size:12px;
+      line-height:1.55;
+      text-transform:uppercase;
+    }
+
+    /* KETA_NOTE panel */
+    #note{
+      position:fixed;
+      top: 64px;
+      left: 16px;
+      z-index:45;
+      width: min(var(--noteW), 92vw);
+      height: var(--noteH);
+      border:1px solid var(--hair);
+      background: rgba(0,0,0,.34);
+      backdrop-filter: blur(8px);
+      display:none;
+      box-shadow: 0 22px 80px rgba(0,0,0,.55);
+    }
+    #note.open{ display:block; }
+    #noteHead{
+      height: 34px;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      padding: 0 10px;
+      border-bottom:1px solid var(--hair2);
+      cursor:move;
+      user-select:none;
+    }
+    #noteHead .label{
+      font-size:11px;
+      letter-spacing:.22em;
+      text-transform:uppercase;
+      font-weight:900;
+      color: rgba(255,255,255,.86);
+    }
+    .miniBtn{
+      width: 26px;
+      height: 22px;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      border:1px solid var(--hair);
+      background: rgba(0,0,0,.22);
+      color: rgba(255,255,255,.85);
+      cursor:pointer;
+      font-weight:900;
+      user-select:none;
+    }
+    .miniBtn:hover{ border-color: rgba(255,255,255,.28); color:#fff; }
+    #noteArea{
+      width:100%;
+      height: calc(100% - 34px);
+      border:0;
+      resize:none;
+      outline:none;
+      padding: 10px 10px;
+      background: transparent;
+      color:#fff;
+      font-family: var(--ui);
+      font-size: 12px;
+      letter-spacing:.06em;
+      line-height:1.45;
+    }
+
+    /* null mode: hide chrome + note only */
+    body.null .topbar,
+    body.null .footer,
+    body.null #note{
+      display:none !important;
+    }
+
+    /* invert */
+    body.invert{ filter: invert(1) hue-rotate(180deg); }
+
+    /* scrollbars minimal */
+    .list::-webkit-scrollbar,
+    .docBody::-webkit-scrollbar{ width: 10px; }
+    .list::-webkit-scrollbar-thumb,
+    .docBody::-webkit-scrollbar-thumb{
+      background: rgba(255,255,255,.10);
+      border: 1px solid rgba(255,255,255,.10);
+    }
+  </style>
+</head>
+
+<body>
+  <div id="field" aria-hidden="true"></div>
+  <div id="lights" aria-hidden="true"></div>
+
+  <div class="topbar" id="topbar">
+    <div class="brandMini">
+      <span class="tiny"></span>
+      <span class="label">KETADATA // LIBRARY</span>
+    </div>
+    <div class="topRight">
+      <button class="btn" id="goSystem">SYSTEM</button>
+      <span class="noteIcon" id="ketaNoteIcon" title="KETA_NOTE" aria-label="KETA_NOTE"></span>
+      <button class="btn" id="btnCopyPrompt">COPY PROMPT</button>
+      <button class="btn" id="goHome">HOME</button>
+      <button class="btn" id="goLanding">LAND</button>
+    </div>
+  </div>
+
+  <div class="wrap">
+    <div class="grid">
+      <div class="left">
+        <div class="searchBlock">
+          <div class="searchRow">
+            <input id="searchInput" type="text" spellcheck="false" autocomplete="off"
+              placeholder="SEARCH: TITLE / AUTHOR / YEAR / TAG" />
+          </div>
+
+          <div class="subRow">
+            <div>
+              RESULTS: <span class="count" id="countLabel">0</span>
+              <span style="opacity:.55;">/</span>
+              <span class="count" id="totalLabel">0</span>
+            </div>
+            <div class="toggles">
+              <div class="chipBtn" id="sortBtn" title="toggle sort">
+                SORT: <span id="sortLabel">TITLE</span>
+              </div>
+              <div class="chipBtn" id="azBtn" title="toggle A–Z jump">
+                A–Z: <span id="azLabel">OFF</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="tagRow" id="tagRow"></div>
+        </div>
+
+        <div class="list" id="listScroll">
+          <div class="cards" id="cards"></div>
+          <div class="emptyState" id="noResults" style="display:none; margin-top:12px;">
+            NO MATCHES. CLEAR FILTERS OR BROADEN SEARCH.
+          </div>
+        </div>
+      </div>
+
+      <div class="right">
+        <div class="docHead">
+          <div>
+            <div class="docTitle" id="docTitle">NO SELECTION</div>
+            <div class="docSub" id="docSub">SELECT A CARD TO OPEN DETAILS. FILTERING WILL NOT BREAK CONTEXT (ID-BASED).</div>
+          </div>
+          <div style="display:flex; gap:10px; align-items:center;">
+            <button class="btn" id="btnCopyJSON">COPY JSON</button>
+            <button class="btn" id="clearSelection">CLEAR</button>
+          </div>
+        </div>
+
+        <div class="docBody" id="docBody">
+          <div class="emptyState">
+            THIS MERGE KEEPS VAULT UI AND RESTORES WORKING BROWSE/SEARCH + CORRECT DETAIL RENDERING.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="note" aria-label="KETA_NOTE">
+    <div id="noteHead">
+      <div class="label">KETA_NOTE</div>
+      <div class="miniBtn" id="noteCollapse" title="collapse">–</div>
+    </div>
+    <textarea id="noteArea" placeholder="KETA_NOTE (GLOBAL)"></textarea>
+  </div>
+
+  <div class="footer" id="footer">
+    <div>
+      <span class="muted">NULL:</span> <b id="nullStatus">OFF</b> ·
+      <span class="muted">INVERT:</span> <b id="invStatus">OFF</b> ·
+      <span class="muted">LIGHT:</span> <b id="lightStatus">0</b>
+    </div>
+    <div>
+      <span class="muted">MODE:</span> <b>INDEX + DETAIL</b>
+    </div>
+  </div>
+
+  <script>
+    /* =========================================================
+       CONTINUITY LINKS (from your vault)
+    ========================================================= */
+    const SHELL_HOME_URL = "system.html";
+    const LANDING_URL = "index11.html";
+
+    /* =========================================================
+       GLOBAL KETA_NOTE SYNC (vault approach)
+    ========================================================= */
+    const NOTE_KEYS = [
+      "KETADATA_GLOBAL_KETA_NOTE_V1",
+      "KETADATA_GLOBAL_KETA_NOTE",
+      "KETA_NOTE",
+      "SHELL8_KETA_NOTE",
+      "KETADATA_SHELL8_KETA_NOTE"
+    ];
+    function readGlobalNote(){
+      for(const k of NOTE_KEYS){
+        const v = localStorage.getItem(k);
+        if(v && v.trim().length) return v;
+      }
+      return "";
+    }
+    function writeGlobalNote(v){
+      for(const k of NOTE_KEYS){
+        localStorage.setItem(k, v);
+      }
+    }
+
+    /* =========================================================
+       DATA
+       - Keep the library list (ugly-but-functional / vault) but fix:
+         1) stable ids (prevents "detail not aligned" under filtering)
+         2) detail panel renders real content
+         3) tag counts and search are consistent
+    ========================================================= */
+    const rawLibrary = [
+      // 2024 READING LIST
+      { title: "Vile Bodies", author: "Evelyn Waugh", year: "1930", tags: ["current-reading", "priority", "fiction"] },
+      { title: "Film Theory and Criticism", author: "Leo Braudy, Marshall Cohen", year: "2009", tags: ["current-reading", "priority", "film-studies"] },
+      { title: "A Genealogy of Nihilism", author: "Michael Allen Gillespie", year: "2002", tags: ["current-reading", "priority", "philosophy"] },
+      { title: "Phenomenology of Spirit", author: "G.W.F. Hegel", year: "2018", tags: ["current-reading", "priority", "philosophy"] },
+      { title: "Trainspotting", author: "Irvine Welsh", year: "1993", tags: ["current-reading", "priority", "fiction"] },
+      { title: "Über Coca", author: "Sigmund Freud", year: "1984", tags: ["current-reading", "priority", "drugs"] },
+      { title: "Writing on Drugs", author: "Sadie Plant", year: "1999", tags: ["current-reading", "priority", "drugs"] },
+
+      // AESTHETICS (sample continues; paste/extend your full list here if needed)
+      { title: "Double Standards of Aesthetic Capital", author: "Outi Sarpila", year: "2020", tags: ["theory", "visual-culture", "aesthetics"] },
+      { title: "Sappho and Aesthetic Relativity", author: "Ernst Zellner", year: "2007", tags: ["theory", "aesthetics"] },
+      { title: "The Hegemonic Aesthetic", author: "Filiault & Drummond", year: "2007", tags: ["theory", "aesthetics"] },
+      { title: "Aesthetic Injustice", author: "Gustavo Dalaqua", year: "2020", tags: ["theory", "aesthetics"] },
+
+      // FICTION (sample)
+      { title: "Naked Lunch", author: "William S. Burroughs", year: "1959", tags: ["fiction", "transgressive"] },
+      { title: "The Crying of Lot 49", author: "Thomas Pynchon", year: "1966", tags: ["fiction", "postmodern"] },
+
+      // MEMOIR (sample)
+      { title: "How to Murder Your Life", author: "Cat Marnell", year: "2017", tags: ["memoir", "addiction"] },
+      { title: "The Center Cannot Hold", author: "Elyn Saks", year: "2007", tags: ["memoir", "mental-health"] }
+    ];
+
+    /* =========================================================
+       STATE (minimal)
+    ========================================================= */
+    const STORAGE_KEY = "KDT::LIBRARY::VAULT_MERGE::v1";
+    const DEFAULT_STATE = {
+      ui: { invert:false, nullMode:false, light:0, az:false, sort:"TITLE" },
+      filters: { q:"", tag:null },
+      selectionId: null,
+      noteOpen:false,
+      notePos:{ x:16, y:64 }
+    };
+    let STATE = loadState() || structuredClone(DEFAULT_STATE);
+
+    /* =========================================================
+       Build stable IDs so selection survives filtering/sorting.
+    ========================================================= */
+    const library = rawLibrary.map((it, idx)=>{
+      const base = `${(it.title||"").toLowerCase()}|${(it.author||"").toLowerCase()}|${String(it.year||"")}`;
+      const id = "b_" + hash10(base) + "_" + idx.toString(16);
+      return {
+        id,
+        title: it.title || "",
+        author: it.author || "",
+        year: it.year || "",
+        tags: Array.isArray(it.tags) ? it.tags.map(String) : []
+      };
+    });
+
+    /* =========================================================
+       DOM
+    ========================================================= */
+    const $ = (id)=>document.getElementById(id);
+
+    const cardsEl = $("cards");
+    const tagRowEl = $("tagRow");
+    const searchEl = $("searchInput");
+    const noResultsEl = $("noResults");
+    const countLabelEl = $("countLabel");
+    const totalLabelEl = $("totalLabel");
+
+    const docTitleEl = $("docTitle");
+    const docSubEl = $("docSub");
+    const docBodyEl = $("docBody");
+
+    const noteEl = $("note");
+    const noteIconEl = $("ketaNoteIcon");
+    const noteAreaEl = $("noteArea");
+
+    const invStatusEl = $("invStatus");
+    const nullStatusEl = $("nullStatus");
+    const lightStatusEl = $("lightStatus");
+    const lightsEl = $("lights");
+
+    const sortBtn = $("sortBtn");
+    const sortLabel = $("sortLabel");
+    const azBtn = $("azBtn");
+    const azLabel = $("azLabel");
+
+    /* =========================================================
+       Helpers
+    ========================================================= */
+    function saveState(){
+      try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(STATE)); }catch(e){}
+    }
+    function loadState(){
+      try{
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if(!raw) return null;
+        return mergeDefault(JSON.parse(raw));
+      }catch(e){ return null; }
+    }
+    function mergeDefault(obj){
+      const out = structuredClone(DEFAULT_STATE);
+      if(!obj || typeof obj !== "object") return out;
+      out.ui = Object.assign(out.ui, obj.ui||{});
+      out.filters = Object.assign(out.filters, obj.filters||{});
+      out.selectionId = obj.selectionId ?? null;
+      out.noteOpen = !!obj.noteOpen;
+      out.notePos = Object.assign(out.notePos, obj.notePos||{});
+      return out;
+    }
+
+    function hash10(s){
+      let h=2166136261;
+      s = String(s||"");
+      for(let i=0;i<s.length;i++){ h^=s.charCodeAt(i); h=Math.imul(h,16777619); }
+      return (h>>>0).toString(16).slice(0,10);
+    }
+    function escapeHtml(s){
+      return String(s).replace(/[&<>\"']/g, (m)=>({
+        "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
+      }[m]));
+    }
+    function norm(s){ return String(s||"").toLowerCase().trim(); }
+
+    function makeContext(item){
+      // Minimal “interpretive” KETADATA context without adding fluff.
+      const t = (item.tags||[]).map(x=>String(x).toUpperCase());
+      const pri = t.includes("PRIORITY") ? "PRIORITY" : "STANDARD";
+      const mode = t.includes("CURRENT-READING") ? "ACTIVE" : "ARCHIVE";
+      const domain = t[0] || "UNSPECIFIED";
+      return [
+        `CLASS: ${domain}`,
+        `MODE: ${mode}`,
+        `WEIGHT: ${pri}`,
+        `TAGS: ${(item.tags||[]).join(", ") || "none"}`,
+        ``,
+        `OPERATOR NOTE:`,
+        `This record is treated as an index object. The library is not a checkout pipeline; it is a navigation surface.`
+      ].join("\n");
+    }
+
+    /* =========================================================
+       Filters + Sorting
+    ========================================================= */
+    function getActiveList(){
+      const q = norm(STATE.filters.q);
+      const tag = STATE.filters.tag;
+
+      let out = library.filter(it=>{
+        if(tag && !(it.tags||[]).includes(tag)) return false;
+        if(!q) return true;
+        const hay = `${it.title} ${it.author} ${it.year} ${(it.tags||[]).join(" ")}`.toLowerCase();
+        return hay.includes(q);
+      });
+
+      // Sort
+      if(STATE.ui.sort === "TITLE"){
+        out.sort((a,b)=> a.title.localeCompare(b.title));
+      }else if(STATE.ui.sort === "AUTHOR"){
+        out.sort((a,b)=> a.author.localeCompare(b.author));
+      }else if(STATE.ui.sort === "YEAR"){
+        out.sort((a,b)=> (a.year||"").localeCompare(b.year||""));
+      }
+
+      return out;
+    }
+
+    function buildTagCounts(){
+      const counts = new Map();
+      for(const it of library){
+        for(const tg of (it.tags||[])){
+          counts.set(tg, (counts.get(tg)||0)+1);
+        }
+      }
+      const sorted = Array.from(counts.entries()).sort((a,b)=> b[1]-a[1] || a[0].localeCompare(b[0]));
+      return sorted.map(([tag, n])=>({tag, n}));
+    }
+
+    /* =========================================================
+       Render
+    ========================================================= */
+    function renderTags(){
+      const items = buildTagCounts();
+      tagRowEl.innerHTML = "";
+
+      // "ALL" pseudo-tag
+      const all = document.createElement("div");
+      all.className = "tag" + (!STATE.filters.tag ? " active" : "");
+      all.innerHTML = `ALL <span class="n">${library.length}</span>`;
+      all.addEventListener("click", ()=>{ STATE.filters.tag=null; saveState(); renderAll(); });
+      tagRowEl.appendChild(all);
+
+      for(const t of items){
+        const el = document.createElement("div");
+        const active = STATE.filters.tag === t.tag;
+        el.className = "tag" + (active ? " active" : "");
+        el.innerHTML = `${escapeHtml(t.tag)} <span class="n">${t.n}</span>`;
+        el.addEventListener("click", ()=>{
+          STATE.filters.tag = (STATE.filters.tag === t.tag) ? null : t.tag;
+          saveState();
+          renderAll();
+        });
+        tagRowEl.appendChild(el);
+      }
+    }
+
+    function renderCards(){
+      const list = getActiveList();
+      cardsEl.innerHTML = "";
+
+      totalLabelEl.textContent = String(library.length);
+      countLabelEl.textContent = String(list.length);
+
+      noResultsEl.style.display = list.length ? "none" : "block";
+
+      for(const it of list){
+        const c = document.createElement("div");
+        c.className = "card" + (STATE.selectionId === it.id ? " selected" : "");
+        const meta = [
+          it.author ? it.author : "—",
+          it.year ? it.year : "—"
+        ].join(" · ");
+
+        c.innerHTML = `
+          <div class="title">${escapeHtml(it.title || "UNTITLED")}</div>
+          <div class="meta">${escapeHtml(meta)}</div>
+          <div class="tagMini">${(it.tags||[]).slice(0,8).map(t=>`<span class="pill">${escapeHtml(t)}</span>`).join("")}</div>
+        `;
+        c.addEventListener("click", ()=>{
+          STATE.selectionId = it.id;
+          saveState();
+          renderDetail();
+          renderCards(); // refresh selection outline
+        });
+        cardsEl.appendChild(c);
+      }
+
+      // A–Z jump (optional, minimal)
+      if(STATE.ui.az && list.length){
+        // Ensure list is scrolled near top on filter change for usability
+        // (do not force on every keystroke; only when toggled ON)
+      }
+    }
+
+    function renderDetail(){
+      const it = library.find(x=>x.id===STATE.selectionId) || null;
+
+      if(!it){
+        docTitleEl.textContent = "NO SELECTION";
+        docSubEl.textContent = "SELECT A CARD TO OPEN DETAILS.";
+        docBodyEl.innerHTML = `<div class="emptyState">INDEX SURFACE. SELECT AN ITEM.</div>`;
+        return;
+      }
+
+      docTitleEl.textContent = (it.title || "UNTITLED").toUpperCase();
+      docSubEl.textContent = "DETAIL PANEL IS ID-LOCKED (FILTERING/SORTING WILL NOT MISALIGN).";
+
+      const ctx = makeContext(it);
+      docBodyEl.innerHTML = `
+        <div class="block">
+          <h3>METADATA</h3>
+          <div class="kv">
+            <div class="k">TITLE</div><div>${escapeHtml(it.title || "—")}</div>
+            <div class="k">AUTHOR</div><div>${escapeHtml(it.author || "—")}</div>
+            <div class="k">YEAR</div><div>${escapeHtml(it.year || "—")}</div>
+            <div class="k">TAGS</div><div>${escapeHtml((it.tags||[]).join(", ") || "—")}</div>
+            <div class="k">ID</div><div class="mono">${escapeHtml(it.id)}</div>
+          </div>
+        </div>
+
+        <div class="block">
+          <h3>KETADATA CONTEXT</h3>
+          <p>${escapeHtml(ctx)}</p>
+        </div>
+
+        <div class="block">
+          <h3>OPERATIONS</h3>
+          <div class="linkRow">
+            <button class="btn" id="btnCopyItem">COPY ITEM</button>
+            <button class="btn" id="btnCopyCtx">COPY CONTEXT</button>
+          </div>
+          <div style="margin-top:10px;" class="mono">
+            PROMPT BUILD USES THIS ITEM + CONTEXT (COPY PROMPT TOP RIGHT).
+          </div>
+        </div>
+      `;
+
+      // Wire buttons after render
+      const btnCopyItem = $("btnCopyItem");
+      const btnCopyCtx  = $("btnCopyCtx");
+      if(btnCopyItem){
+        btnCopyItem.addEventListener("click", ()=> copyText(JSON.stringify(it, null, 2)));
+      }
+      if(btnCopyCtx){
+        btnCopyCtx.addEventListener("click", ()=> copyText(ctx));
+      }
+    }
+
+    function renderUIFlags(){
+      document.body.classList.toggle("invert", !!STATE.ui.invert);
+      document.body.classList.toggle("null", !!STATE.ui.nullMode);
+
+      invStatusEl.textContent = STATE.ui.invert ? "ON" : "OFF";
+      nullStatusEl.textContent = STATE.ui.nullMode ? "ON" : "OFF";
+      lightStatusEl.textContent = String(STATE.ui.light || 0);
+
+      // Lights
+      const l = Number(STATE.ui.light || 0);
+      lightsEl.classList.toggle("on", l>0);
+      lightsEl.style.animation = "none";
+      if(l === 1) lightsEl.style.animation = "strobe1 1.2s steps(1,end) infinite";
+      if(l === 2) lightsEl.style.animation = "strobe2 1.2s steps(1,end) infinite";
+      if(l === 3) lightsEl.style.animation = "strobe3 1.2s steps(1,end) infinite";
+      if(l === 4) lightsEl.style.animation = "strobe4 1.2s steps(1,end) infinite";
+      if(l === 5) lightsEl.style.animation = "strobe5 1.2s steps(1,end) infinite";
+      if(l === 6) lightsEl.style.animation = "strobe6 1.2s steps(1,end) infinite";
+
+      sortLabel.textContent = STATE.ui.sort || "TITLE";
+      sortBtn.classList.toggle("active", false);
+
+      azLabel.textContent = STATE.ui.az ? "ON" : "OFF";
+      azBtn.classList.toggle("active", !!STATE.ui.az);
+    }
+
+    function renderAll(){
+      renderTags();
+      renderCards();
+      renderDetail();
+      renderUIFlags();
+    }
+
+    /* =========================================================
+       Copy helpers
+    ========================================================= */
+    async function copyText(text){
+      try{
+        await navigator.clipboard.writeText(String(text || ""));
+      }catch(e){
+        // fallback
+        const ta = document.createElement("textarea");
+        ta.value = String(text || "");
+        document.body.appendChild(ta);
+        ta.select();
+        try{ document.execCommand("copy"); }catch(_){}
+        document.body.removeChild(ta);
+      }
+    }
+
+    function buildPrompt(){
+      const it = library.find(x=>x.id===STATE.selectionId) || null;
+      const ctx = it ? makeContext(it) : "NO SELECTION.";
+      return [
+        "KETADATA // LIBRARY PROMPT",
+        "",
+        "TASK:",
+        "Produce an operational summary + next actions for the selected record.",
+        "",
+        "RECORD:",
+        it ? JSON.stringify(it, null, 2) : "null",
+        "",
+        "CONTEXT:",
+        ctx
+      ].join("\n");
+    }
+
+    /* =========================================================
+       Note open/close + drag
+    ========================================================= */
+    function setNoteOpen(on){
+      STATE.noteOpen = !!on;
+      noteEl.classList.toggle("open", !!on);
+      noteIconEl.classList.toggle("outlined", !!on);
+      saveState();
+    }
+
+    (function noteDrag(){
+      const head = $("noteHead");
+      let dragging=false, ox=0, oy=0;
+
+      function applyPos(){
+        noteEl.style.left = (STATE.notePos.x||16) + "px";
+        noteEl.style.top  = (STATE.notePos.y||64) + "px";
+      }
+      applyPos();
+
+      head.addEventListener("mousedown",(e)=>{
+        if(e.target.closest(".miniBtn")) return;
+        dragging=true;
+        const r = noteEl.getBoundingClientRect();
+        ox = e.clientX - r.left;
+        oy = e.clientY - r.top;
+        noteEl.style.right = "auto";
+      });
+
+      window.addEventListener("mousemove",(e)=>{
+        if(!dragging) return;
+        const x = e.clientX - ox;
+        const y = e.clientY - oy;
+        noteEl.style.left = x + "px";
+        noteEl.style.top  = y + "px";
+      });
+
+      window.addEventListener("mouseup",()=>{
+        if(!dragging) return;
+        dragging=false;
+        const r = noteEl.getBoundingClientRect();
+        STATE.notePos = { x: Math.max(0, r.left), y: Math.max(0, r.top) };
+        saveState();
+      });
+    })();
+
+    /* =========================================================
+       Events
+    ========================================================= */
+    $("goSystem").addEventListener("click", ()=> location.href = SHELL_HOME_URL);
+    $("goHome").addEventListener("click", ()=> location.href = SHELL_HOME_URL);
+    $("goLanding").addEventListener("click", ()=> location.href = LANDING_URL);
+
+    $("clearSelection").addEventListener("click", ()=>{
+      STATE.selectionId = null;
+      saveState();
+      renderAll();
+    });
+
+    $("btnCopyJSON").addEventListener("click", ()=>{
+      const it = library.find(x=>x.id===STATE.selectionId) || null;
+      copyText(JSON.stringify({ selection: it, filters: STATE.filters, ui: STATE.ui }, null, 2));
+    });
+
+    $("btnCopyPrompt").addEventListener("click", ()=>{
+      copyText(buildPrompt());
+    });
+
+    searchEl.value = STATE.filters.q || "";
+    searchEl.addEventListener("input", (e)=>{
+      STATE.filters.q = e.target.value || "";
+      saveState();
+      renderCards();
+      renderDetail(); // keep right panel consistent if selection disappears? we keep ID-based; if selection exists, details remain.
+    });
+
+    sortBtn.addEventListener("click", ()=>{
+      const order = ["TITLE","AUTHOR","YEAR"];
+      const cur = STATE.ui.sort || "TITLE";
+      const i = order.indexOf(cur);
+      STATE.ui.sort = order[(i+1+order.length)%order.length];
+      saveState();
+      renderCards();
+      renderUIFlags();
+    });
+
+    azBtn.addEventListener("click", ()=>{
+      STATE.ui.az = !STATE.ui.az;
+      saveState();
+      renderUIFlags();
+    });
+
+    noteIconEl.addEventListener("click", ()=>{
+      setNoteOpen(!STATE.noteOpen);
+    });
+    $("noteCollapse").addEventListener("click", ()=> setNoteOpen(false));
+
+    noteAreaEl.value = readGlobalNote();
+    noteAreaEl.addEventListener("input", ()=>{
+      writeGlobalNote(noteAreaEl.value);
+    });
+
+    /* =========================================================
+       UNIVERSALS (match vault)
+       - ESC: exit NULL
+       - N: NULL toggle
+       - SHIFT+I: invert
+       - SHIFT+B: home
+       - SHIFT+K: landing
+       - 1–6: lights (not in typing)
+    ========================================================= */
+    function setNull(on){
+      STATE.ui.nullMode = !!on;
+      saveState();
+      renderUIFlags();
+    }
+    function setInvert(on){
+      STATE.ui.invert = !!on;
+      saveState();
+      renderUIFlags();
+    }
+    function setLight(n){
+      STATE.ui.light = n;
+      saveState();
+      renderUIFlags();
+    }
+
+    document.addEventListener("keydown",(e)=>{
+      const tag = (e.target && e.target.tagName) ? e.target.tagName.toLowerCase() : "";
+      const typing = (tag==="textarea" || tag==="input" || tag==="select");
+
+      if(e.key === "Escape"){
+        setNull(false);
+        return;
+      }
+
+      if(!typing && e.key.toLowerCase() === "n"){
+        setNull(!STATE.ui.nullMode);
+        return;
+      }
+
+      if(e.shiftKey && e.key.toLowerCase() === "i"){
+        setInvert(!STATE.ui.invert);
+        return;
+      }
+
+      if(e.shiftKey && e.key.toLowerCase() === "b"){
+        location.href = SHELL_HOME_URL;
+        return;
+      }
+
+      if(e.shiftKey && e.key.toLowerCase() === "k"){
+        location.href = LANDING_URL;
+        return;
+      }
+
+      if(!typing && !e.shiftKey && !e.ctrlKey && !e.metaKey){
+        const n = Number(e.key);
+        if([1,2,3,4,5,6].includes(n)) setLight(n);
+      }
+    });
+
+    /* =========================================================
+       BOOT
+    ========================================================= */
+    renderAll();
+    if(STATE.noteOpen) setNoteOpen(true);
+    renderUIFlags();
+
+    // If selectionId exists but item missing (after edits), clear it safely
+    if(STATE.selectionId && !library.find(x=>x.id===STATE.selectionId)){
+      STATE.selectionId = null;
+      saveState();
+      renderAll();
+    }
+  </script>
+
+  <!-- ============================================================
+  KETADATA HTML SERIALIZATION STAMP
+  AE/EE/WB: WB
+  FILE_ID: KETADATA_LIBRARY_VAULT_MERGE
+  ROOM_ID: LIBRARY
+  VERSION: library.vault.merge.v1
+  UPDATED_AT: 2026-01-02T00:00:00-05:00
+  CHANGELOG:
+  - KEEP VAULT UI/UX (grid, chrome, lights, global note icon)
+  - RESTORE WORKING BROWSE/SEARCH + TAG COUNTS
+  - FIX "DOC/CONTEXT MISALIGN" BY INTRODUCING STABLE ITEM IDS (FILTER-SAFE)
+  - DETAIL PANEL NOW RENDERS REAL METADATA + KETADATA CONTEXT (NOT PLACEHOLDER)
+  - COPY JSON + COPY PROMPT OPERATIONS ADDED (NO CART/CHECKOUT PIPELINE)
+  - SYSTEM UNIVERSALS: ESC (EXIT NULL), N (NULL TOGGLE), SHIFT+I (INVERT),
+    SHIFT+B (HOME), SHIFT+K (LANDING), 1–6 (LIGHTS)
+  ============================================================ -->
+</body>
+</html>
