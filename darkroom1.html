@@ -185,20 +185,17 @@
       overflow:hidden;
     }
 
-    /* RED FLOOD OVERLAY */
+    /* COLOR FLOOD OVERLAY */
     .viewport::before{
       content:"";
       position:absolute;
       inset:0;
-      background: rgba(255,0,0,.32);
+      background: #000;
       mix-blend-mode: multiply;
       pointer-events:none;
       z-index:2;
       opacity:0;
-      transition: opacity .3s;
-    }
-    .viewport.flooded::before{
-      opacity:1;
+      transition: background .2s, opacity .3s;
     }
 
     video, audio{
@@ -278,10 +275,86 @@
       cursor:not-allowed;
     }
 
-    .toggleRow{
+    .floodControl{
       margin-top:20px;
+      border:1px solid var(--hair2);
+      padding:16px;
+      background: rgba(0,0,0,.15);
+    }
+
+    .floodRow{
       display:flex;
       gap:10px;
+      align-items:center;
+      margin-bottom:12px;
+    }
+    .floodRow:last-child{
+      margin-bottom:0;
+    }
+
+    .floodLabel{
+      font-size:11px;
+      letter-spacing:.18em;
+      text-transform:uppercase;
+      color: rgba(255,255,255,.70);
+      min-width:90px;
+    }
+
+    .floodBtns{
+      display:flex;
+      gap:6px;
+      flex-wrap:wrap;
+    }
+
+    .floodBtn{
+      font-family:var(--ui);
+      font-size:11px;
+      letter-spacing:.18em;
+      text-transform:uppercase;
+      color: rgba(255,255,255,.82);
+      background: rgba(0,0,0,.22);
+      border:1px solid var(--hair);
+      padding:8px 12px;
+      cursor:pointer;
+      transition: all .2s;
+      min-width:40px;
+    }
+    .floodBtn:hover:not(:disabled){
+      border-color: rgba(255,255,255,.28);
+    }
+    .floodBtn:disabled{
+      opacity:.3;
+      cursor:not-allowed;
+    }
+    .floodBtn.active{
+      background: rgba(255,255,255,.12);
+      border-color: rgba(255,255,255,.40);
+      color: #fff;
+    }
+
+    .colorBtn{
+      font-family:var(--ui);
+      font-size:11px;
+      letter-spacing:.18em;
+      text-transform:uppercase;
+      color: rgba(255,255,255,.82);
+      background: rgba(0,0,0,.22);
+      border:1px solid var(--hair);
+      padding:8px 14px;
+      cursor:pointer;
+      transition: all .2s;
+    }
+    .colorBtn:hover:not(:disabled){
+      border-color: rgba(255,255,255,.28);
+    }
+    .colorBtn:disabled{
+      opacity:.3;
+      cursor:not-allowed;
+    }
+    .colorBtn.active{
+      background: rgba(255,255,255,.12);
+      border-color: rgba(255,255,255,.40);
+      color: #fff;
     }
 
     #note{
@@ -398,8 +471,31 @@
         <button class="controlBtn" id="clearBtn" disabled>CLEAR</button>
       </div>
 
-      <div class="toggleRow">
-        <button class="controlBtn" id="floodBtn" disabled>FLOOD: OFF</button>
+      <div class="floodControl">
+        <div class="floodRow">
+          <div class="floodLabel">COLOR:</div>
+          <div class="floodBtns">
+            <button class="colorBtn active" data-color="red" disabled>RED</button>
+            <button class="colorBtn" data-color="green" disabled>GREEN</button>
+            <button class="colorBtn" data-color="blue" disabled>BLUE</button>
+            <button class="colorBtn" data-color="cyan" disabled>CYAN</button>
+            <button class="colorBtn" data-color="magenta" disabled>MAGENTA</button>
+            <button class="colorBtn" data-color="yellow" disabled>YELLOW</button>
+            <button class="colorBtn" data-color="white" disabled>WHITE</button>
+          </div>
+        </div>
+        <div class="floodRow">
+          <div class="floodLabel">INTENSITY:</div>
+          <div class="floodBtns">
+            <button class="floodBtn active" data-level="0" disabled>0</button>
+            <button class="floodBtn" data-level="1" disabled>1</button>
+            <button class="floodBtn" data-level="2" disabled>2</button>
+            <button class="floodBtn" data-level="3" disabled>3</button>
+            <button class="floodBtn" data-level="4" disabled>4</button>
+            <button class="floodBtn" data-level="5" disabled>5</button>
+            <button class="floodBtn" data-level="6" disabled>6</button>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -421,6 +517,7 @@
       <span class="muted">LIGHT:</span> <b id="lightStatus">0</b>
     </div>
     <div>
+      <span class="muted">FLOOD:</span> <b id="floodStatus">RED 0</b> ·
       <span class="muted">DARKROOM MODE:</span> <b>SCREENING</b>
     </div>
   </div>
@@ -450,9 +547,23 @@
       }
     }
 
+    /* COLOR DEFINITIONS */
+    const COLORS = {
+      red: '#ff0000',
+      green: '#00ff00',
+      blue: '#0000ff',
+      cyan: '#00ffff',
+      magenta: '#ff00ff',
+      yellow: '#ffff00',
+      white: '#ffffff'
+    };
+
+    const INTENSITIES = [0, 0.15, 0.30, 0.45, 0.60, 0.75, 0.90];
+
     /* MEDIA PLAYER */
     let currentMedia = null;
-    let flooded = false;
+    let floodColor = 'red';
+    let floodLevel = 0;
 
     const fileInput = document.getElementById('fileInput');
     const viewport = document.getElementById('viewport');
@@ -461,7 +572,7 @@
     const pauseBtn = document.getElementById('pauseBtn');
     const stopBtn = document.getElementById('stopBtn');
     const clearBtn = document.getElementById('clearBtn');
-    const floodBtn = document.getElementById('floodBtn');
+    const floodStatus = document.getElementById('floodStatus');
 
     fileInput.addEventListener('change', (e)=>{
       const file = e.target.files[0];
@@ -485,7 +596,11 @@
       pauseBtn.disabled = false;
       stopBtn.disabled = false;
       clearBtn.disabled = false;
-      floodBtn.disabled = false;
+      
+      // Enable flood buttons
+      document.querySelectorAll('.floodBtn, .colorBtn').forEach(btn => {
+        btn.disabled = false;
+      });
     });
 
     playBtn.addEventListener('click', ()=>{
@@ -505,10 +620,71 @@
 
     clearBtn.addEventListener('click', clearMedia);
 
-    floodBtn.addEventListener('click', ()=>{
-      flooded = !flooded;
-      viewport.classList.toggle('flooded', flooded);
-      floodBtn.textContent = flooded ? "FLOOD: ON" : "FLOOD: OFF";
+    function updateFlood(){
+      const overlay = viewport.querySelector('::before') || viewport;
+      const color = COLORS[floodColor];
+      const opacity = INTENSITIES[floodLevel];
+
+      // Update CSS custom properties for the overlay
+      viewport.style.setProperty('--flood-color', color);
+      viewport.style.setProperty('--flood-opacity', opacity);
+
+      // Apply via the ::before pseudo-element
+      const style = document.createElement('style');
+      style.textContent = `
+        .viewport::before {
+          background: ${color} !important;
+          opacity: ${opacity} !important;
+        }
+      `;
+      
+      // Remove old style if exists
+      const oldStyle = document.getElementById('flood-style');
+      if(oldStyle) oldStyle.remove();
+      
+      style.id = 'flood-style';
+      document.head.appendChild(style);
+
+      // Update status
+      floodStatus.textContent = `${floodColor.toUpperCase()} ${floodLevel}`;
+    }
+
+    function setFloodColor(color){
+      floodColor = color;
+      updateFlood();
+
+      // Update button states
+      document.querySelectorAll('.colorBtn').forEach(btn => {
+        const btnColor = btn.getAttribute('data-color');
+        btn.classList.toggle('active', btnColor === color);
+      });
+    }
+
+    function setFloodLevel(level){
+      floodLevel = level;
+      updateFlood();
+
+      // Update button states
+      document.querySelectorAll('.floodBtn').forEach(btn => {
+        const btnLevel = Number(btn.getAttribute('data-level'));
+        btn.classList.toggle('active', btnLevel === level);
+      });
+    }
+
+    // Color button click handlers
+    document.querySelectorAll('.colorBtn').forEach(btn => {
+      btn.addEventListener('click', ()=>{
+        const color = btn.getAttribute('data-color');
+        setFloodColor(color);
+      });
+    });
+
+    // Intensity button click handlers
+    document.querySelectorAll('.floodBtn').forEach(btn => {
+      btn.addEventListener('click', ()=>{
+        const level = Number(btn.getAttribute('data-level'));
+        setFloodLevel(level);
+      });
     });
 
     function clearMedia(){
@@ -520,7 +696,6 @@
       }
 
       viewport.innerHTML = '<div class="placeholder">NO MEDIA LOADED</div>';
-      viewport.classList.remove('flooded');
       fileName.textContent = '';
       fileInput.value = '';
 
@@ -528,9 +703,13 @@
       pauseBtn.disabled = true;
       stopBtn.disabled = true;
       clearBtn.disabled = true;
-      floodBtn.disabled = true;
-      floodBtn.textContent = "FLOOD: OFF";
-      flooded = false;
+      
+      // Disable and reset flood buttons
+      document.querySelectorAll('.floodBtn, .colorBtn').forEach(btn => {
+        btn.disabled = true;
+      });
+      setFloodColor('red');
+      setFloodLevel(0);
     }
 
     /* KETA NOTE */
@@ -657,6 +836,7 @@
         return;
       }
 
+      // Number keys without modifiers: lights
       if(!e.shiftKey && !e.ctrlKey && !e.metaKey){
         const n = Number(e.key);
         if([1,2,3,4,5,6].includes(n)){
@@ -664,11 +844,36 @@
         }
       }
 
-      // F: toggle flood
+      // Shift + Number: flood intensity (only if media loaded)
+      if(e.shiftKey && currentMedia && !e.ctrlKey && !e.metaKey){
+        const n = Number(e.key);
+        if([0,1,2,3,4,5,6].includes(n)){
+          setFloodLevel(n);
+        }
+      }
+
+      // Ctrl + R/G/B/C/M/Y/W: flood color (only if media loaded)
+      if(e.ctrlKey && currentMedia){
+        const key = e.key.toLowerCase();
+        const colorMap = {
+          r: 'red',
+          g: 'green',
+          b: 'blue',
+          c: 'cyan',
+          m: 'magenta',
+          y: 'yellow',
+          w: 'white'
+        };
+        if(colorMap[key]){
+          e.preventDefault();
+          setFloodColor(colorMap[key]);
+        }
+      }
+
+      // F: cycle flood intensity (only if media loaded)
       if(e.key.toLowerCase() === "f" && currentMedia){
-        flooded = !flooded;
-        viewport.classList.toggle('flooded', flooded);
-        floodBtn.textContent = flooded ? "FLOOD: ON" : "FLOOD: OFF";
+        const nextLevel = (floodLevel + 1) % 7;
+        setFloodLevel(nextLevel);
       }
 
       // SPACE: play/pause
