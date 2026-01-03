@@ -1,0 +1,683 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+  <title>KETADATA // DARKROOM</title>
+
+  <style>
+    :root{
+      --bg:#000;
+      --fg:#fff;
+
+      --inkA: rgba(255,255,255,.86);
+      --inkB: rgba(255,255,255,.62);
+      --inkC: rgba(255,255,255,.42);
+
+      --hair: rgba(255,255,255,.14);
+      --hair2: rgba(255,255,255,.09);
+
+      --grid: rgba(255,255,255,.06);
+      --ui: Arial, Helvetica, sans-serif;
+
+      --pad: 14px;
+      --topH: 38px;
+      --botH: 26px;
+
+      --noteW: 420px;
+      --noteH: 220px;
+    }
+
+    *{ box-sizing:border-box; }
+    html,body{ height:100%; }
+    body{
+      margin:0;
+      background:var(--bg);
+      color:var(--fg);
+      font-family:var(--ui);
+      overflow:hidden;
+    }
+
+    #field{
+      position:fixed; inset:0;
+      z-index:0;
+      background:
+        radial-gradient(1100px 680px at 22% 18%, rgba(255,255,255,.05), transparent 70%),
+        radial-gradient(1100px 680px at 78% 72%, rgba(255,255,255,.05), transparent 72%),
+        linear-gradient(180deg, #000, #030303 55%, #000);
+    }
+    #field::after{
+      content:"";
+      position:absolute; inset:0;
+      background:
+        linear-gradient(var(--grid) 1px, transparent 1px),
+        linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+      background-size: 52px 52px;
+      opacity:.95;
+      pointer-events:none;
+      mix-blend-mode: overlay;
+    }
+
+    #lights{
+      position:fixed; inset:0;
+      z-index:1;
+      pointer-events:none;
+      opacity:0;
+    }
+    #lights.on{ opacity:1; }
+    #lights::before{
+      content:"";
+      position:absolute; inset:-20%;
+      background: radial-gradient(closest-side at 50% 50%, rgba(255,255,255,.16), transparent 70%);
+      transform: rotate(8deg);
+      opacity:.55;
+    }
+    @keyframes strobe1 { 0%,49%{opacity:0} 50%,100%{opacity:1} }
+    @keyframes strobe2 { 0%,24%{opacity:0} 25%,49%{opacity:1} 50%,74%{opacity:0} 75%,100%{opacity:1} }
+    @keyframes strobe3 { 0%,14%{opacity:0} 15%,29%{opacity:1} 30%,44%{opacity:0} 45%,59%{opacity:1} 60%,74%{opacity:0} 75%,100%{opacity:1} }
+    @keyframes strobe4 { 0%,9%{opacity:0} 10%,19%{opacity:1} 20%,29%{opacity:0} 30%,39%{opacity:1} 40%,49%{opacity:0} 50%,59%{opacity:1} 60%,69%{opacity:0} 70%,79%{opacity:1} 80%,89%{opacity:0} 90%,100%{opacity:1} }
+    @keyframes strobe5 { 0%,7%{opacity:0} 8%,15%{opacity:1} 16%,23%{opacity:0} 24%,31%{opacity:1} 32%,39%{opacity:0} 40%,47%{opacity:1} 48%,55%{opacity:0} 56%,63%{opacity:1} 64%,71%{opacity:0} 72%,79%{opacity:1} 80%,87%{opacity:0} 88%,95%{opacity:1} 96%,100%{opacity:0} }
+    @keyframes strobe6 { 0%,3%{opacity:0} 4%,7%{opacity:1} 8%,11%{opacity:0} 12%,15%{opacity:1} 16%,19%{opacity:0} 20%,23%{opacity:1} 24%,27%{opacity:0} 28%,31%{opacity:1} 32%,35%{opacity:0} 36%,39%{opacity:1} 40%,43%{opacity:0} 44%,47%{opacity:1} 48%,51%{opacity:0} 52%,55%{opacity:1} 56%,59%{opacity:0} 60%,63%{opacity:1} 64%,67%{opacity:0} 68%,71%{opacity:1} 72%,75%{opacity:0} 76%,79%{opacity:1} 80%,83%{opacity:0} 84%,87%{opacity:1} 88%,91%{opacity:0} 92%,95%{opacity:1} 96%,100%{opacity:0} }
+
+    .topbar{
+      position:fixed; left:0; right:0; top:0;
+      z-index:40;
+      height:var(--topH);
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      padding:0 12px;
+      border-bottom:1px solid var(--hair);
+      background: rgba(0,0,0,.26);
+      backdrop-filter: blur(6px);
+      user-select:none;
+    }
+    .brandMini{
+      display:flex; align-items:center; gap:10px;
+      font-size:11px;
+      letter-spacing:.18em;
+      text-transform:uppercase;
+      color: rgba(255,255,255,.85);
+    }
+
+    .noteIcon{
+      width:12px; height:12px;
+      display:inline-block;
+      border:1px solid #fff;
+      background: #fff;
+      cursor:pointer;
+    }
+    .noteIcon.outlined{
+      background: transparent;
+    }
+
+    .topRight{
+      display:flex; align-items:center; gap:10px;
+    }
+    .btn{
+      font-family:var(--ui);
+      font-size:11px;
+      letter-spacing:.18em;
+      text-transform:uppercase;
+      color: rgba(255,255,255,.82);
+      background: rgba(0,0,0,.22);
+      border:1px solid var(--hair);
+      padding:6px 10px;
+      cursor:pointer;
+    }
+    .btn:hover{ border-color: rgba(255,255,255,.28); color:#fff; }
+    .btn:active{ transform: translateY(1px); }
+    .btn:disabled{
+      opacity:.3;
+      cursor:not-allowed;
+    }
+
+    .footer{
+      position:fixed; left:0; right:0; bottom:0;
+      z-index:40;
+      height:var(--botH);
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      padding:0 10px;
+      border-top:1px solid var(--hair);
+      background: rgba(0,0,0,.26);
+      backdrop-filter: blur(6px);
+      font-size:10px;
+      letter-spacing:.14em;
+      text-transform:uppercase;
+      color: rgba(255,255,255,.70);
+      user-select:none;
+    }
+    .footer b{ color:#fff; font-weight:900; }
+    .muted{ color: rgba(255,255,255,.55); }
+
+    .wrap{
+      position:fixed; inset:0;
+      z-index:10;
+      padding-top: var(--topH);
+      padding-bottom: var(--botH);
+      display:flex;
+      align-items:center;
+      justify-content:center;
+    }
+
+    .stage{
+      width:100%;
+      max-width:1200px;
+      padding:40px;
+    }
+
+    .viewportWrap{
+      position:relative;
+      margin-bottom:20px;
+    }
+
+    .viewport{
+      position:relative;
+      width:100%;
+      aspect-ratio: 16/9;
+      background:#000;
+      border:1px solid var(--hair);
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      overflow:hidden;
+    }
+
+    /* RED FLOOD OVERLAY */
+    .viewport::before{
+      content:"";
+      position:absolute;
+      inset:0;
+      background: rgba(255,0,0,.32);
+      mix-blend-mode: multiply;
+      pointer-events:none;
+      z-index:2;
+      opacity:0;
+      transition: opacity .3s;
+    }
+    .viewport.flooded::before{
+      opacity:1;
+    }
+
+    video, audio{
+      max-width:100%;
+      max-height:100%;
+      position:relative;
+      z-index:1;
+    }
+
+    .placeholder{
+      color: rgba(255,255,255,.35);
+      font-size:12px;
+      letter-spacing:.18em;
+      text-transform:uppercase;
+      text-align:center;
+    }
+
+    .fileRow{
+      display:flex;
+      align-items:center;
+      gap:12px;
+      margin-bottom:20px;
+    }
+
+    .fileLabel{
+      flex:1;
+      padding:10px 14px;
+      background: rgba(0,0,0,.30);
+      border:1px solid var(--hair);
+      font-family:var(--ui);
+      font-size:11px;
+      letter-spacing:.14em;
+      text-transform:uppercase;
+      color: rgba(255,255,255,.75);
+      cursor:pointer;
+      text-align:center;
+      transition: border-color .2s;
+    }
+    .fileLabel:hover{
+      border-color: rgba(255,255,255,.28);
+    }
+
+    .fileInput{
+      display:none;
+    }
+
+    .fileName{
+      font-size:11px;
+      letter-spacing:.08em;
+      color: rgba(255,255,255,.60);
+      margin-bottom:14px;
+    }
+
+    .controls{
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+    }
+
+    .controlBtn{
+      font-family:var(--ui);
+      font-size:11px;
+      letter-spacing:.18em;
+      text-transform:uppercase;
+      color: rgba(255,255,255,.82);
+      background: rgba(0,0,0,.22);
+      border:1px solid var(--hair);
+      padding:10px 14px;
+      cursor:pointer;
+      transition: border-color .2s;
+    }
+    .controlBtn:hover:not(:disabled){
+      border-color: rgba(255,255,255,.28);
+    }
+    .controlBtn:disabled{
+      opacity:.3;
+      cursor:not-allowed;
+    }
+
+    .toggleRow{
+      margin-top:20px;
+      display:flex;
+      gap:10px;
+    }
+
+    #note{
+      position:fixed;
+      top: 64px;
+      left: 16px;
+      z-index:45;
+      width: min(var(--noteW), 92vw);
+      height: var(--noteH);
+      border:1px solid var(--hair);
+      background: rgba(0,0,0,.34);
+      backdrop-filter: blur(8px);
+      display:none;
+      box-shadow: 0 22px 80px rgba(0,0,0,.55);
+    }
+    #note.open{ display:block; }
+    #noteHead{
+      height: 34px;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      padding: 0 10px;
+      border-bottom:1px solid var(--hair2);
+      cursor:move;
+      user-select:none;
+    }
+    #noteHead .label{
+      font-size:11px;
+      letter-spacing:.22em;
+      text-transform:uppercase;
+      font-weight:900;
+      color: rgba(255,255,255,.86);
+    }
+    #noteHead .mini{
+      display:flex; gap:8px; align-items:center;
+    }
+    .miniBtn{
+      width: 26px;
+      height: 22px;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      border:1px solid var(--hair);
+      background: rgba(0,0,0,.22);
+      color: rgba(255,255,255,.85);
+      cursor:pointer;
+      font-weight:900;
+      user-select:none;
+    }
+    .miniBtn:hover{ border-color: rgba(255,255,255,.28); color:#fff; }
+    #noteArea{
+      width:100%;
+      height: calc(100% - 34px);
+      border:0;
+      resize:none;
+      outline:none;
+      padding: 10px 10px;
+      background: transparent;
+      color:#fff;
+      font-family: var(--ui);
+      font-size: 12px;
+      letter-spacing:.06em;
+      line-height:1.45;
+    }
+
+    body.null .topbar,
+    body.null .footer,
+    body.null #note{
+      display:none !important;
+    }
+
+    body.invert{
+      filter: invert(1) hue-rotate(180deg);
+    }
+  </style>
+</head>
+
+<body>
+  <div id="field" aria-hidden="true"></div>
+  <div id="lights" aria-hidden="true"></div>
+
+  <div class="topbar" id="topbar">
+    <div class="brandMini">
+      <span style="display:inline-block;width:10px;height:10px;border:1px solid #fff;"></span>
+      <span>KETADATA // DARKROOM</span>
+    </div>
+    <div class="topRight">
+      <button class="btn" id="goSystem">SYSTEM</button>
+      <span class="noteIcon" id="ketaNoteIcon" title="KETA_NOTE" aria-label="KETA_NOTE"></span>
+      <button class="btn" id="goHome">HOME</button>
+      <button class="btn" id="goLanding">LAND</button>
+    </div>
+  </div>
+
+  <div class="wrap">
+    <div class="stage">
+      <div class="viewportWrap">
+        <div class="viewport" id="viewport">
+          <div class="placeholder">NO MEDIA LOADED</div>
+        </div>
+      </div>
+
+      <div class="fileName" id="fileName"></div>
+
+      <div class="fileRow">
+        <input type="file" id="fileInput" class="fileInput" accept="video/*,audio/*" />
+        <label for="fileInput" class="fileLabel">LOAD MEDIA</label>
+      </div>
+
+      <div class="controls">
+        <button class="controlBtn" id="playBtn" disabled>PLAY</button>
+        <button class="controlBtn" id="pauseBtn" disabled>PAUSE</button>
+        <button class="controlBtn" id="stopBtn" disabled>STOP</button>
+        <button class="controlBtn" id="clearBtn" disabled>CLEAR</button>
+      </div>
+
+      <div class="toggleRow">
+        <button class="controlBtn" id="floodBtn" disabled>FLOOD: OFF</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="note" aria-label="KETA_NOTE">
+    <div id="noteHead">
+      <div class="label">KETA_NOTE</div>
+      <div class="mini">
+        <div class="miniBtn" id="noteCollapse" title="collapse">–</div>
+      </div>
+    </div>
+    <textarea id="noteArea" placeholder="KETA_NOTE (GLOBAL)"></textarea>
+  </div>
+
+  <div class="footer" id="footer">
+    <div>
+      <span class="muted">NULL:</span> <b id="nullStatus">OFF</b> ·
+      <span class="muted">INVERT:</span> <b id="invStatus">OFF</b> ·
+      <span class="muted">LIGHT:</span> <b id="lightStatus">0</b>
+    </div>
+    <div>
+      <span class="muted">DARKROOM MODE:</span> <b>SCREENING</b>
+    </div>
+  </div>
+
+  <script>
+    const SHELL_HOME_URL = "system.html";
+    const LANDING_URL = "index11.html";
+
+    const NOTE_KEYS = [
+      "KETADATA_GLOBAL_KETA_NOTE_V1",
+      "KETADATA_GLOBAL_KETA_NOTE",
+      "KETA_NOTE",
+      "SHELL8_KETA_NOTE",
+      "KETADATA_SHELL8_KETA_NOTE"
+    ];
+
+    function readGlobalNote(){
+      for(const k of NOTE_KEYS){
+        const v = localStorage.getItem(k);
+        if(v && v.trim().length) return v;
+      }
+      return "";
+    }
+    function writeGlobalNote(v){
+      for(const k of NOTE_KEYS){
+        localStorage.setItem(k, v);
+      }
+    }
+
+    /* MEDIA PLAYER */
+    let currentMedia = null;
+    let flooded = false;
+
+    const fileInput = document.getElementById('fileInput');
+    const viewport = document.getElementById('viewport');
+    const fileName = document.getElementById('fileName');
+    const playBtn = document.getElementById('playBtn');
+    const pauseBtn = document.getElementById('pauseBtn');
+    const stopBtn = document.getElementById('stopBtn');
+    const clearBtn = document.getElementById('clearBtn');
+    const floodBtn = document.getElementById('floodBtn');
+
+    fileInput.addEventListener('change', (e)=>{
+      const file = e.target.files[0];
+      if(!file) return;
+
+      clearMedia();
+
+      const url = URL.createObjectURL(file);
+      const isVideo = file.type.startsWith('video/');
+
+      currentMedia = document.createElement(isVideo ? 'video' : 'audio');
+      currentMedia.src = url;
+      currentMedia.controls = true;
+
+      viewport.innerHTML = '';
+      viewport.appendChild(currentMedia);
+
+      fileName.textContent = file.name;
+
+      playBtn.disabled = false;
+      pauseBtn.disabled = false;
+      stopBtn.disabled = false;
+      clearBtn.disabled = false;
+      floodBtn.disabled = false;
+    });
+
+    playBtn.addEventListener('click', ()=>{
+      if(currentMedia) currentMedia.play();
+    });
+
+    pauseBtn.addEventListener('click', ()=>{
+      if(currentMedia) currentMedia.pause();
+    });
+
+    stopBtn.addEventListener('click', ()=>{
+      if(currentMedia){
+        currentMedia.pause();
+        currentMedia.currentTime = 0;
+      }
+    });
+
+    clearBtn.addEventListener('click', clearMedia);
+
+    floodBtn.addEventListener('click', ()=>{
+      flooded = !flooded;
+      viewport.classList.toggle('flooded', flooded);
+      floodBtn.textContent = flooded ? "FLOOD: ON" : "FLOOD: OFF";
+    });
+
+    function clearMedia(){
+      if(currentMedia){
+        currentMedia.pause();
+        URL.revokeObjectURL(currentMedia.src);
+        currentMedia.remove();
+        currentMedia = null;
+      }
+
+      viewport.innerHTML = '<div class="placeholder">NO MEDIA LOADED</div>';
+      viewport.classList.remove('flooded');
+      fileName.textContent = '';
+      fileInput.value = '';
+
+      playBtn.disabled = true;
+      pauseBtn.disabled = true;
+      stopBtn.disabled = true;
+      clearBtn.disabled = true;
+      floodBtn.disabled = true;
+      floodBtn.textContent = "FLOOD: OFF";
+      flooded = false;
+    }
+
+    /* KETA NOTE */
+    const note = document.getElementById('note');
+    const noteArea = document.getElementById('noteArea');
+    const noteIcon = document.getElementById('ketaNoteIcon');
+    const noteCollapse = document.getElementById('noteCollapse');
+
+    function setNoteOpen(open){
+      note.classList.toggle('open', open);
+      noteIcon.classList.toggle('outlined', open);
+    }
+
+    setNoteOpen(false);
+    noteArea.value = readGlobalNote();
+
+    let saveT = null;
+    noteArea.addEventListener('input', ()=>{
+      clearTimeout(saveT);
+      saveT = setTimeout(()=> writeGlobalNote(noteArea.value), 180);
+    });
+
+    noteIcon.addEventListener('click', ()=>{
+      const open = !note.classList.contains('open');
+      if(open) noteArea.value = readGlobalNote();
+      setNoteOpen(open);
+    });
+
+    noteCollapse.addEventListener('click', ()=> setNoteOpen(false));
+
+    /* DRAG NOTE */
+    (function drag(){
+      const head = document.getElementById('noteHead');
+      let down=false, sx=0, sy=0, ox=0, oy=0;
+
+      head.addEventListener('mousedown', (e)=>{
+        down=true;
+        sx=e.clientX; sy=e.clientY;
+        const r = note.getBoundingClientRect();
+        ox=r.left; oy=r.top;
+      });
+
+      window.addEventListener('mousemove', (e)=>{
+        if(!down) return;
+        const nx = ox + (e.clientX - sx);
+        const ny = oy + (e.clientY - sy);
+        note.style.left = Math.max(8, Math.min(window.innerWidth - 220, nx)) + 'px';
+        note.style.top  = Math.max(46, Math.min(window.innerHeight - 80, ny)) + 'px';
+        note.style.right = 'auto';
+      });
+
+      window.addEventListener('mouseup', ()=> down=false);
+    })();
+
+    /* SYSTEM NAV */
+    document.getElementById('goSystem').addEventListener('click', ()=> location.href = SHELL_HOME_URL);
+    document.getElementById('goHome').addEventListener('click', ()=> location.href = SHELL_HOME_URL);
+    document.getElementById('goLanding').addEventListener('click', ()=> location.href = LANDING_URL);
+
+    /* SYSTEM UNIVERSALS */
+    const nullStatus = document.getElementById('nullStatus');
+    const invStatus = document.getElementById('invStatus');
+    const lightStatus = document.getElementById('lightStatus');
+    const lights = document.getElementById('lights');
+
+    let nullMode = false;
+    let invert = false;
+    let lightMode = 0;
+
+    function setNull(on){
+      nullMode = on;
+      document.body.classList.toggle('null', on);
+      nullStatus.textContent = on ? "ON" : "OFF";
+    }
+    function setInvert(on){
+      invert = on;
+      document.body.classList.toggle('invert', on);
+      invStatus.textContent = on ? "ON" : "OFF";
+    }
+
+    function setLight(n){
+      lightMode = n;
+      lightStatus.textContent = String(n);
+      lights.classList.toggle('on', n !== 0);
+
+      lights.style.animation = "none";
+      void lights.offsetHeight;
+
+      if(n === 0){
+        lights.style.animation = "none";
+        return;
+      }
+      const map = {
+        1: "strobe1 1s linear infinite",
+        2: "strobe2 1s linear infinite",
+        3: "strobe3 1s linear infinite",
+        4: "strobe4 1s linear infinite",
+        5: "strobe5 1s linear infinite",
+        6: "strobe6 1s linear infinite"
+      };
+      lights.style.animation = map[n] || "strobe1 1s linear infinite";
+    }
+
+    window.addEventListener('keydown', (e)=>{
+      if(e.key === "Escape"){ setNull(false); return; }
+
+      if(e.key.toLowerCase() === "n"){
+        setNull(!nullMode);
+        return;
+      }
+
+      if(e.shiftKey && e.key.toLowerCase() === "i"){
+        setInvert(!invert);
+        return;
+      }
+
+      if(e.shiftKey && e.key.toLowerCase() === "b"){
+        location.href = SHELL_HOME_URL;
+        return;
+      }
+
+      if(e.shiftKey && e.key.toLowerCase() === "k"){
+        location.href = LANDING_URL;
+        return;
+      }
+
+      if(!e.shiftKey && !e.ctrlKey && !e.metaKey){
+        const n = Number(e.key);
+        if([1,2,3,4,5,6].includes(n)){
+          setLight(n);
+        }
+      }
+
+      // F: toggle flood
+      if(e.key.toLowerCase() === "f" && currentMedia){
+        flooded = !flooded;
+        viewport.classList.toggle('flooded', flooded);
+        floodBtn.textContent = flooded ? "FLOOD: ON" : "FLOOD: OFF";
+      }
+
+      // SPACE: play/pause
+      if(e.key === " " && currentMedia){
+        e.preventDefault();
+        if(currentMedia.paused) currentMedia.play();
+        else currentMedia.pause();
+      }
+    });
+  </script>
+</body>
+</html>
