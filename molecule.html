@@ -1,0 +1,556 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>KETADATA — MOLECULAR</title>
+<style>
+  :root{
+    --bg:#0b0b0b;
+    --fg:#f2f2f2;
+    --mid:#9a9a9a;
+    --line:#2a2a2a;
+    --panel:#101010;
+    --font:12px/1.25 Arial, Helvetica, sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0;background:var(--bg);color:var(--fg);font:var(--font);overflow:hidden}
+  button,input{font:var(--font);color:var(--fg);background:#0f0f0f;border:1px solid var(--line);height:26px;padding:0 8px}
+  button{cursor:pointer}
+  .wrap{position:fixed;inset:0;display:flex;flex-direction:column;gap:6px;padding:10px}
+  .bar{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+  .chip{display:inline-flex;gap:6px;align-items:center;height:26px;padding:0 8px;border:1px solid var(--line);background:#161616}
+  .chip b{font-weight:700}
+  .grow{flex:1;min-width:180px}
+  .stage{position:relative;flex:1;border:1px solid var(--line);background:var(--panel);overflow:hidden}
+  canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+  .hud{position:absolute;left:8px;top:8px;display:flex;gap:6px;flex-wrap:wrap;align-items:center;pointer-events:auto}
+  .hud .chip{background:rgba(22,22,22,0.86)}
+  .hud button{background:rgba(15,15,15,0.86)}
+  .stamp{
+    border-top:1px solid var(--line);
+    padding:8px 0 0 0;
+    color:#7a7a7a;
+    background:transparent;
+  }
+</style>
+</head>
+
+<body>
+<div class="wrap">
+  <div class="bar">
+    <div class="chip"><b>CLASS</b><span>KETADATA</span></div>
+    <div class="chip"><b>MODE</b><span>VISUALIZER</span></div>
+    <div class="chip"><b>WEIGHT</b><span>DYNAMIC</span></div>
+    <div class="chip"><b>PALETTE</b><span>WHITE / GREY / BLACK</span></div>
+    <div class="chip grow"><b>OPERATOR NOTE</b><span style="color:var(--mid)">Navigation surface; no checkout pipeline.</span></div>
+  </div>
+
+  <div class="stage" id="stage">
+    <canvas id="c"></canvas>
+
+    <div class="hud">
+      <div class="chip"><b>MOLECULE</b><span id="statA">nodes 0</span></div>
+      <div class="chip"><b>BONDS</b><span id="statB">edges 0</span></div>
+      <button id="regen">REGEN</button>
+      <button id="pause">PAUSE</button>
+      <button id="invert">INVERT</button>
+      <button id="null">NULL</button>
+      <button id="fs">FULL</button>
+    </div>
+  </div>
+
+  <!-- KETADATA HTML SERIALIZATION STAMP (MANDATORY) -->
+  <div id="KETADATA_SERIALIZATION_STAMP" class="stamp">
+    AE: KETADATA_MOLECULAR |
+    EE: CANVAS_PARTICLE_GRAPH + MONOCHROME_RENDER + HOTKEYS |
+    WB: UI_WIRING |
+    FILE_ID: KETADATA_MOLECULAR_STRUCTURE_V1 |
+    ROOM_ID: BASE |
+    VERSION: V1 |
+    UPDATED_AT: 2026-01-03T00:00:00-05:00 |
+    CHANGELOG: initial molecular visual, monochrome palette, regen/pause/invert/null/full
+  </div>
+</div>
+
+<script>
+(() => {
+  const canvas = document.getElementById("c");
+  const stage = document.getElementById("stage");
+  const statA = document.getElementById("statA");
+  const statB = document.getElementById("statB");
+  const btnRegen = document.getElementById("regen");
+  const btnPause = document.getElementById("pause");
+  const btnInvert = document.getElementById("invert");
+  const btnNull = document.getElementById("null");
+  const btnFs = document.getElementById("fs");
+
+  const FILE_ID = "KETADATA_MOLECULAR_STRUCTURE_V1";
+  const KEY = "KDT::STATE::" + FILE_ID + "::v1";
+
+  const ctx = canvas.getContext("2d", { alpha: false });
+
+  const state = {
+    paused: false,
+    invert: false,
+    nullMode: false,
+    seed: 1,
+    density: 72,
+    k: 0.0038,
+    bondRadius: 140,
+    repel: 48,
+    noise: 0.15,
+    dragId: null,
+    mouse: {x:0,y:0,down:false}
+  };
+
+  function rnd(seed) { // xorshift32
+    let x = seed | 0;
+    return () => {
+      x ^= x << 13; x |= 0;
+      x ^= x >>> 17;
+      x ^= x << 5; x |= 0;
+      return ((x >>> 0) / 4294967296);
+    };
+  }
+
+  function clamp(v,a,b){ return Math.max(a, Math.min(b, v)); }
+  function lerp(a,b,t){ return a + (b-a)*t; }
+
+  function resize(){
+    const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+    const r = stage.getBoundingClientRect();
+    canvas.width = Math.max(1, Math.floor(r.width * dpr));
+    canvas.height = Math.max(1, Math.floor(r.height * dpr));
+    canvas.style.width = r.width + "px";
+    canvas.style.height = r.height + "px";
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+  }
+
+  let nodes = [];
+  let edges = [];
+
+  function save(){
+    try{
+      localStorage.setItem(KEY, JSON.stringify({
+        paused: state.paused,
+        invert: state.invert,
+        nullMode: state.nullMode,
+        seed: state.seed,
+        density: state.density
+      }));
+    }catch(e){}
+  }
+
+  function load(){
+    try{
+      const raw = localStorage.getItem(KEY);
+      if(!raw) return;
+      const s = JSON.parse(raw);
+      if(!s) return;
+      state.paused = !!s.paused;
+      state.invert = !!s.invert;
+      state.nullMode = !!s.nullMode;
+      state.seed = (s.seed|0) || 1;
+      state.density = clamp((s.density|0)||72, 20, 220);
+    }catch(e){}
+  }
+
+  function build(seed){
+    const r = stage.getBoundingClientRect();
+    const W = r.width, H = r.height;
+
+    const rand = rnd(seed);
+    const count = clamp(Math.floor((W*H)/15000), 35, 140);
+
+    nodes = [];
+    edges = [];
+
+    const cx = W * 0.52;
+    const cy = H * 0.52;
+    const radius = Math.min(W,H) * 0.38;
+
+    for(let i=0;i<count;i++){
+      const a = rand() * Math.PI * 2;
+      const t = Math.sqrt(rand());
+      const x = cx + Math.cos(a) * radius * t;
+      const y = cy + Math.sin(a) * radius * t;
+
+      const mass = lerp(0.6, 1.8, rand());
+      const size = lerp(2.0, 6.0, rand()) * lerp(0.75, 1.25, mass/1.8);
+
+      nodes.push({
+        id: "n"+i,
+        x, y,
+        vx: (rand()-0.5)*0.6,
+        vy: (rand()-0.5)*0.6,
+        mass,
+        size,
+        pin: false
+      });
+    }
+
+    // k-NN bonds (local graph)
+    const kNN = 3;
+    for(let i=0;i<nodes.length;i++){
+      const ni = nodes[i];
+      const dists = [];
+      for(let j=0;j<nodes.length;j++){
+        if(i===j) continue;
+        const nj = nodes[j];
+        const dx = nj.x - ni.x, dy = nj.y - ni.y;
+        const d2 = dx*dx + dy*dy;
+        dists.push([d2, j]);
+      }
+      dists.sort((a,b)=>a[0]-b[0]);
+      for(let t=0;t<kNN;t++){
+        const j = dists[t][1];
+        const key = i < j ? i+"_"+j : j+"_"+i;
+        if(edges.some(e => e.key === key)) continue;
+        const nj = nodes[j];
+        edges.push({
+          key,
+          a: i,
+          b: j,
+          rest: Math.sqrt(dists[t][0]),
+          w: 1
+        });
+      }
+    }
+
+    statA.textContent = "nodes " + nodes.length;
+    statB.textContent = "edges " + edges.length;
+    save();
+  }
+
+  function palette(){
+    // background handled separately; this returns stroke/fill in mono
+    const bg = state.nullMode ? "#000" : "#0b0b0b";
+    const fg = "#f2f2f2";
+    const mid = "#9a9a9a";
+    const dim = "#3a3a3a";
+    if(state.invert){
+      return { bg: "#f2f2f2", fg: "#0b0b0b", mid: "#2a2a2a", dim: "#bdbdbd" };
+    }
+    return { bg, fg, mid, dim };
+  }
+
+  function physics(){
+    const r = stage.getBoundingClientRect();
+    const W = r.width, H = r.height;
+
+    // spring bonds
+    for(const e of edges){
+      const a = nodes[e.a], b = nodes[e.b];
+      const dx = b.x - a.x, dy = b.y - a.y;
+      const dist = Math.max(0.0001, Math.sqrt(dx*dx + dy*dy));
+      const diff = (dist - e.rest);
+      const f = diff * state.k;
+
+      const fx = (dx / dist) * f;
+      const fy = (dy / dist) * f;
+
+      a.vx += fx / a.mass;
+      a.vy += fy / a.mass;
+      b.vx -= fx / b.mass;
+      b.vy -= fy / b.mass;
+    }
+
+    // repulsion (local-ish via distance threshold)
+    const R = state.repel;
+    const R2 = R*R;
+    for(let i=0;i<nodes.length;i++){
+      const a = nodes[i];
+      for(let j=i+1;j<nodes.length;j++){
+        const b = nodes[j];
+        const dx = b.x - a.x, dy = b.y - a.y;
+        const d2 = dx*dx + dy*dy;
+        if(d2 > R2) continue;
+        const d = Math.max(0.001, Math.sqrt(d2));
+        const push = (R - d) * 0.002;
+        const ux = dx/d, uy = dy/d;
+        a.vx -= ux * push;
+        a.vy -= uy * push;
+        b.vx += ux * push;
+        b.vy += uy * push;
+      }
+    }
+
+    // noise drift (molecular jitter)
+    const n = state.noise;
+    for(const a of nodes){
+      if(a.pin) continue;
+      a.vx += (Math.random()-0.5) * n;
+      a.vy += (Math.random()-0.5) * n;
+    }
+
+    // drag node
+    if(state.dragId){
+      const n0 = nodes[state.dragId];
+      if(n0){
+        n0.x = state.mouse.x;
+        n0.y = state.mouse.y;
+        n0.vx = 0;
+        n0.vy = 0;
+      }
+    }
+
+    // integrate + keep in bounds
+    for(const a of nodes){
+      if(a.pin) continue;
+      a.vx *= 0.985;
+      a.vy *= 0.985;
+      a.x += a.vx;
+      a.y += a.vy;
+
+      // soft walls
+      const pad = 14;
+      if(a.x < pad){ a.x = pad; a.vx *= -0.55; }
+      if(a.y < pad){ a.y = pad; a.vy *= -0.55; }
+      if(a.x > W - pad){ a.x = W - pad; a.vx *= -0.55; }
+      if(a.y > H - pad){ a.y = H - pad; a.vy *= -0.55; }
+    }
+  }
+
+  function render(){
+    const r = stage.getBoundingClientRect();
+    const W = r.width, H = r.height;
+    const P = palette();
+
+    ctx.fillStyle = P.bg;
+    ctx.fillRect(0,0,W,H);
+
+    // subtle grain
+    ctx.globalAlpha = 0.08;
+    for(let i=0;i<140;i++){
+      const x = Math.random()*W, y = Math.random()*H;
+      const s = Math.random()*1.5+0.5;
+      ctx.fillStyle = P.fg;
+      ctx.fillRect(x,y,s,s);
+    }
+    ctx.globalAlpha = 1;
+
+    // bonds
+    const maxD = state.bondRadius;
+    for(const e of edges){
+      const a = nodes[e.a], b = nodes[e.b];
+      const dx = b.x - a.x, dy = b.y - a.y;
+      const d = Math.sqrt(dx*dx + dy*dy);
+      const t = clamp(1 - (d / maxD), 0, 1);
+      if(t <= 0) continue;
+
+      ctx.strokeStyle = P.mid;
+      ctx.globalAlpha = 0.10 + 0.55 * t;
+      ctx.lineWidth = 1;
+
+      ctx.beginPath();
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(b.x, b.y);
+      ctx.stroke();
+
+      // tiny bond nodes along the line (molecular feel)
+      if(t > 0.35){
+        ctx.globalAlpha = 0.08 + 0.25 * t;
+        const steps = 2 + Math.floor(t*3);
+        for(let k=1;k<=steps;k++){
+          const u = k/(steps+1);
+          const px = lerp(a.x,b.x,u);
+          const py = lerp(a.y,b.y,u);
+          ctx.fillStyle = P.fg;
+          ctx.fillRect(px, py, 1, 1);
+        }
+      }
+    }
+    ctx.globalAlpha = 1;
+
+    // atoms
+    for(const n of nodes){
+      // outer
+      ctx.globalAlpha = 0.18;
+      ctx.fillStyle = P.fg;
+      const r1 = n.size * 2.2;
+      ctx.beginPath();
+      ctx.arc(n.x, n.y, r1, 0, Math.PI*2);
+      ctx.fill();
+
+      // core
+      ctx.globalAlpha = 0.95;
+      ctx.fillStyle = P.fg;
+      ctx.beginPath();
+      ctx.arc(n.x, n.y, n.size, 0, Math.PI*2);
+      ctx.fill();
+
+      // ring
+      ctx.globalAlpha = 0.55;
+      ctx.strokeStyle = P.dim;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.arc(n.x, n.y, n.size*1.55, 0, Math.PI*2);
+      ctx.stroke();
+
+      // highlight
+      ctx.globalAlpha = 0.55;
+      ctx.fillStyle = P.mid;
+      ctx.beginPath();
+      ctx.arc(n.x - n.size*0.35, n.y - n.size*0.35, Math.max(1, n.size*0.25), 0, Math.PI*2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+
+    // crosshair on pointer (minimal)
+    ctx.globalAlpha = 0.15;
+    ctx.strokeStyle = P.fg;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(state.mouse.x - 10, state.mouse.y);
+    ctx.lineTo(state.mouse.x + 10, state.mouse.y);
+    ctx.moveTo(state.mouse.x, state.mouse.y - 10);
+    ctx.lineTo(state.mouse.x, state.mouse.y + 10);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+
+  function tick(){
+    if(!state.paused) physics();
+    render();
+    requestAnimationFrame(tick);
+  }
+
+  function nearestNode(x,y){
+    let best = -1;
+    let bd = Infinity;
+    for(let i=0;i<nodes.length;i++){
+      const n = nodes[i];
+      const dx = n.x - x, dy = n.y - y;
+      const d2 = dx*dx + dy*dy;
+      if(d2 < bd){
+        bd = d2; best = i;
+      }
+    }
+    // require close hit
+    if(best >= 0){
+      const n = nodes[best];
+      if(Math.sqrt(bd) <= Math.max(10, n.size*2.4)) return best;
+    }
+    return null;
+  }
+
+  function setInvert(v){
+    state.invert = !!v;
+    // invert as a display law (filter), keeps mono palette meaningful
+    document.documentElement.style.filter = state.invert ? "invert(1)" : "none";
+    save();
+  }
+
+  function setNull(v){
+    state.nullMode = !!v;
+    save();
+  }
+
+  function setFullscreen(v){
+    if(v){
+      document.documentElement.requestFullscreen?.().catch(()=>{});
+    }else{
+      document.exitFullscreen?.().catch(()=>{});
+    }
+  }
+
+  // pointer
+  function pointerPos(e){
+    const r = stage.getBoundingClientRect();
+    const x = (e.touches ? e.touches[0].clientX : e.clientX) - r.left;
+    const y = (e.touches ? e.touches[0].clientY : e.clientY) - r.top;
+    state.mouse.x = clamp(x, 0, r.width);
+    state.mouse.y = clamp(y, 0, r.height);
+  }
+
+  stage.addEventListener("mousemove", (e)=>pointerPos(e));
+  stage.addEventListener("touchmove", (e)=>{ pointerPos(e); if(e.cancelable) e.preventDefault(); }, {passive:false});
+
+  stage.addEventListener("mousedown", (e)=>{
+    pointerPos(e);
+    state.mouse.down = true;
+    const hit = nearestNode(state.mouse.x, state.mouse.y);
+    if(hit !== null){
+      state.dragId = hit;
+      nodes[hit].pin = true;
+    }
+  });
+
+  window.addEventListener("mouseup", ()=>{
+    state.mouse.down = false;
+    if(state.dragId !== null){
+      nodes[state.dragId].pin = false;
+      state.dragId = null;
+    }
+  });
+
+  stage.addEventListener("touchstart", (e)=>{
+    pointerPos(e);
+    state.mouse.down = true;
+    const hit = nearestNode(state.mouse.x, state.mouse.y);
+    if(hit !== null){
+      state.dragId = hit;
+      nodes[hit].pin = true;
+    }
+  }, {passive:false});
+
+  stage.addEventListener("touchend", ()=>{
+    state.mouse.down = false;
+    if(state.dragId !== null){
+      nodes[state.dragId].pin = false;
+      state.dragId = null;
+    }
+  });
+
+  // controls
+  btnRegen.addEventListener("click", ()=>{
+    state.seed = (state.seed + 1) | 0;
+    build(state.seed);
+  });
+
+  btnPause.addEventListener("click", ()=>{
+    state.paused = !state.paused;
+    btnPause.textContent = state.paused ? "RESUME" : "PAUSE";
+    save();
+  });
+
+  btnInvert.addEventListener("click", ()=> setInvert(!state.invert));
+  btnNull.addEventListener("click", ()=> setNull(!state.nullMode));
+  btnFs.addEventListener("click", ()=>{
+    const on = !!document.fullscreenElement;
+    setFullscreen(!on);
+  });
+
+  // hotkeys (no typing fields here, but still keep it clean)
+  window.addEventListener("keydown", (e)=>{
+    const k = e.key.toLowerCase();
+    if(e.shiftKey && k === "i") setInvert(!state.invert);
+    if(e.shiftKey && k === "n") setNull(!state.nullMode);
+    if(e.shiftKey && k === "f"){
+      const on = !!document.fullscreenElement;
+      setFullscreen(!on);
+    }
+    if(e.shiftKey && k === "r"){
+      state.seed = (state.seed + 1) | 0;
+      build(state.seed);
+    }
+    if(e.shiftKey && k === " "){
+      state.paused = !state.paused;
+      btnPause.textContent = state.paused ? "RESUME" : "PAUSE";
+      save();
+    }
+  });
+
+  // boot
+  load();
+  resize();
+  window.addEventListener("resize", ()=>{ resize(); });
+  setInvert(state.invert);
+  build(state.seed);
+  btnPause.textContent = state.paused ? "RESUME" : "PAUSE";
+  tick();
+})();
+</script>
+</body>
+</html>
