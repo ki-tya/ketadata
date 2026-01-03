@@ -1,0 +1,1821 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>KETADATA — SPATIAL REGISTRY (TRANSFORMABLE / EDITABLE)</title>
+  <style>
+    :root{
+      --bg:#000;
+      --fg:rgba(255,255,255,.90);
+      --muted:rgba(255,255,255,.55);
+      --hair:rgba(255,255,255,.14);
+      --panel:rgba(255,255,255,.04);
+      --panel2:rgba(255,255,255,.02);
+      --accent:rgba(255,255,255,.82);
+      --fs:13px; /* uniform text size rule */
+      --lh:1.35;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      --sans: Arial, Helvetica, sans-serif;
+    }
+    *{ box-sizing:border-box; }
+    html,body{ height:100%; }
+    body{
+      margin:0;
+      background:var(--bg);
+      color:var(--fg);
+      font-family:var(--sans);
+      font-size:var(--fs);
+      line-height:var(--lh);
+      overflow:hidden;
+    }
+
+    /* Stage */
+    #stage{
+      position:fixed; inset:0;
+      width:100vw; height:100vh;
+      display:block;
+      background:#000;
+    }
+
+    /* Topbar */
+    .topbar{
+      position:fixed; left:0; right:0; top:0;
+      height:44px;
+      display:flex;
+      align-items:center;
+      gap:10px;
+      padding:0 12px;
+      border-bottom:1px solid var(--hair);
+      background:rgba(0,0,0,.84);
+      backdrop-filter: blur(8px);
+      z-index:40;
+    }
+    .brand{
+      font-weight:700;
+      letter-spacing:.14em;
+      text-transform:uppercase;
+      opacity:.92;
+      white-space:nowrap;
+      user-select:none;
+    }
+    .sub{
+      color:var(--muted);
+      letter-spacing:.08em;
+      text-transform:uppercase;
+      opacity:.85;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      flex:1;
+      min-width:0;
+    }
+    .btn, .chip, select, input[type="text"]{
+      font-family:var(--sans);
+      font-size:var(--fs);
+      line-height:1;
+      letter-spacing:.10em;
+      text-transform:uppercase;
+    }
+    .btn{
+      background:var(--panel);
+      border:1px solid rgba(255,255,255,.18);
+      color:var(--fg);
+      padding:8px 10px;
+      border-radius:10px;
+      cursor:pointer;
+      user-select:none;
+      white-space:nowrap;
+    }
+    .btn:hover{ border-color:rgba(255,255,255,.32); background:rgba(255,255,255,.06); }
+    .btn:active{ transform: translateY(1px); }
+    .btn.ghost{ background:transparent; }
+    .btn.small{ padding:6px 8px; border-radius:9px; }
+    .sep{ width:1px; height:22px; background:var(--hair); }
+
+    .search{
+      display:flex;
+      align-items:center;
+      gap:8px;
+      min-width: 240px;
+      max-width: 520px;
+      flex:0 1 520px;
+    }
+    .search input{
+      width:100%;
+      background:rgba(255,255,255,.03);
+      border:1px solid rgba(255,255,255,.14);
+      color:var(--fg);
+      padding:8px 10px;
+      border-radius:10px;
+      outline:none;
+      text-transform:none;
+      letter-spacing:.02em;
+    }
+    .search input::placeholder{ color:rgba(255,255,255,.35); text-transform:uppercase; letter-spacing:.10em; }
+
+    /* HUD */
+    .hud{
+      position:fixed;
+      left:12px;
+      bottom:12px;
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+      align-items:center;
+      z-index:35;
+      pointer-events:none;
+      user-select:none;
+    }
+    .chip{
+      border:1px solid rgba(255,255,255,.18);
+      background:rgba(0,0,0,.35);
+      padding:6px 8px;
+      border-radius:999px;
+      color:var(--muted);
+      pointer-events:none;
+      white-space:nowrap;
+    }
+
+    /* Side panel */
+    .panel{
+      position:fixed;
+      right:12px;
+      top:56px;
+      width:min(420px, calc(100vw - 24px));
+      max-height: calc(100vh - 68px);
+      border:1px solid rgba(255,255,255,.18);
+      border-radius:14px;
+      background:rgba(0,0,0,.62);
+      backdrop-filter: blur(10px);
+      box-shadow: 0 18px 60px rgba(0,0,0,.60);
+      overflow:hidden;
+      z-index:45;
+      display:flex;
+      flex-direction:column;
+      pointer-events:auto;
+    }
+    .panelHead{
+      padding:10px 12px;
+      border-bottom:1px solid rgba(255,255,255,.14);
+      background:rgba(0,0,0,.74);
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+    }
+    .panelTitle{
+      letter-spacing:.12em;
+      text-transform:uppercase;
+      font-weight:700;
+      color:var(--accent);
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      max-width: 260px;
+    }
+    .panelBody{
+      padding:10px 12px 12px;
+      overflow:auto;
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+    }
+    .block{
+      border:1px solid rgba(255,255,255,.12);
+      border-radius:12px;
+      background:rgba(255,255,255,.02);
+      overflow:hidden;
+    }
+    .blockHead{
+      padding:10px 10px;
+      border-bottom:1px solid rgba(255,255,255,.10);
+      background:rgba(255,255,255,.03);
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      letter-spacing:.12em;
+      text-transform:uppercase;
+      color:rgba(255,255,255,.72);
+      font-weight:700;
+    }
+    .rows{ padding:10px; display:flex; flex-direction:column; gap:10px; }
+    .row{
+      display:grid;
+      grid-template-columns: 110px 1fr;
+      gap:10px;
+      align-items:center;
+    }
+    .label{
+      color:var(--muted);
+      letter-spacing:.10em;
+      text-transform:uppercase;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+    .field input, .field select, .field textarea{
+      width:100%;
+      background:rgba(255,255,255,.03);
+      border:1px solid rgba(255,255,255,.14);
+      color:var(--fg);
+      padding:8px 10px;
+      border-radius:10px;
+      outline:none;
+      text-transform:none;
+      letter-spacing:.02em;
+      font-family:var(--sans);
+      font-size:var(--fs);
+      line-height:var(--lh);
+    }
+    .field textarea{ min-height: 68px; resize:vertical; font-family:var(--sans); }
+    .field select{ text-transform:uppercase; letter-spacing:.10em; }
+
+    .toggles{
+      display:flex; gap:8px; flex-wrap:wrap;
+      padding:10px;
+      border-top:1px solid rgba(255,255,255,.10);
+      background:rgba(0,0,0,.12);
+    }
+    .toggle{
+      display:inline-flex; gap:8px; align-items:center;
+      border:1px solid rgba(255,255,255,.18);
+      background:rgba(255,255,255,.03);
+      padding:8px 10px;
+      border-radius:10px;
+      cursor:pointer;
+      user-select:none;
+    }
+    .toggle input{ transform: translateY(1px); }
+    .toggle span{
+      letter-spacing:.10em;
+      text-transform:uppercase;
+      color:rgba(255,255,255,.78);
+      white-space:nowrap;
+    }
+
+    .hint{
+      color:var(--muted);
+      letter-spacing:.06em;
+      text-transform:uppercase;
+      line-height:1.25;
+    }
+
+    /* Modal (IO) */
+    .modalBack{
+      position:fixed; inset:0;
+      background:rgba(0,0,0,.62);
+      display:none;
+      align-items:center;
+      justify-content:center;
+      z-index:100;
+      padding:12px;
+    }
+    .modal{
+      width:min(920px, 100%);
+      border:1px solid rgba(255,255,255,.20);
+      border-radius:14px;
+      background:rgba(0,0,0,.86);
+      backdrop-filter: blur(10px);
+      box-shadow: 0 18px 60px rgba(0,0,0,.75);
+      overflow:hidden;
+    }
+    .modalHead{
+      padding:10px 12px;
+      border-bottom:1px solid rgba(255,255,255,.14);
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      background:rgba(0,0,0,.60);
+    }
+    .modalTitle{
+      letter-spacing:.12em;
+      text-transform:uppercase;
+      font-weight:700;
+      color:var(--accent);
+      white-space:nowrap;
+    }
+    .modalBody{
+      padding:10px 12px 12px;
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+    }
+    .box{
+      width:100%;
+      min-height: 260px;
+      border:1px solid rgba(255,255,255,.16);
+      border-radius:12px;
+      background:rgba(255,255,255,.03);
+      color:var(--fg);
+      padding:10px;
+      font-family:var(--mono);
+      font-size:var(--fs);
+      line-height:1.35;
+      outline:none;
+      resize:vertical;
+      white-space:pre;
+      overflow:auto;
+      text-transform:none;
+      letter-spacing:.02em;
+    }
+
+    /* Print (PDF) */
+    body.print-dark{ --printBg:#000; --printFg:#fff; }
+    body.print-light{ --printBg:#fff; --printFg:#000; }
+
+    @media print{
+      .topbar, .panel, .hud, .modalBack{ display:none !important; }
+      html, body{ background:var(--printBg) !important; color:var(--printFg) !important; }
+      #stage{ display:none !important; }
+      /* print a plain text dump of current registry state */
+      #printDump{
+        display:block !important;
+        white-space:pre-wrap !important;
+        font-family: var(--mono) !important;
+        font-size: var(--fs) !important;
+        line-height: 1.35 !important;
+        color: var(--printFg) !important;
+      }
+      @page{ margin: 14mm; }
+    }
+    #printDump{ display:none; padding:14mm; }
+
+  </style>
+</head>
+<body class="print-dark">
+  <canvas id="stage"></canvas>
+
+  <div class="topbar">
+    <div class="brand">KETADATA</div>
+    <div class="sub" id="sub">SPATIAL REGISTRY · DRAG NODES · DRAG CLUSTERS · PAN/ZOOM · EXPORT STATE</div>
+
+    <div class="search">
+      <input id="q" type="text" placeholder="search title / url / tags" />
+    </div>
+
+    <button class="btn small" id="btnAddNode">ADD NODE</button>
+    <button class="btn small" id="btnAddCluster">ADD CLUSTER</button>
+
+    <div class="sep"></div>
+
+    <button class="btn small ghost" id="btnValidate">VALIDATE (IFRAME)</button>
+    <button class="btn small ghost" id="btnIO">IMPORT/EXPORT</button>
+    <button class="btn small" id="btnPDF">EXPORT PDF</button>
+
+    <div class="sep"></div>
+
+    <button class="btn small ghost" id="btnMode">PDF MODE: DARK</button>
+    <button class="btn small ghost" id="btnHelp">HELP</button>
+  </div>
+
+  <div class="hud">
+    <div class="chip" id="chipZoom">ZOOM —</div>
+    <div class="chip" id="chipCounts">NODES — · CLUSTERS —</div>
+    <div class="chip" id="chipSel">SELECTION —</div>
+    <div class="chip" id="chipHint">DRAG NODE · SHIFT+DRAG STAGE PAN · WHEEL ZOOM · DOUBLE-CLICK EDIT</div>
+  </div>
+
+  <div class="panel" id="panel">
+    <div class="panelHead">
+      <div class="panelTitle" id="panelTitle">INSPECTOR</div>
+      <div style="display:flex; gap:8px; align-items:center;">
+        <button class="btn small ghost" id="btnCenter">CENTER</button>
+        <button class="btn small ghost" id="btnDelete">DELETE</button>
+        <button class="btn small ghost" id="btnClosePanel">HIDE</button>
+      </div>
+    </div>
+
+    <div class="panelBody">
+      <div class="block">
+        <div class="blockHead">
+          <div>SELECTION</div>
+          <div class="hint" id="selMeta">—</div>
+        </div>
+        <div class="rows">
+          <div class="row">
+            <div class="label">TYPE</div>
+            <div class="field"><input id="fType" type="text" disabled /></div>
+          </div>
+          <div class="row">
+            <div class="label">TITLE</div>
+            <div class="field"><input id="fTitle" type="text" /></div>
+          </div>
+          <div class="row">
+            <div class="label">URL</div>
+            <div class="field"><input id="fUrl" type="text" placeholder="https://..." /></div>
+          </div>
+          <div class="row">
+            <div class="label">TAGS</div>
+            <div class="field"><input id="fTags" type="text" placeholder="comma,separated,tags" /></div>
+          </div>
+          <div class="row">
+            <div class="label">CLUSTER</div>
+            <div class="field">
+              <select id="fCluster"></select>
+            </div>
+          </div>
+          <div class="row">
+            <div class="label">STATUS</div>
+            <div class="field"><input id="fStatus" type="text" disabled /></div>
+          </div>
+          <div class="row">
+            <div class="label">NOTES</div>
+            <div class="field"><textarea id="fNotes" placeholder=""></textarea></div>
+          </div>
+        </div>
+
+        <div class="toggles">
+          <label class="toggle"><input id="tPinned" type="checkbox" /><span>PINNED</span></label>
+          <label class="toggle"><input id="tHide" type="checkbox" /><span>HIDE</span></label>
+          <button class="btn small ghost" id="btnOpen">OPEN</button>
+          <button class="btn small ghost" id="btnCopyUrl">COPY URL</button>
+        </div>
+      </div>
+
+      <div class="block">
+        <div class="blockHead">
+          <div>STAGE</div>
+          <div class="hint" id="stageMeta">—</div>
+        </div>
+        <div class="rows">
+          <div class="hint">
+            Transformable view: clusters are boxes; nodes live inside clusters but can be dragged anywhere.
+            Validation uses a hidden iframe probe; some sites will show BLOCKED due to framing policies.
+          </div>
+        </div>
+      </div>
+
+      <div class="block">
+        <div class="blockHead">
+          <div>COMMANDS</div>
+          <div class="hint">H toggles panel</div>
+        </div>
+        <div class="rows">
+          <div class="hint">
+            • Drag node = move node<br/>
+            • Drag cluster header = move cluster<br/>
+            • Wheel = zoom (stage only)<br/>
+            • Shift+drag empty stage = pan<br/>
+            • Double-click node/cluster = edit in panel<br/>
+            • Delete = remove selected (or button)<br/>
+            • Ctrl/Cmd+E = IO · Ctrl/Cmd+P = PDF
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modalBack" id="modalBack" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true">
+      <div class="modalHead">
+        <div class="modalTitle">STATE IO</div>
+        <div style="display:flex; gap:8px; align-items:center;">
+          <button class="btn small" id="btnDownload">DOWNLOAD .JSON</button>
+          <button class="btn small ghost" id="btnLoad">LOAD .JSON</button>
+          <input id="filePick" type="file" accept="application/json" style="display:none" />
+          <button class="btn small ghost" id="btnClose">CLOSE</button>
+        </div>
+      </div>
+      <div class="modalBody">
+        <div class="hint">
+          Export/import is local-first and exact. JSON download is a real file. Paste-in box supported.
+        </div>
+        <textarea id="ioBox" class="box" spellcheck="false"></textarea>
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+          <button class="btn small" id="btnApplyBox">APPLY FROM BOX</button>
+          <button class="btn small ghost" id="btnCopyBox">COPY BOX</button>
+          <button class="btn small ghost" id="btnRefreshBox">REFRESH BOX</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <pre id="printDump"></pre>
+
+  <script>
+    (() => {
+      /* =========================
+         KETADATA SPATIAL REGISTRY
+         Local-first stage with clusters + nodes
+         ========================= */
+
+      const LS_KEY = "KETADATA_SPATIAL_REGISTRY_STATE_v1";
+
+      const $ = (id)=>document.getElementById(id);
+
+      const canvas = $("stage");
+      const ctx = canvas.getContext("2d", { alpha:false });
+
+      const panel = $("panel");
+      const panelTitle = $("panelTitle");
+      const selMeta = $("selMeta");
+      const stageMeta = $("stageMeta");
+
+      const chipZoom = $("chipZoom");
+      const chipCounts = $("chipCounts");
+      const chipSel = $("chipSel");
+
+      const q = $("q");
+
+      const btnAddNode = $("btnAddNode");
+      const btnAddCluster = $("btnAddCluster");
+      const btnValidate = $("btnValidate");
+      const btnIO = $("btnIO");
+      const btnPDF = $("btnPDF");
+      const btnMode = $("btnMode");
+      const btnHelp = $("btnHelp");
+
+      const btnCenter = $("btnCenter");
+      const btnDelete = $("btnDelete");
+      const btnClosePanel = $("btnClosePanel");
+      const btnOpen = $("btnOpen");
+      const btnCopyUrl = $("btnCopyUrl");
+
+      const fType = $("fType");
+      const fTitle = $("fTitle");
+      const fUrl = $("fUrl");
+      const fTags = $("fTags");
+      const fCluster = $("fCluster");
+      const fStatus = $("fStatus");
+      const fNotes = $("fNotes");
+      const tPinned = $("tPinned");
+      const tHide = $("tHide");
+
+      const modalBack = $("modalBack");
+      const ioBox = $("ioBox");
+      const filePick = $("filePick");
+      const btnDownload = $("btnDownload");
+      const btnLoad = $("btnLoad");
+      const btnClose = $("btnClose");
+      const btnApplyBox = $("btnApplyBox");
+      const btnCopyBox = $("btnCopyBox");
+      const btnRefreshBox = $("btnRefreshBox");
+
+      const printDump = $("printDump");
+
+      const clamp = (v,a,b)=>Math.max(a,Math.min(b,v));
+      const nowISO = ()=>new Date().toISOString();
+
+      function uid(prefix="ID"){
+        return (prefix + "_" + Date.now().toString(16) + "_" + Math.random().toString(16).slice(2)).toUpperCase();
+      }
+
+      function isUIEvent(e){
+        // surgical event isolation: if interacting with UI chrome, stage must not react
+        return !!(
+          e.target.closest(".panel") ||
+          e.target.closest(".topbar") ||
+          e.target.closest(".modalBack") ||
+          e.target.closest("input") ||
+          e.target.closest("select") ||
+          e.target.closest("textarea") ||
+          e.target.closest("button")
+        );
+      }
+
+      /* =========================
+         State
+         ========================= */
+      const state = {
+        schema: "ketadata.spatial-registry.v1",
+        FILE_ID: null,
+        ROOM_ID: "K_REGISTRY",
+        VERSION_ID: "V1",
+        UPDATED_AT: null,
+        CHANGELOG: "INIT",
+
+        view: {
+          cx: 0, cy: 0, zoom: 1.0
+        },
+
+        clusters: [],
+        nodes: [],
+
+        selection: { type:null, id:null },
+
+        // runtime
+        _validation: { running:false, queue:[], idx:0 }
+      };
+
+      function defaultSeed(){
+        state.FILE_ID = uid("REGISTRY");
+        state.UPDATED_AT = nowISO();
+        state.CHANGELOG = "SEED";
+
+        // sensible defaults matching your current taxonomy vibe
+        const baseX = -520, baseY = -260;
+        const c = (name, x, y) => ({
+          id: uid("CL"),
+          type:"cluster",
+          name,
+          x, y, w: 420, h: 260,
+          color: "rgba(255,255,255,.10)",
+          hidden:false,
+          pinned:false,
+          notes:""
+        });
+
+        state.clusters = [
+          c("KETA CORE", baseX, baseY),
+          c("CORE UTIL", baseX+520, baseY),
+          c("KETA SCREENS", baseX, baseY+320),
+          c("EXPERIMENTS", baseX+520, baseY+320),
+          c("LAB", baseX+1040, baseY+320),
+          c("GRAVEYARD", baseX+1040, baseY)
+        ];
+
+        // a couple starter nodes so you can see the mechanics
+        const n = (title, url, clusterName, ox, oy) => {
+          const cl = state.clusters.find(z=>z.name===clusterName) || state.clusters[0];
+          return {
+            id: uid("ND"),
+            type:"node",
+            title,
+            url,
+            tags: [],
+            clusterId: cl.id,
+            x: cl.x + 18 + ox,
+            y: cl.y + 56 + oy,
+            w: 240,
+            h: 64,
+            status: "UNKNOWN", // UNKNOWN | ALIVE | DEAD | BLOCKED | LOCAL
+            lastCheckedAt: "",
+            pinned:false,
+            hidden:false,
+            notes:""
+          };
+        };
+        state.nodes = [
+          n("system.html", "", "KETA CORE", 0, 0),
+          n("to-do.html", "", "CORE UTIL", 0, 0),
+          n("kdtv1.html", "", "KETA SCREENS", 0, 0),
+          n("slopstream.html", "", "EXPERIMENTS", 0, 0)
+        ];
+
+        state.view.cx = 0;
+        state.view.cy = 0;
+        state.view.zoom = 1.0;
+
+        state.selection = { type:null, id:null };
+      }
+
+      function load(){
+        try{
+          const raw = localStorage.getItem(LS_KEY);
+          if (!raw){ defaultSeed(); return; }
+          const parsed = JSON.parse(raw);
+          if (!parsed || typeof parsed !== "object"){ defaultSeed(); return; }
+
+          // minimal validation / deep fill
+          state.schema = parsed.schema || state.schema;
+          state.FILE_ID = parsed.FILE_ID || uid("REGISTRY");
+          state.ROOM_ID = parsed.ROOM_ID || "K_REGISTRY";
+          state.VERSION_ID = parsed.VERSION_ID || "V1";
+          state.UPDATED_AT = parsed.UPDATED_AT || nowISO();
+          state.CHANGELOG = parsed.CHANGELOG || "LOAD";
+
+          state.view = parsed.view || state.view;
+          state.view.cx = +state.view.cx || 0;
+          state.view.cy = +state.view.cy || 0;
+          state.view.zoom = clamp(+state.view.zoom || 1, 0.25, 3.0);
+
+          state.clusters = Array.isArray(parsed.clusters) ? parsed.clusters : [];
+          state.nodes = Array.isArray(parsed.nodes) ? parsed.nodes : [];
+          state.selection = parsed.selection || { type:null, id:null };
+
+          // ensure required fields
+          for (const cl of state.clusters){
+            cl.type = "cluster";
+            cl.id = cl.id || uid("CL");
+            cl.name = cl.name || "CLUSTER";
+            cl.x = +cl.x || 0; cl.y = +cl.y || 0;
+            cl.w = clamp(+cl.w || 420, 240, 1200);
+            cl.h = clamp(+cl.h || 260, 160, 900);
+            cl.hidden = !!cl.hidden;
+            cl.pinned = !!cl.pinned;
+            cl.notes = cl.notes || "";
+          }
+          for (const nd of state.nodes){
+            nd.type = "node";
+            nd.id = nd.id || uid("ND");
+            nd.title = nd.title || "NODE";
+            nd.url = nd.url || "";
+            nd.tags = Array.isArray(nd.tags) ? nd.tags : [];
+            nd.clusterId = nd.clusterId || (state.clusters[0] ? state.clusters[0].id : "");
+            nd.x = +nd.x || 0; nd.y = +nd.y || 0;
+            nd.w = clamp(+nd.w || 240, 160, 520);
+            nd.h = clamp(+nd.h || 64, 46, 180);
+            nd.status = nd.status || "UNKNOWN";
+            nd.lastCheckedAt = nd.lastCheckedAt || "";
+            nd.hidden = !!nd.hidden;
+            nd.pinned = !!nd.pinned;
+            nd.notes = nd.notes || "";
+          }
+        } catch(e){
+          defaultSeed();
+        }
+      }
+
+      function save(changelog){
+        state.UPDATED_AT = nowISO();
+        state.CHANGELOG = changelog || state.CHANGELOG || "SAVE";
+        localStorage.setItem(LS_KEY, JSON.stringify(state));
+        refreshIOBox();
+        renderHUD();
+      }
+
+      /* =========================
+         Coordinate transforms
+         ========================= */
+      function resize(){
+        const dpr = Math.min(2, window.devicePixelRatio || 1);
+        canvas.width = Math.floor(innerWidth * dpr);
+        canvas.height = Math.floor(innerHeight * dpr);
+        canvas.style.width = innerWidth + "px";
+        canvas.style.height = innerHeight + "px";
+        ctx.setTransform(dpr,0,0,dpr,0,0);
+      }
+      addEventListener("resize", resize);
+
+      function worldToScreen(wx, wy){
+        const z = state.view.zoom;
+        const sx = (wx - state.view.cx) * z + innerWidth/2;
+        const sy = (wy - state.view.cy) * z + innerHeight/2;
+        return { x:sx, y:sy };
+      }
+      function screenToWorld(sx, sy){
+        const z = state.view.zoom;
+        const wx = (sx - innerWidth/2) / z + state.view.cx;
+        const wy = (sy - innerHeight/2) / z + state.view.cy;
+        return { x:wx, y:wy };
+      }
+
+      /* =========================
+         Query/filter
+         ========================= */
+      function matchesQuery(obj, query){
+        if (!query) return true;
+        const s = query.toLowerCase().trim();
+        if (!s) return true;
+
+        const hay = [
+          obj.name || "",
+          obj.title || "",
+          obj.url || "",
+          (Array.isArray(obj.tags) ? obj.tags.join(",") : ""),
+          obj.notes || ""
+        ].join(" ").toLowerCase();
+
+        return hay.includes(s);
+      }
+
+      /* =========================
+         Drawing
+         ========================= */
+      function draw(){
+        // bg
+        ctx.fillStyle = "#000";
+        ctx.fillRect(0,0,innerWidth,innerHeight);
+
+        const qv = (q.value || "").trim();
+
+        // subtle grid
+        drawGrid();
+
+        // clusters
+        const clusters = state.clusters.slice().sort((a,b)=> (a.pinned===b.pinned)?0:(a.pinned?-1:1));
+        for (const cl of clusters){
+          if (cl.hidden) continue;
+          if (!matchesQuery({name:cl.name, notes:cl.notes}, qv)) {
+            // still draw clusters faintly if query is active, but keep presence
+            if (qv) drawCluster(cl, true);
+            else drawCluster(cl, false);
+          } else {
+            drawCluster(cl, false);
+          }
+        }
+
+        // nodes
+        const nodes = state.nodes.slice().sort((a,b)=> (a.pinned===b.pinned)?0:(a.pinned?-1:1));
+        for (const nd of nodes){
+          if (nd.hidden) continue;
+          if (!matchesQuery(nd, qv)) continue;
+          drawNode(nd);
+        }
+
+        // selection highlight on top
+        const sel = getSelected();
+        if (sel) drawSelection(sel);
+
+        requestAnimationFrame(draw);
+      }
+
+      function drawGrid(){
+        const z = state.view.zoom;
+        const spacing = 120;
+        const minor = 24;
+        const origin = worldToScreen(0,0);
+
+        // major grid lines
+        ctx.save();
+        ctx.globalAlpha = 0.30;
+        ctx.lineWidth = 1;
+
+        const leftWorld = screenToWorld(0,0).x;
+        const topWorld = screenToWorld(0,0).y;
+        const rightWorld = screenToWorld(innerWidth,innerHeight).x;
+        const bottomWorld = screenToWorld(innerWidth,innerHeight).y;
+
+        // majors
+        ctx.strokeStyle = "rgba(255,255,255,.10)";
+        let startX = Math.floor(leftWorld/spacing)*spacing;
+        for (let x=startX; x<=rightWorld; x+=spacing){
+          const p1 = worldToScreen(x, topWorld);
+          const p2 = worldToScreen(x, bottomWorld);
+          ctx.beginPath(); ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y); ctx.stroke();
+        }
+        let startY = Math.floor(topWorld/spacing)*spacing;
+        for (let y=startY; y<=bottomWorld; y+=spacing){
+          const p1 = worldToScreen(leftWorld, y);
+          const p2 = worldToScreen(rightWorld, y);
+          ctx.beginPath(); ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y); ctx.stroke();
+        }
+
+        // minors (fade with zoom)
+        ctx.globalAlpha = clamp(0.18 * (z/1.0), 0.06, 0.22);
+        ctx.strokeStyle = "rgba(255,255,255,.08)";
+        let sx = Math.floor(leftWorld/minor)*minor;
+        for (let x=sx; x<=rightWorld; x+=minor){
+          const p1 = worldToScreen(x, topWorld);
+          const p2 = worldToScreen(x, bottomWorld);
+          ctx.beginPath(); ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y); ctx.stroke();
+        }
+        let sy = Math.floor(topWorld/minor)*minor;
+        for (let y=sy; y<=bottomWorld; y+=minor){
+          const p1 = worldToScreen(leftWorld, y);
+          const p2 = worldToScreen(rightWorld, y);
+          ctx.beginPath(); ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y); ctx.stroke();
+        }
+
+        // origin marker
+        ctx.globalAlpha = 0.60;
+        ctx.strokeStyle = "rgba(255,255,255,.18)";
+        ctx.beginPath();
+        ctx.arc(origin.x, origin.y, 8, 0, Math.PI*2);
+        ctx.stroke();
+
+        ctx.restore();
+      }
+
+      function drawCluster(cl, faint){
+        const s = worldToScreen(cl.x, cl.y);
+        const w = cl.w * state.view.zoom;
+        const h = cl.h * state.view.zoom;
+
+        const isSel = state.selection.type==="cluster" && state.selection.id===cl.id;
+
+        ctx.save();
+        ctx.globalAlpha = faint ? 0.22 : 1.0;
+
+        // box
+        ctx.fillStyle = "rgba(255,255,255,.02)";
+        ctx.strokeStyle = isSel ? "rgba(255,255,255,.48)" : "rgba(255,255,255,.16)";
+        ctx.lineWidth = 1.2;
+        roundRect(s.x, s.y, w, h, 14*state.view.zoom, true, true);
+
+        // header strip
+        const hh = 34 * state.view.zoom;
+        ctx.fillStyle = "rgba(255,255,255,.03)";
+        ctx.strokeStyle = "rgba(255,255,255,.10)";
+        roundRect(s.x, s.y, w, hh, 14*state.view.zoom, true, true);
+
+        // title
+        ctx.fillStyle = "rgba(255,255,255,.86)";
+        ctx.font = `${Math.max(10, Math.floor(13*state.view.zoom))}px Arial`;
+        ctx.textBaseline = "middle";
+        const name = cl.name || "CLUSTER";
+        ctx.fillText(name, s.x + 12*state.view.zoom, s.y + hh/2);
+
+        // badges (pinned / hidden)
+        ctx.fillStyle = "rgba(255,255,255,.55)";
+        const badges = [];
+        if (cl.pinned) badges.push("PIN");
+        if (cl.hidden) badges.push("HIDE");
+        if (badges.length){
+          const txt = badges.join(" ");
+          const tw = ctx.measureText(txt).width;
+          ctx.fillText(txt, s.x + w - (12*state.view.zoom + tw), s.y + hh/2);
+        }
+
+        ctx.restore();
+      }
+
+      function statusToStyle(status){
+        // no color coding beyond opacity/weight — keep minimal.
+        // We encode status via border intensity + label.
+        if (status === "ALIVE") return { stroke:"rgba(255,255,255,.34)", fill:"rgba(255,255,255,.03)", text:"rgba(255,255,255,.86)" };
+        if (status === "DEAD") return { stroke:"rgba(255,255,255,.18)", fill:"rgba(255,255,255,.02)", text:"rgba(255,255,255,.66)" };
+        if (status === "BLOCKED") return { stroke:"rgba(255,255,255,.22)", fill:"rgba(255,255,255,.02)", text:"rgba(255,255,255,.72)" };
+        if (status === "LOCAL") return { stroke:"rgba(255,255,255,.26)", fill:"rgba(255,255,255,.02)", text:"rgba(255,255,255,.80)" };
+        return { stroke:"rgba(255,255,255,.22)", fill:"rgba(255,255,255,.02)", text:"rgba(255,255,255,.78)" };
+      }
+
+      function drawNode(nd){
+        const s = worldToScreen(nd.x, nd.y);
+        const w = nd.w * state.view.zoom;
+        const h = nd.h * state.view.zoom;
+
+        const isSel = state.selection.type==="node" && state.selection.id===nd.id;
+        const stl = statusToStyle(nd.status);
+
+        // If cluster is hidden, hide nodes by default (but user can override node hidden)
+        const cl = state.clusters.find(c=>c.id===nd.clusterId);
+        if (cl && cl.hidden) return;
+
+        ctx.save();
+
+        // card
+        ctx.fillStyle = stl.fill;
+        ctx.strokeStyle = isSel ? "rgba(255,255,255,.52)" : stl.stroke;
+        ctx.lineWidth = 1.2;
+        roundRect(s.x, s.y, w, h, 12*state.view.zoom, true, true);
+
+        // title (top)
+        ctx.fillStyle = stl.text;
+        ctx.font = `${Math.max(10, Math.floor(13*state.view.zoom))}px Arial`;
+        ctx.textBaseline = "top";
+        const pad = 10*state.view.zoom;
+
+        const title = (nd.title || "NODE").toString();
+        drawTruncatedText(title, s.x + pad, s.y + pad, w - pad*2, 1);
+
+        // url (bottom)
+        ctx.fillStyle = "rgba(255,255,255,.55)";
+        ctx.font = `${Math.max(9, Math.floor(12*state.view.zoom))}px Arial`;
+        ctx.textBaseline = "bottom";
+        const url = (nd.url || "").toString();
+        drawTruncatedText(url, s.x + pad, s.y + h - pad, w - pad*2, 1);
+
+        // status label (small, right)
+        ctx.fillStyle = "rgba(255,255,255,.55)";
+        ctx.font = `${Math.max(9, Math.floor(11*state.view.zoom))}px Arial`;
+        ctx.textBaseline = "top";
+        const lbl = (nd.status || "UNKNOWN").toString();
+        const tw = ctx.measureText(lbl).width;
+        ctx.fillText(lbl, s.x + w - pad - tw, s.y + pad);
+
+        // pinned mark
+        if (nd.pinned){
+          ctx.fillStyle = "rgba(255,255,255,.70)";
+          ctx.font = `${Math.max(9, Math.floor(11*state.view.zoom))}px Arial`;
+          ctx.textBaseline = "bottom";
+          ctx.fillText("PIN", s.x + w - pad - ctx.measureText("PIN").width, s.y + h - pad);
+        }
+
+        ctx.restore();
+      }
+
+      function drawSelection(sel){
+        ctx.save();
+        ctx.globalAlpha = 0.9;
+        ctx.strokeStyle = "rgba(255,255,255,.62)";
+        ctx.lineWidth = 1.6;
+
+        if (sel.type==="node"){
+          const nd = sel.obj;
+          const s = worldToScreen(nd.x, nd.y);
+          const w = nd.w * state.view.zoom;
+          const h = nd.h * state.view.zoom;
+          roundRect(s.x-2, s.y-2, w+4, h+4, 14*state.view.zoom, false, true);
+        } else if (sel.type==="cluster"){
+          const cl = sel.obj;
+          const s = worldToScreen(cl.x, cl.y);
+          const w = cl.w * state.view.zoom;
+          const h = cl.h * state.view.zoom;
+          roundRect(s.x-2, s.y-2, w+4, h+4, 16*state.view.zoom, false, true);
+        }
+
+        ctx.restore();
+      }
+
+      function roundRect(x,y,w,h,r, fill, stroke){
+        r = Math.max(2, Math.min(r, Math.min(w,h)/2));
+        ctx.beginPath();
+        ctx.moveTo(x+r, y);
+        ctx.arcTo(x+w, y, x+w, y+h, r);
+        ctx.arcTo(x+w, y+h, x, y+h, r);
+        ctx.arcTo(x, y+h, x, y, r);
+        ctx.arcTo(x, y, x+w, y, r);
+        ctx.closePath();
+        if (fill) ctx.fill();
+        if (stroke) ctx.stroke();
+      }
+
+      function drawTruncatedText(text, x, y, maxW, lines){
+        // single-line truncation with ellipsis
+        const ell = "…";
+        let t = text;
+        if (ctx.measureText(t).width <= maxW){
+          ctx.fillText(t, x, y);
+          return;
+        }
+        while (t.length > 0 && ctx.measureText(t + ell).width > maxW){
+          t = t.slice(0, -1);
+        }
+        ctx.fillText(t + ell, x, y);
+      }
+
+      /* =========================
+         Hit testing
+         ========================= */
+      function hitTest(sx, sy){
+        const w = screenToWorld(sx, sy);
+
+        // nodes on top
+        for (let i=state.nodes.length-1; i>=0; i--){
+          const nd = state.nodes[i];
+          if (nd.hidden) continue;
+          const cl = state.clusters.find(c=>c.id===nd.clusterId);
+          if (cl && cl.hidden) continue;
+          if (!matchesQuery(nd, (q.value||"").trim())) continue;
+
+          if (w.x >= nd.x && w.x <= nd.x + nd.w && w.y >= nd.y && w.y <= nd.y + nd.h){
+            return { type:"node", obj:nd, where:"body" };
+          }
+        }
+
+        // clusters
+        for (let i=state.clusters.length-1; i>=0; i--){
+          const cl = state.clusters[i];
+          if (cl.hidden) continue;
+          if (w.x >= cl.x && w.x <= cl.x + cl.w && w.y >= cl.y && w.y <= cl.y + cl.h){
+            // header zone
+            if (w.y <= cl.y + 34){
+              return { type:"cluster", obj:cl, where:"header" };
+            }
+            return { type:"cluster", obj:cl, where:"body" };
+          }
+        }
+
+        return null;
+      }
+
+      function getSelected(){
+        if (!state.selection.type || !state.selection.id) return null;
+        if (state.selection.type==="node"){
+          const nd = state.nodes.find(n=>n.id===state.selection.id);
+          if (!nd) return null;
+          return { type:"node", obj:nd };
+        }
+        if (state.selection.type==="cluster"){
+          const cl = state.clusters.find(c=>c.id===state.selection.id);
+          if (!cl) return null;
+          return { type:"cluster", obj:cl };
+        }
+        return null;
+      }
+
+      function setSelection(type, id){
+        state.selection.type = type;
+        state.selection.id = id;
+        save("SELECT");
+        syncInspector();
+      }
+
+      /* =========================
+         Inspector
+         ========================= */
+      function rebuildClusterSelect(){
+        fCluster.innerHTML = "";
+        for (const cl of state.clusters){
+          const opt = document.createElement("option");
+          opt.value = cl.id;
+          opt.textContent = cl.name;
+          fCluster.appendChild(opt);
+        }
+      }
+
+      function syncInspector(){
+        rebuildClusterSelect();
+
+        const sel = getSelected();
+        if (!sel){
+          panelTitle.textContent = "INSPECTOR";
+          selMeta.textContent = "—";
+          fType.value = "";
+          fTitle.value = "";
+          fUrl.value = "";
+          fTags.value = "";
+          fCluster.value = state.clusters[0] ? state.clusters[0].id : "";
+          fStatus.value = "";
+          fNotes.value = "";
+          tPinned.checked = false;
+          tHide.checked = false;
+          return;
+        }
+
+        if (sel.type==="node"){
+          const nd = sel.obj;
+          panelTitle.textContent = "NODE";
+          selMeta.textContent = nd.id;
+          fType.value = "NODE";
+          fTitle.value = nd.title || "";
+          fUrl.value = nd.url || "";
+          fTags.value = (nd.tags || []).join(", ");
+          fCluster.value = nd.clusterId || "";
+          fStatus.value = nd.status || "UNKNOWN";
+          fNotes.value = nd.notes || "";
+          tPinned.checked = !!nd.pinned;
+          tHide.checked = !!nd.hidden;
+        } else {
+          const cl = sel.obj;
+          panelTitle.textContent = "CLUSTER";
+          selMeta.textContent = cl.id;
+          fType.value = "CLUSTER";
+          fTitle.value = cl.name || "";
+          fUrl.value = "";
+          fTags.value = "";
+          fCluster.value = cl.id; // self
+          fStatus.value = cl.hidden ? "HIDDEN" : "ACTIVE";
+          fNotes.value = cl.notes || "";
+          tPinned.checked = !!cl.pinned;
+          tHide.checked = !!cl.hidden;
+        }
+      }
+
+      function applyInspector(){
+        const sel = getSelected();
+        if (!sel) return;
+
+        if (sel.type==="node"){
+          const nd = sel.obj;
+          nd.title = fTitle.value || "NODE";
+          nd.url = (fUrl.value || "").trim();
+          nd.tags = (fTags.value || "")
+            .split(",")
+            .map(s=>s.trim())
+            .filter(Boolean);
+          nd.clusterId = fCluster.value || nd.clusterId;
+          nd.notes = fNotes.value || "";
+          nd.pinned = !!tPinned.checked;
+          nd.hidden = !!tHide.checked;
+
+          // status coherence
+          if (nd.url.startsWith("file:") || nd.url.startsWith("blob:")){
+            nd.status = "LOCAL";
+          }
+          save("EDIT_NODE");
+        } else {
+          const cl = sel.obj;
+          cl.name = fTitle.value || "CLUSTER";
+          cl.notes = fNotes.value || "";
+          cl.pinned = !!tPinned.checked;
+          cl.hidden = !!tHide.checked;
+          save("EDIT_CLUSTER");
+        }
+      }
+
+      // Debounce inspector edits
+      let editT = null;
+      function scheduleApply(){
+        clearTimeout(editT);
+        editT = setTimeout(applyInspector, 220);
+      }
+
+      [fTitle,fUrl,fTags,fCluster,fNotes].forEach(el=>{
+        el.addEventListener("input", scheduleApply);
+        el.addEventListener("change", scheduleApply);
+      });
+      [tPinned,tHide].forEach(el=>{
+        el.addEventListener("change", scheduleApply);
+      });
+
+      /* =========================
+         Stage interactions
+         ========================= */
+      const drag = {
+        active:false,
+        kind:null, // "node" | "cluster" | "pan"
+        id:null,
+        startSX:0, startSY:0,
+        startWX:0, startWY:0,
+        baseX:0, baseY:0,
+        offsetX:0, offsetY:0
+      };
+
+      canvas.addEventListener("pointerdown", (e)=>{
+        if (isUIEvent(e)) return;
+
+        canvas.setPointerCapture(e.pointerId);
+
+        const hit = hitTest(e.clientX, e.clientY);
+
+        if (hit){
+          setSelection(hit.type, hit.obj.id);
+
+          drag.active = true;
+          drag.kind = (hit.type==="cluster" && hit.where==="header") ? "cluster" : "node";
+          drag.id = hit.obj.id;
+          drag.startSX = e.clientX;
+          drag.startSY = e.clientY;
+
+          const w = screenToWorld(e.clientX, e.clientY);
+          drag.startWX = w.x;
+          drag.startWY = w.y;
+
+          if (drag.kind==="node"){
+            const nd = state.nodes.find(n=>n.id===drag.id);
+            drag.baseX = nd.x;
+            drag.baseY = nd.y;
+            drag.offsetX = w.x - nd.x;
+            drag.offsetY = w.y - nd.y;
+          } else if (drag.kind==="cluster"){
+            const cl = state.clusters.find(c=>c.id===drag.id);
+            drag.baseX = cl.x;
+            drag.baseY = cl.y;
+            drag.offsetX = w.x - cl.x;
+            drag.offsetY = w.y - cl.y;
+          }
+        } else {
+          // empty stage
+          if (e.shiftKey){
+            drag.active = true;
+            drag.kind = "pan";
+            drag.startSX = e.clientX;
+            drag.startSY = e.clientY;
+            drag.baseX = state.view.cx;
+            drag.baseY = state.view.cy;
+          } else {
+            // clear selection
+            state.selection = { type:null, id:null };
+            save("DESELECT");
+            syncInspector();
+          }
+        }
+      });
+
+      canvas.addEventListener("pointermove", (e)=>{
+        if (!drag.active) return;
+        if (isUIEvent(e)) return;
+
+        const w = screenToWorld(e.clientX, e.clientY);
+
+        if (drag.kind==="node"){
+          const nd = state.nodes.find(n=>n.id===drag.id);
+          if (!nd) return;
+          nd.x = w.x - drag.offsetX;
+          nd.y = w.y - drag.offsetY;
+          save("MOVE_NODE");
+        } else if (drag.kind==="cluster"){
+          const cl = state.clusters.find(c=>c.id===drag.id);
+          if (!cl) return;
+          const nx = w.x - drag.offsetX;
+          const ny = w.y - drag.offsetY;
+
+          // move cluster box; optionally move contained nodes with it (toggle via alt)
+          const dx = nx - cl.x;
+          const dy = ny - cl.y;
+          cl.x = nx;
+          cl.y = ny;
+
+          // move nodes that are inside that cluster bounds (world coords)
+          // only if not holding Alt: Alt = "move box only"
+          if (!e.altKey){
+            for (const nd of state.nodes){
+              if (nd.clusterId !== cl.id) continue;
+              // heuristic: if node is within old bounds before move, move it
+              nd.x += dx;
+              nd.y += dy;
+            }
+          }
+
+          save("MOVE_CLUSTER");
+        } else if (drag.kind==="pan"){
+          const dx = (e.clientX - drag.startSX) / state.view.zoom;
+          const dy = (e.clientY - drag.startSY) / state.view.zoom;
+          state.view.cx = drag.baseX - dx;
+          state.view.cy = drag.baseY - dy;
+          save("PAN");
+        }
+      });
+
+      canvas.addEventListener("pointerup", (e)=>{
+        drag.active = false;
+        drag.kind = null;
+        drag.id = null;
+      });
+      canvas.addEventListener("pointercancel", ()=>{
+        drag.active = false;
+        drag.kind = null;
+        drag.id = null;
+      });
+
+      canvas.addEventListener("dblclick", (e)=>{
+        if (isUIEvent(e)) return;
+        const hit = hitTest(e.clientX, e.clientY);
+        if (hit){
+          setSelection(hit.type, hit.obj.id);
+          showPanel(true);
+        }
+      });
+
+      // Wheel zoom (stage only)
+      canvas.addEventListener("wheel", (e)=>{
+        if (isUIEvent(e)) return;
+
+        const prev = state.view.zoom;
+        const delta = clamp(-e.deltaY, -220, 220);
+        const factor = 1 + (delta / 1200);
+        const next = clamp(prev * factor, 0.25, 3.0);
+
+        // zoom around cursor (keep world point under cursor stable)
+        const before = screenToWorld(e.clientX, e.clientY);
+        state.view.zoom = next;
+        const after = screenToWorld(e.clientX, e.clientY);
+        state.view.cx += (before.x - after.x);
+        state.view.cy += (before.y - after.y);
+
+        save("ZOOM");
+      }, { passive:true });
+
+      /* =========================
+         Commands
+         ========================= */
+      function showPanel(on){
+        panel.style.display = on ? "flex" : "none";
+        save(on ? "PANEL_SHOW" : "PANEL_HIDE");
+      }
+      btnClosePanel.addEventListener("click", ()=> showPanel(false));
+
+      btnCenter.addEventListener("click", ()=>{
+        const sel = getSelected();
+        if (!sel) return;
+        if (sel.type==="node"){
+          const nd = sel.obj;
+          state.view.cx = nd.x + nd.w/2;
+          state.view.cy = nd.y + nd.h/2;
+        } else {
+          const cl = sel.obj;
+          state.view.cx = cl.x + cl.w/2;
+          state.view.cy = cl.y + cl.h/2;
+        }
+        save("CENTER");
+      });
+
+      function deleteSelection(){
+        const sel = getSelected();
+        if (!sel) return;
+        if (sel.type==="node"){
+          state.nodes = state.nodes.filter(n=>n.id!==sel.obj.id);
+          state.selection = { type:null, id:null };
+          save("DELETE_NODE");
+          syncInspector();
+        } else {
+          // delete cluster: move its nodes to Graveyard (if exists), else uncluster
+          const cl = sel.obj;
+          const grave = state.clusters.find(c=>c.name==="GRAVEYARD") || null;
+          for (const nd of state.nodes){
+            if (nd.clusterId === cl.id){
+              nd.clusterId = grave ? grave.id : "";
+              nd.status = nd.status || "UNKNOWN";
+            }
+          }
+          state.clusters = state.clusters.filter(c=>c.id!==cl.id);
+          state.selection = { type:null, id:null };
+          save("DELETE_CLUSTER");
+          syncInspector();
+        }
+      }
+      btnDelete.addEventListener("click", deleteSelection);
+
+      btnOpen.addEventListener("click", ()=>{
+        const sel = getSelected();
+        if (!sel || sel.type!=="node") return;
+        const url = (sel.obj.url || "").trim();
+        if (!url) return;
+        window.open(url, "_blank", "noopener,noreferrer");
+      });
+
+      btnCopyUrl.addEventListener("click", async ()=>{
+        const sel = getSelected();
+        if (!sel || sel.type!=="node") return;
+        const url = (sel.obj.url || "").trim();
+        if (!url) return;
+        try{
+          await navigator.clipboard.writeText(url);
+          save("COPY_URL");
+        } catch(e){}
+      });
+
+      btnAddCluster.addEventListener("click", ()=>{
+        const w = screenToWorld(innerWidth/2, innerHeight/2);
+        const cl = {
+          id: uid("CL"),
+          type:"cluster",
+          name: "NEW CLUSTER",
+          x: w.x - 210,
+          y: w.y - 130,
+          w: 420,
+          h: 260,
+          hidden:false,
+          pinned:false,
+          notes:""
+        };
+        state.clusters.push(cl);
+        setSelection("cluster", cl.id);
+        showPanel(true);
+        save("ADD_CLUSTER");
+      });
+
+      btnAddNode.addEventListener("click", ()=>{
+        const w = screenToWorld(innerWidth/2, innerHeight/2);
+
+        // default to selected cluster if any, else first
+        let clusterId = state.clusters[0] ? state.clusters[0].id : "";
+        const sel = getSelected();
+        if (sel && sel.type==="cluster") clusterId = sel.obj.id;
+        if (sel && sel.type==="node") clusterId = sel.obj.clusterId || clusterId;
+
+        const nd = {
+          id: uid("ND"),
+          type:"node",
+          title:"NEW NODE",
+          url:"",
+          tags:[],
+          clusterId,
+          x: w.x - 120,
+          y: w.y - 32,
+          w: 240,
+          h: 64,
+          status:"UNKNOWN",
+          lastCheckedAt:"",
+          pinned:false,
+          hidden:false,
+          notes:""
+        };
+        state.nodes.push(nd);
+        setSelection("node", nd.id);
+        showPanel(true);
+        save("ADD_NODE");
+      });
+
+      // Help = toggle hint chip verbosity + panel show
+      btnHelp.addEventListener("click", ()=>{
+        showPanel(panel.style.display==="none");
+      });
+
+      /* =========================
+         Validation (hidden iframe probe)
+         ========================= */
+      function normalizeUrl(url){
+        const u = (url||"").trim();
+        if (!u) return "";
+        if (u.startsWith("http://") || u.startsWith("https://")) return u;
+        if (u.startsWith("file:") || u.startsWith("blob:")) return u;
+        // allow relative URLs (GitHub pages, local server)
+        return u;
+      }
+
+      async function probeIframe(url, timeoutMs=3200){
+        // Many sites set X-Frame-Options / CSP frame-ancestors => we mark BLOCKED if load doesn't complete.
+        // We treat "load event fired" as ALIVE; timeout => DEAD/BLOCKED (ambiguous).
+        return new Promise((resolve)=>{
+          const iframe = document.createElement("iframe");
+          iframe.style.position = "fixed";
+          iframe.style.left = "-99999px";
+          iframe.style.top = "-99999px";
+          iframe.style.width = "600px";
+          iframe.style.height = "400px";
+          iframe.style.opacity = "0";
+          iframe.setAttribute("aria-hidden","true");
+
+          let done = false;
+          const finish = (status)=>{
+            if (done) return;
+            done = true;
+            try{ iframe.remove(); } catch(e){}
+            resolve(status);
+          };
+
+          const timer = setTimeout(()=> finish("TIMEOUT"), timeoutMs);
+
+          iframe.onload = () => {
+            clearTimeout(timer);
+            finish("LOADED");
+          };
+
+          iframe.onerror = () => {
+            clearTimeout(timer);
+            finish("ERROR");
+          };
+
+          // Try to load
+          iframe.src = url;
+          document.body.appendChild(iframe);
+        });
+      }
+
+      async function validateAll(){
+        if (state._validation.running) return;
+
+        // build queue: nodes with urls, not hidden, matches query
+        const qv = (q.value||"").trim();
+        const queue = state.nodes
+          .filter(n=>!n.hidden)
+          .filter(n=>matchesQuery(n, qv))
+          .filter(n=>normalizeUrl(n.url))
+          .map(n=>n.id);
+
+        state._validation = { running:true, queue, idx:0 };
+        save("VALIDATE_START");
+
+        for (let i=0; i<queue.length; i++){
+          state._validation.idx = i;
+          const id = queue[i];
+          const nd = state.nodes.find(n=>n.id===id);
+          if (!nd) continue;
+
+          const url = normalizeUrl(nd.url);
+          if (!url) continue;
+
+          if (url.startsWith("file:") || url.startsWith("blob:")){
+            nd.status = "LOCAL";
+            nd.lastCheckedAt = nowISO();
+            save("VALIDATE_LOCAL");
+            continue;
+          }
+
+          // iframe probe
+          const res = await probeIframe(url, 3200);
+
+          // Heuristic:
+          // - LOADED => ALIVE
+          // - ERROR => DEAD
+          // - TIMEOUT => BLOCKED (more common than "dead" due to X-Frame-Options / CSP)
+          nd.lastCheckedAt = nowISO();
+          if (res === "LOADED") nd.status = "ALIVE";
+          else if (res === "ERROR") nd.status = "DEAD";
+          else nd.status = "BLOCKED";
+
+          save("VALIDATE_STEP");
+        }
+
+        state._validation.running = false;
+        save("VALIDATE_DONE");
+      }
+
+      btnValidate.addEventListener("click", validateAll);
+
+      /* =========================
+         IO Modal
+         ========================= */
+      function openIO(){
+        modalBack.style.display = "flex";
+        modalBack.setAttribute("aria-hidden","false");
+        refreshIOBox();
+      }
+      function closeIO(){
+        modalBack.style.display = "none";
+        modalBack.setAttribute("aria-hidden","true");
+      }
+      btnIO.addEventListener("click", openIO);
+      btnClose.addEventListener("click", closeIO);
+      modalBack.addEventListener("click", (e)=>{ if (e.target===modalBack) closeIO(); });
+
+      function refreshIOBox(){
+        // do not include runtime validation details in export; keep stable
+        const exportObj = {
+          schema: state.schema,
+          FILE_ID: state.FILE_ID,
+          ROOM_ID: state.ROOM_ID,
+          VERSION_ID: state.VERSION_ID,
+          UPDATED_AT: state.UPDATED_AT,
+          CHANGELOG: state.CHANGELOG,
+          view: state.view,
+          clusters: state.clusters,
+          nodes: state.nodes,
+          selection: state.selection
+        };
+        ioBox.value = JSON.stringify(exportObj, null, 2);
+      }
+
+      btnRefreshBox.addEventListener("click", refreshIOBox);
+
+      btnCopyBox.addEventListener("click", async ()=>{
+        try{
+          await navigator.clipboard.writeText(ioBox.value);
+          save("COPY_BOX");
+        } catch(e){}
+      });
+
+      btnApplyBox.addEventListener("click", ()=>{
+        try{
+          const parsed = JSON.parse(ioBox.value);
+          if (!parsed || typeof parsed !== "object") return;
+
+          // replace state surfaces (deep fill handled by load-like pass)
+          const tmp = JSON.stringify(parsed);
+          localStorage.setItem(LS_KEY, tmp);
+          load();
+          save("APPLY_BOX");
+          syncInspector();
+        } catch(e){}
+      });
+
+      function downloadJSON(){
+        save("EXPORT_JSON");
+        const exportObj = JSON.parse(ioBox.value || "{}");
+        const blob = new Blob([JSON.stringify(exportObj, null, 2)], { type:"application/json" });
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        const safeId = (state.FILE_ID || "KETADATA_REGISTRY").replace(/[^A-Z0-9_\-]/gi, "_");
+        a.download = safeId + ".json";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(()=> URL.revokeObjectURL(a.href), 500);
+      }
+      btnDownload.addEventListener("click", downloadJSON);
+
+      btnLoad.addEventListener("click", ()=> filePick.click());
+      filePick.addEventListener("change", async ()=>{
+        const f = filePick.files && filePick.files[0];
+        if (!f) return;
+        try{
+          const txt = await f.text();
+          const parsed = JSON.parse(txt);
+          if (!parsed || typeof parsed !== "object") return;
+          localStorage.setItem(LS_KEY, JSON.stringify(parsed));
+          load();
+          save("IMPORT_JSON");
+          syncInspector();
+          refreshIOBox();
+        } catch(e){}
+        filePick.value = "";
+      });
+
+      /* =========================
+         PDF Export
+         ========================= */
+      function updatePrintModeLabel(){
+        const dark = document.body.classList.contains("print-dark");
+        btnMode.textContent = "PDF MODE: " + (dark ? "DARK" : "LIGHT");
+      }
+      btnMode.addEventListener("click", ()=>{
+        const dark = document.body.classList.contains("print-dark");
+        document.body.classList.toggle("print-dark", !dark);
+        document.body.classList.toggle("print-light", dark);
+        updatePrintModeLabel();
+      });
+      updatePrintModeLabel();
+
+      function registryToText(){
+        const lines = [];
+        lines.push("KETADATA SPATIAL REGISTRY");
+        lines.push("FILE_ID: " + (state.FILE_ID||"—"));
+        lines.push("UPDATED_AT: " + (state.UPDATED_AT||"—"));
+        lines.push("");
+
+        const clusters = state.clusters.slice().sort((a,b)=>a.name.localeCompare(b.name));
+        const nodesByCluster = new Map();
+        for (const cl of clusters) nodesByCluster.set(cl.id, []);
+        for (const nd of state.nodes){
+          if (!nodesByCluster.has(nd.clusterId)) nodesByCluster.set(nd.clusterId, []);
+          nodesByCluster.get(nd.clusterId).push(nd);
+        }
+        for (const cl of clusters){
+          lines.push("CLUSTER: " + cl.name + (cl.hidden ? " [HIDDEN]" : "") + (cl.pinned ? " [PIN]" : ""));
+          if (cl.notes) lines.push("NOTES: " + cl.notes);
+          const ns = (nodesByCluster.get(cl.id)||[])
+            .slice()
+            .sort((a,b)=> (a.pinned===b.pinned)?a.title.localeCompare(b.title):(a.pinned?-1:1));
+          for (const nd of ns){
+            if (nd.hidden) continue;
+            const tags = (nd.tags||[]).join(",");
+            lines.push("- " + nd.title + " | " + (nd.url||"") + " | " + (nd.status||"UNKNOWN") + (tags?(" | "+tags):""));
+            if (nd.notes) lines.push("  NOTES: " + nd.notes);
+          }
+          lines.push("");
+        }
+
+        // orphan nodes
+        const orphans = state.nodes.filter(n=>!state.clusters.find(c=>c.id===n.clusterId));
+        if (orphans.length){
+          lines.push("CLUSTER: (ORPHANS)");
+          for (const nd of orphans){
+            lines.push("- " + nd.title + " | " + (nd.url||"") + " | " + (nd.status||"UNKNOWN"));
+          }
+          lines.push("");
+        }
+
+        return lines.join("\n");
+      }
+
+      btnPDF.addEventListener("click", ()=>{
+        save("EXPORT_PDF");
+        printDump.textContent = registryToText();
+        window.print();
+      });
+
+      /* =========================
+         Keyboard shortcuts
+         ========================= */
+      addEventListener("keydown", (e)=>{
+        const mod = e.ctrlKey || e.metaKey;
+
+        if (mod && (e.key==="e" || e.key==="E")){
+          e.preventDefault(); openIO();
+        }
+        if (mod && (e.key==="p" || e.key==="P")){
+          e.preventDefault(); btnPDF.click();
+        }
+        if (e.key==="h" || e.key==="H"){
+          // don't toggle while typing in fields
+          if (isUIEvent(e)) return;
+          showPanel(panel.style.display==="none");
+        }
+        if (e.key==="Delete" || e.key==="Backspace"){
+          // do not delete while typing
+          if (isUIEvent(e)) return;
+          deleteSelection();
+        }
+        if (e.key==="Escape"){
+          // close modal, then panel
+          if (modalBack.style.display==="flex") closeIO();
+          else showPanel(false);
+        }
+      });
+
+      /* =========================
+         HUD
+         ========================= */
+      function renderHUD(){
+        chipZoom.textContent = "ZOOM " + state.view.zoom.toFixed(2);
+        chipCounts.textContent = "NODES " + state.nodes.length + " · CLUSTERS " + state.clusters.length;
+
+        const sel = getSelected();
+        if (!sel) chipSel.textContent = "SELECTION —";
+        else if (sel.type==="node") chipSel.textContent = "SELECTION NODE · " + (sel.obj.title || sel.obj.id);
+        else chipSel.textContent = "SELECTION CLUSTER · " + (sel.obj.name || sel.obj.id);
+
+        // stage meta
+        const v = state._validation;
+        if (v && v.running){
+          stageMeta.textContent = "VALIDATING " + (v.idx+1) + "/" + v.queue.length;
+        } else {
+          stageMeta.textContent = "UPDATED " + (state.UPDATED_AT ? state.UPDATED_AT.replace("T"," ").replace("Z","Z") : "—");
+        }
+      }
+
+      /* =========================
+         Search re-render behavior
+         ========================= */
+      let qT = null;
+      q.addEventListener("input", ()=>{
+        clearTimeout(qT);
+        qT = setTimeout(()=> save("SEARCH"), 200);
+      });
+
+      /* =========================
+         Init
+         ========================= */
+      resize();
+      load();
+      save("BOOT");
+      syncInspector();
+      renderHUD();
+
+      // panel is visible by default
+      showPanel(true);
+
+      // continuous HUD refresh (for validation progress)
+      setInterval(renderHUD, 120);
+
+      // start draw loop
+      requestAnimationFrame(draw);
+
+      /* =========================
+         Serialization stamp builder
+         ========================= */
+      // No-op: stamp is at bottom of HTML as required.
+
+    })();
+  </script>
+
+  <!--
+  AE/EE/WB SERIALIZATION STAMP (MANDATORY)
+  AE: SPATIAL REGISTRY UI (BRUTAL MINIMAL)
+  EE: LOCAL-FIRST STATE + TRANSFORMABLE STAGE + IFRAME VALIDATION
+  WB: IO MODAL + PDF DUMP
+
+  FILE_ID: KETADATA_SPATIAL_REGISTRY_HTML
+  ROOM_ID: K_REGISTRY
+  VERSION_ID: V1
+  UPDATED_AT: 2026-01-03T00:00:00.000Z
+  CHANGELOG: INITIAL_SPATIAL_REGISTRY_TEMPLATE
+  -->
+</body>
+</html>
