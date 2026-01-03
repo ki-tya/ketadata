@@ -1,0 +1,405 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>KETADATA — COFFEE</title>
+<style>
+  :root{
+    --bg:#0b0b0b;
+    --fg:#f2f2f2;
+    --mid:#9a9a9a;
+    --line:#2a2a2a;
+    --panel:#101010;
+    --font:12px/1.25 Arial, Helvetica, sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0;background:var(--bg);color:var(--fg);font:var(--font);overflow:hidden}
+  button,input{font:var(--font);color:var(--fg);background:#0f0f0f;border:1px solid var(--line);height:26px;padding:0 8px}
+  button{cursor:pointer}
+  .wrap{position:fixed;inset:0;display:flex;flex-direction:column;gap:6px;padding:10px}
+  .bar{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+  .chip{display:inline-flex;gap:6px;align-items:center;height:26px;padding:0 8px;border:1px solid var(--line);background:#161616}
+  .chip b{font-weight:700}
+  .grow{flex:1;min-width:180px}
+  .stage{position:relative;flex:1;border:1px solid var(--line);background:var(--panel);overflow:hidden}
+  canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+  .hud{position:absolute;left:8px;top:8px;display:flex;gap:6px;flex-wrap:wrap;align-items:center;pointer-events:auto}
+  .hud .chip{background:rgba(22,22,22,0.86)}
+  .hud button{background:rgba(15,15,15,0.86)}
+  .stamp{
+    border-top:1px solid var(--line);
+    padding:8px 0 0 0;
+    color:#7a7a7a;
+    background:transparent;
+  }
+</style>
+</head>
+
+<body>
+<div class="wrap">
+  <div class="bar">
+    <div class="chip"><b>CLASS</b><span>KETADATA</span></div>
+    <div class="chip"><b>MODE</b><span>INTERPRETIVE</span></div>
+    <div class="chip"><b>WEIGHT</b><span>STANDARD</span></div>
+    <div class="chip"><b>PALETTE</b><span>WHITE / GREY / BLACK</span></div>
+    <div class="chip grow"><b>OPERATOR NOTE</b><span style="color:var(--mid)">Coffee as machine fuel / ritual / heat / momentum.</span></div>
+  </div>
+
+  <div class="stage" id="stage">
+    <canvas id="c"></canvas>
+
+    <div class="hud">
+      <div class="chip"><b>HEAT</b><span id="heat">0.55</span></div>
+      <div class="chip"><b>CREMA</b><span id="crema">0.35</span></div>
+      <div class="chip"><b>GRIND</b><span id="grind">0.62</span></div>
+      <button id="sip">SIP</button>
+      <button id="stir">STIR</button>
+      <button id="invert">INVERT</button>
+      <button id="null">NULL</button>
+      <button id="fs">FULL</button>
+    </div>
+  </div>
+
+  <!-- KETADATA HTML SERIALIZATION STAMP (MANDATORY) -->
+  <div id="KETADATA_SERIALIZATION_STAMP" class="stamp">
+    AE: KETADATA_COFFEE |
+    EE: CANVAS_VORTEX+STEAM_PARTICLES+CREMA_RING+RITUAL_CONTROLS |
+    WB: UI_WIRING |
+    FILE_ID: KETADATA_COFFEE_RITUAL_V1 |
+    ROOM_ID: BASE |
+    VERSION: V1 |
+    UPDATED_AT: 2026-01-03T00:00:00-05:00 |
+    CHANGELOG: coffee vortex field, crema ring, steam, sip/stir controls, monochrome
+  </div>
+</div>
+
+<script>
+(() => {
+  const canvas = document.getElementById("c");
+  const stage = document.getElementById("stage");
+  const ctx = canvas.getContext("2d", { alpha:false });
+
+  const elHeat = document.getElementById("heat");
+  const elCrema = document.getElementById("crema");
+  const elGrind = document.getElementById("grind");
+
+  const btnSip = document.getElementById("sip");
+  const btnStir = document.getElementById("stir");
+  const btnInvert = document.getElementById("invert");
+  const btnNull = document.getElementById("null");
+  const btnFs = document.getElementById("fs");
+
+  const FILE_ID = "KETADATA_COFFEE_RITUAL_V1";
+  const KEY = "KDT::STATE::" + FILE_ID + "::v1";
+
+  const state = {
+    invert:false,
+    nullMode:false,
+    heat:0.55,
+    crema:0.35,
+    grind:0.62,
+    swirl:0.35,
+    sipPulse:0.0,
+    stirPulse:0.0,
+    t:0
+  };
+
+  function clamp(v,a,b){ return Math.max(a, Math.min(b, v)); }
+  function lerp(a,b,t){ return a + (b-a)*t; }
+
+  function save(){
+    try{
+      localStorage.setItem(KEY, JSON.stringify({
+        invert:state.invert,
+        nullMode:state.nullMode,
+        heat:state.heat,
+        crema:state.crema,
+        grind:state.grind
+      }));
+    }catch(e){}
+  }
+  function load(){
+    try{
+      const raw = localStorage.getItem(KEY);
+      if(!raw) return;
+      const s = JSON.parse(raw);
+      if(!s) return;
+      state.invert = !!s.invert;
+      state.nullMode = !!s.nullMode;
+      state.heat = clamp(+s.heat || state.heat, 0, 1);
+      state.crema = clamp(+s.crema || state.crema, 0, 1);
+      state.grind = clamp(+s.grind || state.grind, 0, 1);
+    }catch(e){}
+  }
+
+  function resize(){
+    const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+    const r = stage.getBoundingClientRect();
+    canvas.width = Math.max(1, Math.floor(r.width * dpr));
+    canvas.height = Math.max(1, Math.floor(r.height * dpr));
+    canvas.style.width = r.width + "px";
+    canvas.style.height = r.height + "px";
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+  }
+
+  function setInvert(v){
+    state.invert = !!v;
+    document.documentElement.style.filter = state.invert ? "invert(1)" : "none";
+    save();
+  }
+  function setNull(v){
+    state.nullMode = !!v;
+    save();
+  }
+
+  function bg(){
+    if(state.nullMode) return "#000";
+    return "#0b0b0b";
+  }
+
+  function drawVignette(W,H){
+    ctx.save();
+    ctx.globalAlpha = 1;
+    // soft edge darkening using concentric rects (keeps it monochrome + simple)
+    for(let i=0;i<18;i++){
+      const a = i/18;
+      ctx.strokeStyle = "rgba(0,0,0," + (0.08 + a*0.04) + ")";
+      ctx.strokeRect(0+i,0+i,W-2*i,H-2*i);
+    }
+    ctx.restore();
+  }
+
+  function drawCup(W,H){
+    // minimal brutalist cup (angular = mind, but coffee is senses: still keep straight)
+    const cx = W*0.52, cy = H*0.56;
+    const w = Math.min(W,H)*0.52;
+    const h = Math.min(W,H)*0.30;
+
+    // saucer
+    ctx.globalAlpha = 0.20;
+    ctx.strokeStyle = "#f2f2f2";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.ellipse(cx, cy + h*0.62, w*0.62, h*0.32, 0, 0, Math.PI*2);
+    ctx.stroke();
+
+    // cup body (trapezoid)
+    ctx.globalAlpha = 0.22;
+    ctx.beginPath();
+    ctx.moveTo(cx - w*0.40, cy - h*0.30);
+    ctx.lineTo(cx + w*0.40, cy - h*0.30);
+    ctx.lineTo(cx + w*0.30, cy + h*0.36);
+    ctx.lineTo(cx - w*0.30, cy + h*0.36);
+    ctx.closePath();
+    ctx.stroke();
+
+    // rim
+    ctx.globalAlpha = 0.35;
+    ctx.beginPath();
+    ctx.ellipse(cx, cy - h*0.30, w*0.40, h*0.16, 0, 0, Math.PI*2);
+    ctx.stroke();
+
+    // handle
+    ctx.globalAlpha = 0.18;
+    ctx.beginPath();
+    ctx.ellipse(cx + w*0.46, cy - h*0.02, w*0.12, h*0.16, 0, 0, Math.PI*2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.ellipse(cx + w*0.46, cy - h*0.02, w*0.07, h*0.10, 0, 0, Math.PI*2);
+    ctx.stroke();
+  }
+
+  function drawCoffeeSurface(W,H){
+    const cx = W*0.52, cy = H*0.42;
+    const rx = Math.min(W,H)*0.32;
+    const ry = Math.min(W,H)*0.13;
+
+    // base surface
+    ctx.save();
+    ctx.globalAlpha = 0.95;
+    ctx.fillStyle = "#0f0f0f";
+    ctx.beginPath();
+    ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI*2);
+    ctx.fill();
+
+    // crema ring (white/grey noise ring)
+    const crema = state.crema;
+    for(let k=0;k<90;k++){
+      const a = (k/90)*Math.PI*2;
+      const jitter = (Math.sin(state.t*0.9 + k*0.7)*0.5+0.5) * (0.6 + crema*1.4);
+      const rj = 1 + jitter*6;
+      const x = cx + Math.cos(a)* (rx*0.92 + rj);
+      const y = cy + Math.sin(a)* (ry*0.92 + rj*0.35);
+      ctx.globalAlpha = 0.07 + crema*0.12;
+      ctx.fillStyle = "#f2f2f2";
+      ctx.fillRect(x, y, 1.3, 1.3);
+    }
+
+    // swirl field
+    const swirl = state.swirl + state.stirPulse*0.6;
+    const grind = state.grind;
+    const heat = state.heat;
+
+    // draw many “grounds” as particles orbiting + falling inward
+    const count = Math.floor(520 + grind*980);
+    for(let i=0;i<count;i++){
+      const u = i / count;
+      const a = u*Math.PI*2 + state.t*(0.8 + swirl*2.2);
+      const rr = Math.sqrt(u) * (0.02 + 0.98*Math.sin((u*7.0 + state.t*0.15))*0.02 + 1);
+      const rad = rr * (rx*0.88);
+      const sx = cx + Math.cos(a) * rad;
+      const sy = cy + Math.sin(a) * rad * 0.42;
+
+      // inward drift = coffee pulling thought into motion
+      const pull = 0.25 + swirl*0.65;
+      const px = lerp(sx, cx, pull*0.06);
+      const py = lerp(sy, cy, pull*0.06);
+
+      // brightness: heat increases shimmer
+      const gl = 0.04 + heat*0.10;
+      ctx.globalAlpha = gl * (0.25 + 0.75*(1-u));
+      ctx.fillStyle = "#f2f2f2";
+
+      // particle size: grind controls granularity
+      const s = 0.5 + (1-grind)*1.1;
+      ctx.fillRect(px, py, s, s);
+    }
+
+    // sip pulse: surface drop
+    if(state.sipPulse > 0.001){
+      const p = state.sipPulse;
+      ctx.globalAlpha = 0.10 + p*0.22;
+      ctx.strokeStyle = "#f2f2f2";
+      ctx.lineWidth = 1;
+      for(let r=0;r<4;r++){
+        const k = (r+1)/4;
+        ctx.beginPath();
+        ctx.ellipse(cx, cy, rx*k*(1+p*0.12), ry*k*(1+p*0.12), 0, 0, Math.PI*2);
+        ctx.stroke();
+      }
+    }
+
+    ctx.restore();
+  }
+
+  function drawSteam(W,H){
+    // steam = rising noise columns (monochrome)
+    const cx = W*0.52, cy = H*0.22;
+    const heat = state.heat;
+    const n = Math.floor(120 + heat*240);
+
+    ctx.save();
+    for(let i=0;i<n;i++){
+      const u = i/n;
+      const x = cx + (Math.sin(state.t*0.7 + i*0.9) * (20 + heat*60)) + (Math.random()-0.5)*8;
+      const y = (H*0.14) + u*(H*0.22) + Math.sin(state.t*0.9 + i)*6;
+      const w = 1 + Math.random()*2;
+      const h = 6 + Math.random()*18;
+      const a = 0.02 + heat*0.06;
+      ctx.globalAlpha = a*(1-u);
+      ctx.fillStyle = "#f2f2f2";
+      ctx.fillRect(x, y, w, h);
+    }
+    ctx.restore();
+  }
+
+  function drawText(W,H){
+    // brutal minimal overlay without changing text size (same font everywhere)
+    ctx.save();
+    ctx.globalAlpha = 0.22;
+    ctx.fillStyle = "#f2f2f2";
+    ctx.fillText("COFFEE = HEAT + BITTERNESS + VELOCITY", 12, H-38);
+    ctx.globalAlpha = 0.16;
+    ctx.fillText("RITUAL: SIP (pulse), STIR (spin). SHIFT+I invert. SHIFT+N NULL. SHIFT+F full.", 12, H-22);
+    ctx.restore();
+  }
+
+  function tick(){
+    const r = stage.getBoundingClientRect();
+    const W = r.width, H = r.height;
+
+    // time
+    state.t += 0.016;
+
+    // decay pulses
+    state.sipPulse *= 0.94;
+    state.stirPulse *= 0.92;
+
+    // auto subtle drift
+    state.swirl = clamp(state.swirl + Math.sin(state.t*0.25)*0.0009, 0.05, 0.95);
+
+    // render
+    ctx.fillStyle = bg();
+    ctx.fillRect(0,0,W,H);
+
+    drawSteam(W,H);
+    drawCoffeeSurface(W,H);
+    drawCup(W,H);
+    drawVignette(W,H);
+    drawText(W,H);
+
+    // HUD values
+    elHeat.textContent = state.heat.toFixed(2);
+    elCrema.textContent = state.crema.toFixed(2);
+    elGrind.textContent = state.grind.toFixed(2);
+
+    requestAnimationFrame(tick);
+  }
+
+  // controls
+  btnSip.addEventListener("click", ()=>{
+    state.sipPulse = 1.0;
+    state.heat = clamp(state.heat + 0.06, 0, 1);
+    state.crema = clamp(state.crema + 0.03, 0, 1);
+    save();
+  });
+
+  btnStir.addEventListener("click", ()=>{
+    state.stirPulse = 1.0;
+    state.swirl = clamp(state.swirl + 0.10, 0, 1);
+    state.grind = clamp(state.grind + (Math.random()-0.5)*0.06, 0, 1);
+    save();
+  });
+
+  btnInvert.addEventListener("click", ()=> setInvert(!state.invert));
+  btnNull.addEventListener("click", ()=> setNull(!state.nullMode));
+  btnFs.addEventListener("click", ()=>{
+    const on = !!document.fullscreenElement;
+    if(on) document.exitFullscreen?.().catch(()=>{});
+    else document.documentElement.requestFullscreen?.().catch(()=>{});
+  });
+
+  // hotkeys
+  window.addEventListener("keydown", (e)=>{
+    const k = e.key.toLowerCase();
+    if(e.shiftKey && k === "i") setInvert(!state.invert);
+    if(e.shiftKey && k === "n") setNull(!state.nullMode);
+    if(e.shiftKey && k === "f"){
+      const on = !!document.fullscreenElement;
+      if(on) document.exitFullscreen?.().catch(()=>{});
+      else document.documentElement.requestFullscreen?.().catch(()=>{});
+    }
+    if(e.shiftKey && k === "s"){ // sip
+      state.sipPulse = 1.0;
+      state.heat = clamp(state.heat + 0.06, 0, 1);
+      state.crema = clamp(state.crema + 0.03, 0, 1);
+      save();
+    }
+    if(e.shiftKey && k === "r"){ // stir
+      state.stirPulse = 1.0;
+      state.swirl = clamp(state.swirl + 0.10, 0, 1);
+      save();
+    }
+  });
+
+  // boot
+  load();
+  resize();
+  window.addEventListener("resize", resize);
+  setInvert(state.invert);
+  tick();
+})();
+</script>
+</body>
+</html>
