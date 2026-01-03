@@ -1,0 +1,464 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>KETADATA — FLUID</title>
+<style>
+  :root{
+    --bg:#0b0b0b;
+    --fg:#f2f2f2;
+    --mid:#9a9a9a;
+    --line:#2a2a2a;
+    --panel:#101010;
+    --font:12px/1.25 Arial, Helvetica, sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0;background:var(--bg);color:var(--fg);font:var(--font);overflow:hidden}
+  button{font:var(--font);color:var(--fg);background:rgba(15,15,15,0.9);border:1px solid var(--line);height:26px;padding:0 8px;cursor:pointer}
+  .wrap{position:fixed;inset:0;display:flex;flex-direction:column;gap:6px;padding:10px}
+  .bar{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+  .chip{display:inline-flex;gap:6px;align-items:center;height:26px;padding:0 8px;border:1px solid var(--line);background:#161616}
+  .chip b{font-weight:700}
+  .grow{flex:1;min-width:180px}
+  .stage{position:relative;flex:1;border:1px solid var(--line);background:var(--panel);overflow:hidden}
+  canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+  .hud{position:absolute;left:8px;top:8px;display:flex;gap:6px;flex-wrap:wrap;align-items:center;pointer-events:auto}
+  .hud .chip{background:rgba(22,22,22,0.86)}
+  .stamp{border-top:1px solid var(--line);padding:8px 0 0 0;color:#7a7a7a}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="bar">
+    <div class="chip"><b>CLASS</b><span>KETADATA</span></div>
+    <div class="chip"><b>MODE</b><span>INTERPRETIVE</span></div>
+    <div class="chip"><b>WEIGHT</b><span>STANDARD</span></div>
+    <div class="chip"><b>PALETTE</b><span>WHITE / GREY / BLACK</span></div>
+    <div class="chip grow"><b>OPERATOR NOTE</b><span style="color:var(--mid)">Fluid = continuous state. Move mouse / touch to shear the field.</span></div>
+  </div>
+
+  <div class="stage" id="stage">
+    <canvas id="c"></canvas>
+    <div class="hud">
+      <div class="chip"><b>VISC</b><span id="v">0.90</span></div>
+      <div class="chip"><b>FLOW</b><span id="f">0.55</span></div>
+      <div class="chip"><b>INK</b><span id="i">0.65</span></div>
+      <button id="pour">POUR</button>
+      <button id="drain">DRAIN</button>
+      <button id="invert">INVERT</button>
+      <button id="null">NULL</button>
+      <button id="fs">FULL</button>
+    </div>
+  </div>
+
+  <!-- KETADATA HTML SERIALIZATION STAMP (MANDATORY) -->
+  <div id="KETADATA_SERIALIZATION_STAMP" class="stamp">
+    AE: KETADATA_FLUID |
+    EE: GRID_ADVECTION + DIVERGENCE_FREE_FLOW + MONOCHROME_INK |
+    WB: UI_WIRING |
+    FILE_ID: KETADATA_FLUID_LIQUID_V1 |
+    ROOM_ID: BASE |
+    VERSION: V1 |
+    UPDATED_AT: 2026-01-03T00:00:00-05:00 |
+    CHANGELOG: fluid field with ink advection, pour/drain, mouse shear, monochrome
+  </div>
+</div>
+
+<script>
+(() => {
+  const canvas = document.getElementById("c");
+  const stage = document.getElementById("stage");
+  const ctx = canvas.getContext("2d", { alpha:false });
+
+  const elV = document.getElementById("v");
+  const elF = document.getElementById("f");
+  const elI = document.getElementById("i");
+
+  const btnPour = document.getElementById("pour");
+  const btnDrain = document.getElementById("drain");
+  const btnInvert = document.getElementById("invert");
+  const btnNull = document.getElementById("null");
+  const btnFs = document.getElementById("fs");
+
+  const FILE_ID = "KETADATA_FLUID_LIQUID_V1";
+  const KEY = "KDT::STATE::" + FILE_ID + "::v1";
+
+  const S = {
+    invert:false,
+    nullMode:false,
+    visc:0.90,   // velocity damping
+    flow:0.55,   // force strength
+    ink:0.65,    // ink injection
+    t:0
+  };
+
+  function clamp(v,a,b){ return Math.max(a, Math.min(b, v)); }
+  function save(){
+    try{
+      localStorage.setItem(KEY, JSON.stringify({
+        invert:S.invert, nullMode:S.nullMode, visc:S.visc, flow:S.flow, ink:S.ink
+      }));
+    }catch(e){}
+  }
+  function load(){
+    try{
+      const raw = localStorage.getItem(KEY);
+      if(!raw) return;
+      const s = JSON.parse(raw);
+      if(!s) return;
+      S.invert = !!s.invert;
+      S.nullMode = !!s.nullMode;
+      S.visc = clamp(+s.visc || S.visc, 0.70, 0.995);
+      S.flow = clamp(+s.flow || S.flow, 0.05, 1.0);
+      S.ink  = clamp(+s.ink  || S.ink,  0.05, 1.0);
+    }catch(e){}
+  }
+
+  // grid size (kept light but convincing)
+  let W=0,H=0;
+  let Nx=0,Ny=0;
+  let u=null,v=null;       // velocity
+  let u2=null,v2=null;
+  let d=null,d2=null;      // density (ink)
+  let p=null,div=null;     // pressure solve
+
+  function idx(x,y){ return x + y*Nx; }
+
+  function resize(){
+    const r = stage.getBoundingClientRect();
+    W = Math.max(1, Math.floor(r.width));
+    H = Math.max(1, Math.floor(r.height));
+
+    const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+    canvas.width = Math.floor(W * dpr);
+    canvas.height = Math.floor(H * dpr);
+    canvas.style.width = W + "px";
+    canvas.style.height = H + "px";
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+
+    // grid resolution relative to viewport
+    const target = clamp(Math.floor(Math.min(W,H) / 7), 70, 160);
+    Nx = target;
+    Ny = Math.floor(target * (H/W));
+    Nx = clamp(Nx, 70, 180);
+    Ny = clamp(Ny, 50, 160);
+
+    const N = Nx*Ny;
+    u = new Float32Array(N); v = new Float32Array(N);
+    u2 = new Float32Array(N); v2 = new Float32Array(N);
+    d = new Float32Array(N); d2 = new Float32Array(N);
+    p = new Float32Array(N); div = new Float32Array(N);
+
+    // seed: a quiet pool
+    for(let i=0;i<N;i++){ u[i]=v[i]=u2[i]=v2[i]=0; d[i]=d2[i]=0; p[i]=div[i]=0; }
+  }
+
+  function setInvert(on){
+    S.invert = !!on;
+    document.documentElement.style.filter = S.invert ? "invert(1)" : "none";
+    save();
+  }
+  function setNull(on){
+    S.nullMode = !!on;
+    save();
+  }
+  function bg(){ return S.nullMode ? "#000" : "#0b0b0b"; }
+
+  // bilinear sample (field)
+  function sample(F, x, y){
+    x = clamp(x, 0, Nx-1.001);
+    y = clamp(y, 0, Ny-1.001);
+    const x0 = x|0, y0 = y|0;
+    const x1 = x0+1, y1 = y0+1;
+    const sx = x - x0, sy = y - y0;
+    const i00 = idx(x0,y0);
+    const i10 = idx(Math.min(x1,Nx-1),y0);
+    const i01 = idx(x0,Math.min(y1,Ny-1));
+    const i11 = idx(Math.min(x1,Nx-1),Math.min(y1,Ny-1));
+    const a = F[i00]*(1-sx) + F[i10]*sx;
+    const b = F[i01]*(1-sx) + F[i11]*sx;
+    return a*(1-sy) + b*sy;
+  }
+
+  function advect(F, Fout, U, V, dt, diss){
+    for(let y=0;y<Ny;y++){
+      for(let x=0;x<Nx;x++){
+        const i = idx(x,y);
+        const px = x - U[i]*dt;
+        const py = y - V[i]*dt;
+        Fout[i] = sample(F, px, py) * diss;
+      }
+    }
+  }
+
+  function addForce(cx, cy, fx, fy, rad){
+    const r2 = rad*rad;
+    const x0 = Math.max(1, Math.floor(cx-rad));
+    const x1 = Math.min(Nx-2, Math.ceil(cx+rad));
+    const y0 = Math.max(1, Math.floor(cy-rad));
+    const y1 = Math.min(Ny-2, Math.ceil(cy+rad));
+    for(let y=y0;y<=y1;y++){
+      for(let x=x0;x<=x1;x++){
+        const dx = x - cx, dy = y - cy;
+        const d2v = dx*dx + dy*dy;
+        if(d2v > r2) continue;
+        const w = (1 - d2v/r2);
+        const i = idx(x,y);
+        u[i] += fx * w;
+        v[i] += fy * w;
+      }
+    }
+  }
+
+  function addInk(cx, cy, amount, rad){
+    const r2 = rad*rad;
+    const x0 = Math.max(1, Math.floor(cx-rad));
+    const x1 = Math.min(Nx-2, Math.ceil(cx+rad));
+    const y0 = Math.max(1, Math.floor(cy-rad));
+    const y1 = Math.min(Ny-2, Math.ceil(cy+rad));
+    for(let y=y0;y<=y1;y++){
+      for(let x=x0;x<=x1;x++){
+        const dx = x - cx, dy = y - cy;
+        const d2v = dx*dx + dy*dy;
+        if(d2v > r2) continue;
+        const w = (1 - d2v/r2);
+        d[idx(x,y)] += amount * w;
+      }
+    }
+  }
+
+  // divergence + pressure projection (simple Jacobi)
+  function computeDivergence(){
+    for(let y=1;y<Ny-1;y++){
+      for(let x=1;x<Nx-1;x++){
+        const i = idx(x,y);
+        const dudx = (u[idx(x+1,y)] - u[idx(x-1,y)]) * 0.5;
+        const dvdy = (v[idx(x,y+1)] - v[idx(x,y-1)]) * 0.5;
+        div[i] = dudx + dvdy;
+        p[i] = 0;
+      }
+    }
+  }
+
+  function solvePressure(iter){
+    for(let k=0;k<iter;k++){
+      for(let y=1;y<Ny-1;y++){
+        for(let x=1;x<Nx-1;x++){
+          const i = idx(x,y);
+          const sum =
+            p[idx(x+1,y)] + p[idx(x-1,y)] +
+            p[idx(x,y+1)] + p[idx(x,y-1)];
+          p[i] = (sum - div[i]) * 0.25;
+        }
+      }
+    }
+  }
+
+  function project(){
+    for(let y=1;y<Ny-1;y++){
+      for(let x=1;x<Nx-1;x++){
+        const i = idx(x,y);
+        const dpdx = (p[idx(x+1,y)] - p[idx(x-1,y)]) * 0.5;
+        const dpdy = (p[idx(x,y+1)] - p[idx(x,y-1)]) * 0.5;
+        u[i] -= dpdx;
+        v[i] -= dpdy;
+      }
+    }
+  }
+
+  // rendering: draw density as monochrome "liquid"
+  function render(){
+    ctx.fillStyle = bg();
+    ctx.fillRect(0,0,W,H);
+
+    // map grid to pixels with coarse blocks (fast, brutal, fluid)
+    const sx = W / Nx;
+    const sy = H / Ny;
+
+    // liquid body
+    for(let y=0;y<Ny;y++){
+      for(let x=0;x<Nx;x++){
+        const val = d[idx(x,y)];
+        if(val <= 0.001) continue;
+        const a = clamp(val, 0, 1);
+        ctx.globalAlpha = 0.02 + a*0.22;
+        ctx.fillStyle = "#f2f2f2";
+        ctx.fillRect(x*sx, y*sy, sx+1, sy+1);
+      }
+    }
+    ctx.globalAlpha = 1;
+
+    // subtle contour strokes (gives “surface tension”)
+    ctx.globalAlpha = 0.10;
+    ctx.strokeStyle = "#f2f2f2";
+    ctx.lineWidth = 1;
+    for(let y=1;y<Ny-1;y+=2){
+      for(let x=1;x<Nx-1;x+=2){
+        const i = idx(x,y);
+        const gx = d[idx(x+1,y)] - d[idx(x-1,y)];
+        const gy = d[idx(x,y+1)] - d[idx(x,y-1)];
+        const g = Math.abs(gx) + Math.abs(gy);
+        if(g < 0.20) continue;
+        const px = x*sx, py = y*sy;
+        ctx.beginPath();
+        ctx.moveTo(px, py);
+        ctx.lineTo(px + gx*2.0, py + gy*2.0);
+        ctx.stroke();
+      }
+    }
+    ctx.globalAlpha = 1;
+
+    // border / vignette
+    ctx.globalAlpha = 0.18;
+    ctx.strokeStyle = "#f2f2f2";
+    for(let i=0;i<10;i++){
+      ctx.strokeRect(i,i,W-2*i,H-2*i);
+    }
+    ctx.globalAlpha = 1;
+
+    // HUD values
+    elV.textContent = S.visc.toFixed(2);
+    elF.textContent = S.flow.toFixed(2);
+    elI.textContent = S.ink.toFixed(2);
+  }
+
+  // interaction (mouse shear)
+  const mouse = {x:0,y:0,px:0,py:0,down:false};
+
+  function toGridX(px){ return (px / W) * Nx; }
+  function toGridY(py){ return (py / H) * Ny; }
+
+  stage.addEventListener("mousemove",(e)=>{
+    const r = stage.getBoundingClientRect();
+    mouse.x = clamp(e.clientX - r.left, 0, r.width);
+    mouse.y = clamp(e.clientY - r.top, 0, r.height);
+    if(mouse.down){
+      const dx = mouse.x - mouse.px;
+      const dy = mouse.y - mouse.py;
+      const gx = toGridX(mouse.x);
+      const gy = toGridY(mouse.y);
+      addForce(gx, gy, dx*0.02*S.flow, dy*0.02*S.flow, 8);
+      addInk(gx, gy, 0.08*S.ink, 10);
+    }
+    mouse.px = mouse.x; mouse.py = mouse.y;
+  });
+
+  stage.addEventListener("mousedown",()=>{ mouse.down=true; });
+  window.addEventListener("mouseup",()=>{ mouse.down=false; });
+
+  stage.addEventListener("touchstart",(e)=>{
+    mouse.down=true;
+    const r = stage.getBoundingClientRect();
+    const t = e.touches[0];
+    mouse.x = clamp(t.clientX - r.left, 0, r.width);
+    mouse.y = clamp(t.clientY - r.top, 0, r.height);
+    mouse.px = mouse.x; mouse.py = mouse.y;
+  }, {passive:true});
+
+  stage.addEventListener("touchmove",(e)=>{
+    const r = stage.getBoundingClientRect();
+    const t = e.touches[0];
+    mouse.x = clamp(t.clientX - r.left, 0, r.width);
+    mouse.y = clamp(t.clientY - r.top, 0, r.height);
+    const dx = mouse.x - mouse.px;
+    const dy = mouse.y - mouse.py;
+    const gx = toGridX(mouse.x);
+    const gy = toGridY(mouse.y);
+    addForce(gx, gy, dx*0.02*S.flow, dy*0.02*S.flow, 8);
+    addInk(gx, gy, 0.08*S.ink, 10);
+    mouse.px = mouse.x; mouse.py = mouse.y;
+  }, {passive:true});
+
+  window.addEventListener("touchend",()=>{ mouse.down=false; });
+
+  // ritual controls
+  btnPour.addEventListener("click",()=>{
+    // pour from top center
+    for(let k=0;k<18;k++){
+      const gx = Nx*0.5 + (Math.random()-0.5)*8;
+      const gy = Ny*0.08 + Math.random()*6;
+      addInk(gx, gy, 0.25*S.ink, 14);
+      addForce(gx, gy, (Math.random()-0.5)*0.15, 0.9*S.flow, 16);
+    }
+    save();
+  });
+
+  btnDrain.addEventListener("click",()=>{
+    // drain: globally reduce density + spin-out
+    for(let i=0;i<d.length;i++){
+      d[i] *= 0.55;
+      u[i] *= 0.85;
+      v[i] *= 0.85;
+    }
+    save();
+  });
+
+  btnInvert.addEventListener("click",()=> setInvert(!S.invert));
+  btnNull.addEventListener("click",()=> setNull(!S.nullMode));
+  btnFs.addEventListener("click",()=>{
+    const on = !!document.fullscreenElement;
+    if(on) document.exitFullscreen?.().catch(()=>{});
+    else document.documentElement.requestFullscreen?.().catch(()=>{});
+  });
+
+  // hotkeys
+  window.addEventListener("keydown",(e)=>{
+    const k = e.key.toLowerCase();
+    if(e.shiftKey && k==="i") setInvert(!S.invert);
+    if(e.shiftKey && k==="n") setNull(!S.nullMode);
+    if(e.shiftKey && k==="f"){
+      const on = !!document.fullscreenElement;
+      if(on) document.exitFullscreen?.().catch(()=>{});
+      else document.documentElement.requestFullscreen?.().catch(()=>{});
+    }
+    if(e.shiftKey && k==="p"){ btnPour.click(); }
+    if(e.shiftKey && k==="d"){ btnDrain.click(); }
+  });
+
+  function step(){
+    S.t += 0.016;
+
+    // gentle continuous injection (keeps it alive)
+    if(Math.random() < 0.22){
+      const gx = Nx*0.5 + (Math.random()-0.5)*Nx*0.25;
+      const gy = Ny*0.35 + (Math.random()-0.5)*Ny*0.20;
+      addInk(gx, gy, 0.01*S.ink, 6);
+    }
+
+    // advect velocity + density
+    const dt = 0.65;
+    advect(u, u2, u, v, dt, S.visc);
+    advect(v, v2, u, v, dt, S.visc);
+    // swap
+    [u,u2] = [u2,u];
+    [v,v2] = [v2,v];
+
+    // project to divergence-free flow (liquid feel)
+    computeDivergence();
+    solvePressure(18);
+    project();
+
+    // density advection (slightly dissipative)
+    advect(d, d2, u, v, dt, 0.996);
+    [d,d2] = [d2,d];
+
+    // slight evaporation to keep it from saturating
+    for(let i=0;i<d.length;i++){
+      d[i] *= 0.9985;
+    }
+
+    render();
+    requestAnimationFrame(step);
+  }
+
+  // boot
+  load();
+  resize();
+  window.addEventListener("resize", resize);
+  setInvert(S.invert);
+  step();
+})();
+</script>
+</body>
+</html>
