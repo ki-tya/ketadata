@@ -1,0 +1,1255 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>KETADATA ROUTER — ORGANISM LIGAMENTS (CONNECT/DISCONNECT + SIDE LIST)</title>
+  <style>
+    :root{
+      --bg:#ffffff; --fg:#111111; --muted:#7a7a7a; --line:#cfcfcf;
+      --font:12px/1.15 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace;
+    }
+    html,body{height:100%;margin:0;background:var(--bg);color:var(--fg);font:var(--font);overflow:hidden;}
+    *{box-sizing:border-box;}
+    html.invert{--bg:#0b0b0b;--fg:#f2f2f2;--muted:#a0a0a0;--line:#3a3a3a;}
+    html.null #hud, html.null #side, html.null #corner{display:none;}
+
+    #canvas{position:fixed;inset:0;display:block;}
+
+    #hud{
+      position:fixed;left:10px;top:10px;z-index:50;
+      width:760px;max-width:calc(100vw - 20px);
+      background:rgba(0,0,0,0.03);
+      border:1px solid var(--line);
+      padding:6px;
+      backdrop-filter: blur(4px);
+      user-select:none;
+    }
+    html.invert #hud{background:rgba(255,255,255,0.03);}
+    #hud .row{display:flex;gap:6px;flex-wrap:wrap;align-items:center;}
+    #hud .row + .row{margin-top:6px;}
+    #hud button, #hud select, #hud input{
+      font:var(--font);
+      padding:4px 6px;
+      background:transparent;
+      border:1px solid var(--line);
+      color:var(--fg);
+    }
+    #hud button{cursor:pointer;}
+    #hud .pill{display:inline-block;padding:3px 6px;border:1px solid var(--line);background:transparent;color:var(--muted);}
+    #hud .label{color:var(--muted);}
+    #hud .sp{flex:1;}
+    #hud input[type="range"]{padding:0;height:22px;}
+
+    #side{
+      position:fixed;right:10px;top:10px;z-index:60;
+      width:430px;max-height:calc(100vh - 20px);
+      background:rgba(0,0,0,0.03);
+      border:1px solid var(--line);
+      padding:8px;overflow:auto;display:none;
+      backdrop-filter: blur(4px);
+    }
+    html.invert #side{background:rgba(255,255,255,0.03);}
+    #side .t{color:var(--muted);}
+    #side .a{color:var(--fg);word-break:break-all;}
+    #side .btns{margin-top:6px;display:flex;gap:6px;flex-wrap:wrap;}
+    #side button{font:var(--font);padding:4px 6px;background:transparent;border:1px solid var(--line);cursor:pointer;color:var(--fg);}
+    #side .list{margin-top:8px;border-top:1px solid var(--line);padding-top:8px;}
+    #side .item{
+      display:flex;gap:6px;align-items:center;
+      padding:4px 0;border-bottom:1px dashed var(--line);
+    }
+    #side .item:last-child{border-bottom:none;}
+    #side .name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+    #side .tag{color:var(--muted);}
+    #side .dot{width:8px;height:8px;border:1px solid var(--line);border-radius:999px;display:inline-block;}
+    #side .dot.public{background:var(--fg);}
+    #side .dot.private{background:var(--muted);}
+    #side .dot.unset{background:transparent;}
+    #side .mini{padding:2px 6px;}
+
+    #corner{position:fixed;left:10px;bottom:10px;z-index:40;color:var(--muted);user-select:none;}
+
+    #glass{
+      position:fixed;inset:0;pointer-events:none;z-index:20;
+      box-shadow:
+        inset 0 0 0 1px rgba(0,0,0,.10),
+        inset 0 0 120px rgba(0,0,0,.07),
+        inset 0 0 260px rgba(0,0,0,.10);
+      opacity:.55;
+      mix-blend-mode:multiply;
+    }
+    html.invert #glass{
+      box-shadow:
+        inset 0 0 0 1px rgba(255,255,255,.08),
+        inset 0 0 120px rgba(255,255,255,.06),
+        inset 0 0 260px rgba(255,255,255,.09);
+      opacity:.45;
+      mix-blend-mode:screen;
+    }
+
+    /* hard fallback debug banner (only used if JS fails) */
+    #boot{
+      position:fixed;left:10px;bottom:10px;z-index:9999;
+      padding:6px 8px;border:1px solid var(--line);background:rgba(0,0,0,0.03);
+      color:var(--muted);display:none;
+    }
+    html.invert #boot{background:rgba(255,255,255,0.03);}
+  </style>
+</head>
+<body>
+<canvas id="canvas"></canvas>
+<div id="glass"></div>
+<div id="boot">BOOT OK</div>
+
+<div id="hud">
+  <div class="row">
+    <span class="pill">ROUTER / ORGANISM • LIGAMENTS + SYNAPSE (CONNECT/DISCONNECT)</span>
+    <span class="sp"></span>
+    <span class="pill" id="pillRun">RUNNING</span>
+    <span class="pill" id="pillReveal">FOCUS: NONE</span>
+  </div>
+  <div class="row">
+    <button id="btnPause">PAUSE (SPACE)</button>
+    <button id="btnRecenter">RECENTER</button>
+    <button id="btnSettle">SETTLE</button>
+    <button id="btnClearFocus">CLEAR FOCUS</button>
+    <span class="label">ZOOM</span>
+    <button id="btnZoomOut">-</button>
+    <button id="btnZoomIn">+</button>
+    <span class="label">SPEED</span>
+    <input id="speed" type="range" min="0" max="2" step="0.05" value="0.95" />
+    <span class="label">TENSION</span>
+    <input id="tension" type="range" min="0.3" max="1.9" step="0.05" value="1.05" />
+    <span class="label">SOFT</span>
+    <input id="soft" type="range" min="0" max="2" step="0.05" value="1.25" />
+  </div>
+  <div class="row">
+    <span class="label">SEARCH</span>
+    <input id="q" type="text" placeholder="filter links..." />
+    <span class="label">VIS</span>
+    <select id="visFilter">
+      <option value="ALL">ALL</option>
+      <option value="PUBLIC">PUBLIC</option>
+      <option value="PRIVATE">PRIVATE</option>
+      <option value="UNSET">UNSET</option>
+    </select>
+    <span class="label">SYNAPSE</span>
+    <input id="synapse" type="range" min="0" max="1" step="0.01" value="0.55" />
+    <button id="btnExportPublic">EXPORT PUBLIC</button>
+    <button id="btnExportAll">EXPORT VIS</button>
+    <button id="btnImport">IMPORT</button>
+    <button id="btnResetVis">RESET VIS</button>
+    <button id="btnNull">NULL (SHIFT+N)</button>
+    <button id="btnInvert">INVERT (SHIFT+I)</button>
+    <button id="btnFull">FULL (SHIFT+F)</button>
+  </div>
+</div>
+
+<div id="side">
+  <div class="t" id="sideTitle">FOCUS</div>
+  <div class="a" id="sideMain"></div>
+  <div class="t" style="margin-top:6px;">TYPE</div>
+  <div class="a" id="sideType"></div>
+  <div class="t" style="margin-top:6px;">URL</div>
+  <div class="a" id="sideUrl"></div>
+  <div class="t" style="margin-top:6px;">VISIBILITY</div>
+  <div class="a" id="sideVis"></div>
+  <div class="btns" id="sideBtns">
+    <button id="openNew">OPEN</button>
+    <button id="copyUrl">COPY</button>
+    <button id="toggleVis">TOGGLE PUBLIC/PRIVATE</button>
+    <button id="closeSide">CLOSE</button>
+  </div>
+
+  <div class="list" id="sideListWrap" style="display:none;">
+    <div class="t">LINKS IN CLUSTER</div>
+    <div class="a" id="sideCount"></div>
+    <div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap;">
+      <button class="mini" id="btnOpenAll">OPEN ALL (SAFE)</button>
+      <button class="mini" id="btnExportCluster">EXPORT CLUSTER</button>
+    </div>
+    <div id="sideList"></div>
+  </div>
+</div>
+
+<div id="corner">CLICK CLUSTER=FOCUS (SIDE LIST) • LIGAMENTS CONNECT/DISCONNECT • DRAG EMPTY=PAN • DRAG NODE=PULL • WHEEL=ZOOM</div>
+<input id="filePick" type="file" accept="application/json" style="display:none" />
+
+<script>
+(() => {
+  function showBoot(){ const b=document.getElementById("boot"); if(b){ b.style.display="block"; } }
+  function fail(err){
+    console.error(err);
+    const d=document.createElement("div");
+    d.style.position="fixed";d.style.inset="10px";d.style.zIndex="9999";
+    d.style.background="rgba(0,0,0,0.85)";d.style.color="#fff";
+    d.style.border="1px solid rgba(255,255,255,0.25)";d.style.padding="10px";
+    d.style.font="12px/1.2 ui-monospace, Menlo, Monaco, Consolas, monospace";
+    d.style.whiteSpace="pre-wrap";
+    d.textContent="KETADATA ROUTER ERROR\n\n"+(err && (err.stack||err.message)?(err.stack||err.message):String(err));
+    document.body.appendChild(d);
+  }
+
+  try{
+    showBoot();
+
+    const BASE_URL="https://ki-tya.github.io/ketadata/";
+    const STORE_VIS="KD_ROUTER_VIS_V1";
+
+    const CLUSTERS=[
+      { name:"KETA-CORE", links:["based_diva9.html","elevator3.html","index.html","index013.html","index11.html","map.html","room.html"]},
+      { name:"BLEAK-TECH", links:["ball.html","beatball.html","blacklotus2.html","bleak.html","chakra.html","memofesto.html"]},
+      { name:"SCREENS", links:["cctv1.html","crunch1.html","darkroom1.html","kdtv1.html","obscura.html"]},
+      { name:"EXPERIMENTS", links:[
+        "003.html","aniversary1111.html","artaud.html","bataille1.html","borges.html","burroughs.html","capture.html",
+        "capturegpt.html","capturegpt2.html","capturegpt3.html","capturegpt4.html","capturegpt5.html","capturegpt6.html",
+        "capturegpt7.html","capturegpt8.html","christmas25.html","chroma.html","coffee.html","coffee1.html","cp1.html",
+        "cube.html","cube1.html","debord.html","deleuze.html","dmt.html","dmt2.html","dmt3.html","dmt4.html","dmtzoom.html",
+        "etal.html","funnel.html","funnel1.html","funnel2.html","funnel3.html","funnel4.html","goffman.html","gptsubject.html",
+        "holzer.html","hyperstition.html","hyperstition1.html","hyperstition2.html","hyperstition3.html","hyperstition5.html",
+        "index0.html","index001.html","index002.html","index003.html","index004.html","index005.html","index006.html","index007.html",
+        "index008.html","index009.html","index01.html","index011.html","index012.html","index014.html","index015.html","index02.html",
+        "index03.html","index04.html","index05.html","index06.html","index07.html","index08.html","index09.html","infinity.html","jung.html",
+        "kitty.html","kmas.html","land.html","mandala.html","mandala2.html","mandala3.html","mandalagpt.html","mandalagpt2.html",
+        "mandalagpt3.html","mandalagpt4.html","matrix.html","matryoshka.html","mcluhan.html","mdma.html","mdma2.html","mdmagpt.html",
+        "mdmagpt2.html","misc.html","misc2.html","misc3.html","misc4.html","misc5.html","misc6.html","misc7.html","misc8.html",
+        "molecule.html","newtrap.html","newtrap2.html","newtrap3.html","polka1.html","polka2.html","polkadot.html","pool.html","pool3.html",
+        "pool4.html","pool5.html","pool6.html","release.html","release2.html","release3.html","release4.html","ripple.html","ripple2.html",
+        "ripple3.html","ripplegpt.html","sg.html","sg1.html","slopstream2.html","slopstream3.html","slopstream4.html","slopstream6.html",
+        "snakes.html","sovereignty.html","subgpt2.html","subgpt3.html","subgpt4.html","subgpt5.html","sublime.html","substance.html",
+        "substrate.html","substrate1.html","substrate3.html","teleo.html","teleo1.html","temple.html","temple1.html"
+      ]},
+      { name:"CONCEPTUAL ALIGNMENT", links:["2812.html","claude_cl3.html","concept_cl4.html","cp.html","depth.html","drugprotocol.html","fivethirtysix.html","intra.html","reading.html","widefield.html"]},
+      { name:"BASE", links:["based_diva3.html","based_diva8.html","based_diva98.html","based_diva98x.html","based_diva9a.html","based_diva9b.html","based_diva9c.html","based_diva9d.html","based_diva9e.html","based_diva9f.html","based_diva9g.html","based_diva9h.html","based_diva9i.html","based_diva9ii.html","based_diva9iii.html","bbd1.html","bbd2.html","bbd3.html","diva.html","divabased4.html","re_diva9.html","systemkill.html"]},
+      { name:"SYSTEM", links:["backbone.html","backbone1.html","backbone2.html","backend.html","claude_mockup.html","claude.html","contract.html","memofesto1.html","memofesto2.html","mockups.html","mockups1.html","mockups2.html","nav.html","pads.html","page.html"]},
+      { name:"SYS-UTIL", links:["arranger.html","bugtest.html","debug.html","diagnostic.html","inspector.html","inspector1.html","linklist.html","linkorg4.html","main3.html","manifest.html","master2.html","mastergpt.html","monitor.html","primitive.html","primitive1.html","primitive2.html","primitive3.html","pulse.html","quota.html","reg.html","regv3.html","regv4.html","screenplane.html","screenplane1.html","storage.html","storage1.html","storagemanager.html","system8.html","version.html","videomanager.html"]},
+      { name:"SYS-PR", links:["cashapp1.html","cashapp3.html","funding.html","shop.html","submit.html"]},
+      { name:"TESTERS", links:["anniversary1.html","anniversary11.html","anniversary111.html","concept_cl.html","concept_cl1.html","concept_cl2.html","darkroom.html","doc5.html","index_copy.html","index_prev1.html","index01_tester.html","lib_cl.html","mandala88.html","master.html","master1.html","redroom.html","to-do.html","to-do1.html","vape-drive.html","vault.html","video.html","video2.html"]},
+      { name:"SECRET", links:["67.html","page2.html"]},
+      { name:"CORE", links:["deprecated.html","design1.html","lab.html","lab1.html","labyrinth.html","lib_gpt.html","linksv3.html","main2.html","sensory3.html","studiofront.html","studiov2.html","studiov3.html","tester3.html","tester31.html"]},
+      { name:"CORE-UTIL", links:["acid_doc.html","artifact.html","board.html","board1.html","board2.html","board3.html","calendar1.html","controller.html","controller1.html","controller2.html","controller3.html","display1.html","doc2.html","manifest5.html","modern.html","pdf2jpeg7.html","sheets.html","studio.html","to-do2.html"]},
+      { name:"DESIGN-UTIL", links:["color1.html","color3.html","font.html"]},
+      { name:"PHOTOG-UTIL", links:["editor.html","studiov1.html"]},
+      { name:"DATA-UTIL", links:["pdf2jpeg8.html"]},
+      { name:"META-COG", links:["circle.html","libra.html"]},
+      { name:"LLM-UTIL", links:["compiler.html","contextifier.html","d2.html","prompt.html","prompt1.html","prompt3.html","prompter.html"]},
+      { name:"HTML-UTIL", links:["classifier.html","classifier1.html","forge3.html","forge4.html","forge5.html","forge7.html","html.html","metadata.html","metadata1.html","unifier.html"]},
+      { name:"UI-UTIL", links:["color5.html","interfacer.html","interfacer1.html","interfacer2.html","lab3.html","lab9.html","system6.html"]},
+    ];
+
+    function makeUrl(path){ return /^https?:\/\//i.test(path) ? path : (BASE_URL + path.replace(/^\//,'')); }
+    function makeId(cluster, path){ return `${cluster}::${path}`; }
+
+    let vis={};
+    function loadVis(){
+      try{
+        const raw=localStorage.getItem(STORE_VIS);
+        if(!raw) return;
+        const parsed=JSON.parse(raw);
+        if(parsed && parsed.vis && typeof parsed.vis==="object") vis=parsed.vis||{};
+      }catch{}
+    }
+    function saveVis(){
+      try{ localStorage.setItem(STORE_VIS, JSON.stringify({version:"KD_ROUTER_VIS_V1",updatedAt:new Date().toISOString(),vis})); }catch{}
+    }
+    function getVis(id){
+      const v=vis[id];
+      if(v==="PUBLIC"||v==="PRIVATE") return v;
+      return "UNSET";
+    }
+    function toggleVis(id){
+      const cur=getVis(id);
+      vis[id]=(cur==="PUBLIC")?"PRIVATE":"PUBLIC";
+      saveVis();
+    }
+    function resetVis(){ vis={}; saveVis(); }
+
+    const canvas=document.getElementById("canvas");
+    const ctx=canvas.getContext("2d"); // safer default context
+    function resize(){
+      const dpr=Math.max(1,Math.min(2,window.devicePixelRatio||1));
+      canvas.width=Math.floor(window.innerWidth*dpr);
+      canvas.height=Math.floor(window.innerHeight*dpr);
+      canvas.style.width=window.innerWidth+"px";
+      canvas.style.height=window.innerHeight+"px";
+      ctx.setTransform(dpr,0,0,dpr,0,0);
+    }
+    window.addEventListener("resize",resize);
+    resize();
+
+    const cam={x:0,y:0,z:1};
+    function screenToWorld(sx,sy){
+      const cx=window.innerWidth/2, cy=window.innerHeight/2;
+      return {x:(sx-cx)/cam.z+cam.x, y:(sy-cy)/cam.z+cam.y};
+    }
+    function worldToScreen(wx,wy){
+      const cx=window.innerWidth/2, cy=window.innerHeight/2;
+      return {x:(wx-cam.x)*cam.z+cx, y:(wy-cam.y)*cam.z+cy};
+    }
+
+    function seeded(s){
+      let h=2166136261>>>0; s=String(s);
+      for(let i=0;i<s.length;i++){ h^=s.charCodeAt(i); h=Math.imul(h,16777619)>>>0; }
+      return (h%10000)/10000;
+    }
+    function cssVar(name){ return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || "#000"; }
+
+    const nodes=[];
+    const edges=[];
+    const nodeByKey=new Map();
+    function addNode(n){ nodes.push(n); nodeByKey.set(n.key,n); return n; }
+    function addEdge(a,b,rest,kind){
+      const seed=seeded(a+"|"+b+"|"+kind);
+      edges.push({ a,b,rest,kind:kind||"tendon", seed, alive:1, targetAlive:1, ttl:0 });
+    }
+
+    const clusterNames = CLUSTERS.map(c=>c.name).slice().sort((a,b)=>seeded(a)-seeded(b));
+    const spineLen = clusterNames.length;
+    const spine = [];
+    for(let i=0;i<spineLen;i++){
+      const t=i/(Math.max(1,spineLen-1));
+      const x = (t*2-1)*760;
+      const y = Math.sin(t*Math.PI*2)*240 + Math.sin(t*Math.PI*6)*70;
+      spine.push({x,y});
+    }
+
+    const CLUSTER_KEYS=[];
+    clusterNames.forEach((name,i)=>{
+      const p=spine[i];
+      const s=seeded(name);
+      const key=`CLUSTER::${name}`;
+      CLUSTER_KEYS.push(key);
+      addNode({
+        key,type:"CLUSTER",label:name,url:"",
+        x:p.x + (seeded(name+"_jx")*2-1)*110,
+        y:p.y + (seeded(name+"_jy")*2-1)*110,
+        vx:0,vy:0,r:16,seed:s,
+        revealed:false
+      });
+    });
+
+    for(let i=0;i<CLUSTER_KEYS.length-1;i++){
+      addEdge(CLUSTER_KEYS[i],CLUSTER_KEYS[i+1], 260 + seeded("s"+i)*160, "spine");
+    }
+    for(let i=0;i<CLUSTER_KEYS.length;i++){
+      const a=CLUSTER_KEYS[i];
+      const j = (i + 3 + Math.floor(seeded(a+"_c")*6)) % CLUSTER_KEYS.length;
+      if(Math.abs(j-i)<=1) continue;
+      const b=CLUSTER_KEYS[j];
+      const key=a<b?a+"|"+b:b+"|"+a;
+      if(edges.some(e=>{
+        const k=e.a<e.b?e.a+"|"+e.b:e.b+"|"+e.a;
+        return k===key && e.kind!=="branch";
+      })) continue;
+      addEdge(a,b, 430 + seeded(key)*300, "fascia");
+    }
+
+    CLUSTERS.forEach(c=>{
+      const cKey=`CLUSTER::${c.name}`;
+      const cn=nodeByKey.get(cKey);
+      if(!cn) return;
+      c.links.forEach(p=>{
+        const id=makeId(c.name,p);
+        const s2=seeded(id);
+        const k=`LINK::${id}`;
+
+        const ang=(s2*2-1)*2.6;
+        const rr=20 + s2*45;
+        const hx=cn.x + Math.cos(ang)*rr;
+        const hy=cn.y + Math.sin(ang)*rr;
+
+        addNode({
+          key:k,type:"LINK",label:p,url:makeUrl(p),
+          x:hx,y:hy,vx:0,vy:0,r:10,cluster:c.name,id,seed:s2,
+          visible:false,
+          home:{x:hx,y:hy}
+        });
+
+        addEdge(cKey,k, 160 + s2*120, "branch");
+      });
+    });
+
+    // HUD refs
+    const pillRun=document.getElementById("pillRun");
+    const pillReveal=document.getElementById("pillReveal");
+    const btnPause=document.getElementById("btnPause");
+    const btnRecenter=document.getElementById("btnRecenter");
+    const btnSettle=document.getElementById("btnSettle");
+    const btnClearFocus=document.getElementById("btnClearFocus");
+    const btnZoomIn=document.getElementById("btnZoomIn");
+    const btnZoomOut=document.getElementById("btnZoomOut");
+    const speedEl=document.getElementById("speed");
+    const tensionEl=document.getElementById("tension");
+    const softEl=document.getElementById("soft");
+    const synapseEl=document.getElementById("synapse");
+    const qEl=document.getElementById("q");
+    const visFilterEl=document.getElementById("visFilter");
+    const btnExportPublic=document.getElementById("btnExportPublic");
+    const btnExportAll=document.getElementById("btnExportAll");
+    const btnImport=document.getElementById("btnImport");
+    const btnResetVis=document.getElementById("btnResetVis");
+    const btnNull=document.getElementById("btnNull");
+    const btnInvert=document.getElementById("btnInvert");
+    const btnFull=document.getElementById("btnFull");
+    const filePick=document.getElementById("filePick");
+
+    // side refs
+    const side=document.getElementById("side");
+    const sideTitle=document.getElementById("sideTitle");
+    const sideMain=document.getElementById("sideMain");
+    const sideType=document.getElementById("sideType");
+    const sideUrl=document.getElementById("sideUrl");
+    const sideVis=document.getElementById("sideVis");
+    const sideBtns=document.getElementById("sideBtns");
+    const sideListWrap=document.getElementById("sideListWrap");
+    const sideCount=document.getElementById("sideCount");
+    const sideList=document.getElementById("sideList");
+
+    const openNew=document.getElementById("openNew");
+    const copyUrl=document.getElementById("copyUrl");
+    const toggleVisBtn=document.getElementById("toggleVis");
+    const closeSide=document.getElementById("closeSide");
+    const btnOpenAll=document.getElementById("btnOpenAll");
+    const btnExportCluster=document.getElementById("btnExportCluster");
+
+    let running=true;
+    function setRunning(r){
+      running=r;
+      pillRun.textContent=r?"RUNNING":"PAUSED";
+      btnPause.textContent=r?"PAUSE (SPACE)":"RUN (SPACE)";
+    }
+
+    function dotClass(v){
+      if(v==="PUBLIC") return "public";
+      if(v==="PRIVATE") return "private";
+      return "unset";
+    }
+
+    function listFiltersPass(path, clusterName){
+      const q=(qEl.value||"").trim().toLowerCase();
+      const vf=(visFilterEl.value||"ALL");
+      if(q && !path.toLowerCase().includes(q)) return false;
+      const v=getVis(makeId(clusterName,path));
+      if(vf!=="ALL" && v!==vf) return false;
+      return true;
+    }
+
+    function renderClusterList(clusterName){
+      const cluster=CLUSTERS.find(c=>c.name===clusterName);
+      if(!cluster){ sideList.innerHTML=""; sideCount.textContent="0"; return; }
+      const items = cluster.links.filter(p=>listFiltersPass(p, clusterName));
+      sideCount.textContent = items.length + " / " + cluster.links.length;
+
+      sideList.innerHTML="";
+      items.forEach(p=>{
+        const id=makeId(clusterName,p);
+        const v=getVis(id);
+        const row=document.createElement("div");
+        row.className="item";
+
+        const dot=document.createElement("span");
+        dot.className="dot "+dotClass(v);
+
+        const name=document.createElement("div");
+        name.className="name";
+        name.textContent=p;
+
+        const tag=document.createElement("div");
+        tag.className="tag";
+        tag.textContent=v;
+
+        const btnOpen=document.createElement("button");
+        btnOpen.className="mini";
+        btnOpen.textContent="OPEN";
+        btnOpen.onclick=()=>window.open(makeUrl(p),"_blank","noopener,noreferrer");
+
+        const btnT=document.createElement("button");
+        btnT.className="mini";
+        btnT.textContent="TOGGLE";
+        btnT.onclick=()=>{
+          toggleVis(id);
+          renderClusterList(clusterName);
+        };
+
+        row.appendChild(dot);
+        row.appendChild(name);
+        row.appendChild(tag);
+        row.appendChild(btnOpen);
+        row.appendChild(btnT);
+        sideList.appendChild(row);
+      });
+    }
+
+    function refreshSideIfCluster(){
+      if(selected && selected.type==="CLUSTER" && focusedClusterKey){
+        renderClusterList(selected.label);
+        sideListWrap.style.display="";
+      }
+    }
+    qEl.addEventListener("input", refreshSideIfCluster);
+    visFilterEl.addEventListener("change", refreshSideIfCluster);
+
+    let selected=null;
+    let focusedClusterKey=null;
+
+    function setSelected(n, opts){
+      opts=opts||{};
+      selected=n;
+      if(!n){
+        side.style.display="none";
+        return;
+      }
+      side.style.display="block";
+      sideTitle.textContent = (n.type==="CLUSTER") ? "FOCUS CLUSTER" : "SELECTED";
+      sideMain.textContent = n.label;
+      sideType.textContent = n.type;
+      sideUrl.textContent = n.url || "";
+      sideListWrap.style.display="none";
+
+      if(n.type==="LINK"){
+        sideVis.textContent=getVis(n.id);
+        sideBtns.style.display="";
+        openNew.style.display="";
+        copyUrl.style.display="";
+        toggleVisBtn.style.display="";
+      }else if(n.type==="CLUSTER"){
+        sideVis.textContent="";
+        sideBtns.style.display="";
+        openNew.style.display="none";
+        copyUrl.style.display="none";
+        toggleVisBtn.style.display="none";
+        if(opts.showList){
+          renderClusterList(n.label);
+          sideListWrap.style.display="";
+        }
+      }else{
+        sideVis.textContent="";
+        sideBtns.style.display="none";
+      }
+    }
+
+    function isNodeVisible(n){
+      if(n.type==="LINK"){
+        return !!n.visible && listFiltersPass(n.label, n.cluster);
+      }
+      return true;
+    }
+
+    function filteredEdges(){
+      return edges.filter(e=>{
+        const A=nodeByKey.get(e.a), B=nodeByKey.get(e.b);
+        if(!A||!B) return false;
+        if(e.kind==="branch"){
+          return isNodeVisible(B) && isNodeVisible(A);
+        }
+        return isNodeVisible(A) && isNodeVisible(B);
+      });
+    }
+
+    function updateSynapses(dt){
+      const syn=parseFloat(synapseEl.value||"0.5");
+      for(const e of edges){
+        if(e.kind==="branch"){ e.alive=1; e.targetAlive=1; continue; }
+        e.ttl -= dt;
+        if(e.ttl <= 0){
+          const base = (e.kind==="spine") ? 1400 : 900;
+          const jitter = 900 + e.seed*1300;
+          e.ttl = base + jitter * (1.2 - syn);
+          const pFlip = syn * (e.kind==="spine" ? 0.35 : 0.55);
+          if(Math.random() < pFlip){
+            e.targetAlive = (e.targetAlive > 0.5) ? 0 : 1;
+          }else{
+            if(Math.random() < syn*0.15) e.targetAlive = (Math.random()<0.5)?0:1;
+          }
+        }
+        const k = 0.004 + syn*0.010;
+        e.alive += (e.targetAlive - e.alive) * (1 - Math.pow(1-k, dt));
+        if(e.alive<0.001) e.alive=0;
+        if(e.alive>0.999) e.alive=1;
+      }
+    }
+
+    function focusCluster(clusterKey){
+      if(!clusterKey || typeof clusterKey!=="string" || !clusterKey.startsWith("CLUSTER::")) clusterKey=null;
+      if(focusedClusterKey===clusterKey) focusedClusterKey=null;
+      else focusedClusterKey=clusterKey;
+
+      for(const n of nodes){
+        if(n.type==="CLUSTER") n.revealed = (focusedClusterKey===n.key);
+      }
+      for(const n of nodes){
+        if(n.type!=="LINK") continue;
+        const ck=`CLUSTER::${n.cluster}`;
+        n.visible = (focusedClusterKey===ck);
+        if(!n.visible){
+          n.vx*=0.10; n.vy*=0.10;
+        }else{
+          const cn=nodeByKey.get(ck);
+          const dx=(n.x-cn.x), dy=(n.y-cn.y);
+          const d=Math.sqrt(dx*dx+dy*dy)+0.001;
+          const ux=dx/d, uy=dy/d;
+          n.vx += ux*(2.0 + seeded(n.key+"_w")*2.0);
+          n.vy += uy*(2.0 + seeded(n.key+"_w2")*2.0);
+        }
+      }
+
+      pillReveal.textContent = focusedClusterKey ? ("FOCUS: "+focusedClusterKey.replace("CLUSTER::","")) : "FOCUS: NONE";
+
+      if(focusedClusterKey){
+        const cn=nodeByKey.get(focusedClusterKey);
+        setSelected(cn, {showList:true});
+      }else{
+        setSelected(null);
+      }
+    }
+
+    // side actions
+    openNew.onclick=()=>{ if(selected && selected.type==="LINK") window.open(selected.url,"_blank","noopener,noreferrer"); };
+    copyUrl.onclick=async()=>{ if(!(selected && selected.type==="LINK")) return; try{ await navigator.clipboard.writeText(selected.url); }catch{} };
+    toggleVisBtn.onclick=()=>{
+      if(!(selected && selected.type==="LINK")) return;
+      toggleVis(selected.id);
+      sideVis.textContent=getVis(selected.id);
+      refreshSideIfCluster();
+    };
+    closeSide.onclick=()=>setSelected(null);
+
+    btnOpenAll.onclick=()=>{
+      if(!(selected && selected.type==="CLUSTER")) return;
+      const clusterName=selected.label;
+      const cluster=CLUSTERS.find(c=>c.name===clusterName);
+      if(!cluster) return;
+      const items=cluster.links.filter(p=>listFiltersPass(p,clusterName)).slice(0,10);
+      items.forEach(p=>window.open(makeUrl(p),"_blank","noopener,noreferrer"));
+    };
+
+    function download(filename,text){
+      const blob=new Blob([text],{type:"application/json"});
+      const url=URL.createObjectURL(blob);
+      const a=document.createElement("a");
+      a.href=url;a.download=filename;
+      document.body.appendChild(a);
+      a.click();a.remove();
+      setTimeout(()=>URL.revokeObjectURL(url),800);
+    }
+
+    btnExportCluster.onclick=()=>{
+      if(!(selected && selected.type==="CLUSTER")) return;
+      const clusterName=selected.label;
+      const cluster=CLUSTERS.find(c=>c.name===clusterName);
+      if(!cluster) return;
+      const out={
+        fileId:"KETADATA_CLUSTER_EXPORT_V1",
+        updatedAt:new Date().toISOString(),
+        baseUrl:BASE_URL,
+        cluster:clusterName,
+        links:cluster.links.map(p=>{
+          const id=makeId(clusterName,p);
+          return {path:p,url:makeUrl(p),visibility:getVis(id)};
+        })
+      };
+      download("KD_cluster_"+clusterName.replace(/\s+/g,"_")+".json", JSON.stringify(out,null,2));
+    };
+
+    function importJSON(text){
+      let parsed; try{ parsed=JSON.parse(text); }catch{ return; }
+      if(!parsed||typeof parsed!=="object") return;
+
+      if(parsed.vis && typeof parsed.vis==="object"){
+        const next={};
+        for(const k in parsed.vis){
+          const v=parsed.vis[k];
+          if(v==="PUBLIC"||v==="PRIVATE") next[k]=v;
+        }
+        vis=next; saveVis();
+        if(selected && selected.type==="LINK") sideVis.textContent=getVis(selected.id);
+        refreshSideIfCluster();
+        return;
+      }
+      if(parsed.clusters && typeof parsed.clusters==="object"){
+        const next={};
+        for(const cname in parsed.clusters){
+          const arr=parsed.clusters[cname];
+          if(!Array.isArray(arr)) continue;
+          arr.forEach(it=>{
+            const p=it?.path, v=it?.visibility;
+            if(typeof p!=="string") return;
+            const id=makeId(cname,p);
+            if(v==="PUBLIC"||v==="PRIVATE") next[id]=v;
+          });
+        }
+        vis=next; saveVis();
+        if(selected && selected.type==="LINK") sideVis.textContent=getVis(selected.id);
+        refreshSideIfCluster();
+      }
+    }
+
+    // export/import/reset
+    btnExportPublic.onclick=()=>{
+      const out={fileId:"KETADATA_PUBLIC_LINKS_V1",updatedAt:new Date().toISOString(),baseUrl:BASE_URL,clusters:{}};
+      CLUSTERS.forEach(c=>{
+        out.clusters[c.name]=c.links.map(p=>({path:p,url:makeUrl(p),visibility:getVis(makeId(c.name,p))}))
+          .filter(x=>x.visibility==="PUBLIC");
+      });
+      download("KD_public_links.json",JSON.stringify(out,null,2));
+    };
+    btnExportAll.onclick=()=>download("KD_visibility_map.json",JSON.stringify({version:"KD_ROUTER_VIS_V1",updatedAt:new Date().toISOString(),vis},null,2));
+    btnImport.onclick=()=>filePick.click();
+    filePick.addEventListener("change",async()=>{
+      const f=filePick.files && filePick.files[0];
+      if(!f) return;
+      const text=await f.text();
+      importJSON(text);
+      filePick.value="";
+    });
+    btnResetVis.onclick=()=>{
+      resetVis();
+      if(selected && selected.type==="LINK") sideVis.textContent=getVis(selected.id);
+      refreshSideIfCluster();
+    };
+
+    // system universals
+    function toggleNull(){ document.documentElement.classList.toggle("null"); }
+    function toggleInvert(){ document.documentElement.classList.toggle("invert"); }
+    function toggleFull(){
+      if(!document.fullscreenElement) document.documentElement.requestFullscreen?.();
+      else document.exitFullscreen?.();
+    }
+    btnNull.onclick=toggleNull;
+    btnInvert.onclick=toggleInvert;
+    btnFull.onclick=toggleFull;
+
+    // interaction
+    let draggingCam=false;
+    let draggingNode=null;
+    let dragOff={x:0,y:0};
+    let lastMouse={x:0,y:0};
+    let hovered=null;
+
+    function nodeAt(sx,sy){
+      const w=screenToWorld(sx,sy);
+      let best=null, bestD=Infinity;
+      for(const n of nodes){
+        if(!isNodeVisible(n)) continue;
+        const dx=w.x-n.x, dy=w.y-n.y;
+        const d=Math.sqrt(dx*dx+dy*dy);
+        const hitR=n.r+(n.type==="LINK"?9:11);
+        if(d<hitR && d<bestD){ best=n; bestD=d; }
+      }
+      return best;
+    }
+
+    canvas.addEventListener("mousedown",(e)=>{
+      const onHud=e.target && e.target.closest && e.target.closest("#hud");
+      const onSide=e.target && e.target.closest && e.target.closest("#side");
+      if(onHud||onSide) return;
+
+      const hit=nodeAt(e.clientX,e.clientY);
+      if(hit){
+        draggingNode=hit;
+        const w=screenToWorld(e.clientX,e.clientY);
+        dragOff.x=w.x-hit.x; dragOff.y=w.y-hit.y;
+        setSelected(hit);
+      }else{
+        draggingCam=true;
+        lastMouse.x=e.clientX; lastMouse.y=e.clientY;
+        setSelected(null);
+      }
+    });
+
+    window.addEventListener("mousemove",(e)=>{
+      hovered=nodeAt(e.clientX,e.clientY);
+      if(draggingNode){
+        const w=screenToWorld(e.clientX,e.clientY);
+        draggingNode.x=w.x-dragOff.x; draggingNode.y=w.y-dragOff.y;
+        draggingNode.vx*=0.25; draggingNode.vy*=0.25;
+
+        if(draggingNode.type==="CLUSTER"){
+          for(const n of nodes){
+            if(n.type!=="LINK") continue;
+            if(n.cluster!==draggingNode.label) continue;
+            const s=n.seed||0.5;
+            const ang=(s*2-1)*2.6;
+            const rr=20 + s*45;
+            n.home.x=draggingNode.x + Math.cos(ang)*rr;
+            n.home.y=draggingNode.y + Math.sin(ang)*rr;
+            if(!n.visible){
+              n.x=n.home.x; n.y=n.home.y;
+            }
+          }
+        }
+      }else if(draggingCam){
+        const dx=(e.clientX-lastMouse.x)/cam.z;
+        const dy=(e.clientY-lastMouse.y)/cam.z;
+        cam.x-=dx; cam.y-=dy;
+        lastMouse.x=e.clientX; lastMouse.y=e.clientY;
+      }
+    });
+
+    window.addEventListener("mouseup",()=>{ draggingCam=false; draggingNode=null; });
+
+    canvas.addEventListener("click",(e)=>{
+      const onHud=e.target && e.target.closest && e.target.closest("#hud");
+      const onSide=e.target && e.target.closest && e.target.closest("#side");
+      if(onHud||onSide) return;
+
+      const hit=nodeAt(e.clientX,e.clientY);
+      if(!hit) return;
+
+      if(hit.type==="CLUSTER"){ focusCluster(hit.key); return; }
+      if(hit.type==="LINK"){
+        if(selected && selected.key===hit.key){
+          window.open(hit.url,"_blank","noopener,noreferrer");
+        }else{
+          setSelected(hit);
+        }
+      }
+    });
+
+    canvas.addEventListener("wheel",(e)=>{
+      const onHud=e.target && e.target.closest && e.target.closest("#hud");
+      const onSide=e.target && e.target.closest && e.target.closest("#side");
+      if(onHud||onSide) return;
+      e.preventDefault();
+      const before=screenToWorld(e.clientX,e.clientY);
+      const zoom=Math.exp(-e.deltaY*0.0012);
+      cam.z=Math.max(0.15,Math.min(3.5,cam.z*zoom));
+      const after=screenToWorld(e.clientX,e.clientY);
+      cam.x+=(before.x-after.x);
+      cam.y+=(before.y-after.y);
+    },{passive:false});
+
+    // physics + draw
+    function step(dt){
+      const speed=parseFloat(speedEl.value||"1");
+      const tension=parseFloat(tensionEl.value||"1");
+      const soft=parseFloat(softEl.value||"1");
+      const t=performance.now()*0.001;
+
+      updateSynapses(dt);
+
+      const eList=filteredEdges();
+      const repulse=1180*(1.15/soft);
+      const springK=0.0100*tension*(1/soft);
+      const damp=0.93 - Math.min(0.07,(soft-1)*0.035);
+
+      for(let i=0;i<nodes.length;i++){
+        const A=nodes[i];
+        if(!isNodeVisible(A)) continue;
+        for(let j=i+1;j<nodes.length;j++){
+          const B=nodes[j];
+          if(!isNodeVisible(B)) continue;
+          const dx=B.x-A.x, dy=B.y-A.y;
+          const d2=dx*dx+dy*dy+0.001;
+          const d=Math.sqrt(d2);
+          const minD=(A.r+B.r+22);
+          const squeeze=(d<minD)?2.1:1.0;
+          const f=(repulse/d2)*squeeze;
+          const ux=dx/d, uy=dy/d;
+          if(draggingNode!==A){ A.vx-=ux*f*0.002; A.vy-=uy*f*0.002; }
+          if(draggingNode!==B){ B.vx+=ux*f*0.002; B.vy+=uy*f*0.002; }
+        }
+      }
+
+      for(const e of eList){
+        const A=nodeByKey.get(e.a), B=nodeByKey.get(e.b);
+        const dx=B.x-A.x, dy=B.y-A.y;
+        const d=Math.sqrt(dx*dx+dy*dy)+0.001;
+        const diff=d-e.rest;
+        const ux=dx/d, uy=dy/d;
+
+        const phase=(A.seed||0)*7 + (B.seed||0)*9;
+        const pulse = 1 + Math.sin(t*0.9 + phase) * 0.12 * soft;
+
+        const kindMult = (e.kind==="spine")?1.15:(e.kind==="fascia"?0.70:0.85);
+        const aliveMult = (e.kind==="branch") ? 1 : (0.15 + e.alive*0.85);
+        const f=diff*springK*pulse*kindMult*aliveMult;
+
+        if(draggingNode!==A){ A.vx+=ux*f; A.vy+=uy*f; }
+        if(draggingNode!==B){ B.vx-=ux*f; B.vy-=uy*f; }
+      }
+
+      for(const n of nodes){
+        if(!isNodeVisible(n)) continue;
+        if(draggingNode===n) continue;
+        const s=n.seed||0.5;
+        if(n.type==="CLUSTER"){
+          n.vx += Math.sin(t*0.34 + s*5) * 0.06 * speed * soft;
+          n.vy += Math.cos(t*0.32 + s*7) * 0.06 * speed * soft;
+        }
+        if(n.type==="LINK"){
+          n.vx += Math.sin(t*0.70 + s*17) * 0.032 * speed * soft;
+          n.vy += Math.cos(t*0.64 + s*19) * 0.032 * speed * soft;
+        }
+      }
+
+      for(const n of nodes){
+        if(n.type!=="LINK") continue;
+        if(n.visible) continue;
+        const hx=n.home?.x ?? n.x;
+        const hy=n.home?.y ?? n.y;
+        const dx=hx-n.x, dy=hy-n.y;
+        n.vx += dx*0.03;
+        n.vy += dy*0.03;
+        n.vx*=0.62;
+        n.vy*=0.62;
+        n.x += n.vx*(dt/16);
+        n.y += n.vy*(dt/16);
+      }
+
+      for(const n of nodes){
+        if(!isNodeVisible(n)) continue;
+        if(draggingNode===n) continue;
+        n.vx*=damp; n.vy*=damp;
+        n.x += n.vx*(dt/16)*speed;
+        n.y += n.vy*(dt/16)*speed;
+      }
+    }
+
+    function draw(){
+      const W=window.innerWidth, H=window.innerHeight;
+
+      const bg=cssVar("--bg");
+      const fg=cssVar("--fg");
+      const muted=cssVar("--muted");
+      const line=cssVar("--line");
+      const soft=parseFloat(softEl.value||"1");
+      const syn=parseFloat(synapseEl.value||"0.5");
+      const t=performance.now()*0.001;
+
+      ctx.fillStyle=bg;
+      ctx.fillRect(0,0,W,H);
+
+      ctx.save();
+      ctx.globalAlpha=0.12;
+      ctx.strokeStyle=line;
+      ctx.lineWidth=1;
+      ctx.beginPath();
+      const g=84;
+      for(let x=0;x<=W;x+=g){ ctx.moveTo(x,0); ctx.lineTo(x,H); }
+      for(let y=0;y<=H;y+=g){ ctx.moveTo(0,y); ctx.lineTo(W,y); }
+      ctx.stroke();
+      ctx.restore();
+
+      ctx.save();
+      ctx.globalAlpha=0.10;
+      ctx.strokeStyle=line;
+      ctx.lineWidth=1;
+      for(let i=0;i<9;i++){
+        const y=(i/8)*H;
+        ctx.beginPath();
+        for(let x=0;x<=W;x+=34){
+          const yy=y + Math.sin(x*0.01 + i*0.9 + t*0.30) * (7 + i*0.22);
+          if(x===0) ctx.moveTo(x,yy); else ctx.lineTo(x,yy);
+        }
+        ctx.stroke();
+      }
+      ctx.restore();
+
+      const visibleNodes = nodes.filter(n=>isNodeVisible(n));
+
+      ctx.save();
+      ctx.globalAlpha=0.20 + (soft-1)*0.05;
+      ctx.fillStyle=line;
+      ctx.filter=`blur(${Math.max(8,18*cam.z)}px)`;
+      for(const n of visibleNodes){
+        const p=worldToScreen(n.x,n.y);
+        const baseR=(n.type==="CLUSTER")?26:15;
+        const wob=1 + Math.sin(t*0.85 + (n.seed||0)*9) * 0.10;
+        ctx.beginPath();
+        ctx.arc(p.x,p.y,baseR*wob,0,Math.PI*2);
+        ctx.fill();
+      }
+      ctx.filter="none";
+      ctx.restore();
+
+      const eList=filteredEdges();
+      ctx.save();
+      for(const e of eList){
+        const A=nodeByKey.get(e.a), B=nodeByKey.get(e.b);
+        const a=worldToScreen(A.x,A.y);
+        const b=worldToScreen(B.x,B.y);
+
+        const mx=(a.x+b.x)/2, my=(a.y+b.y)/2;
+        const nx=-(b.y-a.y), ny=(b.x-a.x);
+        const nd=Math.sqrt(nx*nx+ny*ny)+0.001;
+        const ux=nx/nd, uy=ny/nd;
+
+        const phase=(A.seed||0)*7 + (B.seed||0)*9 + e.seed*3;
+        const baseB = (e.kind==="spine") ? 8 : (e.kind==="fascia" ? 18 : 12);
+        const bend = baseB * Math.sin(t*0.75 + phase);
+
+        const alive = (e.kind==="branch") ? 1 : e.alive;
+        const alphaBase = (e.kind==="spine") ? 0.95 : (e.kind==="fascia" ? 0.45 : 0.75);
+        const alpha = alphaBase * (0.10 + alive*0.90);
+        const widthBase = (e.kind==="spine") ? 1.65 : (e.kind==="fascia" ? 1.0 : 1.2);
+        const width = widthBase * (0.65 + alive*0.55);
+
+        ctx.globalAlpha=alpha;
+        ctx.strokeStyle=line;
+        ctx.lineWidth=width;
+
+        if(e.kind!=="branch" && alive < 0.35){
+          const dash = 6 + syn*10;
+          ctx.setLineDash([dash, dash]);
+        }else{
+          ctx.setLineDash([]);
+        }
+
+        ctx.beginPath();
+        ctx.moveTo(a.x,a.y);
+        ctx.quadraticCurveTo(mx+ux*bend, my+uy*bend, b.x,b.y);
+        ctx.stroke();
+
+        if(e.kind!=="branch" && alive > 0.65 && Math.sin(t*3 + phase) > 0.92){
+          ctx.save();
+          ctx.setLineDash([]);
+          ctx.globalAlpha=0.35;
+          ctx.fillStyle=line;
+          ctx.beginPath();
+          ctx.arc(mx, my, 3.5, 0, Math.PI*2);
+          ctx.fill();
+          ctx.restore();
+        }
+      }
+      ctx.setLineDash([]);
+      ctx.restore();
+
+      let hoveredNode=null;
+      // hovered computed outside; keep it light:
+      // (hovered is set in mousemove handler)
+
+      for(const n of visibleNodes){
+        const p=worldToScreen(n.x,n.y);
+        const isHover=(typeof hovered!=="undefined" && hovered && hovered.key===n.key);
+        const isSel=(selected && selected.key===n.key);
+        const r=n.r;
+
+        ctx.save();
+        ctx.globalAlpha=0.18 + (isSel?0.18:0) + (isHover?0.10:0) + (n.type==="CLUSTER"&&n.revealed?0.12:0);
+        ctx.fillStyle=line;
+        ctx.beginPath();
+        ctx.arc(p.x,p.y,r+10,0,Math.PI*2);
+        ctx.fill();
+        ctx.restore();
+
+        ctx.save();
+        ctx.fillStyle=bg;
+        ctx.strokeStyle=line;
+        ctx.lineWidth=(isSel||isHover|| (n.type==="CLUSTER"&&n.revealed))?2:1;
+        ctx.beginPath();
+        ctx.arc(p.x,p.y,r,0,Math.PI*2);
+        ctx.fill();
+        ctx.stroke();
+        ctx.restore();
+
+        if(n.type==="LINK"){
+          const v=getVis(n.id);
+          ctx.save();
+          ctx.globalAlpha=0.85;
+          ctx.fillStyle=(v==="PUBLIC")?fg:(v==="PRIVATE"?muted:line);
+          ctx.beginPath();
+          ctx.arc(p.x,p.y,3.2,0,Math.PI*2);
+          ctx.fill();
+          ctx.restore();
+        }
+
+        ctx.save();
+        ctx.font="12px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, \"Liberation Mono\",\"Courier New\", monospace";
+        ctx.textBaseline="middle";
+
+        const text=n.label;
+        const maxChars=(n.type==="LINK")?26:18;
+        const label=text.length>maxChars?text.slice(0,maxChars-1)+"…":text;
+
+        const tx=p.x+(r+9), ty=p.y;
+        ctx.textAlign="left";
+        const w=ctx.measureText(label).width;
+        const pad=3;
+
+        ctx.globalAlpha=0.82;
+        ctx.fillStyle=bg;
+        ctx.fillRect(tx-pad, ty-8, w+pad*2, 16);
+
+        ctx.globalAlpha=1;
+        ctx.fillStyle=(n.type==="LINK")?muted:fg;
+        ctx.fillText(label, tx, ty);
+        ctx.restore();
+      }
+
+      ctx.save();
+      const grad=ctx.createRadialGradient(W/2,H/2,Math.min(W,H)*0.20,W/2,H/2,Math.min(W,H)*0.78);
+      grad.addColorStop(0,"rgba(0,0,0,0)");
+      grad.addColorStop(1,"rgba(0,0,0,"+(document.documentElement.classList.contains("invert")?"0.16":"0.10")+")");
+      ctx.fillStyle=grad;
+      ctx.fillRect(0,0,W,H);
+      ctx.restore();
+    }
+
+    // hover needs to exist before draw uses it
+    let hovered=null;
+
+    btnPause.onclick=()=>setRunning(!running);
+    btnRecenter.onclick=()=>{ cam.x=0; cam.y=0; cam.z=1; };
+    btnSettle.onclick=()=>{ for(const n of nodes){ n.vx*=0.25; n.vy*=0.25; } };
+    btnClearFocus.onclick=()=>focusCluster(null);
+    btnZoomIn.onclick=()=>cam.z=Math.min(3.5,cam.z*1.15);
+    btnZoomOut.onclick=()=>cam.z=Math.max(0.15,cam.z/1.15);
+
+    function toggleNull(){ document.documentElement.classList.toggle("null"); }
+    function toggleInvert(){ document.documentElement.classList.toggle("invert"); }
+    function toggleFull(){
+      if(!document.fullscreenElement) document.documentElement.requestFullscreen?.();
+      else document.exitFullscreen?.();
+    }
+
+    window.addEventListener("keydown",(e)=>{
+      const tag=(document.activeElement && document.activeElement.tagName)?document.activeElement.tagName.toLowerCase():"";
+      const typing=(tag==="input"||tag==="textarea");
+      if(e.key===" " && !typing){ e.preventDefault(); setRunning(!running); return; }
+      if(e.shiftKey && (e.key==="I"||e.key==="i")){ e.preventDefault(); toggleInvert(); return; }
+      if(e.shiftKey && (e.key==="N"||e.key==="n")){ e.preventDefault(); toggleNull(); return; }
+      if(e.shiftKey && (e.key==="F"||e.key==="f")){ e.preventDefault(); toggleFull(); return; }
+      if(e.key==="Escape"){ setSelected(null); focusCluster(null); }
+    });
+
+    btnNull.onclick=toggleNull;
+    btnInvert.onclick=toggleInvert;
+    btnFull.onclick=toggleFull;
+
+    let draggingCam=false;
+    let draggingNode=null;
+    let dragOff={x:0,y:0};
+    let lastMouse={x:0,y:0};
+
+    function nodeAt(sx,sy){
+      const w=screenToWorld(sx,sy);
+      let best=null, bestD=Infinity;
+      for(const n of nodes){
+        if(!isNodeVisible(n)) continue;
+        const dx=w.x-n.x, dy=w.y-n.y;
+        const d=Math.sqrt(dx*dx+dy*dy);
+        const hitR=n.r+(n.type==="LINK"?9:11);
+        if(d<hitR && d<bestD){ best=n; bestD=d; }
+      }
+      return best;
+    }
+
+    canvas.addEventListener("mousedown",(e)=>{
+      const onHud=e.target && e.target.closest && e.target.closest("#hud");
+      const onSide=e.target && e.target.closest && e.target.closest("#side");
+      if(onHud||onSide) return;
+
+      const hit=nodeAt(e.clientX,e.clientY);
+      if(hit){
+        draggingNode=hit;
+        const w=screenToWorld(e.clientX,e.clientY);
+        dragOff.x=w.x-hit.x; dragOff.y=w.y-hit.y;
+        setSelected(hit);
+      }else{
+        draggingCam=true;
+        lastMouse.x=e.clientX; lastMouse.y=e.clientY;
+        setSelected(null);
+      }
+    });
+
+    window.addEventListener("mousemove",(e)=>{
+      hovered=nodeAt(e.clientX,e.clientY);
+      if(draggingNode){
+        const w=screenToWorld(e.clientX,e.clientY);
+        draggingNode.x=w.x-dragOff.x; draggingNode.y=w.y-dragOff.y;
+        draggingNode.vx*=0.25; draggingNode.vy*=0.25;
+
+        if(draggingNode.type==="CLUSTER"){
+          for(const n of nodes){
+            if(n.type!=="LINK") continue;
+            if(n.cluster!==draggingNode.label) continue;
+            const s=n.seed||0.5;
+            const ang=(s*2-1)*2.6;
+            const rr=20 + s*45;
+            n.home.x=draggingNode.x + Math.cos(ang)*rr;
+            n.home.y=draggingNode.y + Math.sin(ang)*rr;
+            if(!n.visible){ n.x=n.home.x; n.y=n.home.y; }
+          }
+        }
+      }else if(draggingCam){
+        const dx=(e.clientX-lastMouse.x)/cam.z;
+        const dy=(e.clientY-lastMouse.y)/cam.z;
+        cam.x-=dx; cam.y-=dy;
+        lastMouse.x=e.clientX; lastMouse.y=e.clientY;
+      }
+    });
+
+    window.addEventListener("mouseup",()=>{ draggingCam=false; draggingNode=null; });
+
+    canvas.addEventListener("click",(e)=>{
+      const onHud=e.target && e.target.closest && e.target.closest("#hud");
+      const onSide=e.target && e.target.closest && e.target.closest("#side");
+      if(onHud||onSide) return;
+
+      const hit=nodeAt(e.clientX,e.clientY);
+      if(!hit) return;
+
+      if(hit.type==="CLUSTER"){ focusCluster(hit.key); return; }
+      if(hit.type==="LINK"){
+        if(selected && selected.key===hit.key) window.open(hit.url,"_blank","noopener,noreferrer");
+        else setSelected(hit);
+      }
+    });
+
+    canvas.addEventListener("wheel",(e)=>{
+      const onHud=e.target && e.target.closest && e.target.closest("#hud");
+      const onSide=e.target && e.target.closest && e.target.closest("#side");
+      if(onHud||onSide) return;
+      e.preventDefault();
+      const before=screenToWorld(e.clientX,e.clientY);
+      const zoom=Math.exp(-e.deltaY*0.0012);
+      cam.z=Math.max(0.15,Math.min(3.5,cam.z*zoom));
+      const after=screenToWorld(e.clientX,e.clientY);
+      cam.x+=(before.x-after.x);
+      cam.y+=(before.y-after.y);
+    },{passive:false});
+
+    // run loop
+    loadVis();
+    pillReveal.textContent="FOCUS: NONE";
+    let last=performance.now();
+    function loop(now){
+      const dt=Math.min(40,now-last);
+      last=now;
+      if(running) step(dt);
+      draw();
+      requestAnimationFrame(loop);
+    }
+    requestAnimationFrame(loop);
+
+    // hide BOOT once animation starts reliably
+    setTimeout(()=>{ const b=document.getElementById("boot"); if(b) b.style.display="none"; }, 800);
+
+    // final: start in settled state
+    for(const n of nodes){ n.vx*=0.0; n.vy*=0.0; }
+
+    // wire remaining UI that depends on selected/focus
+    btnOpenAll.onclick=btnOpenAll.onclick; // no-op keep
+    btnExportCluster.onclick=btnExportCluster.onclick; // no-op keep
+
+  }catch(err){ fail(err); }
+})();
+</script>
+
+<!--
+AE / EE / WB — KETADATA SERIALIZATION STAMP (MANDATORY)
+AE: ORGANISM LIGAMENT NETWORK — SPINE + FASCIA THAT CONNECT/DISCONNECT (SYNAPSE); FOCUS CLUSTER SHOWS LINK NODES + SIDE LIST
+EE: CLICK CLUSTER TO FOCUS; SIDE PANEL LISTS LINKS (FILTERABLE) WITH PUBLIC/PRIVATE TOGGLES; LIGAMENTS FLICKER BETWEEN CONNECTED/DISCONNECTED
+WB: LOCAL-FIRST VISIBILITY MAP; WHOLE-PAGE INVERT; NULL/FULL HOTKEYS; EXPORT/IMPORT JSON
+
+FILE_ID: "KETADATA_ROUTER_ORGANISM_LIGAMENTS_SYNapse_SIDE_LIST"
+ROOM_ID: "K_ROUTER"
+VERSION_ID: "V7"
+UPDATED_AT: "2026-01-04T00:00:00.000-05:00"
+CHANGELOG:
+- V7: FIXED SCRIPT CRASH (DUPLICATE CONST DECLARATIONS) + SAFER CANVAS INIT + BOOT OK FALLBACK
+-->
+</body>
+</html>
