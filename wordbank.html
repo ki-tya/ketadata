@@ -1,0 +1,1170 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>KETADATA WORDBANK</title>
+<style>
+  :root{
+    --bg:#0b0b0b;
+    --fg:#f2f2f2;
+    --muted:#a8a8a8;
+    --line:#2a2a2a;
+    --panel:#121212;
+    --panel2:#0f0f0f;
+    --danger:#ff5a5a;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--fg);
+    font-family: Arial, Helvetica, sans-serif;
+    font-size:12px; /* uniform text size */
+    line-height:1.2;
+    letter-spacing:0.2px;
+    overflow:hidden;
+  }
+  button,input,textarea,select{
+    font:inherit;
+    color:inherit;
+    background:transparent;
+    border:1px solid var(--line);
+    padding:6px 8px;
+    outline:none;
+  }
+  button{cursor:pointer}
+  button:hover{border-color:var(--muted)}
+  button:active{transform:translateY(1px)}
+  input,textarea{width:100%}
+  textarea{resize:none}
+  .app{
+    height:100%;
+    display:grid;
+    grid-template-columns: 330px 1fr 380px;
+    gap:8px;
+    padding:8px;
+  }
+  .col{
+    background:var(--panel);
+    border:1px solid var(--line);
+    display:flex;
+    flex-direction:column;
+    min-height:0;
+  }
+  .bar{
+    display:flex;
+    gap:6px;
+    padding:8px;
+    border-bottom:1px solid var(--line);
+    background:var(--panel2);
+    align-items:center;
+    flex-wrap:wrap;
+  }
+  .grow{flex:1}
+  .pill{
+    border:1px solid var(--line);
+    padding:2px 6px;
+    color:var(--muted);
+    white-space:nowrap;
+  }
+  .muted{color:var(--muted)}
+  .danger{color:var(--danger)}
+  .content{
+    padding:8px;
+    display:flex;
+    flex-direction:column;
+    gap:8px;
+    min-height:0;
+  }
+  .row{display:flex; gap:6px; align-items:center}
+  .list{
+    border:1px solid var(--line);
+    min-height:0;
+    overflow:auto;
+    background:#0d0d0d;
+  }
+  .item{
+    display:grid;
+    grid-template-columns: 1fr auto;
+    gap:6px;
+    padding:6px 8px;
+    border-bottom:1px solid #1a1a1a;
+    align-items:center;
+  }
+  .item:last-child{border-bottom:none}
+  .item.sel{background:#151515}
+  .item .title{white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+  .tinybtn{padding:4px 6px; border-color:#1f1f1f}
+  .tinybtn:hover{border-color:var(--muted)}
+  .panel{
+    border:1px solid var(--line);
+    background:#0d0d0d;
+    padding:8px;
+    min-height:0;
+    overflow:auto;
+  }
+  .divider{height:1px; background:var(--line)}
+  .statusline{
+    display:flex;
+    gap:8px;
+    flex-wrap:wrap;
+    padding:6px 8px;
+    border-top:1px solid var(--line);
+    background:var(--panel2);
+    align-items:center;
+  }
+  .kbd{border:1px solid var(--line); padding:2px 4px; color:var(--muted)}
+  .chip{
+    border:1px solid var(--line);
+    padding:2px 6px;
+    color:var(--muted);
+    cursor:pointer;
+    user-select:none;
+    display:inline-block;
+    margin:2px;
+  }
+  .chip.on{background:#161616; color:var(--fg); border-color:#3a3a3a}
+  .mono{font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;}
+  .grid2{display:grid; grid-template-columns:1fr 1fr; gap:8px}
+  a{color:var(--fg); text-decoration:none}
+  a:hover{text-decoration:underline}
+</style>
+</head>
+<body>
+<div class="app" id="app">
+
+  <!-- LEFT: WORD LIST -->
+  <div class="col" id="colIndex">
+    <div class="bar">
+      <span class="pill">WORDBANK</span>
+      <span class="grow"></span>
+      <button class="tinybtn" id="btnNew">NEW</button>
+      <button class="tinybtn" id="btnDup">DUP</button>
+      <button class="tinybtn" id="btnDel">DEL</button>
+    </div>
+
+    <div class="content" style="min-height:0">
+      <div class="row">
+        <input id="search" placeholder="search word / tags / notes / examples" />
+      </div>
+      <div class="row">
+        <input id="tagFilter" placeholder="filter tags: comma separated (e.g. theory, slang)" />
+      </div>
+      <div class="row">
+        <button class="tinybtn" id="btnRandom">RANDOM</button>
+        <button class="tinybtn" id="btnPin">PIN</button>
+        <button class="tinybtn" id="btnUnpin">UNPIN</button>
+        <span class="grow"></span>
+        <span class="muted" id="countLine">0</span>
+      </div>
+
+      <div class="panel" style="padding:6px">
+        <div class="row">
+          <span class="pill">PINNED</span>
+          <span class="grow"></span>
+          <button class="tinybtn" id="btnCopyPinned">COPY</button>
+        </div>
+        <div class="panel" id="pinnedBox" style="max-height:120px; overflow:auto;"></div>
+      </div>
+
+      <div class="list" id="wordList" aria-label="Words"></div>
+      <div class="muted">words as objects. tags as gravity. export as ownership.</div>
+    </div>
+
+    <div class="statusline">
+      <span class="muted">hotkeys:</span>
+      <span class="kbd">SHIFT+I</span><span class="muted">invert</span>
+      <span class="kbd">SHIFT+N</span><span class="muted">null</span>
+      <span class="kbd">SHIFT+S</span><span class="muted">save</span>
+      <span class="kbd">CTRL/⌘+K</span><span class="muted">search</span>
+    </div>
+  </div>
+
+  <!-- CENTER: WORD DETAIL -->
+  <div class="col" id="colDetail">
+    <div class="bar">
+      <span class="pill">DETAIL</span>
+      <span class="grow"></span>
+      <button class="tinybtn" id="btnAddExample">ADD EXAMPLE</button>
+      <button class="tinybtn" id="btnDelExample">DEL EXAMPLE</button>
+      <button class="tinybtn" id="btnCopyWord">COPY</button>
+    </div>
+
+    <div class="content" style="min-height:0">
+      <div class="grid2">
+        <input id="word" placeholder="word / phrase" />
+        <input id="pos" placeholder="part of speech (optional)" />
+      </div>
+      <div class="grid2">
+        <input id="tags" placeholder="tags (comma separated)" />
+        <input id="source" placeholder="source / origin (optional)" />
+      </div>
+
+      <div class="panel" style="display:flex; flex-direction:column; gap:8px; min-height:0;">
+        <div class="row">
+          <span class="pill">DEFINITION / NOTES</span>
+          <span class="grow"></span>
+          <span class="muted" id="metaLine">—</span>
+        </div>
+        <textarea id="notes" spellcheck="false" style="flex:1; min-height:140px" placeholder="definition, meaning, nuance, when to use, why it matters"></textarea>
+
+        <div class="divider"></div>
+
+        <div class="row">
+          <span class="pill">EXAMPLES</span>
+          <span class="grow"></span>
+          <span class="muted" id="exSelLine">selected: none</span>
+        </div>
+        <div class="list" id="exampleList" style="min-height:0; flex:1;"></div>
+
+        <div class="divider"></div>
+
+        <div class="row">
+          <span class="pill">RELATED</span>
+          <span class="grow"></span>
+          <button class="tinybtn" id="btnAddRel">ADD</button>
+          <button class="tinybtn" id="btnDelRel">DEL</button>
+        </div>
+        <div class="list" id="relList" style="min-height:120px;"></div>
+      </div>
+    </div>
+
+    <div class="statusline">
+      <span class="muted" id="selLine">selected: none</span>
+      <span class="muted" id="dirtyLine"></span>
+    </div>
+  </div>
+
+  <!-- RIGHT: IO / TAG CLOUD / PROMPT -->
+  <div class="col" id="colIO">
+    <div class="bar">
+      <span class="pill">IO</span>
+      <span class="grow"></span>
+      <button class="tinybtn" id="btnExportJson">EXPORT JSON</button>
+      <button class="tinybtn" id="btnExportTxt">EXPORT TXT</button>
+      <button class="tinybtn" id="btnExportAll">EXPORT ALL</button>
+    </div>
+
+    <div class="content" style="min-height:0">
+
+      <div class="panel">
+        <div class="row" style="margin-bottom:6px">
+          <span class="pill">IMPORT</span>
+          <span class="grow"></span>
+          <span class="muted">json / txt</span>
+        </div>
+        <div class="row">
+          <input type="file" id="fileInput" accept=".json,.txt,application/json,text/plain" />
+        </div>
+        <div class="row" style="margin-top:6px">
+          <label class="muted" style="display:flex;align-items:center;gap:6px;cursor:pointer">
+            <input type="checkbox" id="chkReplace" style="width:auto" />
+            replace selected
+          </label>
+          <span class="grow"></span>
+          <button class="tinybtn" id="btnLoadFile">LOAD</button>
+        </div>
+        <div class="muted" style="margin-top:6px">
+          txt import: one word per line (or paste a blob; it will extract tokens conservatively).
+        </div>
+      </div>
+
+      <div class="panel" style="min-height:0; display:flex; flex-direction:column; gap:8px;">
+        <div class="row">
+          <span class="pill">TAG CLOUD</span>
+          <span class="grow"></span>
+          <button class="tinybtn" id="btnClearTagFilter">CLEAR FILTER</button>
+        </div>
+        <div class="panel" id="tagCloud" style="flex:1;"></div>
+      </div>
+
+      <div class="panel">
+        <div class="row" style="margin-bottom:6px">
+          <span class="pill">PROMPT EXPORT</span>
+          <span class="grow"></span>
+          <button class="tinybtn" id="btnCopyPrompt">COPY</button>
+        </div>
+        <div class="muted">one word object → compact prompt payload</div>
+        <div class="divider" style="margin:8px 0"></div>
+        <div class="panel mono" id="promptBox" style="max-height:200px; overflow:auto;"></div>
+      </div>
+
+    </div>
+
+    <div class="statusline">
+      <span class="muted" id="storageLine">storage: —</span>
+    </div>
+  </div>
+
+</div>
+
+<script>
+(() => {
+  "use strict";
+
+  const LS_KEY = "KETADATA_WORDBANK_V1::state";
+  const uid = () => "WD_" + Math.random().toString(16).slice(2) + "_" + Date.now().toString(16);
+  const nowISO = () => new Date().toISOString();
+  const $ = (id) => document.getElementById(id);
+
+  const els = {
+    app: $("app"),
+    colIndex: $("colIndex"),
+    colIO: $("colIO"),
+
+    search: $("search"),
+    tagFilter: $("tagFilter"),
+    wordList: $("wordList"),
+    countLine: $("countLine"),
+
+    pinnedBox: $("pinnedBox"),
+    btnCopyPinned: $("btnCopyPinned"),
+    btnRandom: $("btnRandom"),
+    btnPin: $("btnPin"),
+    btnUnpin: $("btnUnpin"),
+
+    word: $("word"),
+    pos: $("pos"),
+    tags: $("tags"),
+    source: $("source"),
+    notes: $("notes"),
+    metaLine: $("metaLine"),
+
+    exampleList: $("exampleList"),
+    exSelLine: $("exSelLine"),
+    btnAddExample: $("btnAddExample"),
+    btnDelExample: $("btnDelExample"),
+
+    relList: $("relList"),
+    btnAddRel: $("btnAddRel"),
+    btnDelRel: $("btnDelRel"),
+
+    btnNew: $("btnNew"),
+    btnDup: $("btnDup"),
+    btnDel: $("btnDel"),
+
+    btnCopyWord: $("btnCopyWord"),
+
+    btnExportJson: $("btnExportJson"),
+    btnExportTxt: $("btnExportTxt"),
+    btnExportAll: $("btnExportAll"),
+
+    fileInput: $("fileInput"),
+    chkReplace: $("chkReplace"),
+    btnLoadFile: $("btnLoadFile"),
+
+    tagCloud: $("tagCloud"),
+    btnClearTagFilter: $("btnClearTagFilter"),
+
+    selLine: $("selLine"),
+    dirtyLine: $("dirtyLine"),
+    storageLine: $("storageLine"),
+
+    btnCopyPrompt: $("btnCopyPrompt"),
+    promptBox: $("promptBox"),
+  };
+
+  const defaultState = () => ({
+    fileId: "KETADATA_WORDBANK_V1_" + Date.now().toString(16),
+    version: "V1",
+    updatedAt: nowISO(),
+    system: { invert:false, nullMode:false },
+    ui: {
+      search:"", tagFilter:"",
+      selectedWordId:null,
+      selectedExampleIdx:null,
+      selectedRelIdx:null
+    },
+    pinned: [], // array of wordIds (stable)
+    words: [],
+  });
+
+  let state = loadState();
+  let dirty = false;
+
+  function seedOne(){
+    return {
+      id: uid(),
+      word: "untitled",
+      pos: "",
+      source: "",
+      tags: ["wordbank"],
+      notes: "",
+      examples: [],
+      related: [],
+      createdAt: nowISO(),
+      updatedAt: nowISO()
+    };
+  }
+
+  function loadState(){
+    try{
+      const raw = localStorage.getItem(LS_KEY);
+      if(!raw){
+        const s = defaultState();
+        const w = seedOne();
+        s.words.push(w);
+        s.ui.selectedWordId = w.id;
+        localStorage.setItem(LS_KEY, JSON.stringify(s));
+        return s;
+      }
+      const s = JSON.parse(raw);
+      if(!s.words) s.words = [];
+      if(!s.pinned) s.pinned = [];
+      if(!s.ui) s.ui = { search:"", tagFilter:"", selectedWordId:null, selectedExampleIdx:null, selectedRelIdx:null };
+      if(!s.system) s.system = { invert:false, nullMode:false };
+      if(!s.fileId) s.fileId = "KETADATA_WORDBANK_V1_" + Date.now().toString(16);
+      if(!s.version) s.version = "V1";
+      if(s.words.length === 0){
+        const w = seedOne();
+        s.words.push(w);
+        s.ui.selectedWordId = w.id;
+      }
+      if(!s.ui.selectedWordId || !s.words.find(x => x.id === s.ui.selectedWordId)){
+        s.ui.selectedWordId = s.words[0].id;
+      }
+      return s;
+    }catch(e){
+      const s = defaultState();
+      const w = seedOne();
+      s.words.push(w);
+      s.ui.selectedWordId = w.id;
+      return s;
+    }
+  }
+
+  function saveState(next = state){
+    next.updatedAt = nowISO();
+    localStorage.setItem(LS_KEY, JSON.stringify(next));
+    state = next;
+    dirty = false;
+    render();
+  }
+
+  function markDirty(){
+    dirty = true;
+    els.dirtyLine.textContent = "unsaved";
+  }
+
+  function selectedWord(){
+    return state.words.find(w => w.id === state.ui.selectedWordId) || null;
+  }
+
+  function normTags(str){
+    return (str || "")
+      .split(",")
+      .map(s => s.trim())
+      .filter(Boolean)
+      .map(s => s.toLowerCase());
+  }
+
+  function uniq(arr){
+    const out = [];
+    const seen = new Set();
+    for(const x of arr){
+      if(seen.has(x)) continue;
+      seen.add(x);
+      out.push(x);
+    }
+    return out;
+  }
+
+  // UI modes
+  function applySystemModes(){
+    document.body.style.filter = state.system.invert ? "invert(1)" : "none";
+    if(state.system.nullMode){
+      els.app.style.gridTemplateColumns = "0px 1fr 0px";
+      els.colIndex.style.visibility = "hidden";
+      els.colIO.style.visibility = "hidden";
+      els.colIndex.style.pointerEvents = "none";
+      els.colIO.style.pointerEvents = "none";
+    }else{
+      els.app.style.gridTemplateColumns = "330px 1fr 380px";
+      els.colIndex.style.visibility = "visible";
+      els.colIO.style.visibility = "visible";
+      els.colIndex.style.pointerEvents = "auto";
+      els.colIO.style.pointerEvents = "auto";
+    }
+  }
+
+  // Render
+  function render(){
+    els.storageLine.textContent = `storage: ${LS_KEY} | fileId: ${state.fileId}`;
+    els.search.value = state.ui.search || "";
+    els.tagFilter.value = state.ui.tagFilter || "";
+
+    renderPinned();
+    renderWordList();
+    renderDetail();
+    renderTagCloud();
+    renderPromptBox();
+    applySystemModes();
+  }
+
+  function matchesFilters(w){
+    const q = (state.ui.search || "").toLowerCase().trim();
+    const tf = normTags(state.ui.tagFilter || "");
+    const hay = [
+      w.word || "",
+      w.pos || "",
+      w.source || "",
+      (w.tags || []).join(" "),
+      w.notes || "",
+      (w.examples || []).join("\n"),
+      (w.related || []).join(", ")
+    ].join("\n").toLowerCase();
+
+    if(q && !hay.includes(q)) return false;
+    if(tf.length){
+      const set = new Set((w.tags || []).map(t => t.toLowerCase()));
+      for(const t of tf){
+        if(!set.has(t)) return false;
+      }
+    }
+    return true;
+  }
+
+  function renderWordList(){
+    els.wordList.innerHTML = "";
+    const items = state.words
+      .filter(matchesFilters)
+      .slice()
+      .sort((a,b) => (a.word||"").localeCompare(b.word||""));
+
+    els.countLine.textContent = String(items.length);
+
+    for(const w of items){
+      const div = document.createElement("div");
+      div.className = "item" + (w.id === state.ui.selectedWordId ? " sel" : "");
+
+      const left = document.createElement("div");
+      left.className = "title";
+      left.textContent = w.word || "untitled";
+
+      const right = document.createElement("div");
+      right.className = "muted";
+      right.textContent = String((w.examples || []).length);
+
+      div.appendChild(left);
+      div.appendChild(right);
+
+      div.addEventListener("click", () => {
+        state.ui.selectedWordId = w.id;
+        state.ui.selectedExampleIdx = null;
+        state.ui.selectedRelIdx = null;
+        markDirty();
+        render();
+      });
+
+      els.wordList.appendChild(div);
+    }
+  }
+
+  function renderPinned(){
+    const pinnedWords = state.pinned
+      .map(id => state.words.find(w => w.id === id))
+      .filter(Boolean);
+
+    els.pinnedBox.innerHTML = "";
+    if(pinnedWords.length === 0){
+      els.pinnedBox.textContent = "—";
+      return;
+    }
+    const lines = pinnedWords.map(w => w.word || "untitled");
+    els.pinnedBox.textContent = lines.join("\n");
+  }
+
+  function renderDetail(){
+    const w = selectedWord();
+    if(!w){
+      els.word.value = "";
+      els.pos.value = "";
+      els.source.value = "";
+      els.tags.value = "";
+      els.notes.value = "";
+      els.metaLine.textContent = "—";
+      els.selLine.textContent = "selected: none";
+      els.exampleList.innerHTML = "";
+      els.relList.innerHTML = "";
+      return;
+    }
+
+    els.word.value = w.word || "";
+    els.pos.value = w.pos || "";
+    els.source.value = w.source || "";
+    els.tags.value = (w.tags || []).join(", ");
+    els.notes.value = w.notes || "";
+    els.metaLine.textContent = `created ${w.createdAt || "—"} | updated ${w.updatedAt || "—"}`;
+    els.selLine.textContent = `selected: ${w.word || "untitled"}`;
+
+    // examples
+    els.exampleList.innerHTML = "";
+    (w.examples || []).forEach((ex, idx) => {
+      const div = document.createElement("div");
+      div.className = "item" + (idx === state.ui.selectedExampleIdx ? " sel" : "");
+      const left = document.createElement("div");
+      left.className = "title";
+      left.textContent = ex.length > 140 ? ex.slice(0,137) + "..." : ex;
+      const right = document.createElement("div");
+      right.className = "muted";
+      right.textContent = String(idx+1);
+      div.appendChild(left);
+      div.appendChild(right);
+      div.addEventListener("click", () => {
+        state.ui.selectedExampleIdx = idx;
+        markDirty();
+        els.exSelLine.textContent = `selected: ${idx+1}`;
+        renderDetail(); // rerender for selection highlight
+      });
+      els.exampleList.appendChild(div);
+    });
+    els.exSelLine.textContent = (state.ui.selectedExampleIdx === null || state.ui.selectedExampleIdx === undefined)
+      ? "selected: none"
+      : `selected: ${state.ui.selectedExampleIdx + 1}`;
+
+    // related
+    els.relList.innerHTML = "";
+    (w.related || []).forEach((r, idx) => {
+      const div = document.createElement("div");
+      div.className = "item" + (idx === state.ui.selectedRelIdx ? " sel" : "");
+      const left = document.createElement("div");
+      left.className = "title";
+      left.textContent = r;
+      const right = document.createElement("div");
+      right.className = "muted";
+      right.textContent = String(idx+1);
+      div.appendChild(left);
+      div.appendChild(right);
+      div.addEventListener("click", () => {
+        state.ui.selectedRelIdx = idx;
+        markDirty();
+        renderDetail();
+      });
+      els.relList.appendChild(div);
+    });
+
+    renderPromptBox();
+  }
+
+  function renderTagCloud(){
+    const tags = [];
+    for(const w of state.words){
+      for(const t of (w.tags || [])) tags.push(t.toLowerCase());
+    }
+    const counts = new Map();
+    tags.forEach(t => counts.set(t, (counts.get(t) || 0) + 1));
+    const sorted = Array.from(counts.entries()).sort((a,b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+
+    els.tagCloud.innerHTML = "";
+    for(const [t, c] of sorted){
+      const span = document.createElement("span");
+      span.className = "chip" + (normTags(state.ui.tagFilter).includes(t) ? " on" : "");
+      span.textContent = `${t} (${c})`;
+      span.addEventListener("click", () => {
+        const cur = normTags(state.ui.tagFilter);
+        const set = new Set(cur);
+        if(set.has(t)) set.delete(t); else set.add(t);
+        state.ui.tagFilter = Array.from(set).join(", ");
+        markDirty();
+        render();
+      });
+      els.tagCloud.appendChild(span);
+    }
+  }
+
+  function renderPromptBox(){
+    const w = selectedWord();
+    if(!w){ els.promptBox.textContent = ""; return; }
+    const payload =
+`KETADATA_WORDBANK_OBJECT
+WORD: ${w.word || "untitled"}
+POS: ${w.pos || ""}
+SOURCE: ${w.source || ""}
+TAGS: ${(w.tags || []).join(", ")}
+
+DEFINITION/NOTES:
+${(w.notes || "").slice(0,5000)}
+
+EXAMPLES:
+${(w.examples || []).slice(0,50).map((x,i)=>`${i+1}. ${x}`).join("\n")}
+
+RELATED:
+${(w.related || []).join(", ")}`;
+    els.promptBox.textContent = payload;
+  }
+
+  // Actions
+  function newWord(){
+    const w = seedOne();
+    const name = prompt("word / phrase", "untitled");
+    if(name !== null) w.word = (name || "untitled").trim() || "untitled";
+    state.words.push(w);
+    state.ui.selectedWordId = w.id;
+    state.ui.selectedExampleIdx = null;
+    state.ui.selectedRelIdx = null;
+    markDirty();
+    render();
+  }
+
+  function dupWord(){
+    const w = selectedWord();
+    if(!w) return;
+    const copy = JSON.parse(JSON.stringify(w));
+    copy.id = uid();
+    copy.word = (w.word || "untitled") + " _copy";
+    copy.createdAt = nowISO();
+    copy.updatedAt = nowISO();
+    state.words.push(copy);
+    state.ui.selectedWordId = copy.id;
+    state.ui.selectedExampleIdx = null;
+    state.ui.selectedRelIdx = null;
+    markDirty();
+    render();
+  }
+
+  function delWord(){
+    const w = selectedWord();
+    if(!w) return;
+    if(!confirm(`delete "${w.word}"?`)) return;
+    state.words = state.words.filter(x => x.id !== w.id);
+    state.pinned = state.pinned.filter(id => id !== w.id);
+    if(state.words.length === 0){
+      const n = seedOne();
+      state.words.push(n);
+      state.ui.selectedWordId = n.id;
+    }else{
+      state.ui.selectedWordId = state.words[0].id;
+    }
+    state.ui.selectedExampleIdx = null;
+    state.ui.selectedRelIdx = null;
+    markDirty();
+    render();
+  }
+
+  function pin(){
+    const w = selectedWord();
+    if(!w) return;
+    if(!state.pinned.includes(w.id)) state.pinned.push(w.id);
+    markDirty();
+    renderPinned();
+  }
+
+  function unpin(){
+    const w = selectedWord();
+    if(!w) return;
+    state.pinned = state.pinned.filter(id => id !== w.id);
+    markDirty();
+    renderPinned();
+  }
+
+  function randomPick(){
+    const items = state.words.filter(matchesFilters);
+    if(items.length === 0) return;
+    const w = items[Math.floor(Math.random() * items.length)];
+    state.ui.selectedWordId = w.id;
+    state.ui.selectedExampleIdx = null;
+    state.ui.selectedRelIdx = null;
+    markDirty();
+    render();
+  }
+
+  function addExample(){
+    const w = selectedWord();
+    if(!w) return;
+    const ex = prompt("example sentence / usage", "");
+    if(ex === null) return;
+    const t = ex.trim();
+    if(!t) return;
+    w.examples = w.examples || [];
+    w.examples.push(t);
+    w.updatedAt = nowISO();
+    markDirty();
+    renderDetail();
+  }
+
+  function delExample(){
+    const w = selectedWord();
+    if(!w) return;
+    const idx = state.ui.selectedExampleIdx;
+    if(idx === null || idx === undefined) return;
+    w.examples.splice(idx, 1);
+    state.ui.selectedExampleIdx = null;
+    w.updatedAt = nowISO();
+    markDirty();
+    renderDetail();
+  }
+
+  function addRel(){
+    const w = selectedWord();
+    if(!w) return;
+    const r = prompt("related word / phrase", "");
+    if(r === null) return;
+    const t = r.trim();
+    if(!t) return;
+    w.related = w.related || [];
+    w.related.push(t);
+    w.updatedAt = nowISO();
+    markDirty();
+    renderDetail();
+  }
+
+  function delRel(){
+    const w = selectedWord();
+    if(!w) return;
+    const idx = state.ui.selectedRelIdx;
+    if(idx === null || idx === undefined) return;
+    w.related.splice(idx, 1);
+    state.ui.selectedRelIdx = null;
+    w.updatedAt = nowISO();
+    markDirty();
+    renderDetail();
+  }
+
+  async function copyWord(){
+    const w = selectedWord();
+    if(!w) return;
+    try{ await navigator.clipboard.writeText((w.word || "") + "\n"); }catch(_){}
+  }
+
+  async function copyPinned(){
+    const pinnedWords = state.pinned
+      .map(id => state.words.find(w => w.id === id))
+      .filter(Boolean)
+      .map(w => w.word || "untitled");
+    const txt = pinnedWords.join("\n") + (pinnedWords.length ? "\n" : "");
+    try{ await navigator.clipboard.writeText(txt); }catch(_){}
+  }
+
+  function downloadBlob(filename, mime, content){
+    const blob = new Blob([content], { type: mime });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 250);
+  }
+
+  function exportSelectedJSON(){
+    const w = selectedWord();
+    if(!w) return;
+    const payload = {
+      type: "KETADATA_WORDBANK_OBJECT",
+      version: "V1",
+      word: w.word,
+      pos: w.pos || "",
+      source: w.source || "",
+      tags: w.tags || [],
+      notes: w.notes || "",
+      examples: w.examples || [],
+      related: w.related || [],
+      createdAt: w.createdAt,
+      updatedAt: w.updatedAt
+    };
+    const safe = (w.word || "word").replace(/[^\w\-]+/g, "_").slice(0,60);
+    downloadBlob(`${safe}.ketadata.word.json`, "application/json", JSON.stringify(payload, null, 2));
+  }
+
+  function exportSelectedTXT(){
+    const w = selectedWord();
+    if(!w) return;
+    const safe = (w.word || "word").replace(/[^\w\-]+/g, "_").slice(0,60);
+    const txt =
+`KETADATA_WORDBANK_OBJECT
+WORD: ${w.word || "untitled"}
+POS: ${w.pos || ""}
+SOURCE: ${w.source || ""}
+TAGS: ${(w.tags||[]).join(", ")}
+CREATED: ${w.createdAt || ""}
+UPDATED: ${w.updatedAt || ""}
+
+DEFINITION/NOTES:
+${w.notes || ""}
+
+EXAMPLES:
+${(w.examples||[]).map((x,i)=>`${i+1}. ${x}`).join("\n")}
+
+RELATED:
+${(w.related||[]).join(", ")}
+`;
+    downloadBlob(`${safe}.ketadata.word.txt`, "text/plain", txt);
+  }
+
+  function exportAllJSON(){
+    const payload = {
+      type: "KETADATA_WORDBANK_EXPORT",
+      version: "V1",
+      fileId: state.fileId,
+      exportedAt: nowISO(),
+      pinned: state.pinned,
+      words: state.words
+    };
+    downloadBlob(`KETADATA_WORDBANK_ALL_V1.json`, "application/json", JSON.stringify(payload, null, 2));
+  }
+
+  function conservativeTokenize(text){
+    // For TXT import: accept one word/phrase per line;
+    // if blob, extract tokens >=3 chars with letters, keep hyphen/apostrophe.
+    const lines = (text || "").split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+    if(lines.length && lines.every(l => l.length <= 80)) return lines;
+    const tokens = (text || "")
+      .split(/[\s,;]+/)
+      .map(s => s.trim())
+      .filter(Boolean)
+      .filter(s => /[A-Za-z]/.test(s))
+      .map(s => s.replace(/^[^\w']+|[^\w']+$/g,""))
+      .filter(s => s.length >= 3 && s.length <= 40);
+    return uniq(tokens);
+  }
+
+  async function loadFile(){
+    const file = els.fileInput.files && els.fileInput.files[0];
+    if(!file) return;
+    const text = await file.text();
+    let obj = null;
+    try{ obj = JSON.parse(text); }catch(_){ obj = null; }
+
+    const replace = !!els.chkReplace.checked;
+
+    if(obj && obj.type === "KETADATA_WORDBANK_OBJECT"){
+      const incoming = obj;
+      const w = {
+        id: uid(),
+        word: String(incoming.word || "imported"),
+        pos: String(incoming.pos || ""),
+        source: String(incoming.source || ""),
+        tags: Array.isArray(incoming.tags) ? incoming.tags.map(String) : [],
+        notes: String(incoming.notes || ""),
+        examples: Array.isArray(incoming.examples) ? incoming.examples.map(String) : [],
+        related: Array.isArray(incoming.related) ? incoming.related.map(String) : [],
+        createdAt: incoming.createdAt || nowISO(),
+        updatedAt: nowISO()
+      };
+
+      if(replace){
+        const cur = selectedWord();
+        if(cur){
+          Object.assign(cur, w, { id: cur.id, createdAt: cur.createdAt || w.createdAt });
+          state.ui.selectedWordId = cur.id;
+        }else{
+          state.words.push(w);
+          state.ui.selectedWordId = w.id;
+        }
+      }else{
+        state.words.push(w);
+        state.ui.selectedWordId = w.id;
+      }
+
+      state.ui.selectedExampleIdx = null;
+      state.ui.selectedRelIdx = null;
+      markDirty();
+      render();
+      els.fileInput.value = "";
+      els.chkReplace.checked = false;
+      return;
+    }
+
+    // TXT import: add many words
+    const tokens = conservativeTokenize(text);
+    if(tokens.length === 0){
+      alert("import: no tokens found");
+      return;
+    }
+
+    if(replace){
+      // replace selected word with first token, and add the rest
+      const cur = selectedWord();
+      if(cur){
+        cur.word = tokens[0];
+        cur.updatedAt = nowISO();
+        for(let i=1;i<tokens.length;i++){
+          const nw = seedOne();
+          nw.word = tokens[i];
+          nw.updatedAt = nowISO();
+          state.words.push(nw);
+        }
+        state.ui.selectedWordId = cur.id;
+      }else{
+        tokens.forEach(t => {
+          const nw = seedOne(); nw.word = t; nw.updatedAt = nowISO();
+          state.words.push(nw);
+        });
+        state.ui.selectedWordId = state.words[state.words.length-1].id;
+      }
+    }else{
+      tokens.forEach(t => {
+        const nw = seedOne();
+        nw.word = t;
+        nw.updatedAt = nowISO();
+        state.words.push(nw);
+      });
+      state.ui.selectedWordId = state.words[state.words.length-1].id;
+    }
+
+    state.ui.selectedExampleIdx = null;
+    state.ui.selectedRelIdx = null;
+    markDirty();
+    render();
+    els.fileInput.value = "";
+    els.chkReplace.checked = false;
+  }
+
+  // Wire events
+  els.btnNew.addEventListener("click", newWord);
+  els.btnDup.addEventListener("click", dupWord);
+  els.btnDel.addEventListener("click", delWord);
+
+  els.btnRandom.addEventListener("click", randomPick);
+  els.btnPin.addEventListener("click", pin);
+  els.btnUnpin.addEventListener("click", unpin);
+  els.btnCopyPinned.addEventListener("click", copyPinned);
+
+  els.search.addEventListener("input", () => { state.ui.search = els.search.value; markDirty(); renderWordList(); });
+  els.tagFilter.addEventListener("input", () => { state.ui.tagFilter = els.tagFilter.value; markDirty(); renderWordList(); renderTagCloud(); });
+
+  els.btnClearTagFilter.addEventListener("click", () => { state.ui.tagFilter = ""; markDirty(); render(); });
+
+  els.word.addEventListener("input", () => {
+    const w = selectedWord(); if(!w) return;
+    w.word = els.word.value;
+    w.updatedAt = nowISO();
+    markDirty();
+    renderWordList();
+    renderPinned();
+    renderPromptBox();
+  });
+  els.pos.addEventListener("input", () => {
+    const w = selectedWord(); if(!w) return;
+    w.pos = els.pos.value;
+    w.updatedAt = nowISO();
+    markDirty();
+    renderPromptBox();
+  });
+  els.source.addEventListener("input", () => {
+    const w = selectedWord(); if(!w) return;
+    w.source = els.source.value;
+    w.updatedAt = nowISO();
+    markDirty();
+    renderPromptBox();
+  });
+  els.tags.addEventListener("input", () => {
+    const w = selectedWord(); if(!w) return;
+    w.tags = uniq(normTags(els.tags.value));
+    w.updatedAt = nowISO();
+    markDirty();
+    renderWordList();
+    renderTagCloud();
+    renderPromptBox();
+  });
+  els.notes.addEventListener("input", () => {
+    const w = selectedWord(); if(!w) return;
+    w.notes = els.notes.value;
+    w.updatedAt = nowISO();
+    markDirty();
+    renderPromptBox();
+  });
+
+  els.btnAddExample.addEventListener("click", addExample);
+  els.btnDelExample.addEventListener("click", delExample);
+
+  els.btnAddRel.addEventListener("click", addRel);
+  els.btnDelRel.addEventListener("click", delRel);
+
+  els.btnCopyWord.addEventListener("click", copyWord);
+
+  els.btnExportJson.addEventListener("click", exportSelectedJSON);
+  els.btnExportTxt.addEventListener("click", exportSelectedTXT);
+  els.btnExportAll.addEventListener("click", exportAllJSON);
+
+  els.btnLoadFile.addEventListener("click", loadFile);
+
+  els.btnCopyPrompt.addEventListener("click", async () => {
+    const txt = els.promptBox.textContent || "";
+    try{ await navigator.clipboard.writeText(txt); }catch(_){}
+  });
+
+  // Manual save
+  function doSave(){ saveState(state); els.dirtyLine.textContent = ""; }
+
+  // Hotkeys
+  document.addEventListener("keydown", (e) => {
+    const tag = (e.target && e.target.tagName) ? e.target.tagName.toLowerCase() : "";
+    const typing = (tag === "input" || tag === "textarea");
+
+    if(e.shiftKey && e.key.toLowerCase() === "i"){
+      e.preventDefault();
+      state.system.invert = !state.system.invert;
+      markDirty();
+      applySystemModes();
+      return;
+    }
+    if(e.shiftKey && e.key.toLowerCase() === "n"){
+      e.preventDefault();
+      state.system.nullMode = !state.system.nullMode;
+      markDirty();
+      applySystemModes();
+      return;
+    }
+    if(e.shiftKey && e.key.toLowerCase() === "s"){
+      e.preventDefault();
+      doSave();
+      return;
+    }
+    if((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k"){
+      e.preventDefault();
+      els.search.focus();
+      els.search.select();
+      return;
+    }
+
+    if(!typing){
+      // quick example selection
+      const w = selectedWord();
+      if(!w) return;
+      if(e.key === "ArrowUp" || e.key === "ArrowDown"){
+        const n = (w.examples || []).length;
+        if(n === 0) return;
+        let idx = (state.ui.selectedExampleIdx === null || state.ui.selectedExampleIdx === undefined) ? -1 : state.ui.selectedExampleIdx;
+        idx = (e.key === "ArrowUp") ? Math.max(0, idx <= 0 ? 0 : idx - 1) : Math.min(n - 1, idx < 0 ? 0 : idx + 1);
+        state.ui.selectedExampleIdx = idx;
+        markDirty();
+        renderDetail();
+      }
+      if(e.key === "Delete" || e.key === "Backspace"){
+        const tag2 = (e.target && e.target.tagName) ? e.target.tagName.toLowerCase() : "";
+        const typing2 = (tag2 === "input" || tag2 === "textarea");
+        if(typing2) return;
+        delExample();
+      }
+    }
+  });
+
+  // init
+  render();
+
+  window.__KETADATA_WORDBANK__ = {
+    getState: () => JSON.parse(JSON.stringify(state)),
+    save: () => saveState(state),
+    reset: () => { localStorage.removeItem(LS_KEY); location.reload(); }
+  };
+})();
+</script>
+
+<!--
+AE: BRUTAL_MIN_UNIFORM_TEXT
+EE: LOCAL_FIRST_WORDBANK_OBJECTS / PINNED / TAG_CLOUD / EXPORT_OWNERSHIP / PROMPT_PAYLOAD
+WB: LS_KEY=KETADATA_WORDBANK_V1::state / HOTKEYS SHIFT+I invert SHIFT+N null SHIFT+S save / CTRL+K search
+FILE_ID: KETADATA_WORDBANK_V1
+ROOM_ID: KD_TOOL
+VERSION: V1
+UPDATED_AT: 2026-01-04T00:00:00.000-05:00
+CHANGELOG:
+- V1: word objects with tags/notes/examples/related; pinned list; search+tag filter; export JSON/TXT + export all; import JSON/TXT; prompt payload copy; minimal invert/null; deliberate save.
+-->
+</body>
+</html>
+
