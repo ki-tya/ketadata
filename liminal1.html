@@ -1,0 +1,861 @@
+<!doctype html>
+<html lang="en" class="">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>KETADATA CLUSTERS — PUBLIC / PRIVATE (LIZARD)</title>
+  <style>
+    :root{
+      --bg:#ffffff; --fg:#111111; --muted:#7a7a7a; --line:#cfcfcf;
+      --panel:#f2f2f2; --panel2:#e8e8e8;
+      --font:12px/1.15 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace;
+    }
+    html,body{height:100%;margin:0;background:var(--bg);color:var(--fg);font:var(--font);overflow:hidden;}
+    *{box-sizing:border-box;}
+
+    /* Invert MUST affect whole page: apply class on <html> */
+    html.invert{
+      --bg:#0b0b0b; --fg:#f2f2f2; --muted:#a0a0a0; --line:#3a3a3a;
+      --panel:#111111; --panel2:#161616;
+    }
+
+    /* NULL */
+    html.null #hud, html.null #side, html.null #corner{display:none;}
+
+    #stage{position:fixed;inset:0;overflow:hidden;}
+    #fx{position:absolute;inset:0;pointer-events:none;opacity:.22;mix-blend-mode:multiply;}
+    #fx2{position:absolute;inset:0;pointer-events:none;opacity:.18;mix-blend-mode:multiply;}
+
+    #hud{
+      position:fixed;left:10px;top:10px;z-index:60;
+      background:var(--panel);border:1px solid var(--line);
+      padding:8px;width:560px;user-select:none;
+    }
+    #hud .row{display:flex;gap:6px;flex-wrap:wrap;align-items:center;}
+    #hud .row + .row{margin-top:6px;}
+    #hud button{
+      font:var(--font);padding:4px 6px;background:var(--bg);
+      border:1px solid var(--line);color:var(--fg);cursor:pointer;
+    }
+    #hud input[type="text"], #hud select{
+      font:var(--font);padding:4px 6px;background:var(--bg);
+      border:1px solid var(--line);color:var(--fg);
+    }
+    #hud input[type="text"]{width:220px;}
+    #hud .pill{display:inline-block;padding:3px 6px;border:1px solid var(--line);background:var(--bg);color:var(--muted);}
+    #hud .label{color:var(--muted);}
+    #hud .sp{flex:1;}
+
+    #corner{
+      position:fixed;left:10px;bottom:10px;color:var(--muted);
+      user-select:none;z-index:40;
+    }
+
+    /* LIZARD PANELS (cluster modules) */
+    .cluster{
+      position:absolute;
+      width:420px;
+      max-width:calc(100vw - 20px);
+      background:var(--panel);
+      border:1px solid var(--line);
+      padding:8px;
+      z-index:10;
+    }
+    .clusterHeader{
+      display:flex;gap:8px;align-items:center;justify-content:space-between;
+      margin-bottom:6px;
+      cursor:grab;
+    }
+    .clusterHeader:active{cursor:grabbing;}
+    .clusterTitle{display:flex;gap:8px;align-items:center;min-width:0;}
+    .clusterTitle .name{color:var(--fg);font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+    .clusterTitle .count{color:var(--muted);}
+    .clusterTools{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;}
+    .clusterTools button{padding:3px 6px;}
+
+    .list{
+      display:flex;flex-direction:column;gap:4px;
+      max-height:300px;
+      overflow:auto;
+      border-top:1px solid var(--line);
+      padding-top:6px;
+    }
+    .item{
+      background:var(--bg);
+      border:1px solid var(--line);
+      padding:6px;
+      display:flex;
+      gap:8px;
+      align-items:center;
+      min-height:28px;
+    }
+    .item .left{display:flex;gap:8px;align-items:center;min-width:0;flex:1;}
+    .item .path{color:var(--fg);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;}
+    .item .meta{color:var(--muted);white-space:nowrap;}
+    .item .btn{
+      font:var(--font);
+      padding:3px 6px;background:var(--panel2);
+      border:1px solid var(--line);cursor:pointer;color:var(--fg);
+    }
+    .tag{
+      display:inline-block;
+      padding:1px 6px;
+      border:1px solid var(--line);
+      background:var(--panel2);
+      color:var(--muted);
+    }
+    .tag.pub{color:var(--fg);}
+    .tag.priv{color:var(--muted);}
+
+    #side{
+      position:fixed;right:10px;top:10px;z-index:70;
+      width:420px;max-height:calc(100vh - 20px);
+      background:var(--panel);border:1px solid var(--line);
+      padding:8px;overflow:auto;display:none;
+    }
+    #side .t{color:var(--muted);}
+    #side .a{color:var(--fg);word-break:break-all;}
+    #side .btns{margin-top:6px;display:flex;gap:6px;flex-wrap:wrap;}
+    #side button{font:var(--font);padding:4px 6px;background:var(--bg);border:1px solid var(--line);cursor:pointer;}
+  </style>
+</head>
+<body>
+  <div id="stage">
+    <canvas id="fx"></canvas>
+    <canvas id="fx2"></canvas>
+  </div>
+
+  <div id="hud">
+    <div class="row">
+      <span class="pill">CLUSTERS / PUBLIC-PRIVATE / LIZARD</span>
+      <span class="sp"></span>
+      <span class="pill" id="pillRun">RUNNING</span>
+      <span class="pill" id="pillSaved">LOCAL</span>
+    </div>
+    <div class="row">
+      <button id="btnPause">PAUSE (SPACE)</button>
+      <button id="btnNudge">SPREAD</button>
+      <button id="btnCenter">CENTER</button>
+      <button id="btnResetLayout">RESET LAYOUT</button>
+      <span class="label">FILTER</span>
+      <input id="q" type="text" placeholder="search filename..." />
+      <span class="label">SHOW</span>
+      <select id="visFilter">
+        <option value="ALL">ALL</option>
+        <option value="PUBLIC">PUBLIC</option>
+        <option value="PRIVATE">PRIVATE</option>
+        <option value="UNSET">UNSET</option>
+      </select>
+      <span class="label">CLUSTER</span>
+      <select id="clusterFilter"><option value="ALL">ALL</option></select>
+    </div>
+    <div class="row">
+      <button id="btnExportPublic">EXPORT PUBLIC JSON</button>
+      <button id="btnExportAll">EXPORT ALL JSON</button>
+      <button id="btnImport">IMPORT JSON</button>
+      <button id="btnResetVis">RESET VISIBILITY</button>
+      <button id="btnNull">NULL (SHIFT+N)</button>
+      <button id="btnInvert">INVERT (SHIFT+I)</button>
+      <button id="btnFull">FULL (SHIFT+F)</button>
+    </div>
+  </div>
+
+  <div id="side">
+    <div class="t">SELECTED</div>
+    <div class="a" id="selPath"></div>
+    <div class="t" style="margin-top:6px;">URL</div>
+    <div class="a" id="selUrl"></div>
+    <div class="t" style="margin-top:6px;">VISIBILITY</div>
+    <div class="a" id="selVis"></div>
+    <div class="btns">
+      <button id="openHere">OPEN</button>
+      <button id="openNew">OPEN NEW TAB</button>
+      <button id="copyUrl">COPY URL</button>
+      <button id="toggleVis">TOGGLE PUBLIC/PRIVATE</button>
+      <button id="closeSide">CLOSE</button>
+    </div>
+  </div>
+
+  <div id="corner">SPREAD OUT / ALIVE / LIZARD MOTION — DRAG CLUSTERS — LOCAL-FIRST VISIBILITY</div>
+
+  <input id="filePick" type="file" accept="application/json" style="display:none" />
+
+<script>
+(() => {
+  const BASE_URL = "https://ki-tya.github.io/ketadata/";
+
+  const CLUSTERS = [
+    { name:"KETA-CORE", links:["based_diva9.html","elevator3.html","index.html","index013.html","index11.html","map.html","room.html"]},
+    { name:"BLEAK-TECH", links:["ball.html","beatball.html","blacklotus2.html","bleak.html","chakra.html","memofesto.html"]},
+    { name:"SCREENS", links:["cctv1.html","crunch1.html","darkroom1.html","kdtv1.html","obscura.html"]},
+    { name:"EXPERIMENTS", links:[
+      "003.html","aniversary1111.html","artaud.html","bataille1.html","borges.html","burroughs.html","capture.html",
+      "capturegpt.html","capturegpt2.html","capturegpt3.html","capturegpt4.html","capturegpt5.html","capturegpt6.html",
+      "capturegpt7.html","capturegpt8.html","christmas25.html","chroma.html","coffee.html","coffee1.html","cp1.html",
+      "cube.html","cube1.html","debord.html","deleuze.html","dmt.html","dmt2.html","dmt3.html","dmt4.html","dmtzoom.html",
+      "etal.html","funnel.html","funnel1.html","funnel2.html","funnel3.html","funnel4.html","goffman.html","gptsubject.html",
+      "holzer.html","hyperstition.html","hyperstition1.html","hyperstition2.html","hyperstition3.html","hyperstition5.html",
+      "index0.html","index001.html","index002.html","index003.html","index004.html","index005.html","index006.html","index007.html",
+      "index008.html","index009.html","index01.html","index011.html","index012.html","index014.html","index015.html","index02.html",
+      "index03.html","index04.html","index05.html","index06.html","index07.html","index08.html","index09.html","infinity.html","jung.html",
+      "kitty.html","kmas.html","land.html","mandala.html","mandala2.html","mandala3.html","mandalagpt.html","mandalagpt2.html",
+      "mandalagpt3.html","mandalagpt4.html","matrix.html","matryoshka.html","mcluhan.html","mdma.html","mdma2.html","mdmagpt.html",
+      "mdmagpt2.html","misc.html","misc2.html","misc3.html","misc4.html","misc5.html","misc6.html","misc7.html","misc8.html",
+      "molecule.html","newtrap.html","newtrap2.html","newtrap3.html","polka1.html","polka2.html","polkadot.html","pool.html","pool3.html",
+      "pool4.html","pool5.html","pool6.html","release.html","release2.html","release3.html","release4.html","ripple.html","ripple2.html",
+      "ripple3.html","ripplegpt.html","sg.html","sg1.html","slopstream2.html","slopstream3.html","slopstream4.html","slopstream6.html",
+      "snakes.html","sovereignty.html","subgpt2.html","subgpt3.html","subgpt4.html","subgpt5.html","sublime.html","substance.html",
+      "substrate.html","substrate1.html","substrate3.html","teleo.html","teleo1.html","temple.html","temple1.html"
+    ]},
+    { name:"CONCEPTUAL ALIGNMENT", links:["2812.html","claude_cl3.html","concept_cl4.html","cp.html","depth.html","drugprotocol.html","fivethirtysix.html","intra.html","reading.html","widefield.html"]},
+    { name:"BASE", links:["based_diva3.html","based_diva8.html","based_diva98.html","based_diva98x.html","based_diva9a.html","based_diva9b.html","based_diva9c.html","based_diva9d.html","based_diva9e.html","based_diva9f.html","based_diva9g.html","based_diva9h.html","based_diva9i.html","based_diva9ii.html","based_diva9iii.html","bbd1.html","bbd2.html","bbd3.html","diva.html","divabased4.html","re_diva9.html","systemkill.html"]},
+    { name:"SYSTEM", links:["backbone.html","backbone1.html","backbone2.html","backend.html","claude_mockup.html","claude.html","contract.html","memofesto1.html","memofesto2.html","mockups.html","mockups1.html","mockups2.html","nav.html","pads.html","page.html"]},
+    { name:"SYS-UTIL", links:["arranger.html","bugtest.html","debug.html","diagnostic.html","inspector.html","inspector1.html","linklist.html","linkorg4.html","main3.html","manifest.html","master2.html","mastergpt.html","monitor.html","primitive.html","primitive1.html","primitive2.html","primitive3.html","pulse.html","quota.html","reg.html","regv3.html","regv4.html","screenplane.html","screenplane1.html","storage.html","storage1.html","storagemanager.html","system8.html","version.html","videomanager.html"]},
+    { name:"SYS-PR", links:["cashapp1.html","cashapp3.html","funding.html","shop.html","submit.html"]},
+    { name:"TESTERS", links:["anniversary1.html","anniversary11.html","anniversary111.html","concept_cl.html","concept_cl1.html","concept_cl2.html","darkroom.html","doc5.html","index_copy.html","index_prev1.html","index01_tester.html","lib_cl.html","mandala88.html","master.html","master1.html","redroom.html","to-do.html","to-do1.html","vape-drive.html","vault.html","video.html","video2.html"]},
+    { name:"SECRET", links:["67.html","page2.html"]},
+    { name:"CORE", links:["deprecated.html","design1.html","lab.html","lab1.html","labyrinth.html","lib_gpt.html","linksv3.html","main2.html","sensory3.html","studiofront.html","studiov2.html","studiov3.html","tester3.html","tester31.html"]},
+    { name:"CORE-UTIL", links:["acid_doc.html","artifact.html","board.html","board1.html","board2.html","board3.html","calendar1.html","controller.html","controller1.html","controller2.html","controller3.html","display1.html","doc2.html","manifest5.html","modern.html","pdf2jpeg7.html","sheets.html","studio.html","to-do2.html"]},
+    { name:"DESIGN-UTIL", links:["color1.html","color3.html","font.html"]},
+    { name:"PHOTOG-UTIL", links:["editor.html","studiov1.html"]},
+    { name:"DATA-UTIL", links:["pdf2jpeg8.html"]},
+    { name:"META-COG", links:["circle.html","libra.html"]},
+    { name:"LLM-UTIL", links:["compiler.html","contextifier.html","d2.html","prompt.html","prompt1.html","prompt3.html","prompter.html"]},
+    { name:"HTML-UTIL", links:["classifier.html","classifier1.html","forge3.html","forge4.html","forge5.html","forge7.html","html.html","metadata.html","metadata1.html","unifier.html"]},
+    { name:"UI-UTIL", links:["color5.html","interfacer.html","interfacer1.html","interfacer2.html","lab3.html","lab9.html","system6.html"]},
+  ];
+
+  const STORE_VIS = "KD_PUBLIC_PRIVATE_V1";
+  const STORE_POS = "KD_CLUSTER_POS_V1";
+
+  const el = {
+    stage: document.getElementById("stage"),
+    hud: document.getElementById("hud"),
+    side: document.getElementById("side"),
+    q: document.getElementById("q"),
+    visFilter: document.getElementById("visFilter"),
+    clusterFilter: document.getElementById("clusterFilter"),
+    pillSaved: document.getElementById("pillSaved"),
+    pillRun: document.getElementById("pillRun"),
+    btnPause: document.getElementById("btnPause"),
+    btnNudge: document.getElementById("btnNudge"),
+    btnCenter: document.getElementById("btnCenter"),
+    btnResetLayout: document.getElementById("btnResetLayout"),
+    btnExportPublic: document.getElementById("btnExportPublic"),
+    btnExportAll: document.getElementById("btnExportAll"),
+    btnImport: document.getElementById("btnImport"),
+    btnResetVis: document.getElementById("btnResetVis"),
+    btnNull: document.getElementById("btnNull"),
+    btnInvert: document.getElementById("btnInvert"),
+    btnFull: document.getElementById("btnFull"),
+    selPath: document.getElementById("selPath"),
+    selUrl: document.getElementById("selUrl"),
+    selVis: document.getElementById("selVis"),
+    openHere: document.getElementById("openHere"),
+    openNew: document.getElementById("openNew"),
+    copyUrl: document.getElementById("copyUrl"),
+    toggleVis: document.getElementById("toggleVis"),
+    closeSide: document.getElementById("closeSide"),
+    filePick: document.getElementById("filePick"),
+    fx: document.getElementById("fx"),
+    fx2: document.getElementById("fx2"),
+  };
+
+  function makeUrl(path){ return /^https?:\/\//i.test(path) ? path : (BASE_URL + path.replace(/^\//,'')); }
+  function makeId(cluster, path){ return `${cluster}::${path}`; }
+  function escapeHtml(s){ return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+  function clamp(v,a,b){ return Math.max(a, Math.min(b, v)); }
+
+  // Flat index
+  const byId = new Map();
+  CLUSTERS.forEach(c => c.links.forEach(p => byId.set(makeId(c.name,p), { id:makeId(c.name,p), cluster:c.name, path:p, url:makeUrl(p) })));
+
+  // Visibility store
+  let vis = {};
+  function loadVis(){
+    try{
+      const raw = localStorage.getItem(STORE_VIS);
+      if(!raw) return;
+      const parsed = JSON.parse(raw);
+      if(parsed && parsed.vis && typeof parsed.vis === "object") vis = parsed.vis || {};
+    }catch{}
+  }
+  function saveVis(){
+    try{
+      const payload = { version:"KD_PUBLIC_PRIVATE_V1", updatedAt:new Date().toISOString(), vis };
+      localStorage.setItem(STORE_VIS, JSON.stringify(payload));
+      el.pillSaved.textContent = "SAVED";
+      setTimeout(()=>el.pillSaved.textContent="LOCAL", 600);
+    }catch{}
+  }
+  function getVis(id){
+    const v = vis[id];
+    if(v==="PUBLIC" || v==="PRIVATE") return v;
+    return "UNSET";
+  }
+  function setVis(id, v){
+    if(v==="UNSET") delete vis[id];
+    else vis[id] = v;
+    saveVis();
+  }
+  function toggleVis(id){
+    const cur = getVis(id);
+    setVis(id, cur==="PUBLIC" ? "PRIVATE" : "PUBLIC");
+  }
+
+  // Cluster filter menu
+  function buildClusterFilter(){
+    el.clusterFilter.innerHTML = `<option value="ALL">ALL</option>` + CLUSTERS.map(c=>`<option value="${escapeHtml(c.name)}">${escapeHtml(c.name)}</option>`).join("");
+  }
+  buildClusterFilter();
+
+  // ====== LIZARD LAYOUT (scattered panels + motion) ======
+  const state = {
+    running:true,
+    selectedId:null,
+    clusters: new Map(), // name -> { nodeEl, x,y,vx,vy, seed, dragging, dragDx, dragDy }
+    t:0
+  };
+
+  function loadPositions(){
+    try{
+      const raw = localStorage.getItem(STORE_POS);
+      if(!raw) return null;
+      const parsed = JSON.parse(raw);
+      if(parsed && parsed.pos && typeof parsed.pos === "object") return parsed.pos;
+    }catch{}
+    return null;
+  }
+  function savePositions(){
+    try{
+      const pos = {};
+      state.clusters.forEach((v,k) => { pos[k] = { x:v.x, y:v.y }; });
+      localStorage.setItem(STORE_POS, JSON.stringify({ version:"KD_CLUSTER_POS_V1", updatedAt:new Date().toISOString(), pos }));
+    }catch{}
+  }
+
+  function seeded(n){
+    // deterministic 0..1
+    let h=2166136261>>>0;
+    const s=String(n);
+    for(let i=0;i<s.length;i++){ h ^= s.charCodeAt(i); h = Math.imul(h,16777619)>>>0; }
+    return (h % 10000) / 10000;
+  }
+
+  function defaultScatter(){
+    const W = window.innerWidth, H = window.innerHeight;
+    const margin = 10;
+    const topPad = 150; // leave HUD air
+    const rightPad = 450; // leave side panel air
+    const usableW = Math.max(600, W - rightPad - margin*2);
+    const usableH = Math.max(400, H - topPad - margin*2);
+
+    const positions = {};
+    CLUSTERS.forEach((c, i) => {
+      const s = seeded(c.name);
+      // lizard-ish: long sweep across field
+      const x = margin + (s * usableW);
+      const y = topPad + (seeded(c.name + "_y") * usableH);
+      positions[c.name] = { x, y };
+    });
+    return positions;
+  }
+
+  function matchFilters(rec){
+    const q = el.q.value.trim().toLowerCase();
+    if(q){
+      const hay = (rec.path + " " + rec.cluster).toLowerCase();
+      if(!hay.includes(q)) return false;
+    }
+    const vf = el.visFilter.value;
+    const v = getVis(rec.id);
+    if(vf !== "ALL" && v !== vf) return false;
+
+    const cf = el.clusterFilter.value;
+    if(cf !== "ALL" && rec.cluster !== cf) return false;
+
+    return true;
+  }
+
+  function renderClusterCard(clusterName){
+    const c = CLUSTERS.find(x=>x.name===clusterName);
+    const node = state.clusters.get(clusterName);
+    if(!c || !node) return;
+
+    const cf = el.clusterFilter.value;
+    node.nodeEl.style.display = (cf==="ALL" || cf===clusterName) ? "block" : "none";
+
+    const listEl = node.nodeEl.querySelector(".list");
+    listEl.innerHTML = "";
+
+    const defaultFilters = el.q.value.trim()==="" && el.visFilter.value==="ALL" && el.clusterFilter.value==="ALL";
+    const items = c.links.map(p => byId.get(makeId(c.name,p)));
+    const showItems = defaultFilters ? items : items.filter(matchFilters);
+
+    // Keep panel alive even if filtered empty; list just empty.
+    showItems.forEach(rec => {
+      const row = document.createElement("div");
+      row.className = "item";
+      const v = getVis(rec.id);
+      const tagClass = (v==="PUBLIC") ? "pub" : (v==="PRIVATE" ? "priv" : "");
+      const tagText = (v==="UNSET") ? "UNSET" : v;
+
+      row.innerHTML = `
+        <div class="left">
+          <span class="tag ${tagClass}">${escapeHtml(tagText)}</span>
+          <span class="path" title="${escapeHtml(rec.path)}">${escapeHtml(rec.path)}</span>
+          <span class="meta" title="${escapeHtml(rec.cluster)}">${escapeHtml(rec.cluster)}</span>
+        </div>
+        <button class="btn" data-act="toggle">TOGGLE</button>
+        <button class="btn" data-act="open">OPEN</button>
+      `;
+
+      row.querySelector('[data-act="toggle"]').onclick = (e) => { e.stopPropagation(); toggleVis(rec.id); renderAllLists(); syncSelected(); };
+      row.querySelector('[data-act="open"]').onclick = (e) => { e.stopPropagation(); select(rec.id); open(rec.id, true); };
+      row.onclick = () => select(rec.id);
+
+      listEl.appendChild(row);
+    });
+
+    const countEl = node.nodeEl.querySelector(".count");
+    countEl.textContent = `(${c.links.length})`;
+  }
+
+  function renderAllLists(){
+    state.clusters.forEach((_, name) => renderClusterCard(name));
+  }
+
+  function select(id){
+    state.selectedId = id;
+    const rec = byId.get(id);
+    if(!rec){ el.side.style.display="none"; return; }
+    el.side.style.display = "block";
+    el.selPath.textContent = `${rec.cluster} / ${rec.path}`;
+    el.selUrl.textContent = rec.url;
+    el.selVis.textContent = getVis(id);
+  }
+  function syncSelected(){
+    if(state.selectedId) select(state.selectedId);
+  }
+  function open(id, newTab){
+    const rec = byId.get(id);
+    if(!rec) return;
+    if(newTab) window.open(rec.url, "_blank", "noopener,noreferrer");
+    else window.location.href = rec.url;
+  }
+
+  function buildClusterModules(){
+    // cleanup
+    state.clusters.forEach(v => v.nodeEl.remove());
+    state.clusters.clear();
+
+    const savedPos = loadPositions();
+    const pos = savedPos || defaultScatter();
+
+    CLUSTERS.forEach((c) => {
+      const card = document.createElement("div");
+      card.className = "cluster";
+      card.dataset.cluster = c.name;
+
+      card.innerHTML = `
+        <div class="clusterHeader">
+          <div class="clusterTitle">
+            <span class="name">${escapeHtml(c.name)}</span>
+            <span class="count">(${c.links.length})</span>
+          </div>
+          <div class="clusterTools">
+            <button data-act="allpub">ALL PUBLIC</button>
+            <button data-act="allpriv">ALL PRIVATE</button>
+            <button data-act="clear">CLEAR</button>
+          </div>
+        </div>
+        <div class="list"></div>
+      `;
+
+      el.stage.appendChild(card);
+
+      const seed = seeded(c.name);
+      const x = (pos[c.name]?.x ?? 40) + (seed*20 - 10);
+      const y = (pos[c.name]?.y ?? 200) + (seeded(c.name+"_y")*20 - 10);
+
+      const node = { nodeEl:card, x, y, vx:0, vy:0, seed, dragging:false, dragDx:0, dragDy:0 };
+      state.clusters.set(c.name, node);
+
+      // Bulk tools
+      card.querySelector('[data-act="allpub"]').onclick = (e) => {
+        e.stopPropagation();
+        c.links.forEach(p => setVis(makeId(c.name,p), "PUBLIC"));
+        renderAllLists(); syncSelected();
+      };
+      card.querySelector('[data-act="allpriv"]').onclick = (e) => {
+        e.stopPropagation();
+        c.links.forEach(p => setVis(makeId(c.name,p), "PRIVATE"));
+        renderAllLists(); syncSelected();
+      };
+      card.querySelector('[data-act="clear"]').onclick = (e) => {
+        e.stopPropagation();
+        c.links.forEach(p => setVis(makeId(c.name,p), "UNSET"));
+        renderAllLists(); syncSelected();
+      };
+
+      // Drag header
+      const header = card.querySelector(".clusterHeader");
+      header.addEventListener("mousedown", (e) => {
+        e.preventDefault();
+        // bring to front
+        let z = 10;
+        document.querySelectorAll(".cluster").forEach(x => { z = Math.max(z, parseInt(x.style.zIndex||"10",10)); });
+        card.style.zIndex = String(z + 1);
+
+        node.dragging = true;
+        const rect = card.getBoundingClientRect();
+        node.dragDx = e.clientX - rect.left;
+        node.dragDy = e.clientY - rect.top;
+      });
+    });
+
+    renderAllLists();
+    tickPlace(); // place immediately
+  }
+
+  function tickPlace(){
+    state.clusters.forEach((n) => {
+      n.nodeEl.style.transform = `translate(${Math.round(n.x)}px, ${Math.round(n.y)}px)`;
+    });
+  }
+
+  // Mouse move/up for dragging
+  window.addEventListener("mousemove", (e) => {
+    state.clusters.forEach((n) => {
+      if(!n.dragging) return;
+      n.x = e.clientX - n.dragDx;
+      n.y = e.clientY - n.dragDy;
+    });
+    tickPlace();
+  });
+  window.addEventListener("mouseup", () => {
+    let changed = false;
+    state.clusters.forEach((n) => {
+      if(n.dragging){ n.dragging = false; changed = true; }
+    });
+    if(changed) savePositions();
+  });
+
+  // Lizard motion: gentle crawl + repulsion between cluster panels
+  function lizardStep(dt){
+    const W = window.innerWidth, H = window.innerHeight;
+    const margin = 10;
+    const topSafe = 120; // keep HUD air
+    const rightSafe = 450; // keep side air
+
+    state.t += dt;
+    const t = state.t;
+
+    const nodes = Array.from(state.clusters.values()).filter(n => !n.dragging && n.nodeEl.style.display !== "none");
+
+    // Repulsion (spread out)
+    const repel = 1800;
+    const damp = 0.90;
+    const maxV = 520;
+
+    for(let i=0;i<nodes.length;i++){
+      const A = nodes[i];
+      const ar = A.nodeEl.getBoundingClientRect();
+      const ax = A.x + ar.width/2;
+      const ay = A.y + ar.height/2;
+
+      // crawl drift (lizard spine)
+      const sx = Math.sin(t*0.0007 + A.seed*9) * 0.35;
+      const sy = Math.cos(t*0.0006 + A.seed*11) * 0.35;
+      A.vx += sx;
+      A.vy += sy;
+
+      for(let j=i+1;j<nodes.length;j++){
+        const B = nodes[j];
+        const br = B.nodeEl.getBoundingClientRect();
+        const bx = B.x + br.width/2;
+        const by = B.y + br.height/2;
+
+        const dx = bx - ax;
+        const dy = by - ay;
+        const d2 = dx*dx + dy*dy + 0.001;
+        const d = Math.sqrt(d2);
+
+        // effective radii based on panel footprint
+        const minD = (Math.max(ar.width, ar.height) + Math.max(br.width, br.height)) * 0.40;
+        const k = (d < minD) ? (repel*2.2) : repel;
+        const f = k / d2;
+
+        const ux = dx / d, uy = dy / d;
+
+        A.vx -= ux * f * 0.01;
+        A.vy -= uy * f * 0.01;
+        B.vx += ux * f * 0.01;
+        B.vy += uy * f * 0.01;
+      }
+    }
+
+    // integrate + bounds
+    nodes.forEach(n => {
+      n.vx *= damp; n.vy *= damp;
+      n.vx = clamp(n.vx, -maxV, maxV);
+      n.vy = clamp(n.vy, -maxV, maxV);
+
+      n.x += n.vx * (dt/16);
+      n.y += n.vy * (dt/16);
+
+      // bounds with soft bounce
+      const r = n.nodeEl.getBoundingClientRect();
+      const maxX = Math.max(margin, W - margin - r.width - rightSafe * 0.10);
+      const maxY = Math.max(topSafe, H - margin - r.height);
+
+      if(n.x < margin){ n.x = margin; n.vx *= -0.35; }
+      if(n.y < topSafe){ n.y = topSafe; n.vy *= -0.35; }
+      if(n.x > maxX){ n.x = maxX; n.vx *= -0.35; }
+      if(n.y > maxY){ n.y = maxY; n.vy *= -0.35; }
+    });
+
+    tickPlace();
+  }
+
+  function nudgeSpread(){
+    state.clusters.forEach(n => {
+      n.vx += (Math.random()-0.5) * 80;
+      n.vy += (Math.random()-0.5) * 80;
+    });
+  }
+
+  // FX canvases (whole-page, respects invert via CSS vars)
+  const DPR = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+  function resizeFx(){
+    const W = window.innerWidth, H = window.innerHeight;
+    [el.fx, el.fx2].forEach(c => {
+      c.width = Math.floor(W*DPR);
+      c.height = Math.floor(H*DPR);
+      c.style.width = W+"px";
+      c.style.height = H+"px";
+      const ctx = c.getContext("2d");
+      ctx.setTransform(DPR,0,0,DPR,0,0);
+    });
+  }
+  window.addEventListener("resize", resizeFx);
+  resizeFx();
+
+  function cssVar(name){ return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+
+  function drawFx(){
+    const W = window.innerWidth, H = window.innerHeight;
+    const line = cssVar("--line");
+    const bg = cssVar("--bg");
+
+    const ctx1 = el.fx.getContext("2d");
+    ctx1.clearRect(0,0,W,H);
+    ctx1.globalAlpha = 0.22;
+    ctx1.strokeStyle = line;
+    ctx1.lineWidth = 1;
+
+    // grid
+    ctx1.beginPath();
+    const g = 64;
+    for(let x=0;x<=W;x+=g){ ctx1.moveTo(x,0); ctx1.lineTo(x,H); }
+    for(let y=0;y<=H;y+=g){ ctx1.moveTo(0,y); ctx1.lineTo(W,y); }
+    ctx1.stroke();
+
+    // lizard scratches (organic diagonal hatching)
+    const ctx2 = el.fx2.getContext("2d");
+    ctx2.clearRect(0,0,W,H);
+    ctx2.globalAlpha = 0.18;
+    ctx2.strokeStyle = line;
+    ctx2.lineWidth = 1;
+
+    ctx2.beginPath();
+    const step = 80;
+    for(let i=-H;i<W;i+=step){
+      ctx2.moveTo(i,0);
+      ctx2.lineTo(i+H, H);
+    }
+    ctx2.stroke();
+
+    ctx1.globalAlpha = 1;
+    ctx2.globalAlpha = 1;
+  }
+
+  // Export/Import
+  function download(filename, text){
+    const blob = new Blob([text], { type:"application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url), 800);
+  }
+  function exportPublicJSON(){
+    const out = { fileId:"KETADATA_PUBLIC_LINKS_V1", updatedAt:new Date().toISOString(), baseUrl:BASE_URL, clusters:{} };
+    CLUSTERS.forEach(c => {
+      out.clusters[c.name] = c.links
+        .map(p => ({ path:p, url:makeUrl(p), visibility:getVis(makeId(c.name,p)) }))
+        .filter(x => x.visibility === "PUBLIC");
+    });
+    return JSON.stringify(out, null, 2);
+  }
+  function exportAllVisJSON(){
+    const payload = { version:"KD_PUBLIC_PRIVATE_V1", updatedAt:new Date().toISOString(), vis };
+    return JSON.stringify(payload, null, 2);
+  }
+  function importJSON(text){
+    let parsed;
+    try{ parsed = JSON.parse(text); }catch{ return; }
+    if(!parsed || typeof parsed !== "object") return;
+
+    if(parsed.vis && typeof parsed.vis === "object"){
+      const next = {};
+      for(const k in parsed.vis){
+        const v = parsed.vis[k];
+        if(!byId.has(k)) continue;
+        if(v==="PUBLIC" || v==="PRIVATE") next[k]=v;
+      }
+      vis = next;
+      saveVis();
+      renderAllLists();
+      syncSelected();
+      return;
+    }
+
+    if(parsed.clusters && typeof parsed.clusters === "object"){
+      const next = {};
+      for(const cname in parsed.clusters){
+        const items = parsed.clusters[cname];
+        if(!Array.isArray(items)) continue;
+        items.forEach(it => {
+          const p = it?.path;
+          const v = it?.visibility;
+          if(typeof p !== "string") return;
+          const id = makeId(cname, p);
+          if(!byId.has(id)) return;
+          if(v==="PUBLIC" || v==="PRIVATE") next[id]=v;
+        });
+      }
+      vis = next;
+      saveVis();
+      renderAllLists();
+      syncSelected();
+    }
+  }
+
+  // Controls
+  function setRunning(r){
+    state.running = r;
+    el.pillRun.textContent = r ? "RUNNING" : "PAUSED";
+    el.btnPause.textContent = r ? "PAUSE (SPACE)" : "RUN (SPACE)";
+  }
+
+  el.btnPause.onclick = () => setRunning(!state.running);
+  el.btnNudge.onclick = () => nudgeSpread();
+  el.btnCenter.onclick = () => {
+    // center-ish: rebase positions into viewable area, keep relative spread
+    const nodes = Array.from(state.clusters.values());
+    if(!nodes.length) return;
+    let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
+    nodes.forEach(n => { minX=Math.min(minX,n.x); minY=Math.min(minY,n.y); maxX=Math.max(maxX,n.x); maxY=Math.max(maxY,n.y); });
+    const cx = (minX+maxX)/2, cy = (minY+maxY)/2;
+    const targetX = 90, targetY = 170;
+    nodes.forEach(n => { n.x = n.x - cx + targetX; n.y = n.y - cy + targetY; });
+    tickPlace();
+    savePositions();
+  };
+  el.btnResetLayout.onclick = () => {
+    localStorage.removeItem(STORE_POS);
+    buildClusterModules();
+    savePositions();
+  };
+
+  el.q.addEventListener("input", () => renderAllLists());
+  el.visFilter.addEventListener("change", () => renderAllLists());
+  el.clusterFilter.addEventListener("change", () => renderAllLists());
+
+  el.btnExportPublic.onclick = () => download("KD_public_links.json", exportPublicJSON());
+  el.btnExportAll.onclick = () => download("KD_visibility_map.json", exportAllVisJSON());
+  el.btnImport.onclick = () => el.filePick.click();
+  el.filePick.addEventListener("change", async () => {
+    const f = el.filePick.files && el.filePick.files[0];
+    if(!f) return;
+    const text = await f.text();
+    importJSON(text);
+    el.filePick.value = "";
+  });
+  el.btnResetVis.onclick = () => { vis = {}; saveVis(); renderAllLists(); syncSelected(); };
+
+  el.openHere.onclick = () => state.selectedId && open(state.selectedId, false);
+  el.openNew.onclick = () => state.selectedId && open(state.selectedId, true);
+  el.copyUrl.onclick = async () => {
+    if(!state.selectedId) return;
+    const rec = byId.get(state.selectedId);
+    if(!rec) return;
+    try{ await navigator.clipboard.writeText(rec.url); }catch{}
+  };
+  el.toggleVis.onclick = () => {
+    if(!state.selectedId) return;
+    toggleVis(state.selectedId);
+    syncSelected();
+    renderAllLists();
+  };
+  el.closeSide.onclick = () => { el.side.style.display="none"; state.selectedId=null; };
+
+  // System universals (invert affects whole page via <html> class)
+  function toggleNull(){ document.documentElement.classList.toggle("null"); }
+  function toggleInvert(){ document.documentElement.classList.toggle("invert"); drawFx(); }
+  function toggleFull(){
+    if(!document.fullscreenElement) document.documentElement.requestFullscreen?.();
+    else document.exitFullscreen?.();
+  }
+  el.btnNull.onclick = toggleNull;
+  el.btnInvert.onclick = toggleInvert;
+  el.btnFull.onclick = toggleFull;
+
+  window.addEventListener("keydown", (e) => {
+    // space pauses (no text inputs on this page except filter; avoid stealing focus when typing)
+    const tag = (document.activeElement && document.activeElement.tagName) ? document.activeElement.tagName.toLowerCase() : "";
+    const typing = (tag === "input" || tag === "textarea");
+
+    if(e.key === " " && !typing){ e.preventDefault(); setRunning(!state.running); return; }
+    if(e.shiftKey && (e.key==="I"||e.key==="i")){ e.preventDefault(); toggleInvert(); return; }
+    if(e.shiftKey && (e.key==="N"||e.key==="n")){ e.preventDefault(); toggleNull(); return; }
+    if(e.shiftKey && (e.key==="F"||e.key==="f")){ e.preventDefault(); toggleFull(); return; }
+    if(e.key==="Escape"){ el.side.style.display="none"; state.selectedId=null; }
+  });
+
+  // Main loop
+  let last = performance.now();
+  function loop(now){
+    const dt = Math.min(40, now - last);
+    last = now;
+    if(state.running) lizardStep(dt);
+    requestAnimationFrame(loop);
+  }
+
+  // Boot
+  loadVis();
+  buildClusterModules();
+  drawFx();
+  requestAnimationFrame(loop);
+
+})();
+</script>
+
+<!--
+AE / EE / WB — KETADATA SERIALIZATION STAMP (MANDATORY)
+AE: SCATTERED CLUSTER MODULES ON A FIELD (MORE SPREAD / MORE ALIVE), MONOCHROME, UNIFORM TEXT
+EE: PUBLIC/PRIVATE/UNSET PER LINK + BULK PER CLUSTER + FILTERS + EXPORT/IMPORT + DRAG + PAUSE
+WB: LOCAL-FIRST (localStorage) + WHOLE-PAGE INVERT (CLASS ON <HTML>) + NULL/FULL HOTKEYS
+
+FILE_ID: "KETADATA_CLUSTER_VISIBILITY_LIZARD"
+ROOM_ID: "K_CLUSTER"
+VERSION_ID: "V2"
+UPDATED_AT: "2026-01-04T00:00:00.000-05:00"
+CHANGELOG:
+- V2: SPREAD-OUT FIELD LAYOUT, DRAGGABLE CLUSTERS, LIZARD MOTION + PAUSE, INVERT APPLIES TO WHOLE PAGE (HTML CLASS)
+-->
+</body>
+</html>
