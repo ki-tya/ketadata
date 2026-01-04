@@ -1,0 +1,561 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>KETADATA — JUKEBOX + NOTES</title>
+<style>
+:root{
+  --bg:#0b0b0b; --fg:#f2f2f2; --muted:rgba(242,242,242,.62);
+  --hair:rgba(242,242,242,.18); --hair2:rgba(242,242,242,.08);
+  --panel:rgba(0,0,0,.55); --panel2:rgba(0,0,0,.30);
+  --font:12px;
+}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);font-family:Arial,Helvetica,sans-serif;font-size:var(--font);overflow:hidden;}
+*{box-sizing:border-box;}
+button,input,textarea,select{font:inherit;color:var(--fg);background:transparent;border:1px solid var(--hair);padding:6px 8px;outline:none;}
+button{cursor:pointer;}
+button:hover{background:rgba(255,255,255,.06);}
+textarea{resize:none;}
+a{color:var(--fg);text-decoration:none;}
+a:hover{text-decoration:underline;}
+.pill{border:1px solid var(--hair);padding:4px 8px;opacity:.9;}
+.muted{color:var(--muted);}
+kbd{border:1px solid var(--hair);padding:1px 4px;opacity:.8;}
+
+.stage{position:absolute;inset:0;}
+.frameWrap{position:absolute;inset:0;}
+.frame{position:absolute;inset:0;border:0;width:100%;height:100%;background:#000;}
+.fade{transition:opacity .45s ease;}
+.hidden{opacity:0;pointer-events:none;}
+
+.topbar{position:absolute;left:0;right:0;top:0;height:36px;display:flex;align-items:center;gap:8px;padding:0 8px;background:rgba(0,0,0,.65);border-bottom:1px solid var(--hair);z-index:20;}
+.spacer{flex:1;}
+
+.deck{position:absolute;left:8px;right:8px;bottom:8px;display:flex;gap:8px;align-items:center;background:var(--panel);border:1px solid var(--hair);padding:8px;z-index:20;}
+.deck .group{display:flex;gap:6px;align-items:center;}
+.deck .big{padding:8px 12px;font-weight:bold;letter-spacing:.3px;}
+.deck input[type="range"]{width:140px;}
+.now{border:1px solid var(--hair);padding:6px 8px;opacity:.9;min-width:320px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+
+.panel{position:absolute;right:8px;top:44px;width:420px;background:var(--panel);border:1px solid var(--hair);padding:8px;z-index:20;}
+.panel.left{right:auto;left:8px;width:420px;}
+.panel .hdr{display:flex;gap:8px;align-items:center;margin-bottom:6px;}
+.panel .hdr .title{opacity:.9;}
+.panel .hdr .btn{padding:2px 6px;}
+.panel .body{display:block;}
+.panel.collapsed .body{display:none;}
+.panel.collapsed{width:auto;}
+.row{display:flex;gap:8px;align-items:center;}
+.row>*{flex:1;}
+.row .tight{flex:0;white-space:nowrap;}
+.list{border:1px solid var(--hair);max-height:40vh;overflow:auto;background:rgba(0,0,0,.20);}
+.item{display:flex;gap:6px;align-items:center;padding:6px 8px;border-bottom:1px solid var(--hair2);}
+.item:last-child{border-bottom:0;}
+.item .t{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.item.active{background:rgba(255,255,255,.06);}
+.item .btn{padding:2px 6px;}
+
+.badge{border:1px solid var(--hair);padding:2px 6px;opacity:.75;}
+
+.toast{position:absolute;left:50%;top:52px;transform:translateX(-50%);
+  background:rgba(0,0,0,.72);border:1px solid var(--hair);padding:6px 10px;opacity:0;pointer-events:none;transition:opacity .2s ease;z-index:30;}
+.toast.on{opacity:1;}
+
+body.invert{--bg:#f2f2f2;--fg:#0b0b0b;--muted:rgba(0,0,0,.62);--hair:rgba(0,0,0,.20);--hair2:rgba(0,0,0,.08);--panel:rgba(242,242,242,.75);--panel2:rgba(242,242,242,.45);}
+body.null .topbar, body.null .panel{display:none;}
+
+@media print{ .topbar,.deck,.panel,.toast{display:none !important;} }
+</style>
+</head>
+<body>
+<div class="stage">
+  <div class="topbar">
+    <div class="pill">JUKEBOX + NOTES</div>
+    <div class="pill" id="counter">0 / 0</div>
+    <div class="spacer"></div>
+    <div class="pill">HOTKEYS: <kbd>←</kbd>/<kbd>→</kbd> · <kbd>Space</kbd> play · <kbd>S</kbd> shuffle · <kbd>R</kbd> repeat · <kbd>N</kbd> notes · <kbd>L</kbd> list · <kbd>I</kbd> invert · <kbd>Shift</kbd>+<kbd>N</kbd> NULL</div>
+  </div>
+
+  <div class="frameWrap">
+    <iframe id="f0" class="frame fade"></iframe>
+    <iframe id="f1" class="frame fade hidden"></iframe>
+  </div>
+
+  <div class="toast" id="toast">OK</div>
+
+  <div class="panel" id="panelCue">
+    <div class="hdr">
+      <div class="title">CUE</div>
+      <div class="spacer"></div>
+      <div class="badge" id="cueCount">0</div>
+      <button class="btn" id="toggleCue">–</button>
+    </div>
+    <div class="body">
+      <textarea id="paste" rows="5" placeholder="PASTE URLS (one per line)"></textarea>
+      <div style="height:6px"></div>
+      <div class="row">
+        <button id="load">LOAD</button>
+        <button id="append">APPEND</button>
+        <button id="clear">CLEAR</button>
+      </div>
+      <div style="height:6px"></div>
+      <div class="row">
+        <div class="tight muted">FILTER</div>
+        <input id="filter" type="text" placeholder="search"/>
+        <button id="exportCue" class="tight">EXPORT CUE</button>
+      </div>
+      <div style="height:6px"></div>
+      <div class="list" id="list"></div>
+    </div>
+  </div>
+
+  <div class="panel left" id="panelNotes">
+    <div class="hdr">
+      <div class="title">NOTES / SETLIST</div>
+      <div class="spacer"></div>
+      <div class="badge" id="noteCount">0</div>
+      <button class="btn" id="toggleNotes">–</button>
+    </div>
+    <div class="body">
+      <div class="row">
+        <div class="tight muted">SET</div>
+        <input id="setName" type="text" placeholder="SET NAME (e.g. STIM_01)"/>
+        <button id="saveSet" class="tight">SAVE</button>
+      </div>
+      <div style="height:6px"></div>
+      <div class="row">
+        <button id="addToSet">ADD CURRENT → SET</button>
+        <button id="exportSet" class="tight">EXPORT SET</button>
+        <button id="importSet" class="tight">IMPORT</button>
+      </div>
+      <div style="height:6px"></div>
+      <textarea id="noteBox" rows="10" placeholder="NOTES FOR CURRENT TRACK..."></textarea>
+      <div style="height:6px"></div>
+      <div class="row">
+        <button id="saveNote">SAVE NOTE</button>
+        <button id="copyNow" class="tight">COPY URL</button>
+        <button id="copyNote" class="tight">COPY NOTE</button>
+      </div>
+      <div style="height:6px"></div>
+      <div class="list" id="setList"></div>
+    </div>
+  </div>
+
+  <div class="deck">
+    <div class="group">
+      <button class="big" id="play">PLAY</button>
+      <button class="big" id="stop">STOP</button>
+    </div>
+    <div class="group">
+      <button id="prev">PREV</button>
+      <button id="next">NEXT</button>
+    </div>
+    <div class="group">
+      <button id="shuffle">SHUFFLE OFF</button>
+      <button id="repeat">REPEAT OFF</button>
+    </div>
+    <div class="group">
+      <div class="muted">INTENSITY</div>
+      <input id="intensity" type="range" min="0" max="100" value="50"/>
+    </div>
+    <div class="spacer"></div>
+    <div class="now" id="now">NOW: —</div>
+  </div>
+
+  <div style="position:absolute;left:8px;bottom:60px;opacity:.55;z-index:1;">
+    AE/EE/WB · FILE_ID: "KETADATA_JUKEBOX_NOTES" · ROOM_ID: "EXPERIMENTAL_SURFACE" · VERSION_ID: "V1" · UPDATED_AT: "2026-01-04T03:27:07Z" · CHANGELOG: "collapsible cue; now playing; per-track notes; setlist builder; import/export; focus-safe hotkeys; state persistence"
+  </div>
+</div>
+
+<script>
+const LS_KEY="KD_JUKEBOX_NOTES_V1";
+let state={
+  urls:[], index:0, playing:false, shuffle:false, repeat:false, intensity:50, invert:false, nullMode:false,
+  ui:{ cueCollapsed:false, notesCollapsed:false },
+  notes:{},
+  set:{ name:"", items:[] }
+};
+try{ Object.assign(state, JSON.parse(localStorage.getItem(LS_KEY)||"{}")); }catch{}
+
+const f0=document.getElementById("f0"), f1=document.getElementById("f1");
+let active=0;
+
+const counter=document.getElementById("counter");
+const now=document.getElementById("now");
+const toast=document.getElementById("toast");
+
+const panelCue=document.getElementById("panelCue");
+const panelNotes=document.getElementById("panelNotes");
+const toggleCue=document.getElementById("toggleCue");
+const toggleNotes=document.getElementById("toggleNotes");
+
+const cueCount=document.getElementById("cueCount");
+const noteCount=document.getElementById("noteCount");
+
+const paste=document.getElementById("paste");
+const list=document.getElementById("list");
+const filter=document.getElementById("filter");
+
+const setName=document.getElementById("setName");
+const setList=document.getElementById("setList");
+const noteBox=document.getElementById("noteBox");
+
+const playBtn=document.getElementById("play");
+const stopBtn=document.getElementById("stop");
+const prevBtn=document.getElementById("prev");
+const nextBtn=document.getElementById("next");
+const shuffleBtn=document.getElementById("shuffle");
+const repeatBtn=document.getElementById("repeat");
+const intensity=document.getElementById("intensity");
+
+let timer=null;
+
+function save(){ localStorage.setItem(LS_KEY, JSON.stringify(state)); }
+
+function toastMsg(msg){
+  toast.textContent=msg;
+  toast.classList.add("on");
+  clearTimeout(toast._t);
+  toast._t=setTimeout(()=>toast.classList.remove("on"),650);
+}
+
+function isTypingTarget(el){
+  if(!el) return false;
+  const t=(el.tagName||"").toLowerCase();
+  return t==="input"||t==="textarea"||t==="select"||el.isContentEditable;
+}
+
+function uniq(arr){ const s=new Set(); const out=[]; for(const x of arr){ const v=(x||"").trim(); if(v && !s.has(v)){ s.add(v); out.push(v); } } return out; }
+function linesToUrls(txt){ return uniq((txt||"").split(/\n+/).map(s=>s.trim()).filter(Boolean)); }
+
+function labelUrl(u){
+  try{
+    const url=new URL(u);
+    const p=url.pathname.split("/").filter(Boolean).slice(-1)[0] || url.hostname;
+    return p + (url.hash?url.hash:"");
+  }catch{ return u; }
+}
+
+function download(filename, text, mime){
+  const blob=new Blob([text],{type:mime||"application/octet-stream"});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement("a");
+  a.href=url; a.download=filename;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(()=>{ URL.revokeObjectURL(url); a.remove(); },0);
+}
+
+function applyMode(){
+  document.body.classList.toggle("invert", !!state.invert);
+  document.body.classList.toggle("null", !!state.nullMode);
+
+  panelCue.classList.toggle("collapsed", !!state.ui.cueCollapsed);
+  toggleCue.textContent = state.ui.cueCollapsed ? "+" : "–";
+
+  panelNotes.classList.toggle("collapsed", !!state.ui.notesCollapsed);
+  toggleNotes.textContent = state.ui.notesCollapsed ? "+" : "–";
+}
+
+function currentUrl(){ return state.urls[state.index] || ""; }
+
+function renderDeck(){
+  counter.textContent = state.urls.length ? ((state.index+1)+" / "+state.urls.length) : "0 / 0";
+  shuffleBtn.textContent = state.shuffle ? "SHUFFLE ON" : "SHUFFLE OFF";
+  repeatBtn.textContent = state.repeat ? "REPEAT ON" : "REPEAT OFF";
+  playBtn.textContent = state.playing ? "PAUSE" : "PLAY";
+  intensity.value = String(state.intensity||50);
+
+  const u = currentUrl();
+  now.textContent = u ? ("NOW: " + labelUrl(u)) : "NOW: —";
+
+  cueCount.textContent = String(state.urls.length||0);
+  noteCount.textContent = String(Object.keys(state.notes||{}).length||0);
+
+  setName.value = state.set?.name || "";
+  noteBox.value = u ? (state.notes[u] || "") : "";
+}
+
+function highlightActive(){
+  const items=list.querySelectorAll(".item");
+  items.forEach((el)=>el.classList.remove("active"));
+  const el=document.getElementById("row_"+state.index);
+  if(el) el.classList.add("active");
+}
+
+function renderList(){
+  list.innerHTML="";
+  const q=(filter.value||"").trim().toLowerCase();
+  state.urls.forEach((u,i)=>{
+    const lab=labelUrl(u);
+    if(q && !(u.toLowerCase().includes(q) || lab.toLowerCase().includes(q))) return;
+
+    const row=document.createElement("div");
+    row.className="item";
+    row.id="row_"+i;
+
+    const t=document.createElement("div");
+    t.className="t";
+    t.title=u;
+    t.textContent=lab;
+
+    const up=document.createElement("button");
+    up.className="btn"; up.textContent="↑";
+    up.onclick=(e)=>{ e.stopPropagation(); move(i,i-1); };
+
+    const dn=document.createElement("button");
+    dn.className="btn"; dn.textContent="↓";
+    dn.onclick=(e)=>{ e.stopPropagation(); move(i,i+1); };
+
+    const x=document.createElement("button");
+    x.className="btn"; x.textContent="X";
+    x.onclick=(e)=>{ e.stopPropagation(); remove(i); };
+
+    row.onclick=()=>{ mount(i); setPlaying(true); };
+
+    row.appendChild(t);
+    row.appendChild(up);
+    row.appendChild(dn);
+    row.appendChild(x);
+    list.appendChild(row);
+  });
+  highlightActive();
+}
+
+function renderSetList(){
+  setList.innerHTML="";
+  const items = state.set?.items || [];
+  items.forEach((it, idx)=>{
+    const row=document.createElement("div");
+    row.className="item";
+    const t=document.createElement("div");
+    t.className="t";
+    t.title=it.url;
+    t.textContent = (it.label || labelUrl(it.url));
+
+    const go=document.createElement("button");
+    go.className="btn"; go.textContent="GO";
+    go.onclick=(e)=>{ e.stopPropagation();
+      const j = state.urls.indexOf(it.url);
+      if(j===-1) state.urls.push(it.url);
+      save(); renderList();
+      mount(state.urls.indexOf(it.url));
+      setPlaying(true);
+    };
+
+    const del=document.createElement("button");
+    del.className="btn"; del.textContent="X";
+    del.onclick=(e)=>{ e.stopPropagation();
+      state.set.items.splice(idx,1);
+      save(); renderSetList(); toastMsg("SET REMOVED");
+    };
+
+    row.appendChild(t);
+    row.appendChild(go);
+    row.appendChild(del);
+    setList.appendChild(row);
+  });
+}
+
+function mount(i){
+  if(!state.urls.length) return;
+  state.index = (i + state.urls.length) % state.urls.length;
+  const nextFrame = active ? f0 : f1;
+  const curFrame  = active ? f1 : f0;
+
+  const u = currentUrl();
+  const withParam = u + (u.includes("?") ? "&" : "?") + "INTENSITY=" + encodeURIComponent(String(state.intensity||50));
+  nextFrame.src = withParam;
+
+  nextFrame.classList.remove("hidden");
+  curFrame.classList.add("hidden");
+  active = active ? 0 : 1;
+
+  renderDeck();
+  save();
+  highlightActive();
+}
+
+function nextIndex(){
+  if(!state.urls.length) return 0;
+  if(state.shuffle && state.urls.length>1){
+    let j = state.index;
+    for(let k=0;k<10;k++){ j = Math.floor(Math.random()*state.urls.length); if(j!==state.index) break; }
+    return j;
+  }
+  return state.index + 1;
+}
+
+function next(){
+  if(!state.urls.length) return;
+  if(state.index === state.urls.length-1 && !state.repeat && !state.shuffle){
+    setPlaying(false);
+    return;
+  }
+  mount(nextIndex());
+}
+
+function prev(){ if(!state.urls.length) return; mount(state.index-1); }
+
+function intervalMs(){
+  const v = Number(state.intensity||50);
+  return Math.max(1200, 6500 - v*45);
+}
+
+function setPlaying(on){
+  state.playing = !!on;
+  if(timer){ clearInterval(timer); timer=null; }
+  if(state.playing){ timer = setInterval(()=>next(), intervalMs()); }
+  renderDeck();
+  save();
+}
+
+function move(from,to){
+  if(to<0||to>=state.urls.length) return;
+  const arr=state.urls.slice();
+  const [v]=arr.splice(from,1);
+  arr.splice(to,0,v);
+  state.urls=arr;
+  state.index = Math.min(state.index, state.urls.length-1);
+  save(); renderList(); renderDeck();
+}
+
+function remove(i){
+  if(i<0||i>=state.urls.length) return;
+  const removingCurrent = (i===state.index);
+  state.urls.splice(i,1);
+  if(!state.urls.length){
+    state.index=0;
+    f0.src="about:blank"; f1.src="about:blank";
+    setPlaying(false);
+  } else {
+    if(i<state.index) state.index--;
+    if(removingCurrent) mount(state.index);
+  }
+  save(); renderList(); renderDeck();
+}
+
+function loadReplace(){
+  state.urls = linesToUrls(paste.value);
+  state.index = 0;
+  save(); renderList(); renderDeck();
+  if(state.urls.length) mount(0);
+}
+
+function loadAppend(){
+  const add = linesToUrls(paste.value);
+  state.urls = uniq(state.urls.concat(add));
+  save(); renderList(); renderDeck();
+  if(state.urls.length && !state.urls[state.index]) mount(0);
+}
+
+/* NOTES */
+function saveCurrentNote(){
+  const u=currentUrl(); if(!u) return;
+  state.notes[u] = noteBox.value || "";
+  save(); renderDeck(); toastMsg("NOTE SAVED");
+}
+
+async function copyText(t){
+  try{ await navigator.clipboard.writeText(t); toastMsg("COPIED"); }
+  catch{ toastMsg("COPY FAIL"); }
+}
+
+/* SETLIST */
+function addCurrentToSet(){
+  const u=currentUrl(); if(!u) return;
+  const items = state.set.items || [];
+  if(items.some(x=>x.url===u)){ toastMsg("ALREADY IN SET"); return; }
+  items.push({ url:u, label:labelUrl(u), note:(state.notes[u]||"") });
+  state.set.items = items;
+  save(); renderSetList(); toastMsg("ADDED TO SET");
+}
+
+function saveSetMeta(){
+  state.set.name = (setName.value||"").trim();
+  save(); toastMsg("SET SAVED");
+}
+
+function exportCue(){
+  const payload={ version:"KD_JUKEBOX_CUE_V1", updatedAt:new Date().toISOString(), urls:state.urls };
+  download("KD_CUE.json", JSON.stringify(payload,null,2), "application/json");
+}
+
+function exportSet(){
+  const name=((state.set.name||"SET").replace(/[^a-z0-9_-]+/gi,"_")) || "SET";
+  const payload={ version:"KD_JUKEBOX_SET_V1", updatedAt:new Date().toISOString(), set:state.set };
+  download("KD_SET_"+name+".json", JSON.stringify(payload,null,2), "application/json");
+}
+
+function importSet(){
+  const inp=document.createElement("input");
+  inp.type="file";
+  inp.accept=".json,application/json";
+  inp.onchange=async ()=>{
+    const f=inp.files?.[0]; if(!f) return;
+    const txt=await f.text();
+    try{
+      const j=JSON.parse(txt);
+      if(j && j.set && Array.isArray(j.set.items)){ state.set=j.set; save(); renderSetList(); renderDeck(); toastMsg("SET IMPORTED"); }
+      else toastMsg("BAD SET");
+    }catch{ toastMsg("BAD JSON"); }
+  };
+  inp.click();
+}
+
+/* WIRING */
+document.getElementById("load").onclick=()=>{ loadReplace(); setPlaying(false); };
+document.getElementById("append").onclick=()=>{ loadAppend(); };
+document.getElementById("clear").onclick=()=>{ paste.value=""; };
+document.getElementById("exportCue").onclick=exportCue;
+
+filter.oninput=()=>renderList();
+
+toggleCue.onclick=()=>{ state.ui.cueCollapsed=!state.ui.cueCollapsed; applyMode(); save(); };
+toggleNotes.onclick=()=>{ state.ui.notesCollapsed=!state.ui.notesCollapsed; applyMode(); save(); };
+
+nextBtn.onclick=()=>next();
+prevBtn.onclick=()=>prev();
+shuffleBtn.onclick=()=>{ state.shuffle=!state.shuffle; renderDeck(); save(); };
+repeatBtn.onclick=()=>{ state.repeat=!state.repeat; renderDeck(); save(); };
+playBtn.onclick=()=>setPlaying(!state.playing);
+stopBtn.onclick=()=>setPlaying(false);
+intensity.oninput=()=>{ state.intensity=Number(intensity.value); if(state.playing) setPlaying(true); save(); renderDeck(); };
+
+document.getElementById("saveNote").onclick=saveCurrentNote;
+noteBox.addEventListener("input",()=>{ const u=currentUrl(); if(u){ state.notes[u]=noteBox.value||""; save(); } });
+
+document.getElementById("copyNow").onclick=()=>{ const u=currentUrl(); if(u) copyText(u); };
+document.getElementById("copyNote").onclick=()=>{ const u=currentUrl(); if(u) copyText(state.notes[u]||""); };
+
+document.getElementById("addToSet").onclick=addCurrentToSet;
+document.getElementById("saveSet").onclick=saveSetMeta;
+document.getElementById("exportSet").onclick=exportSet;
+document.getElementById("importSet").onclick=importSet;
+
+/* HOTKEYS — focus safe */
+window.addEventListener("keydown",(e)=>{
+  if(isTypingTarget(document.activeElement)) return;
+  const k=(e.key||"").toLowerCase();
+  if(e.key==="ArrowRight"){ next(); e.preventDefault(); }
+  if(e.key==="ArrowLeft"){ prev(); e.preventDefault(); }
+  if(k===" "||e.code==="Space"){ setPlaying(!state.playing); e.preventDefault(); }
+  if(k==="s"){ state.shuffle=!state.shuffle; renderDeck(); save(); }
+  if(k==="r"){ state.repeat=!state.repeat; renderDeck(); save(); }
+  if(k==="i"){ state.invert=!state.invert; applyMode(); save(); }
+  if(k==="n"){ state.ui.notesCollapsed=!state.ui.notesCollapsed; applyMode(); save(); }
+  if(k==="l"){ state.ui.cueCollapsed=!state.ui.cueCollapsed; applyMode(); save(); }
+  if(e.shiftKey && k==="n"){ state.nullMode=!state.nullMode; applyMode(); save(); }
+});
+
+/* BOOT */
+applyMode();
+renderDeck();
+renderList();
+renderSetList();
+if(state.urls.length) mount(state.index);
+if(state.playing) setPlaying(true);
+</script>
+</body>
+</html>
