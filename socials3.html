@@ -1,0 +1,553 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>KETADATA — SOCIAL MANAGER (FAST)</title>
+  <style>
+    :root{
+      --bg:#000; --fg:#f2f2f2; --muted:#9a9a9a; --line:#2a2a2a;
+      --hud:rgba(255,255,255,0.03);
+      --font:12px/1.15 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace;
+      --r:12px;
+    }
+    html,body{height:100%;margin:0;background:var(--bg);color:var(--fg);font:var(--font);overflow:hidden;}
+    *{box-sizing:border-box;}
+    a{color:var(--fg);text-decoration:none;}
+    a:hover{text-decoration:underline;}
+    button,input,textarea{font:var(--font);color:var(--fg);}
+    input,textarea{
+      background:rgba(0,0,0,0.28);
+      border:1px solid var(--line);
+      border-radius:10px;
+      outline:none;
+      padding:6px 8px;
+      min-width:0;
+    }
+    input{height:28px;}
+    textarea{resize:vertical;min-height:56px;}
+    button{
+      height:28px;padding:0 10px;border:1px solid var(--line);
+      background:transparent;border-radius:10px;cursor:pointer;
+    }
+    button:active{transform:translateY(1px);}
+    button.on{background:rgba(255,255,255,0.06);}
+    .pill{border:1px solid var(--line);border-radius:999px;padding:3px 6px;color:var(--muted);background:rgba(0,0,0,0.14);white-space:nowrap;}
+    .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
+    .sp{flex:1;}
+    .sep{height:1px;background:rgba(255,255,255,0.06);margin:8px 0;}
+    .muted{color:var(--muted);}
+    .tiny{height:26px;padding:0 8px;border-radius:999px;}
+    .danger{border-color:rgba(255,255,255,0.18);}
+    .danger:hover{border-color:rgba(255,255,255,0.35);}
+
+    html.invert #app{filter: invert(1) hue-rotate(180deg);}
+    html.null #hud, html.null #dock{display:none;}
+
+    #app{position:fixed;inset:0;}
+    #workspace{position:fixed;inset:0;overflow:auto;padding:64px 10px 56px 10px;}
+    #hud{
+      position:fixed;left:10px;right:10px;top:10px;z-index:60;
+      border:1px solid var(--line);
+      background:var(--hud);
+      backdrop-filter: blur(6px);
+      border-radius:var(--r);
+      padding:8px;
+      user-select:none;
+    }
+    #dock{
+      position:fixed;left:10px;right:10px;bottom:10px;z-index:60;
+      border:1px solid var(--line);
+      background:rgba(0,0,0,0.30);
+      border-radius:var(--r);
+      padding:8px;
+      display:flex;gap:8px;align-items:center;flex-wrap:wrap;
+      user-select:none;
+    }
+
+    /* FAST layout: one focused platform panel at a time */
+    .panel{
+      border:1px solid var(--line);
+      border-radius:var(--r);
+      background:rgba(255,255,255,0.02);
+      padding:8px;
+      max-width:1100px;
+      margin:0 auto;
+    }
+    .grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+    .grid3{display:grid;grid-template-columns: 1fr 1fr auto;gap:8px;align-items:center;}
+    .grid3 > button{width:100%;min-width:72px;justify-self:stretch;}
+    .grid3 > input{min-width:0;}
+    .list{display:flex;flex-wrap:wrap;gap:8px;}
+    .chip{height:26px;padding:0 8px;border-radius:999px;}
+    .chip.active{background:rgba(255,255,255,0.06);}
+    .acct{
+      border:1px solid rgba(255,255,255,0.10);
+      border-radius:12px;
+      background:rgba(255,255,255,0.02);
+      padding:8px;
+      display:flex;flex-direction:column;gap:8px;
+    }
+    .minh{min-height:84px;}
+  </style>
+</head>
+<body>
+<div id="app">
+  <div id="hud">
+    <div class="row">
+      <span class="pill">KETADATA SOCIAL MANAGER (FAST)</span>
+      <span class="pill">ENTER = ADD PLATFORM / ADD ACCOUNT</span>
+      <span class="pill">SHIFT+I INVERT</span>
+      <span class="pill">SHIFT+N NULL</span>
+      <span class="pill">SHIFT+F FULL</span>
+      <span class="sp"></span>
+      <span class="pill" id="filePill"></span>
+    </div>
+    <div class="sep"></div>
+    <div class="row">
+      <input id="newPlatform" type="text" placeholder="ADD PLATFORM (e.g., TIKTOK / INSTAGRAM / X / YOUTUBE)" spellcheck="false" style="flex:1;min-width:240px;"/>
+      <button id="addPlatformBtn">ADD</button>
+      <button id="openAllBtn" class="tiny">ALL</button>
+      <span class="sp"></span>
+      <button id="exportBtn">EXPORT (FILE)</button>
+      <button id="importBtn">IMPORT (FILE)</button>
+      <button id="resetBtn" class="danger">RESET</button>
+      <input id="importFile" type="file" accept="application/json" style="display:none"/>
+    </div>
+  </div>
+
+  <div id="workspace">
+    <div class="panel">
+      <div class="row">
+        <span class="muted">PLATFORMS</span>
+        <span class="sp"></span>
+        <span class="pill" id="countsPill">—</span>
+      </div>
+      <div class="sep"></div>
+      <div class="list" id="platformChips"></div>
+      <div class="sep"></div>
+
+      <div id="focusArea"></div>
+    </div>
+  </div>
+
+  <div id="dock">
+    <span class="muted">FOCUS:</span>
+    <span class="pill" id="focusPill">NONE</span>
+    <span class="sp"></span>
+    <span class="pill">DBLCLICK PLATFORM CHIP = DELETE</span>
+  </div>
+</div>
+
+<script>
+(() => {
+  const FILE_ID = "KD_SOCIAL_MANAGER_FAST_V1";
+  const STORE_KEY = "KD_STATE__" + FILE_ID;
+
+  const $ = (id)=>document.getElementById(id);
+  $("filePill").textContent = "FILE_ID: " + FILE_ID;
+
+  const newPlatform = $("newPlatform");
+  const addPlatformBtn = $("addPlatformBtn");
+  const platformChips = $("platformChips");
+  const focusArea = $("focusArea");
+  const focusPill = $("focusPill");
+  const countsPill = $("countsPill");
+
+  const exportBtn = $("exportBtn");
+  const importBtn = $("importBtn");
+  const importFile = $("importFile");
+  const resetBtn = $("resetBtn");
+
+  const nowISO=()=>new Date().toISOString();
+  const uid=()=>Math.random().toString(16).slice(2)+Math.random().toString(16).slice(2);
+  const norm=(s)=>String(s||"").trim().replace(/\s+/g," ").toUpperCase();
+
+  // ---- state
+  const def = () => ({
+    meta:{ fileId: FILE_ID, updatedAt: nowISO() },
+    ui:{ invert:false, nullMode:false, focusPid:null },
+    platforms:[]
+  });
+
+  let state = load();
+  applyUI();
+
+  let saveT=null;
+  function scheduleSave(){ if(saveT) clearTimeout(saveT); saveT=setTimeout(save, 160); }
+  function save(){ try{ state.meta.updatedAt = nowISO(); localStorage.setItem(STORE_KEY, JSON.stringify(state)); }catch{} }
+  function load(){
+    try{
+      const raw = localStorage.getItem(STORE_KEY);
+      if(!raw) return def();
+      const p = JSON.parse(raw);
+      if(!p || typeof p!=="object") return def();
+      if(!p.meta) p.meta={};
+      if(!p.ui) p.ui={};
+      if(!Array.isArray(p.platforms)) p.platforms=[];
+      p.meta.fileId = FILE_ID;
+      p.ui.invert = !!p.ui.invert;
+      p.ui.nullMode = !!p.ui.nullMode;
+      if(p.ui.focusPid===undefined) p.ui.focusPid=null;
+      // normalize
+      p.platforms = p.platforms.map(pl => ({
+        id: pl.id || ("P_"+uid()),
+        name: norm(pl.name),
+        notes: String(pl.notes||""),
+        accounts: Array.isArray(pl.accounts) ? pl.accounts.map(a => ({
+          id: a.id || ("A_"+uid()),
+          name: String(a.name||"").trim(),
+          link: String(a.link||"").trim(),
+          notes: String(a.notes||""),
+          strategy: String(a.strategy||""),
+          deliverables: String(a.deliverables||""),
+          isPublic: !!a.isPublic
+        })) : []
+      })).filter(pl => pl.name);
+      // focus validity
+      if(p.ui.focusPid && !p.platforms.some(x=>x.id===p.ui.focusPid)) p.ui.focusPid = p.platforms[0]?.id || null;
+      return p;
+    }catch{ return def(); }
+  }
+
+  function applyUI(){
+    document.documentElement.classList.toggle("invert", !!state.ui.invert);
+    document.documentElement.classList.toggle("null", !!state.ui.nullMode);
+  }
+
+  function ensureFocus(){
+    if(state.ui.focusPid && state.platforms.some(x=>x.id===state.ui.focusPid)) return;
+    state.ui.focusPid = state.platforms[0]?.id || null;
+  }
+
+  // ---- actions
+  function addPlatform(name){
+    const n = norm(name);
+    if(!n) return;
+    if(state.platforms.some(p=>p.name===n)) { focusByName(n); return; }
+    const p = { id:"P_"+uid(), name:n, notes:"", accounts:[] };
+    state.platforms.push(p);
+    state.ui.focusPid = p.id;
+    scheduleSave();
+    render();
+  }
+
+  function removePlatform(pid){
+    state.platforms = state.platforms.filter(p=>p.id!==pid);
+    if(state.ui.focusPid===pid) state.ui.focusPid = state.platforms[0]?.id || null;
+    scheduleSave();
+    render();
+  }
+
+  function focus(pid){
+    state.ui.focusPid = pid;
+    scheduleSave();
+    render();
+  }
+
+  function focusByName(name){
+    const n = norm(name);
+    const p = state.platforms.find(x=>x.name===n);
+    if(p) focus(p.id);
+  }
+
+  function addAccount(pid, name, link){
+    const p = state.platforms.find(x=>x.id===pid);
+    if(!p) return;
+    const a = {
+      id:"A_"+uid(),
+      name: (name||"").trim() || "(UNTITLED)",
+      link: (link||"").trim(),
+      notes:"",
+      strategy:"",
+      deliverables:"",
+      isPublic:false
+    };
+    p.accounts.unshift(a); // new first (fast)
+    scheduleSave();
+    render();
+  }
+
+  function removeAccount(pid, aid){
+    const p = state.platforms.find(x=>x.id===pid);
+    if(!p) return;
+    p.accounts = p.accounts.filter(a=>a.id!==aid);
+    scheduleSave();
+    render();
+  }
+
+  function toggleAccountPublic(pid, aid){
+    const p = state.platforms.find(x=>x.id===pid);
+    if(!p) return;
+    const a = p.accounts.find(x=>x.id===aid);
+    if(!a) return;
+    a.isPublic = !a.isPublic;
+    scheduleSave();
+    render();
+  }
+
+  // ---- export/import
+  function downloadJSON(filename, obj){
+    const blob = new Blob([JSON.stringify(obj, null, 2)], {type:"application/json"});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = filename;
+    document.body.appendChild(a);
+    a.click(); a.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  function exportState(){ downloadJSON(FILE_ID+"__STATE.json", state); }
+
+  function importStateFromFile(file){
+    const fr = new FileReader();
+    fr.onload = () => {
+      try{
+        const parsed = JSON.parse(fr.result);
+        if(!parsed || typeof parsed!=="object") return;
+        if(!Array.isArray(parsed.platforms)) return;
+        state = def();
+        state.ui.invert = !!(parsed.ui && parsed.ui.invert);
+        state.ui.nullMode = !!(parsed.ui && parsed.ui.nullMode);
+        state.platforms = parsed.platforms.map(pl => ({
+          id: pl.id || ("P_"+uid()),
+          name: norm(pl.name),
+          notes: String(pl.notes||""),
+          accounts: Array.isArray(pl.accounts) ? pl.accounts.map(a => ({
+            id: a.id || ("A_"+uid()),
+            name: String(a.name||"").trim(),
+            link: String(a.link||"").trim(),
+            notes: String(a.notes||""),
+            strategy: String(a.strategy||""),
+            deliverables: String(a.deliverables||""),
+            isPublic: !!a.isPublic
+          })) : []
+        })).filter(pl=>pl.name);
+        state.ui.focusPid = (parsed.ui && parsed.ui.focusPid) || state.platforms[0]?.id || null;
+        ensureFocus();
+        applyUI();
+        save();
+        render();
+      }catch{}
+    };
+    fr.readAsText(file);
+  }
+
+  // ---- render
+  function el(tag, cls, txt){
+    const e = document.createElement(tag);
+    if(cls) e.className = cls;
+    if(txt!==undefined) e.textContent = txt;
+    return e;
+  }
+
+  function render(){
+    ensureFocus();
+
+    // counts
+    const totalPlatforms = state.platforms.length;
+    const totalAccounts = state.platforms.reduce((n,p)=>n + (p.accounts?.length||0), 0);
+    countsPill.textContent = `PLATFORMS: ${totalPlatforms} • ACCOUNTS: ${totalAccounts}`;
+
+    // chips
+    platformChips.innerHTML = "";
+    state.platforms
+      .slice()
+      .sort((a,b)=>a.name.localeCompare(b.name))
+      .forEach(p=>{
+        const b = el("button","chip"+(p.id===state.ui.focusPid?" active":""));
+        b.textContent = p.name;
+        b.onclick = ()=>focus(p.id);
+        b.ondblclick = ()=>removePlatform(p.id);
+        platformChips.appendChild(b);
+      });
+
+    const p = state.platforms.find(x=>x.id===state.ui.focusPid) || null;
+    focusPill.textContent = p ? p.name : "NONE";
+
+    focusArea.innerHTML = "";
+    if(!p){
+      focusArea.appendChild(el("div","muted","NO PLATFORMS. ADD ONE ABOVE."));
+      return;
+    }
+
+    // platform header + notes
+    const head = el("div","");
+    head.appendChild(el("div","row", ""));
+    const r1 = el("div","row");
+    r1.appendChild(el("span","muted","PLATFORM"));
+    r1.appendChild(el("span","pill", p.name));
+    const del = el("button","danger","DELETE PLATFORM");
+    del.onclick = ()=>removePlatform(p.id);
+    r1.appendChild(el("span","sp",""));
+    r1.appendChild(del);
+    head.appendChild(r1);
+
+    const notes = document.createElement("textarea");
+    notes.className="minh";
+    notes.placeholder="GENERAL PLATFORM NOTES";
+    notes.value = p.notes || "";
+    notes.addEventListener("input", ()=>{ p.notes = notes.value; scheduleSave(); });
+
+    head.appendChild(el("div","sep"));
+    head.appendChild(notes);
+    head.appendChild(el("div","sep"));
+
+    // add account (fast)
+    const addWrap = el("div","acct");
+    addWrap.appendChild(el("div","muted","ADD ACCOUNT (ENTER)"));
+    const row = el("div","grid3");
+
+    const inName = document.createElement("input");
+    inName.placeholder="ACCOUNT NAME";
+    const inLink = document.createElement("input");
+    inLink.placeholder="ACCOUNT LINK (URL)";
+
+    const addBtn = el("button","","ADD");
+    const commit = ()=>{
+      const n = inName.value.trim();
+      const l = inLink.value.trim();
+      if(!n && !l) return;
+      addAccount(p.id, n || "(UNTITLED)", l);
+      inName.value=""; inLink.value="";
+      inName.focus();
+    };
+    addBtn.onclick = commit;
+
+    inName.addEventListener("keydown",(e)=>{ if(e.key==="Enter"){ e.preventDefault(); commit(); }});
+    inLink.addEventListener("keydown",(e)=>{ if(e.key==="Enter"){ e.preventDefault(); commit(); }});
+
+    row.appendChild(inName);
+    row.appendChild(inLink);
+    row.appendChild(addBtn);
+    addWrap.appendChild(row);
+
+    focusArea.appendChild(head);
+    focusArea.appendChild(addWrap);
+
+    // accounts list
+    if(!p.accounts.length){
+      focusArea.appendChild(el("div","muted","NO ACCOUNTS YET."));
+      return;
+    }
+
+    const acctHeader = el("div","row");
+    acctHeader.appendChild(el("span","muted","ACCOUNTS (NEWEST FIRST)"));
+    acctHeader.appendChild(el("span","sp",""));
+    focusArea.appendChild(el("div","sep"));
+    focusArea.appendChild(acctHeader);
+
+    p.accounts.forEach(a=>{
+      const card = el("div","acct");
+
+      const top = el("div","grid3");
+
+      const n = document.createElement("input");
+      n.value = a.name || "";
+      n.placeholder="ACCOUNT NAME";
+      n.addEventListener("input",()=>{ a.name=n.value; scheduleSave(); });
+
+      const l = document.createElement("input");
+      l.value = a.link || "";
+      l.placeholder="ACCOUNT LINK (URL)";
+      l.addEventListener("input",()=>{ a.link=l.value; scheduleSave(); });
+
+      const rm = el("button","danger","DEL");
+      rm.onclick = ()=>removeAccount(p.id, a.id);
+
+      top.appendChild(n); top.appendChild(l); top.appendChild(rm);
+
+      const pubRow = el("div","row");
+      const pubBtn = el("button", a.isPublic ? "on" : "", a.isPublic ? "PUBLIC" : "PRIVATE");
+      pubBtn.onclick = ()=>toggleAccountPublic(p.id, a.id);
+      pubRow.appendChild(el("span","muted","VISIBILITY"));
+      pubRow.appendChild(pubBtn);
+      pubRow.appendChild(el("span","sp",""));
+      if(a.link){
+        const open = el("button","","OPEN");
+        open.onclick = ()=>window.open(a.link, "_blank", "noopener,noreferrer");
+        pubRow.appendChild(open);
+      }
+
+      const grid = el("div","grid2");
+      const note = document.createElement("textarea");
+      note.placeholder="SPECIFIC NOTES";
+      note.value = a.notes || "";
+      note.addEventListener("input",()=>{ a.notes=note.value; scheduleSave(); });
+
+      const strat = document.createElement("textarea");
+      strat.placeholder="STRATEGY";
+      strat.value = a.strategy || "";
+      strat.addEventListener("input",()=>{ a.strategy=strat.value; scheduleSave(); });
+
+      const deliv = document.createElement("textarea");
+      deliv.placeholder="DELIVERABLES / NEXT POSTS / TASKS";
+      deliv.value = a.deliverables || "";
+      deliv.addEventListener("input",()=>{ a.deliverables=deliv.value; scheduleSave(); });
+
+      grid.appendChild(note);
+      grid.appendChild(strat);
+
+      card.appendChild(top);
+      card.appendChild(pubRow);
+      card.appendChild(grid);
+      card.appendChild(deliv);
+
+      focusArea.appendChild(card);
+    });
+  }
+
+  // ---- events
+  addPlatformBtn.onclick = ()=>{ addPlatform(newPlatform.value); newPlatform.value=""; newPlatform.focus(); };
+  newPlatform.addEventListener("keydown",(e)=>{ if(e.key==="Enter"){ e.preventDefault(); addPlatformBtn.click(); }});
+
+  exportBtn.onclick = exportState;
+  importBtn.onclick = ()=>importFile.click();
+  importFile.onchange = ()=>{
+    const f = importFile.files && importFile.files[0];
+    importFile.value="";
+    if(f) importStateFromFile(f);
+  };
+
+  resetBtn.onclick = ()=>{
+    state = def();
+    applyUI();
+    save();
+    render();
+  };
+
+  // hotkeys
+  function toggleFull(){
+    if(!document.fullscreenElement) document.documentElement.requestFullscreen?.();
+    else document.exitFullscreen?.();
+  }
+  window.addEventListener("keydown",(e)=>{
+    const tag=(document.activeElement && document.activeElement.tagName || "").toLowerCase();
+    const typing=(tag==="input"||tag==="textarea");
+    if(e.shiftKey && (e.key==="I"||e.key==="i")){ e.preventDefault(); state.ui.invert=!state.ui.invert; applyUI(); scheduleSave(); }
+    if(e.shiftKey && (e.key==="N"||e.key==="n")){ e.preventDefault(); state.ui.nullMode=!state.ui.nullMode; applyUI(); scheduleSave(); }
+    if(e.shiftKey && (e.key==="F"||e.key==="f")){ e.preventDefault(); toggleFull(); }
+    if(!typing && e.key==="Escape" && state.ui.nullMode){ state.ui.nullMode=false; applyUI(); scheduleSave(); }
+  });
+
+  // init
+  save();
+  render();
+})();
+</script>
+
+<!--
+AE / EE / WB — KETADATA SERIALIZATION STAMP (MANDATORY)
+AE: BLACK DEFAULT • UNIFORM TEXT SIZE • SINGLE FOCUSED PANEL (FAST) • INVERT GLOBAL • NULL HIDES CHROME
+EE: PLATFORM CHIPS + FOCUS • PLATFORM GENERAL NOTES • ACCOUNTS UNDER PLATFORM • ACCOUNT VISIBILITY TOGGLE (PUBLIC/PRIVATE)
+WB: LOCAL-FIRST • EXPORT = REAL FILE DOWNLOAD • IMPORT = FILE PICKER READ
+
+FILE_ID: "KD_SOCIAL_MANAGER_FAST_V1"
+ROOM_ID: "K_CORE_UTIL"
+VERSION_ID: "V1"
+UPDATED_AT: "2026-01-04T00:00:00.000-05:00"
+CHANGELOG:
+- V1: Frictionless single-focus social manager; Enter-to-add, fast chips, per-account public/private toggle.
+-->
+</body>
+</html>
