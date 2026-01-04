@@ -1,0 +1,992 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>KETADATA WORDBANK BOWL</title>
+<style>
+  :root{
+    --bg:#0b0b0b;
+    --fg:#f2f2f2;
+    --muted:#a8a8a8;
+    --line:#2a2a2a;
+    --panel:#121212;
+    --panel2:#0f0f0f;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--fg);
+    font-family: Arial, Helvetica, sans-serif;
+    font-size:12px; /* uniform text size */
+    line-height:1.2;
+    letter-spacing:0.2px;
+    overflow:hidden;
+    user-select:none;
+  }
+  button, input, textarea{
+    font:inherit;
+    color:inherit;
+    background:transparent;
+    border:1px solid var(--line);
+    padding:6px 8px;
+    outline:none;
+  }
+  button{cursor:pointer}
+  button:hover{border-color:var(--muted)}
+  button:active{transform:translateY(1px)}
+  textarea{resize:none; width:100%; height:110px; user-select:text}
+  input{width:100%}
+
+  .app{
+    height:100%;
+    display:grid;
+    grid-template-columns: 360px 1fr;
+    gap:8px;
+    padding:8px;
+  }
+  .col{
+    background:var(--panel);
+    border:1px solid var(--line);
+    display:flex;
+    flex-direction:column;
+    min-height:0;
+  }
+  .bar{
+    display:flex;
+    gap:6px;
+    padding:8px;
+    border-bottom:1px solid var(--line);
+    background:var(--panel2);
+    align-items:center;
+    flex-wrap:wrap;
+  }
+  .pill{
+    border:1px solid var(--line);
+    padding:2px 6px;
+    color:var(--muted);
+    white-space:nowrap;
+  }
+  .muted{color:var(--muted)}
+  .grow{flex:1}
+  .content{
+    padding:8px;
+    display:flex;
+    flex-direction:column;
+    gap:8px;
+    min-height:0;
+  }
+  .panel{
+    border:1px solid var(--line);
+    background:#0d0d0d;
+    padding:8px;
+  }
+  .row{display:flex; gap:6px; align-items:center; flex-wrap:wrap}
+  .status{
+    margin-top:auto;
+    padding:6px 8px;
+    border-top:1px solid var(--line);
+    background:var(--panel2);
+    display:flex;
+    gap:8px;
+    flex-wrap:wrap;
+    align-items:center;
+  }
+  .kbd{border:1px solid var(--line); padding:2px 4px; color:var(--muted)}
+  .hint{color:var(--muted)}
+  .canvasWrap{
+    position:relative;
+    background:#070707;
+    border:1px solid var(--line);
+    min-height:0;
+    height:100%;
+    overflow:hidden;
+  }
+  canvas{display:block; width:100%; height:100%}
+
+  /* “glass bowl” overlay */
+  .bowlOverlay{
+    pointer-events:none;
+    position:absolute; inset:0;
+    background:
+      radial-gradient(closest-side at 45% 35%, rgba(255,255,255,0.10), rgba(255,255,255,0.00) 55%),
+      radial-gradient(closest-side at 60% 70%, rgba(255,255,255,0.06), rgba(255,255,255,0.00) 60%),
+      radial-gradient(closest-side at 50% 55%, rgba(255,255,255,0.05), rgba(0,0,0,0.00) 70%);
+    mix-blend-mode: screen;
+    opacity:0.9;
+  }
+  .bowlRim{
+    pointer-events:none;
+    position:absolute; inset:8px;
+    border:1px solid rgba(255,255,255,0.10);
+    border-radius:999px;
+  }
+</style>
+</head>
+<body>
+<div class="app" id="app">
+
+  <!-- LEFT: INPUT / CONTROLS -->
+  <div class="col" id="colLeft">
+    <div class="bar">
+      <span class="pill">WORDBANK BOWL</span>
+      <span class="grow"></span>
+      <button id="btnSave">SAVE</button>
+      <button id="btnClear">CLEAR</button>
+    </div>
+
+    <div class="content" style="min-height:0">
+      <div class="panel">
+        <div class="row">
+          <span class="pill">PASTE LIST</span>
+          <span class="grow"></span>
+          <button id="btnAdd">ADD</button>
+        </div>
+        <div class="hint" style="margin:6px 0">
+          Paste words/phrases. One per line. You can also paste a blob; it will extract reasonable tokens.
+        </div>
+        <textarea id="pasteBox" spellcheck="false" placeholder="e.g.
+psycho-geography
+schema
+diva protocol
+infra-void
+compression
+"></textarea>
+        <div class="row" style="margin-top:6px">
+          <input id="quickAdd" placeholder="quick add (enter)" />
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="row">
+          <span class="pill">FILTER</span>
+          <span class="grow"></span>
+          <button id="btnResetView">CENTER</button>
+        </div>
+        <div class="row" style="margin-top:6px">
+          <input id="search" placeholder="search inside bowl" />
+        </div>
+        <div class="row" style="margin-top:6px">
+          <button id="btnShake">SHAKE</button>
+          <button id="btnUnjam">UNJAM</button>
+          <span class="grow"></span>
+          <span class="muted" id="countLine">0</span>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="row">
+          <span class="pill">EXPORT / IMPORT</span>
+          <span class="grow"></span>
+          <button id="btnExport">EXPORT JSON</button>
+        </div>
+        <div class="row" style="margin-top:6px">
+          <input type="file" id="fileInput" accept=".json,application/json" />
+          <button id="btnImport">IMPORT</button>
+        </div>
+        <div class="hint" style="margin-top:6px">
+          Export = real download. Import hydrates the bowl exactly.
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="row">
+          <span class="pill">DELETE</span>
+          <span class="grow"></span>
+          <button id="btnDeleteSelected">DELETE SELECTED</button>
+        </div>
+        <div class="hint" style="margin-top:6px">
+          Click a marble to select. Drag to move. Double-click a marble to rename.
+        </div>
+      </div>
+    </div>
+
+    <div class="status">
+      <span class="muted">hotkeys:</span>
+      <span class="kbd">SHIFT+I</span><span class="muted">invert</span>
+      <span class="kbd">SHIFT+N</span><span class="muted">null</span>
+      <span class="kbd">SHIFT+S</span><span class="muted">save</span>
+      <span class="kbd">DEL</span><span class="muted">delete selected</span>
+      <span class="muted" id="storageLine">storage: —</span>
+    </div>
+  </div>
+
+  <!-- RIGHT: BOWL -->
+  <div class="col" id="colRight">
+    <div class="bar">
+      <span class="pill">GLASS BOWL</span>
+      <span class="grow"></span>
+      <span class="muted" id="selLine">selected: none</span>
+    </div>
+    <div class="content" style="min-height:0">
+      <div class="canvasWrap" id="wrap">
+        <canvas id="c"></canvas>
+        <div class="bowlOverlay"></div>
+        <div class="bowlRim"></div>
+      </div>
+      <div class="hint">
+        Tip: drag marbles. Use SHAKE if they settle boring. Search hides non-matching marbles.
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+(() => {
+  "use strict";
+
+  // -------------------------
+  // Local-first state
+  // -------------------------
+  const LS_KEY = "KETADATA_WORDBANK_BOWL_V1::state";
+  const nowISO = () => new Date().toISOString();
+  const uid = () => "MB_" + Math.random().toString(16).slice(2) + "_" + Date.now().toString(16);
+  const $ = (id) => document.getElementById(id);
+
+  const els = {
+    app: $("app"),
+    colLeft: $("colLeft"),
+    colRight: $("colRight"),
+
+    pasteBox: $("pasteBox"),
+    quickAdd: $("quickAdd"),
+    btnAdd: $("btnAdd"),
+    btnSave: $("btnSave"),
+    btnClear: $("btnClear"),
+
+    search: $("search"),
+    btnResetView: $("btnResetView"),
+    btnShake: $("btnShake"),
+    btnUnjam: $("btnUnjam"),
+
+    countLine: $("countLine"),
+    selLine: $("selLine"),
+    storageLine: $("storageLine"),
+
+    btnExport: $("btnExport"),
+    fileInput: $("fileInput"),
+    btnImport: $("btnImport"),
+
+    btnDeleteSelected: $("btnDeleteSelected"),
+
+    wrap: $("wrap"),
+    canvas: $("c"),
+  };
+
+  const defaultState = () => ({
+    type: "KETADATA_WORDBANK_BOWL_STATE",
+    version: "V1",
+    fileId: "KETADATA_WORDBANK_BOWL_V1_" + Date.now().toString(16),
+    updatedAt: nowISO(),
+    system: { invert:false, nullMode:false },
+    ui: { search:"", selectedId:null },
+    marbles: [] // {id, text, r, x,y, vx,vy, createdAt, updatedAt}
+  });
+
+  let state = loadState();
+  let dirty = false;
+
+  function loadState(){
+    try{
+      const raw = localStorage.getItem(LS_KEY);
+      if(!raw){
+        const s = defaultState();
+        localStorage.setItem(LS_KEY, JSON.stringify(s));
+        return s;
+      }
+      const s = JSON.parse(raw);
+      if(!s.marbles) s.marbles = [];
+      if(!s.ui) s.ui = { search:"", selectedId:null };
+      if(!s.system) s.system = { invert:false, nullMode:false };
+      if(!s.fileId) s.fileId = "KETADATA_WORDBANK_BOWL_V1_" + Date.now().toString(16);
+      if(!s.version) s.version = "V1";
+      return s;
+    }catch(e){
+      return defaultState();
+    }
+  }
+
+  function saveState(){
+    state.updatedAt = nowISO();
+    localStorage.setItem(LS_KEY, JSON.stringify(state));
+    dirty = false;
+    renderHUD();
+  }
+
+  function markDirty(){ dirty = true; }
+
+  // -------------------------
+  // Canvas / Bowl physics
+  // -------------------------
+  const ctx = els.canvas.getContext("2d");
+  let W = 0, H = 0, DPR = 1;
+
+  function resize(){
+    DPR = Math.max(1, Math.floor(window.devicePixelRatio || 1));
+    const rect = els.wrap.getBoundingClientRect();
+    W = Math.max(300, Math.floor(rect.width));
+    H = Math.max(300, Math.floor(rect.height));
+    els.canvas.width = W * DPR;
+    els.canvas.height = H * DPR;
+    els.canvas.style.width = W + "px";
+    els.canvas.style.height = H + "px";
+    ctx.setTransform(DPR,0,0,DPR,0,0);
+  }
+
+  // Bowl boundary: ellipse
+  function bowlParams(){
+    // inset creates a rim zone
+    const pad = 22;
+    const cx = W/2, cy = H/2;
+    const rx = Math.max(120, (W/2) - pad);
+    const ry = Math.max(120, (H/2) - pad);
+    return { cx, cy, rx, ry };
+  }
+
+  // constrain point inside ellipse (soft projection)
+  function projectInsideEllipse(m){
+    const {cx,cy,rx,ry} = bowlParams();
+    const dx = m.x - cx;
+    const dy = m.y - cy;
+    const nx = dx / (rx - m.r);
+    const ny = dy / (ry - m.r);
+    const d = nx*nx + ny*ny;
+    if(d <= 1) return;
+
+    // project back to boundary along direction
+    const k = 1 / Math.sqrt(d);
+    const px = cx + dx * k;
+    const py = cy + dy * k;
+
+    // move marble just inside boundary (account for radius)
+    const bx = cx + (px - cx) * ((rx - m.r) / rx);
+    const by = cy + (py - cy) * ((ry - m.r) / ry);
+
+    // reflect velocity (simple)
+    const vx = m.vx, vy = m.vy;
+    // boundary normal approx from ellipse gradient:
+    const gx = (bx - cx) / (rx*rx);
+    const gy = (by - cy) / (ry*ry);
+    const gl = Math.hypot(gx,gy) || 1;
+    const nxn = gx/gl, nyn = gy/gl;
+    const dot = vx*nxn + vy*nyn;
+    m.vx = vx - 2*dot*nxn;
+    m.vy = vy - 2*dot*nyn;
+
+    m.x = bx;
+    m.y = by;
+  }
+
+  // collision resolve (pairwise)
+  function resolveCollisions(){
+    const ms = visibleMarbles();
+    for(let i=0;i<ms.length;i++){
+      for(let j=i+1;j<ms.length;j++){
+        const a = ms[i], b = ms[j];
+        const dx = b.x - a.x;
+        const dy = b.y - a.y;
+        const dist = Math.hypot(dx,dy) || 0.0001;
+        const min = a.r + b.r;
+        if(dist < min){
+          const overlap = (min - dist);
+          const nx = dx / dist;
+          const ny = dy / dist;
+
+          // separate
+          const push = overlap * 0.52;
+          a.x -= nx * push;
+          a.y -= ny * push;
+          b.x += nx * push;
+          b.y += ny * push;
+
+          // velocity swap along normal (cheap elastic-ish)
+          const av = a.vx*nx + a.vy*ny;
+          const bv = b.vx*nx + b.vy*ny;
+          const impulse = (bv - av) * 0.55;
+          a.vx += impulse * nx;
+          a.vy += impulse * ny;
+          b.vx -= impulse * nx;
+          b.vy -= impulse * ny;
+        }
+      }
+    }
+  }
+
+  function integrate(){
+    const ms = visibleMarbles();
+    // simple forces
+    const g = 0.045;          // gentle gravity
+    const drag = 0.992;       // air resistance
+    const floorFriction = 0.998;
+
+    for(const m of ms){
+      m.vy += g;
+      m.vx *= drag;
+      m.vy *= drag;
+      m.x += m.vx;
+      m.y += m.vy;
+
+      // subtle center pull keeps them in bowl, prevents edge-camping
+      const {cx,cy} = bowlParams();
+      m.vx += (cx - m.x) * 0.00002;
+      m.vy += (cy - m.y) * 0.00002;
+
+      projectInsideEllipse(m);
+
+      // tiny friction when low velocity (settle)
+      if(Math.abs(m.vx) + Math.abs(m.vy) < 0.08){
+        m.vx *= floorFriction;
+        m.vy *= floorFriction;
+      }
+    }
+
+    // collisions a few iterations improves stability
+    for(let k=0;k<3;k++){
+      resolveCollisions();
+      for(const m of ms) projectInsideEllipse(m);
+    }
+  }
+
+  function draw(){
+    ctx.clearRect(0,0,W,H);
+
+    // bowl shading
+    const {cx,cy,rx,ry} = bowlParams();
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI*2);
+    ctx.closePath();
+    ctx.clip();
+
+    // subtle noise-like grid (no color; alpha only)
+    ctx.globalAlpha = 0.18;
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = "rgba(255,255,255,0.06)";
+    const step = 36;
+    for(let x=0;x<W;x+=step){
+      ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke();
+    }
+    for(let y=0;y<H;y+=step){
+      ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+
+    // marbles
+    const ms = visibleMarbles();
+    for(const m of ms){
+      const selected = (m.id === state.ui.selectedId);
+      // body
+      ctx.beginPath();
+      ctx.arc(m.x, m.y, m.r, 0, Math.PI*2);
+      ctx.closePath();
+      ctx.fillStyle = selected ? "rgba(255,255,255,0.14)" : "rgba(255,255,255,0.08)";
+      ctx.fill();
+
+      // rim
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = selected ? "rgba(255,255,255,0.30)" : "rgba(255,255,255,0.18)";
+      ctx.stroke();
+
+      // highlight
+      ctx.beginPath();
+      ctx.arc(m.x - m.r*0.25, m.y - m.r*0.25, Math.max(2, m.r*0.22), 0, Math.PI*2);
+      ctx.fillStyle = "rgba(255,255,255,0.14)";
+      ctx.fill();
+
+      // label (uniform text size)
+      ctx.fillStyle = "rgba(255,255,255,0.85)";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.font = "12px Arial";
+      const txt = fitText(m.text, m.r*1.75);
+      ctx.fillText(txt, m.x, m.y);
+    }
+
+    ctx.restore();
+
+    // rim stroke (outside clip)
+    ctx.beginPath();
+    ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI*2);
+    ctx.closePath();
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = "rgba(255,255,255,0.12)";
+    ctx.stroke();
+  }
+
+  function fitText(text, maxWidth){
+    // crude truncation; consistent and fast
+    const t = String(text || "").trim();
+    if(!t) return "";
+    const maxChars = Math.max(3, Math.floor(maxWidth / 7)); // ~7px per char at 12px Arial
+    if(t.length <= maxChars) return t;
+    return t.slice(0, Math.max(1, maxChars-1)) + "…";
+  }
+
+  // -------------------------
+  // Visibility/filter
+  // -------------------------
+  function visibleMarbles(){
+    const q = (state.ui.search || "").toLowerCase().trim();
+    if(!q) return state.marbles;
+    return state.marbles.filter(m => (m.text || "").toLowerCase().includes(q));
+  }
+
+  // -------------------------
+  // Interaction: select/drag/rename
+  // -------------------------
+  let pointerDown = false;
+  let dragId = null;
+  let dragOffX = 0, dragOffY = 0;
+  let lastClickTime = 0;
+  let lastClickId = null;
+
+  function canvasToLocal(e){
+    const rect = els.canvas.getBoundingClientRect();
+    const x = (e.clientX - rect.left);
+    const y = (e.clientY - rect.top);
+    return {x,y};
+  }
+
+  function hitTest(x,y){
+    // prioritize selected/topmost by iterating reverse
+    const ms = visibleMarbles().slice().reverse();
+    for(const m of ms){
+      const d = Math.hypot(x - m.x, y - m.y);
+      if(d <= m.r) return m;
+    }
+    return null;
+  }
+
+  function selectMarble(id){
+    state.ui.selectedId = id;
+    markDirty();
+    renderHUD();
+  }
+
+  function renameMarble(m){
+    const next = prompt("rename word/phrase", m.text || "");
+    if(next === null) return;
+    const t = next.trim();
+    if(!t) return;
+    m.text = t;
+    m.updatedAt = nowISO();
+    markDirty();
+    renderHUD();
+  }
+
+  els.canvas.addEventListener("pointerdown", (e) => {
+    pointerDown = true;
+    els.canvas.setPointerCapture(e.pointerId);
+
+    const {x,y} = canvasToLocal(e);
+    const m = hitTest(x,y);
+
+    if(m){
+      // double click rename
+      const t = performance.now();
+      const isDouble = (lastClickId === m.id && (t - lastClickTime) < 340);
+      lastClickTime = t;
+      lastClickId = m.id;
+      if(isDouble){
+        renameMarble(m);
+        return;
+      }
+
+      selectMarble(m.id);
+      dragId = m.id;
+      dragOffX = x - m.x;
+      dragOffY = y - m.y;
+
+      // add some “grab” energy
+      m.vx *= 0.3;
+      m.vy *= 0.3;
+    }else{
+      selectMarble(null);
+      dragId = null;
+    }
+  });
+
+  els.canvas.addEventListener("pointermove", (e) => {
+    if(!pointerDown || !dragId) return;
+    const m = state.marbles.find(mm => mm.id === dragId);
+    if(!m) return;
+    const {x,y} = canvasToLocal(e);
+
+    // position
+    const nx = x - dragOffX;
+    const ny = y - dragOffY;
+
+    // velocity from movement
+    m.vx = (nx - m.x) * 0.35;
+    m.vy = (ny - m.y) * 0.35;
+
+    m.x = nx;
+    m.y = ny;
+    projectInsideEllipse(m);
+    markDirty();
+  });
+
+  els.canvas.addEventListener("pointerup", (e) => {
+    pointerDown = false;
+    dragId = null;
+  });
+
+  // -------------------------
+  // Marble creation / parsing
+  // -------------------------
+  function radiusForText(t){
+    const len = (String(t||"").trim().length);
+    // phrase gets bigger, but bounded for readability
+    const r = 18 + Math.min(26, Math.floor(len * 1.2));
+    return Math.max(18, Math.min(44, r));
+  }
+
+  function addMarble(text){
+    const t = String(text||"").trim();
+    if(!t) return null;
+
+    // prevent dup exact match (case-insensitive)
+    const exists = state.marbles.find(m => (m.text||"").toLowerCase() === t.toLowerCase());
+    if(exists) return exists;
+
+    const {cx,cy,rx,ry} = bowlParams();
+    const r = radiusForText(t);
+
+    // spawn near top center with slight jitter
+    const x = cx + (Math.random()-0.5) * (rx*0.35);
+    const y = cy - (ry*0.55) + (Math.random()-0.5) * 20;
+
+    const m = {
+      id: uid(),
+      text: t,
+      r,
+      x, y,
+      vx: (Math.random()-0.5)*1.2,
+      vy: (Math.random())*0.6,
+      createdAt: nowISO(),
+      updatedAt: nowISO(),
+    };
+    state.marbles.push(m);
+    projectInsideEllipse(m);
+    return m;
+  }
+
+  function tokenizeLinesOrBlob(text){
+    const raw = String(text||"").trim();
+    if(!raw) return [];
+
+    const lines = raw.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+
+    // if user clearly provided a list (multiple lines), respect lines
+    if(lines.length >= 2) return lines.slice(0, 500);
+
+    // otherwise extract tokens/phrases conservatively:
+    // - quoted phrases
+    // - hyphenated/apostrophe words
+    // - capitalized sequences
+    const out = [];
+
+    const quoted = [];
+    raw.replace(/"([^"]{2,80})"/g, (_,g1) => { quoted.push(g1.trim()); return ""; });
+    for(const q of quoted) out.push(q);
+
+    // split on punctuation but keep hyphen/apostrophe inside tokens
+    const tokens = raw
+      .split(/[\n\r\t]+/g).join(" ")
+      .split(/[,:;(){}\[\]<>|\\/]+/g).join(" ")
+      .split(/\s+/g)
+      .map(s => s.trim())
+      .filter(Boolean)
+      .map(s => s.replace(/^[^\w']+|[^\w']+$/g,""))
+      .filter(s => /[A-Za-z]/.test(s))
+      .filter(s => s.length >= 3 && s.length <= 40);
+
+    // if it’s one long blob, take unique
+    const seen = new Set();
+    for(const t of tokens){
+      const k = t.toLowerCase();
+      if(seen.has(k)) continue;
+      seen.add(k);
+      out.push(t);
+      if(out.length >= 120) break; // avoid overload
+    }
+
+    return out;
+  }
+
+  function addFromPaste(){
+    const txt = els.pasteBox.value || "";
+    const items = tokenizeLinesOrBlob(txt);
+    if(items.length === 0) return;
+
+    for(const it of items) addMarble(it);
+
+    // clear paste box (frictionless)
+    els.pasteBox.value = "";
+    markDirty();
+    renderHUD();
+  }
+
+  // -------------------------
+  // Utility actions
+  // -------------------------
+  function renderHUD(){
+    els.storageLine.textContent = `storage: ${LS_KEY} | fileId: ${state.fileId}`;
+    els.search.value = state.ui.search || "";
+    const count = state.marbles.length;
+    const vis = visibleMarbles().length;
+    els.countLine.textContent = (state.ui.search && state.ui.search.trim())
+      ? `${vis}/${count}`
+      : `${count}`;
+
+    const sel = state.marbles.find(m => m.id === state.ui.selectedId);
+    els.selLine.textContent = sel ? `selected: ${sel.text}` : "selected: none";
+  }
+
+  function applySystemModes(){
+    document.body.style.filter = state.system.invert ? "invert(1)" : "none";
+    if(state.system.nullMode){
+      els.app.style.gridTemplateColumns = "0px 1fr";
+      els.colLeft.style.visibility = "hidden";
+      els.colLeft.style.pointerEvents = "none";
+    }else{
+      els.app.style.gridTemplateColumns = "360px 1fr";
+      els.colLeft.style.visibility = "visible";
+      els.colLeft.style.pointerEvents = "auto";
+    }
+  }
+
+  function shake(){
+    const ms = visibleMarbles();
+    for(const m of ms){
+      m.vx += (Math.random()-0.5) * 5.0;
+      m.vy += (Math.random()-0.5) * 5.0;
+    }
+    markDirty();
+  }
+
+  function unjam(){
+    // re-spread all marbles around center
+    const {cx,cy,rx,ry} = bowlParams();
+    for(const m of state.marbles){
+      m.x = cx + (Math.random()-0.5) * (rx*0.75);
+      m.y = cy + (Math.random()-0.5) * (ry*0.75);
+      m.vx = (Math.random()-0.5) * 2.0;
+      m.vy = (Math.random()-0.5) * 2.0;
+      projectInsideEllipse(m);
+    }
+    markDirty();
+  }
+
+  function deleteSelected(){
+    if(!state.ui.selectedId) return;
+    const idx = state.marbles.findIndex(m => m.id === state.ui.selectedId);
+    if(idx < 0) return;
+    state.marbles.splice(idx, 1);
+    state.ui.selectedId = null;
+    markDirty();
+    renderHUD();
+  }
+
+  function clearAll(){
+    if(!confirm("clear all marbles?")) return;
+    state.marbles = [];
+    state.ui.selectedId = null;
+    markDirty();
+    renderHUD();
+  }
+
+  function downloadBlob(filename, mime, content){
+    const blob = new Blob([content], { type: mime });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 250);
+  }
+
+  function exportJSON(){
+    const payload = {
+      type: "KETADATA_WORDBANK_BOWL_EXPORT",
+      version: "V1",
+      fileId: state.fileId,
+      exportedAt: nowISO(),
+      marbles: state.marbles.map(m => ({
+        id: m.id, text: m.text, r: m.r,
+        x: m.x, y: m.y, vx: m.vx, vy: m.vy,
+        createdAt: m.createdAt, updatedAt: m.updatedAt
+      }))
+    };
+    downloadBlob("KETADATA_WORDBANK_BOWL_V1.json", "application/json", JSON.stringify(payload, null, 2));
+  }
+
+  async function importJSON(){
+    const file = els.fileInput.files && els.fileInput.files[0];
+    if(!file) return;
+    const text = await file.text();
+    let obj = null;
+    try{ obj = JSON.parse(text); }catch(_){ obj = null; }
+    if(!obj || !obj.marbles || !Array.isArray(obj.marbles)){
+      alert("import failed: invalid json");
+      return;
+    }
+    // hydrate
+    state.marbles = obj.marbles.map(mm => ({
+      id: String(mm.id || uid()),
+      text: String(mm.text || "untitled"),
+      r: Number(mm.r || radiusForText(mm.text)),
+      x: Number(mm.x || 0),
+      y: Number(mm.y || 0),
+      vx: Number(mm.vx || 0),
+      vy: Number(mm.vy || 0),
+      createdAt: mm.createdAt || nowISO(),
+      updatedAt: nowISO(),
+    }));
+    state.ui.selectedId = null;
+    markDirty();
+    els.fileInput.value = "";
+    renderHUD();
+  }
+
+  // -------------------------
+  // Loop
+  // -------------------------
+  function tick(){
+    integrate();
+    draw();
+    requestAnimationFrame(tick);
+  }
+
+  // -------------------------
+  // Wiring
+  // -------------------------
+  function init(){
+    resize();
+    window.addEventListener("resize", () => { resize(); });
+
+    els.search.value = state.ui.search || "";
+    els.search.addEventListener("input", () => {
+      state.ui.search = els.search.value;
+      markDirty();
+      renderHUD();
+    });
+
+    els.btnAdd.addEventListener("click", addFromPaste);
+    els.quickAdd.addEventListener("keydown", (e) => {
+      if(e.key === "Enter"){
+        e.preventDefault();
+        const t = els.quickAdd.value.trim();
+        if(t){
+          addMarble(t);
+          els.quickAdd.value = "";
+          markDirty();
+          renderHUD();
+        }
+      }
+    });
+
+    els.btnSave.addEventListener("click", () => saveState());
+    els.btnClear.addEventListener("click", clearAll);
+
+    els.btnShake.addEventListener("click", shake);
+    els.btnUnjam.addEventListener("click", unjam);
+    els.btnResetView.addEventListener("click", () => {
+      state.ui.search = "";
+      els.search.value = "";
+      markDirty();
+      renderHUD();
+    });
+
+    els.btnDeleteSelected.addEventListener("click", deleteSelected);
+
+    els.btnExport.addEventListener("click", exportJSON);
+    els.btnImport.addEventListener("click", importJSON);
+
+    // hotkeys
+    document.addEventListener("keydown", (e) => {
+      const tag = (e.target && e.target.tagName) ? e.target.tagName.toLowerCase() : "";
+      const typing = (tag === "input" || tag === "textarea");
+
+      if(e.shiftKey && e.key.toLowerCase() === "i"){
+        e.preventDefault();
+        state.system.invert = !state.system.invert;
+        markDirty();
+        applySystemModes();
+        return;
+      }
+      if(e.shiftKey && e.key.toLowerCase() === "n"){
+        e.preventDefault();
+        state.system.nullMode = !state.system.nullMode;
+        markDirty();
+        applySystemModes();
+        return;
+      }
+      if(e.shiftKey && e.key.toLowerCase() === "s"){
+        e.preventDefault();
+        saveState();
+        return;
+      }
+      if(!typing && (e.key === "Delete" || e.key === "Backspace")){
+        e.preventDefault();
+        deleteSelected();
+      }
+      if(!typing && e.key.toLowerCase() === " "){
+        // space = micro shake (only if not typing)
+        e.preventDefault();
+        shake();
+      }
+    });
+
+    // apply modes
+    applySystemModes();
+    renderHUD();
+
+    // seed if empty (optional: keep empty; but give one marble so it’s not dead)
+    if(state.marbles.length === 0){
+      addMarble("wordbank");
+      addMarble("diva");
+      addMarble("schema");
+      addMarble("rabbit hole");
+      markDirty();
+    }
+
+    // keep inside bowl on first load
+    for(const m of state.marbles) projectInsideEllipse(m);
+
+    // autosave on interval (lightweight; still manual SAVE exists)
+    setInterval(() => { if(dirty) saveState(); }, 6000);
+
+    tick();
+  }
+
+  init();
+
+  // Debug
+  window.__KETADATA_WORDBANK_BOWL__ = {
+    getState: () => JSON.parse(JSON.stringify(state)),
+    save: () => saveState(),
+    reset: () => { localStorage.removeItem(LS_KEY); location.reload(); }
+  };
+})();
+</script>
+
+<!--
+AE: BRUTAL_MIN_UNIFORM_TEXT / GLASS_BOWL_ILLUSION
+EE: MARBLE_WORD_OBJECTS / PASTE_CAPTURE / DRAG_PHYSICS / EXPORT_IMPORT_DOWNLOAD / LOCAL_FIRST
+WB: LS_KEY=KETADATA_WORDBANK_BOWL_V1::state / HOTKEYS SHIFT+I invert SHIFT+N null SHIFT+S save / SPACE micro-shake (non-typing) / DEL delete selected
+FILE_ID: KETADATA_WORDBANK_BOWL_V1
+ROOM_ID: KD_TOOL
+VERSION: V1
+UPDATED_AT: 2026-01-04T00:00:00.000-05:00
+CHANGELOG:
+- V1: paste list -> marbles in a glass bowl; drag/select/rename; search hides non-matching; shake/unjam; export/import JSON; local-first persistence.
+-->
+</body>
+</html>
