@@ -1,0 +1,343 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>KETADATA — SPLIT</title>
+  <style>
+    :root{
+      --bg:#000; --fg:#f2f2f2; --muted:#9a9a9a; --line:#2a2a2a;
+      --hud:rgba(255,255,255,0.03);
+      --font:12px/1.15 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace;
+      --r:12px;
+    }
+    html,body{height:100%;margin:0;background:var(--bg);color:var(--fg);font:var(--font);overflow:hidden;}
+    *{box-sizing:border-box;}
+    a{color:var(--fg);text-decoration:none;}
+    button,input{font:var(--font);color:var(--fg);}
+    input{
+      height:28px;width:100%;
+      background:rgba(0,0,0,0.28);
+      border:1px solid var(--line);
+      border-radius:10px;
+      padding:6px 8px;
+      outline:none;
+      min-width:0;
+    }
+    button{
+      height:28px;padding:0 10px;border:1px solid var(--line);
+      background:transparent;border-radius:10px;cursor:pointer;
+    }
+    button:active{transform:translateY(1px);}
+    .pill{border:1px solid var(--line);border-radius:999px;padding:3px 6px;color:var(--muted);background:rgba(0,0,0,0.14);white-space:nowrap;}
+    .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
+    .sp{flex:1;}
+
+    /* INVERT affects whole page */
+    html.invert #app{filter: invert(1) hue-rotate(180deg);}
+
+    /* NULL hides chrome */
+    html.null #hud{display:none;}
+
+    #app{position:fixed;inset:0;}
+    #hud{
+      position:fixed;left:10px;right:10px;top:10px;z-index:50;
+      border:1px solid var(--line);
+      background:var(--hud);
+      backdrop-filter: blur(6px);
+      border-radius:var(--r);
+      padding:8px;
+      user-select:none;
+    }
+    #grid{
+      display:grid;
+      grid-template-columns: 1fr 8px 1fr;
+      gap:0;
+      position:fixed;left:10px;right:10px;top:64px;bottom:10px;
+    }
+    #divider{
+      background:rgba(255,255,255,0.08);
+      border-left:1px solid rgba(255,255,255,0.12);
+      border-right:1px solid rgba(255,255,255,0.12);
+      cursor:col-resize;
+    }
+    .pane{
+      border:1px solid var(--line);
+      border-radius:var(--r);
+      overflow:hidden;
+      background:rgba(0,0,0,0.35);
+    }
+    .paneHead{
+      display:grid;
+      grid-template-columns: 1fr auto auto auto;
+      gap:8px;
+      align-items:center;
+      padding:8px;
+      border-bottom:1px solid var(--line);
+      background:rgba(255,255,255,0.02);
+    }
+    .frameWrap{position:relative;height:calc(100% - 49px);}
+    iframe{
+      position:absolute;inset:0;width:100%;height:100%;
+      border:0;background:#000;
+    }
+    .blocked{
+      position:absolute;inset:0;
+      padding:10px;
+      color:var(--muted);
+      display:none;
+      white-space:pre-wrap;
+    }
+    .blocked.show{display:block;}
+  </style>
+</head>
+<body>
+<div id="app">
+  <div id="hud" class="row">
+    <span class="pill">SHIFT+I INVERT</span>
+    <span class="pill">SHIFT+N NULL</span>
+    <span class="pill">SHIFT+F FULL</span>
+    <span class="pill">DRAG DIVIDER</span>
+    <span class="sp"></span>
+    <span class="pill" id="filePill"></span>
+  </div>
+
+  <div id="grid">
+    <!-- LEFT -->
+    <div class="pane" id="paneL">
+      <div class="paneHead">
+        <input id="urlL" type="text" spellcheck="false" placeholder="LEFT URL (e.g., https://chat.openai.com/ )"/>
+        <button id="goL">GO</button>
+        <button id="backL">BACK</button>
+        <button id="reloadL">RELOAD</button>
+      </div>
+      <div class="frameWrap">
+        <iframe id="frameL" sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-modals allow-downloads"></iframe>
+        <div class="blocked" id="blockedL">
+EMBED BLOCKED OR NOT LOADED.
+
+Some sites refuse iframes (security headers). Try:
+- a different URL that allows embedding
+- a local file (file://) often won’t load inside iframe in some browsers
+- use this pane for docs/tools that permit embedding
+        </div>
+      </div>
+    </div>
+
+    <!-- DIVIDER -->
+    <div id="divider" title="Drag to resize"></div>
+
+    <!-- RIGHT -->
+    <div class="pane" id="paneR">
+      <div class="paneHead">
+        <input id="urlR" type="text" spellcheck="false" placeholder="RIGHT URL (e.g., https://github.com/ )"/>
+        <button id="goR">GO</button>
+        <button id="backR">BACK</button>
+        <button id="reloadR">RELOAD</button>
+      </div>
+      <div class="frameWrap">
+        <iframe id="frameR" sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-modals allow-downloads"></iframe>
+        <div class="blocked" id="blockedR">
+EMBED BLOCKED OR NOT LOADED.
+
+GitHub commonly blocks iframe embedding on some pages.
+If you see a refusal, that’s expected—security policy.
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const FILE_ID = "KD_SPLIT_V1";
+  const STORE_KEY = "KD_STATE__" + FILE_ID;
+
+  const $ = (id)=>document.getElementById(id);
+  $("filePill").textContent = "FILE_ID: " + FILE_ID;
+
+  const stateDefault = () => ({
+    meta:{ fileId: FILE_ID, updatedAt: new Date().toISOString() },
+    ui:{ invert:false, nullMode:false, split:0.5 },
+    panes:{
+      L:{ url:"https://chat.openai.com/" },
+      R:{ url:"https://github.com/" }
+    }
+  });
+
+  let state = load();
+  applyUI();
+
+  // ---- elements
+  const grid = $("grid");
+  const divider = $("divider");
+
+  const urlL = $("urlL"), urlR = $("urlR");
+  const frameL = $("frameL"), frameR = $("frameR");
+  const blockedL = $("blockedL"), blockedR = $("blockedR");
+
+  // ---- init
+  urlL.value = state.panes.L.url || "";
+  urlR.value = state.panes.R.url || "";
+
+  navTo("L", urlL.value, true);
+  navTo("R", urlR.value, true);
+  applySplit();
+
+  // ---- navigation
+  function navTo(side, url, silent){
+    const isL = side==="L";
+    const frame = isL ? frameL : frameR;
+    const blocked = isL ? blockedL : blockedR;
+
+    url = String(url||"").trim();
+    if(!url) return;
+
+    // if user types "github.com" without protocol, add https://
+    if(!/^https?:\/\//i.test(url) && !/^about:/i.test(url)){
+      url = "https://" + url;
+    }
+
+    // store
+    state.panes[side].url = url;
+    scheduleSave();
+
+    blocked.classList.remove("show");
+    frame.src = url;
+
+    // show "blocked" overlay if iframe stays blank too long
+    if(!silent){
+      // minor UX; do nothing
+    }
+    setTimeout(()=>{ blocked.classList.add("show"); }, 1200);
+  }
+
+  // remove blocked overlay when load fires
+  frameL.addEventListener("load", ()=>blockedL.classList.remove("show"));
+  frameR.addEventListener("load", ()=>blockedR.classList.remove("show"));
+
+  // buttons
+  $("goL").onclick = ()=>navTo("L", urlL.value);
+  $("goR").onclick = ()=>navTo("R", urlR.value);
+
+  $("reloadL").onclick = ()=>{ try{ frameL.contentWindow.location.reload(); }catch{ frameL.src = state.panes.L.url; } };
+  $("reloadR").onclick = ()=>{ try{ frameR.contentWindow.location.reload(); }catch{ frameR.src = state.panes.R.url; } };
+
+  $("backL").onclick = ()=>{ try{ frameL.contentWindow.history.back(); }catch{} };
+  $("backR").onclick = ()=>{ try{ frameR.contentWindow.history.back(); }catch{} };
+
+  urlL.addEventListener("keydown",(e)=>{ if(e.key==="Enter"){ e.preventDefault(); navTo("L", urlL.value); }});
+  urlR.addEventListener("keydown",(e)=>{ if(e.key==="Enter"){ e.preventDefault(); navTo("R", urlR.value); }});
+
+  // ---- split drag
+  let dragging=false;
+  divider.addEventListener("mousedown",(e)=>{
+    if(e.button!==0) return;
+    dragging=true;
+    e.preventDefault();
+  });
+  window.addEventListener("mousemove",(e)=>{
+    if(!dragging) return;
+    const rect = grid.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const split = Math.max(0.15, Math.min(0.85, x / rect.width));
+    state.ui.split = split;
+    applySplit();
+  });
+  window.addEventListener("mouseup",()=>{
+    if(!dragging) return;
+    dragging=false;
+    scheduleSave();
+  });
+
+  function applySplit(){
+    const split = Math.max(0.15, Math.min(0.85, state.ui.split ?? 0.5));
+    // divider is 8px
+    grid.style.gridTemplateColumns = `calc(${(split*100).toFixed(3)}% - 4px) 8px calc(${((1-split)*100).toFixed(3)}% - 4px)`;
+  }
+
+  // ---- local-first save/load
+  let saveT=null;
+  function scheduleSave(){
+    if(saveT) clearTimeout(saveT);
+    saveT=setTimeout(save, 220);
+  }
+  function save(){
+    try{
+      state.meta.updatedAt = new Date().toISOString();
+      localStorage.setItem(STORE_KEY, JSON.stringify(state));
+    }catch{}
+  }
+  function load(){
+    try{
+      const raw = localStorage.getItem(STORE_KEY);
+      if(!raw) return stateDefault();
+      const p = JSON.parse(raw);
+      if(!p || typeof p!=="object") return stateDefault();
+      if(!p.meta) p.meta={};
+      if(!p.ui) p.ui={};
+      if(!p.panes) p.panes={L:{},R:{}};
+      if(!p.panes.L) p.panes.L={};
+      if(!p.panes.R) p.panes.R={};
+      p.meta.fileId = FILE_ID;
+      // fill defaults
+      const d = stateDefault();
+      p.ui.split = (p.ui.split===undefined) ? d.ui.split : p.ui.split;
+      p.panes.L.url = p.panes.L.url || d.panes.L.url;
+      p.panes.R.url = p.panes.R.url || d.panes.R.url;
+      p.ui.invert = !!p.ui.invert;
+      p.ui.nullMode = !!p.ui.nullMode;
+      return p;
+    }catch{ return stateDefault(); }
+  }
+
+  function applyUI(){
+    document.documentElement.classList.toggle("invert", !!state.ui.invert);
+    document.documentElement.classList.toggle("null", !!state.ui.nullMode);
+  }
+
+  function toggleFull(){
+    if(!document.fullscreenElement) document.documentElement.requestFullscreen?.();
+    else document.exitFullscreen?.();
+  }
+
+  // ---- hotkeys (SHIFT-only; avoid typing collisions)
+  window.addEventListener("keydown",(e)=>{
+    const tag=(document.activeElement && document.activeElement.tagName || "").toLowerCase();
+    const typing=(tag==="input"||tag==="textarea");
+    if(e.shiftKey && (e.key==="I"||e.key==="i")){ e.preventDefault(); state.ui.invert=!state.ui.invert; applyUI(); scheduleSave(); }
+    if(e.shiftKey && (e.key==="N"||e.key==="n")){ e.preventDefault(); state.ui.nullMode=!state.ui.nullMode; applyUI(); scheduleSave(); }
+    if(e.shiftKey && (e.key==="F"||e.key==="f")){ e.preventDefault(); toggleFull(); }
+    if(e.key==="Escape" && state.ui.nullMode){ state.ui.nullMode=false; applyUI(); scheduleSave(); }
+    if(!typing && (e.key==="S"||e.key==="s") && e.shiftKey){
+      e.preventDefault();
+      // swap URLs
+      const a = state.panes.L.url, b = state.panes.R.url;
+      state.panes.L.url = b; state.panes.R.url = a;
+      urlL.value = state.panes.L.url;
+      urlR.value = state.panes.R.url;
+      navTo("L", urlL.value, true);
+      navTo("R", urlR.value, true);
+      scheduleSave();
+    }
+  });
+
+  save();
+})();
+</script>
+
+<!--
+AE / EE / WB — KETADATA SERIALIZATION STAMP (MANDATORY)
+AE: BLACK DEFAULT • UNIFORM TEXT SIZE • SPLIT BRUTAL HUD • INVERT GLOBAL • NULL HIDES CHROME
+EE: 2 IF RAMES + URL BARS • DRAG DIVIDER SPLIT • SWAP (SHIFT+S) • LOAD BLOCKED OVERLAY
+WB: LOCAL-FIRST (SPLIT + URLS SAVED) • SHIFT+I INVERT • SHIFT+N NULL • SHIFT+F FULLSCREEN
+
+FILE_ID: "KD_SPLIT_V1"
+ROOM_ID: "K_CORE_UTIL"
+VERSION_ID: "V1"
+UPDATED_AT: "2026-01-04T00:00:00.000-05:00"
+CHANGELOG:
+- V1: Split screen KD viewer for running two URLs side-by-side.
+-->
+</body>
+</html>
