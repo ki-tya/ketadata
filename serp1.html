@@ -1,0 +1,953 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>KETADATA — LIZARD — MONO IMMERSIVE</title>
+  <style>
+    :root{
+      --bg:#000;
+      --fg:#f2f2f2;
+      --muted:#9a9a9a;
+      --line:#2a2a2a;
+      --hud:rgba(255,255,255,0.03);
+      --hud2:rgba(0,0,0,0.30);
+      --font:12px/1.15 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace;
+      --r:12px;
+    }
+    html,body{height:100%;margin:0;background:var(--bg);color:var(--fg);font:var(--font);overflow:hidden;}
+    *{box-sizing:border-box;}
+    a{color:var(--fg);text-decoration:none;}
+    a:hover{text-decoration:underline;}
+
+    /* INVERT must affect whole page */
+    html.invert #app{filter: invert(1) hue-rotate(180deg);}
+
+    /* NULL = fullscreen/quiet/no chrome */
+    html.null #hud, html.null #status, html.null #hint{display:none;}
+
+    #app{position:fixed;inset:0;}
+    canvas{position:fixed;inset:0;display:block;background:var(--bg);}
+
+    /* Minimal hint (immersive default: subtle, auto-fades) */
+    #hint{
+      position:fixed;left:10px;top:10px;z-index:60;
+      border:1px solid rgba(255,255,255,0.10);
+      background:rgba(0,0,0,0.35);
+      border-radius:12px;
+      padding:6px 8px;
+      color:rgba(242,242,242,0.82);
+      user-select:none;
+      opacity:0;
+      transform:translateY(-2px);
+      transition:opacity 420ms ease, transform 420ms ease;
+      pointer-events:none;
+      white-space:nowrap;
+    }
+    #hint.show{opacity:1; transform:translateY(0);}
+
+    #hud{
+      position:fixed;left:10px;top:44px;z-index:50;
+      width:360px;
+      border:1px solid var(--line);
+      background:var(--hud);
+      backdrop-filter: blur(6px);
+      border-radius:var(--r);
+      overflow:hidden;
+      user-select:none;
+      display:none; /* immersive default: hidden */
+    }
+    #hudHead{
+      display:flex;gap:6px;align-items:center;
+      padding:8px;
+      border-bottom:1px solid var(--line);
+      background:rgba(0,0,0,0.18);
+    }
+    #hudHead .t{color:var(--muted);}
+    #hudHead .sp{flex:1;}
+    #hudHead .btn{
+      height:26px;padding:0 8px;border:1px solid var(--line);
+      background:transparent;color:var(--fg);border-radius:10px;cursor:pointer;
+      font:var(--font);
+    }
+    #hudHead .btn:active{transform:translateY(1px);}
+    #hudBody{padding:8px;display:block;}
+    #hudBody.collapsed{display:none;}
+
+    .row{display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap;}
+    .pill{
+      border:1px solid var(--line);
+      border-radius:999px;
+      padding:3px 6px;
+      color:var(--muted);
+      background:rgba(0,0,0,0.14);
+      white-space:nowrap;
+    }
+    .btn{
+      height:28px;padding:0 10px;border:1px solid var(--line);
+      background:transparent;color:var(--fg);border-radius:10px;cursor:pointer;
+      font:var(--font);
+    }
+    .btn:active{transform:translateY(1px);}
+    .btn.on{background:rgba(255,255,255,0.06);}
+
+    label{color:var(--muted);}
+    input[type="range"]{width:100%;}
+    .kv{
+      display:grid;grid-template-columns: 120px 1fr;
+      gap:8px;align-items:center;
+      padding:6px 0;border-bottom:1px dashed rgba(255,255,255,0.08);
+    }
+    .kv:last-child{border-bottom:none;}
+
+    #status{
+      position:fixed;left:10px;right:10px;bottom:10px;z-index:40;
+      border:1px solid var(--line);
+      background:var(--hud2);
+      border-radius:var(--r);
+      padding:6px 8px;
+      display:flex;gap:10px;align-items:center;
+      color:var(--muted);
+      user-select:none;
+    }
+    #status .sp{flex:1;}
+    #status .pill{border:1px solid var(--line);border-radius:999px;padding:3px 6px;}
+  </style>
+</head>
+<body>
+<div id="app">
+  <canvas id="c"></canvas>
+
+  <div id="hint">SHIFT+N NULL · SHIFT+I INVERT · H HUD · SPACE PAUSE · CLICK DROP</div>
+
+  <div id="hud">
+    <div id="hudHead">
+      <span class="t">KETADATA LIZARD — MONO</span>
+      <span class="sp"></span>
+      <button class="btn" id="collapseBtn" title="Collapse">—</button>
+      <button class="btn" id="pauseBtn" title="Pause">PAUSE</button>
+      <button class="btn" id="closeHudBtn" title="Hide HUD">HIDE</button>
+    </div>
+
+    <div id="hudBody">
+      <div class="row">
+        <span class="pill">SHIFT+I INVERT</span>
+        <span class="pill">SHIFT+N NULL</span>
+        <span class="pill">SHIFT+F FULL</span>
+        <span class="pill">H HUD</span>
+      </div>
+
+      <div class="kv">
+        <label>SPEED</label>
+        <div><input id="speed" type="range" min="0.3" max="3.0" step="0.05" value="1.35"></div>
+      </div>
+      <div class="kv">
+        <label>TAIL WAVE</label>
+        <div><input id="wave" type="range" min="0.0" max="2.0" step="0.02" value="1.15"></div>
+      </div>
+      <div class="kv">
+        <label>TRAIL</label>
+        <div><input id="trail" type="range" min="0.02" max="0.35" step="0.01" value="0.10"></div>
+      </div>
+      <div class="kv">
+        <label>GLOW</label>
+        <div><input id="glow" type="range" min="0" max="1" step="0.01" value="0.70"></div>
+      </div>
+      <div class="kv">
+        <label>FOG</label>
+        <div><input id="fog" type="range" min="0" max="1" step="0.01" value="0.40"></div>
+      </div>
+      <div class="kv">
+        <label>GRAIN</label>
+        <div><input id="grain" type="range" min="0" max="1" step="0.01" value="0.55"></div>
+      </div>
+      <div class="kv">
+        <label>VIGNETTE</label>
+        <div><input id="vignette" type="range" min="0" max="1" step="0.01" value="0.55"></div>
+      </div>
+
+      <div class="row" style="margin-top:10px;">
+        <button class="btn" id="regenBtn">REGEN</button>
+        <button class="btn" id="clearBtn">CLEAR</button>
+      </div>
+
+      <div class="row">
+        <span class="pill">MOUSE MOVE: LURE</span>
+        <span class="pill">CLICK: DROP INSECT</span>
+        <span class="pill">WHEEL: ZOOM</span>
+      </div>
+    </div>
+  </div>
+
+  <div id="status">
+    <span class="pill" id="filePill"></span>
+    <span class="pill" id="fpsPill">FPS: —</span>
+    <span class="sp"></span>
+    <span class="pill">BLACK DEFAULT</span>
+  </div>
+</div>
+
+<script>
+(() => {
+  const FILE_ID = "KD_LIZARD_MONO_IMMERSIVE_V1";
+  const STORE_KEY = "KD_STATE__" + FILE_ID;
+
+  const canvas = document.getElementById("c");
+  const ctx = canvas.getContext("2d", { alpha:false });
+
+  const el = (id)=>document.getElementById(id);
+
+  const hud = el("hud");
+  const hudBody = el("hudBody");
+  const hint = el("hint");
+
+  const collapseBtn = el("collapseBtn");
+  const pauseBtn = el("pauseBtn");
+  const closeHudBtn = el("closeHudBtn");
+  const regenBtn = el("regenBtn");
+  const clearBtn = el("clearBtn");
+
+  const speedR = el("speed");
+  const waveR  = el("wave");
+  const trailR = el("trail");
+  const glowR  = el("glow");
+  const fogR   = el("fog");
+  const grainR = el("grain");
+  const vignetteR = el("vignette");
+
+  const filePill = el("filePill");
+  const fpsPill = el("fpsPill");
+  filePill.textContent = "FILE_ID: " + FILE_ID;
+
+  const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
+  const lerp=(a,b,t)=>a+(b-a)*t;
+
+  const DPR = ()=>Math.max(1, Math.min(2.25, window.devicePixelRatio||1));
+  let w=0,h=0,dpr=1;
+
+  const cam = { x:0, y:0, s:1.0 };
+  const mouse = { x:0, y:0, worldX:0, worldY:0, present:false };
+
+  const worldFromScreen = (sx,sy)=>{
+    const cx = (sx*dpr - w/2)/cam.s + cam.x;
+    const cy = (sy*dpr - h/2)/cam.s + cam.y;
+    return {x:cx,y:cy};
+  };
+
+  const resize = ()=>{
+    dpr = DPR();
+    w = Math.floor(window.innerWidth*dpr);
+    h = Math.floor(window.innerHeight*dpr);
+    canvas.width = w;
+    canvas.height = h;
+    canvas.style.width = window.innerWidth + "px";
+    canvas.style.height = window.innerHeight + "px";
+    ctx.setTransform(1,0,0,1,0,0);
+    ctx.imageSmoothingEnabled = true;
+  };
+  window.addEventListener("resize", resize, {passive:true});
+
+  window.addEventListener("mousemove",(e)=>{
+    mouse.x=e.clientX; mouse.y=e.clientY;
+    const p=worldFromScreen(mouse.x,mouse.y);
+    mouse.worldX=p.x; mouse.worldY=p.y;
+    mouse.present=true;
+  },{passive:true});
+
+  window.addEventListener("wheel",(e)=>{
+    const delta = Math.sign(e.deltaY);
+    const before = worldFromScreen(e.clientX, e.clientY);
+    cam.s = clamp(cam.s * (delta>0 ? 0.92 : 1.08), 0.35, 2.85);
+    const after = worldFromScreen(e.clientX, e.clientY);
+    cam.x += (before.x - after.x);
+    cam.y += (before.y - after.y);
+  },{passive:true});
+
+  // minimal hash noise (grain)
+  const hash = (x,y) => {
+    let n = x*374761393 + y*668265263;
+    n = (n ^ (n >> 13)) >>> 0;
+    n = (n * 1274126177) >>> 0;
+    return (n ^ (n >> 16)) / 4294967295;
+  };
+
+  // local-first state
+  const stateDefault = () => ({
+    meta:{ fileId:FILE_ID, updatedAt:new Date().toISOString() },
+    ui:{ invert:false, nullMode:false, paused:false, hudCollapsed:false, hudOpen:false },
+    params:{
+      speed:+speedR.value,
+      wave:+waveR.value,
+      trail:+trailR.value,
+      glow:+glowR.value,
+      fog:+fogR.value,
+      grain:+grainR.value,
+      vignette:+vignetteR.value
+    }
+  });
+  let state=null;
+  let saveTimer=null;
+
+  const load=()=>{
+    try{
+      const raw=localStorage.getItem(STORE_KEY);
+      if(!raw) return stateDefault();
+      const parsed=JSON.parse(raw);
+      if(!parsed||typeof parsed!=="object") return stateDefault();
+      if(!parsed.ui) parsed.ui={};
+      if(!parsed.params) parsed.params={};
+      return parsed;
+    }catch{ return stateDefault(); }
+  };
+  const save=()=>{
+    try{
+      state.meta.updatedAt=new Date().toISOString();
+      localStorage.setItem(STORE_KEY, JSON.stringify(state));
+    }catch{}
+  };
+  const scheduleSave=()=>{
+    if(saveTimer) clearTimeout(saveTimer);
+    saveTimer=setTimeout(save,220);
+  };
+
+  const setInvert=(v)=>{
+    state.ui.invert=!!v;
+    document.documentElement.classList.toggle("invert", state.ui.invert);
+    scheduleSave();
+    flashHint();
+  };
+  const setNull=(v)=>{
+    state.ui.nullMode=!!v;
+    document.documentElement.classList.toggle("null", state.ui.nullMode);
+    scheduleSave();
+    flashHint();
+  };
+  const toggleFull=()=>{
+    if(!document.fullscreenElement) document.documentElement.requestFullscreen?.();
+    else document.exitFullscreen?.();
+  };
+
+  const setHudOpen=(v)=>{
+    state.ui.hudOpen = !!v;
+    hud.style.display = state.ui.hudOpen ? "block" : "none";
+    scheduleSave();
+  };
+
+  const flashHint=()=>{
+    hint.classList.add("show");
+    clearTimeout(flashHint._t);
+    flashHint._t = setTimeout(()=>hint.classList.remove("show"), 1400);
+  };
+
+  const setCamera = ()=>{
+    ctx.setTransform(cam.s, 0, 0, cam.s, w/2 - cam.x*cam.s, h/2 - cam.y*cam.s);
+  };
+
+  const clearWithTrail = (alpha)=>{
+    ctx.save();
+    ctx.setTransform(1,0,0,1,0,0);
+    ctx.globalCompositeOperation="source-over";
+    ctx.globalAlpha=alpha;
+    ctx.fillStyle="#000";
+    ctx.fillRect(0,0,w,h);
+    ctx.restore();
+  };
+
+  // insects as lure points
+  let insects = []; // {x,y, born, ttl}
+  const dropInsect = (x,y)=>{
+    insects.push({x,y, born:performance.now(), ttl:11000 + Math.random()*9000});
+    if(insects.length>14) insects.shift();
+  };
+
+  window.addEventListener("click",(e)=>{
+    if(hud.style.display==="block"){
+      const r=hud.getBoundingClientRect();
+      const insideHud = (e.clientX>=r.left && e.clientX<=r.right && e.clientY>=r.top && e.clientY<=r.bottom);
+      if(insideHud) return;
+    }
+    const p=worldFromScreen(e.clientX,e.clientY);
+    dropInsect(p.x,p.y);
+  });
+
+  // lizard model: verlet spine + 4 feet steppers
+  const LIZ = {
+    spineN: 24,
+    segLen: 18,
+    pts: [],
+    feet: [],
+    tongue: {on:false, t:0},
+    phase: Math.random()*1000
+  };
+
+  const makeLizard = ()=>{
+    LIZ.pts = [];
+    const startX = 0, startY = 0;
+    for(let i=0;i<LIZ.spineN;i++){
+      LIZ.pts.push({ x:startX - i*LIZ.segLen, y:startY, ox:startX - i*LIZ.segLen, oy:startY });
+    }
+    const hips = [4, 7, 15, 18];
+    LIZ.feet = hips.map((hipIdx, i)=>({
+      hipIdx,
+      x: LIZ.pts[hipIdx].x,
+      y: LIZ.pts[hipIdx].y + (i<2 ? 22 : 18),
+      tx: 0, ty: 0,
+      phase: i%2,
+      stepping:false,
+      stepT:0
+    }));
+    LIZ.tongue.on=false; LIZ.tongue.t=0;
+    cam.x = 0; cam.y = 0; cam.s = 1.0;
+  };
+
+  const tryStep = (foot, hip, dirX, dirY, stride)=>{
+    const dx = hip.x - foot.x;
+    const dy = hip.y - foot.y;
+    const dist = Math.sqrt(dx*dx+dy*dy);
+
+    if(!foot.stepping){
+      const trigger = 28 + foot.phase*8;
+      if(dist > trigger){
+        foot.stepping = true;
+        foot.stepT = 0;
+        const side = (foot.phase===0 ? 1 : -1);
+        const lateral = (foot.hipIdx < 12 ? 18 : 14);
+        foot.tx = hip.x + dirX*stride + (-dirY)*side*lateral;
+        foot.ty = hip.y + dirY*stride + ( dirX)*side*lateral;
+      }
+    }
+
+    if(foot.stepping){
+      foot.stepT = Math.min(1, foot.stepT + 0.06);
+      const tt = foot.stepT;
+      const lift = Math.sin(tt*Math.PI) * 8;
+      foot.x = lerp(foot.x, foot.tx, 0.18);
+      foot.y = lerp(foot.y, foot.ty - lift, 0.18);
+      if(tt>=1){
+        foot.stepping = false;
+        foot.phase = 1-foot.phase;
+      }
+    } else {
+      foot.x = lerp(foot.x, foot.x + dx*0.02, 0.04);
+      foot.y = lerp(foot.y, foot.y + dy*0.02, 0.04);
+    }
+  };
+
+  const params = ()=>({
+    speed:+speedR.value,
+    wave:+waveR.value,
+    trail:+trailR.value,
+    glow:+glowR.value,
+    fog:+fogR.value,
+    grain:+grainR.value,
+    vignette:+vignetteR.value
+  });
+
+  const updateLizard = (dt, now)=>{
+    const p=params();
+    const head = LIZ.pts[0];
+
+    // clean insects
+    insects = insects.filter(o => (now - o.born) < o.ttl);
+
+    // target: insect -> mouse -> wander
+    let tx=null, ty=null;
+    if(insects.length){
+      let best=null, bestD=1e18;
+      for(const ins of insects){
+        const dx=ins.x-head.x, dy=ins.y-head.y;
+        const d=dx*dx+dy*dy;
+        if(d<bestD){ bestD=d; best=ins; }
+      }
+      tx=best.x; ty=best.y;
+    } else if(mouse.present){
+      tx=mouse.worldX; ty=mouse.worldY;
+    } else {
+      const a = now*0.00015 + LIZ.phase;
+      tx = Math.cos(a)*260 + Math.sin(a*0.73)*120;
+      ty = Math.sin(a*0.92)*190 + Math.cos(a*0.51)*80;
+    }
+
+    const dx = tx - head.x;
+    const dy = ty - head.y;
+    const d = Math.sqrt(dx*dx+dy*dy) + 1e-6;
+    const dirX = dx/d, dirY = dy/d;
+
+    // tongue flick near insect
+    if(insects.length && d < 34 && !LIZ.tongue.on){
+      LIZ.tongue.on = true;
+      LIZ.tongue.t = 0;
+      insects.shift();
+    }
+
+    const perpX = -dirY, perpY = dirX;
+    const sway = Math.sin(now*0.004 + LIZ.phase) * (2.0 + 7.0*p.wave);
+
+    const speed = (22 + 40*p.speed) * (0.45 + 0.55*Math.min(1, d/260));
+    const ax = dirX * speed*0.06 + perpX * sway*0.10;
+    const ay = dirY * speed*0.06 + perpY * sway*0.10;
+
+    // verlet integrate
+    for(let i=0;i<LIZ.pts.length;i++){
+      const pt=LIZ.pts[i];
+      const px=pt.x, py=pt.y;
+      const vx=pt.x-pt.ox, vy=pt.y-pt.oy;
+      const damp = 0.90 - (i/LIZ.pts.length)*0.05;
+
+      let iax=0, iay=0;
+      if(i===0){ iax=ax; iay=ay; }
+      else{
+        const phase=(i/LIZ.pts.length)*2.7;
+        const n=Math.sin(now*0.004 + phase*2.0 + LIZ.phase) * (0.9 + 2.2*p.wave);
+        iax = perpX * n*0.08;
+        iay = perpY * n*0.08;
+      }
+
+      pt.ox=px; pt.oy=py;
+      pt.x = px + vx*damp + iax;
+      pt.y = py + vy*damp + iay;
+    }
+
+    // constraints
+    for(let iter=0; iter<4; iter++){
+      for(let i=1;i<LIZ.pts.length;i++){
+        const a=LIZ.pts[i-1], b=LIZ.pts[i];
+        const dx=b.x-a.x, dy=b.y-a.y;
+        const dist=Math.sqrt(dx*dx+dy*dy)+1e-6;
+        const diff=(dist - LIZ.segLen)/dist;
+        const wA = (i===1) ? 0.12 : 0.22;
+        const wB = 1 - wA;
+        a.x += dx*diff*wA; a.y += dy*diff*wA;
+        b.x -= dx*diff*wB; b.y -= dy*diff*wB;
+      }
+    }
+
+    // feet
+    const stride = 24 + 22*p.speed;
+    for(const foot of LIZ.feet){
+      const hip = LIZ.pts[foot.hipIdx];
+      tryStep(foot, hip, dirX, dirY, stride);
+    }
+
+    // camera: immersive follow
+    cam.x = lerp(cam.x, head.x, 0.03);
+    cam.y = lerp(cam.y, head.y, 0.03);
+  };
+
+  const drawInsects = (now)=>{
+    const p=params();
+    const g=p.glow;
+
+    if(!insects.length) return;
+
+    ctx.save();
+    setCamera();
+    ctx.globalCompositeOperation="lighter";
+
+    for(const ins of insects){
+      const age = (now - ins.born) / ins.ttl;
+      const pulse = 0.35 + 0.65*Math.sin(now*0.010 + ins.x*0.02);
+      const r = 1.0 + 2.2*pulse;
+      const a = 0.10 + 0.55*(1-age);
+
+      // bloom
+      if(g>0.01){
+        ctx.globalAlpha = a*(0.18+0.82*g);
+        ctx.fillStyle = "#f2f2f2";
+        ctx.beginPath();
+        ctx.arc(ins.x, ins.y, r*(1.7+2.6*g), 0, Math.PI*2);
+        ctx.fill();
+      }
+      // core
+      ctx.globalAlpha = a;
+      ctx.fillStyle = "#f2f2f2";
+      ctx.beginPath();
+      ctx.arc(ins.x, ins.y, r, 0, Math.PI*2);
+      ctx.fill();
+    }
+    ctx.restore();
+  };
+
+  const drawLizard = (now)=>{
+    const p=params();
+    const g=p.glow;
+
+    const head=LIZ.pts[0];
+    const neck=LIZ.pts[2];
+    const tail=LIZ.pts[LIZ.pts.length-1];
+
+    // forward dir from head->neck (reverse)
+    let fx = head.x - neck.x, fy = head.y - neck.y;
+    const fd = Math.sqrt(fx*fx+fy*fy)+1e-6;
+    fx/=fd; fy/=fd;
+    const px = -fy, py = fx;
+
+    ctx.save();
+    setCamera();
+    ctx.globalCompositeOperation="lighter";
+    ctx.lineCap="round";
+    ctx.lineJoin="round";
+
+    // bright fog halo around spine (immersive)
+    if(g>0.01){
+      ctx.globalAlpha = 0.08 + 0.26*g;
+      ctx.strokeStyle = "#f2f2f2";
+      ctx.lineWidth = (7.0 + 18.0*g);
+      ctx.beginPath();
+      for(let i=0;i<LIZ.pts.length;i++){
+        const pt=LIZ.pts[i];
+        if(i===0) ctx.moveTo(pt.x, pt.y);
+        else ctx.lineTo(pt.x, pt.y);
+      }
+      ctx.stroke();
+    }
+
+    // ligament spine (sharp)
+    ctx.globalAlpha = 0.62 + 0.22*g;
+    ctx.strokeStyle = "#f2f2f2";
+    ctx.lineWidth = (1.1 + 1.5*g);
+    ctx.beginPath();
+    for(let i=0;i<LIZ.pts.length;i++){
+      const pt=LIZ.pts[i];
+      if(i===0) ctx.moveTo(pt.x, pt.y);
+      else ctx.lineTo(pt.x, pt.y);
+    }
+    ctx.stroke();
+
+    // ribs that connect/disconnect
+    const stride = 3;
+    for(let i=4;i<LIZ.pts.length-2;i+=stride){
+      const pt=LIZ.pts[i];
+      const next=LIZ.pts[i+1];
+      const dx=next.x-pt.x, dy=next.y-pt.y;
+      const d=Math.sqrt(dx*dx+dy*dy)+1e-6;
+      const nx=-dy/d, ny=dx/d;
+
+      const gate = 0.35 + 0.65*Math.max(0, Math.sin(now*0.0017 + i*0.35 + LIZ.phase));
+      if(gate < 0.55) continue;
+
+      const amp = (11 + 20*g) * (1 - i/LIZ.pts.length);
+      const x1 = pt.x + nx*amp;
+      const y1 = pt.y + ny*amp;
+      const x2 = pt.x - nx*amp;
+      const y2 = pt.y - ny*amp;
+
+      ctx.globalAlpha = (0.05 + 0.22*gate) * (0.30+0.70*g);
+      ctx.strokeStyle = "#f2f2f2";
+      ctx.lineWidth = 0.9 + 0.9*g;
+      ctx.beginPath();
+      ctx.moveTo(x1,y1); ctx.lineTo(x2,y2);
+      ctx.stroke();
+    }
+
+    // legs
+    for(const foot of LIZ.feet){
+      const hip = LIZ.pts[foot.hipIdx];
+      const kx = lerp(hip.x, foot.x, 0.55) + px*6*(foot.hipIdx<12 ? 1 : -1);
+      const ky = lerp(hip.y, foot.y, 0.55) + py*6*(foot.hipIdx<12 ? 1 : -1);
+
+      ctx.globalAlpha = 0.10 + 0.34*(0.25+0.75*g);
+      ctx.strokeStyle = "#f2f2f2";
+      ctx.lineWidth = 1.0 + 0.8*g;
+      ctx.beginPath();
+      ctx.moveTo(hip.x, hip.y);
+      ctx.lineTo(kx, ky);
+      ctx.lineTo(foot.x, foot.y);
+      ctx.stroke();
+
+      ctx.globalAlpha = 0.10 + 0.35*(0.25+0.75*g);
+      ctx.fillStyle = "#f2f2f2";
+      ctx.beginPath();
+      ctx.arc(foot.x, foot.y, 1.0 + 2.0*g, 0, Math.PI*2);
+      ctx.fill();
+    }
+
+    // head wedge
+    const hx=head.x, hy=head.y;
+    const snout = { x: hx + fx*(10+7*g), y: hy + fy*(10+7*g) };
+    const jawL = { x: hx + px*(6+4*g) - fx*(2+1*g), y: hy + py*(6+4*g) - fy*(2+1*g) };
+    const jawR = { x: hx - px*(6+4*g) - fx*(2+1*g), y: hy - py*(6+4*g) - fy*(2+1*g) };
+
+    ctx.globalAlpha = 0.14 + 0.26*g;
+    ctx.fillStyle = "#f2f2f2";
+    ctx.beginPath();
+    ctx.moveTo(snout.x, snout.y);
+    ctx.lineTo(jawL.x, jawL.y);
+    ctx.lineTo(jawR.x, jawR.y);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.globalAlpha = 0.18 + 0.36*(0.25+0.75*g);
+    ctx.strokeStyle = "#f2f2f2";
+    ctx.lineWidth = 1.0 + 1.0*g;
+    ctx.beginPath();
+    ctx.moveTo(snout.x, snout.y);
+    ctx.lineTo(jawL.x, jawL.y);
+    ctx.lineTo(jawR.x, jawR.y);
+    ctx.closePath();
+    ctx.stroke();
+
+    // eyes
+    ctx.globalAlpha = 0.12 + 0.28*(0.25+0.75*g);
+    ctx.fillStyle = "#f2f2f2";
+    ctx.beginPath();
+    ctx.arc(hx + px*(3+2*g) - fx*(1.5+0.5*g), hy + py*(3+2*g) - fy*(1.5+0.5*g), 0.9+0.7*g, 0, Math.PI*2);
+    ctx.arc(hx - px*(3+2*g) - fx*(1.5+0.5*g), hy - py*(3+2*g) - fy*(1.5+0.5*g), 0.9+0.7*g, 0, Math.PI*2);
+    ctx.fill();
+
+    // tongue flick
+    if(LIZ.tongue.on){
+      LIZ.tongue.t = Math.min(1, LIZ.tongue.t + 0.08);
+      const tt=LIZ.tongue.t;
+      const reach = (12 + 24*g) * Math.sin(tt*Math.PI);
+      const tx = hx + fx*reach;
+      const ty = hy + fy*reach;
+
+      ctx.globalAlpha = 0.10 + 0.28*(0.25+0.75*g);
+      ctx.strokeStyle = "#f2f2f2";
+      ctx.lineWidth = 0.9 + 0.9*g;
+      ctx.beginPath();
+      ctx.moveTo(hx, hy);
+      ctx.lineTo(tx, ty);
+      ctx.stroke();
+
+      ctx.globalAlpha = 0.10 + 0.22*(0.25+0.75*g);
+      ctx.fillStyle = "#f2f2f2";
+      ctx.beginPath();
+      ctx.arc(tx, ty, 0.9 + 1.1*g, 0, Math.PI*2);
+      ctx.fill();
+
+      if(tt>=1) LIZ.tongue.on=false;
+    }
+
+    // tail spark
+    ctx.globalAlpha = 0.08 + 0.22*(0.25+0.75*g);
+    ctx.fillStyle = "#f2f2f2";
+    ctx.beginPath();
+    ctx.arc(tail.x, tail.y, 0.9 + 2.0*g, 0, Math.PI*2);
+    ctx.fill();
+
+    ctx.restore();
+  };
+
+  // immersive post fx: fog + vignette + grain (in screen space)
+  const drawPostFX = (now)=>{
+    const p=params();
+    ctx.save();
+    ctx.setTransform(1,0,0,1,0,0);
+
+    // fog (soft lift)
+    if(p.fog>0.001){
+      ctx.globalCompositeOperation="screen";
+      ctx.globalAlpha = 0.06 + 0.20*p.fog;
+      ctx.fillStyle = "#0a0a0a";
+      ctx.fillRect(0,0,w,h);
+      ctx.globalCompositeOperation="lighter";
+      ctx.globalAlpha = 0.03 + 0.10*p.fog;
+      ctx.fillStyle = "#f2f2f2";
+      ctx.fillRect(0,0,w,h);
+    }
+
+    // vignette
+    if(p.vignette>0.001){
+      ctx.globalCompositeOperation="source-over";
+      const g = ctx.createRadialGradient(w/2,h/2, Math.min(w,h)*0.15, w/2,h/2, Math.max(w,h)*0.62);
+      g.addColorStop(0, "rgba(0,0,0,0)");
+      g.addColorStop(1, `rgba(0,0,0,${0.60*p.vignette})`);
+      ctx.fillStyle=g;
+      ctx.globalAlpha=1;
+      ctx.fillRect(0,0,w,h);
+    }
+
+    // grain (dither)
+    if(p.grain>0.001){
+      const step = Math.max(1, Math.floor(3 - 2*p.grain)); // more grain = denser
+      ctx.globalCompositeOperation="overlay";
+      ctx.globalAlpha = 0.06 + 0.12*p.grain;
+      ctx.fillStyle="#fff";
+      for(let y=0;y<h;y+=step){
+        for(let x=0;x<w;x+=step){
+          const n = hash((x + (now|0))|0, (y + ((now*0.5)|0))|0);
+          if(n>0.62) ctx.fillRect(x,y,1,1);
+        }
+      }
+      ctx.globalCompositeOperation="source-over";
+    }
+
+    ctx.restore();
+  };
+
+  // FPS
+  let lastT=performance.now();
+  let fpsAcc=0,fpsN=0,fpsOut=0;
+
+  const applyStateToUI = ()=>{
+    speedR.value = String(clamp(state.params.speed ?? +speedR.value, 0.3, 3.0));
+    waveR.value  = String(clamp(state.params.wave ?? +waveR.value, 0.0, 2.0));
+    trailR.value = String(clamp(state.params.trail ?? +trailR.value, 0.02, 0.35));
+    glowR.value  = String(clamp(state.params.glow ?? +glowR.value, 0, 1));
+    fogR.value   = String(clamp(state.params.fog ?? +fogR.value, 0, 1));
+    grainR.value = String(clamp(state.params.grain ?? +grainR.value, 0, 1));
+    vignetteR.value = String(clamp(state.params.vignette ?? +vignetteR.value, 0, 1));
+
+    document.documentElement.classList.toggle("invert", !!state.ui.invert);
+    document.documentElement.classList.toggle("null", !!state.ui.nullMode);
+
+    const collapsed = !!state.ui.hudCollapsed;
+    hudBody.classList.toggle("collapsed", collapsed);
+    collapseBtn.textContent = collapsed ? "+" : "—";
+
+    const paused = !!state.ui.paused;
+    pauseBtn.classList.toggle("on", paused);
+    pauseBtn.textContent = paused ? "PLAY" : "PAUSE";
+
+    setHudOpen(!!state.ui.hudOpen);
+  };
+
+  const wireParam = (node, key) => {
+    node.addEventListener("input", ()=>{
+      state.params[key] = +node.value;
+      scheduleSave();
+    });
+  };
+
+  const init = ()=>{
+    resize();
+    state = load();
+    if(!state.meta) state.meta={};
+    state.meta.fileId = FILE_ID;
+    if(!state.ui) state.ui={};
+    if(!state.params) state.params={};
+
+    applyStateToUI();
+    makeLizard();
+
+    wireParam(speedR,"speed");
+    wireParam(waveR,"wave");
+    wireParam(trailR,"trail");
+    wireParam(glowR,"glow");
+    wireParam(fogR,"fog");
+    wireParam(grainR,"grain");
+    wireParam(vignetteR,"vignette");
+
+    collapseBtn.onclick=()=>{
+      state.ui.hudCollapsed=!state.ui.hudCollapsed;
+      applyStateToUI();
+      scheduleSave();
+    };
+    pauseBtn.onclick=()=>{
+      state.ui.paused=!state.ui.paused;
+      applyStateToUI();
+      scheduleSave();
+    };
+    closeHudBtn.onclick=()=>{
+      setHudOpen(false);
+      state.ui.hudOpen=false;
+      scheduleSave();
+      flashHint();
+    };
+
+    regenBtn.onclick=()=>{
+      insects = [];
+      makeLizard();
+      scheduleSave();
+      flashHint();
+    };
+
+    clearBtn.onclick=()=>{
+      ctx.setTransform(1,0,0,1,0,0);
+      ctx.fillStyle="#000";
+      ctx.fillRect(0,0,w,h);
+    };
+
+    // seed insects
+    for(let i=0;i<4;i++){
+      dropInsect((Math.random()-0.5)*260, (Math.random()-0.5)*180);
+    }
+
+    // initial black clear
+    ctx.setTransform(1,0,0,1,0,0);
+    ctx.fillStyle="#000";
+    ctx.fillRect(0,0,w,h);
+
+    // show hint on boot
+    flashHint();
+
+    save();
+    requestAnimationFrame(loop);
+  };
+
+  // hotkeys (SHIFT-based; do not interfere with typing)
+  window.addEventListener("keydown",(e)=>{
+    const tag=(document.activeElement && document.activeElement.tagName || "").toLowerCase();
+    const typing=(tag==="input"||tag==="textarea");
+    if(e.shiftKey && (e.key==="I"||e.key==="i")){ e.preventDefault(); setInvert(!state.ui.invert); }
+    if(e.shiftKey && (e.key==="N"||e.key==="n")){ e.preventDefault(); setNull(!state.ui.nullMode); }
+    if(e.shiftKey && (e.key==="F"||e.key==="f")){ e.preventDefault(); toggleFull(); }
+    if(!typing && (e.key===" ")){ e.preventDefault(); state.ui.paused=!state.ui.paused; applyStateToUI(); scheduleSave(); flashHint(); }
+    if(!typing && (e.key==="h"||e.key==="H")){
+      e.preventDefault();
+      const next = !(state.ui.hudOpen);
+      state.ui.hudOpen = next;
+      setHudOpen(next);
+      scheduleSave();
+      flashHint();
+    }
+    if(e.key==="Escape" && state.ui.nullMode){ setNull(false); }
+  });
+
+  const loop = (now)=>{
+    const dt = Math.min(0.033, (now-lastT)/1000);
+    lastT = now;
+
+    // fps
+    fpsAcc += 1/dt; fpsN++;
+    if(fpsN>=12){
+      fpsOut = fpsAcc/fpsN;
+      fpsAcc=0; fpsN=0;
+      fpsPill.textContent = "FPS: " + Math.round(fpsOut);
+    }
+
+    const p = params();
+
+    // trail
+    clearWithTrail(p.trail);
+
+    if(!state.ui.paused){
+      updateLizard(dt, now);
+
+      // tiny insect drift (alive)
+      for(const ins of insects){
+        const n = hash(((ins.x*0.7)|0) + (now|0), ((ins.y*0.7)|0));
+        const m = hash(((ins.y*0.7)|0) + ((now*0.7)|0), ((ins.x*0.7)|0));
+        ins.x += (n-0.5)*0.35;
+        ins.y += (m-0.5)*0.35;
+      }
+    }
+
+    drawInsects(now);
+    drawLizard(now);
+    drawPostFX(now);
+
+    requestAnimationFrame(loop);
+  };
+
+  init();
+})();
+</script>
+
+<!--
+AE / EE / WB — KETADATA SERIALIZATION STAMP (MANDATORY)
+AE: BLACK DEFAULT • MONOCHROME ONLY • IMMERSIVE HUD-HIDDEN DEFAULT • INVERT FILTER APPLIES TO WHOLE APP • NULL HIDES ALL CHROME
+EE: VERLET SPINE LIZARD • LIGAMENT RIBS CONNECT/DISCONNECT • INSECT LURE • TONGUE FLICK • CAMERA FOLLOW • POST FX (FOG/GRAIN/VIGNETTE)
+WB: LOCAL-FIRST PARAM SAVE • SHIFT+I INVERT • SHIFT+N NULL • SHIFT+F FULLSCREEN • H HUD • SPACE PAUSE (non-typing contexts)
+
+FILE_ID: "KD_LIZARD_MONO_IMMERSIVE_V1"
+ROOM_ID: "K_EXPERIMENT"
+VERSION_ID: "V1"
+UPDATED_AT: "2026-01-04T00:00:00.000-05:00"
+CHANGELOG:
+- V1: Monochrome immersive lizard artifact (HUD hidden by default, full-page post FX)
+-->
+</body>
+</html>
