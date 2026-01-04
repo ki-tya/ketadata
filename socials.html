@@ -1,0 +1,934 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>KETADATA — SOCIAL CHANNELS MANAGER</title>
+  <style>
+    :root{
+      /* KETADATA DEFAULT: BLACK */
+      --bg:#0b0b0b;
+      --fg:#f2f2f2;
+      --muted:#9a9a9a;
+      --line:#2f2f2f;
+      --hud:rgba(255,255,255,0.03);
+      --panel:#101010;
+      --panel2:#0f0f0f;
+
+      --font:12px/1.15 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace;
+      --pad:8px;
+      --r:12px;
+    }
+    html,body{height:100%;margin:0;background:var(--bg);color:var(--fg);font:var(--font);overflow:hidden;}
+    *{box-sizing:border-box;}
+    a{color:var(--fg);text-decoration:none;}
+    a:hover{text-decoration:underline;}
+    /* INVERT must affect whole page */
+    html.invert #app{filter: invert(1) hue-rotate(180deg);}
+    html.invert{background:#000;}
+    /* NULL = fullscreen/quiet/no chrome */
+    html.null #hud, html.null #left, html.null #status, html.null #right{display:none;}
+    html.null #main{inset:0 !important;}
+    html.null #grid{padding:0 !important;}
+    body{user-select:none;}
+
+    #app{position:fixed;inset:0;}
+    #hud{
+      position:fixed;left:10px;top:10px;right:10px;z-index:60;
+      border:1px solid var(--line);
+      background:var(--hud);
+      backdrop-filter: blur(4px);
+      border-radius:var(--r);
+      padding:6px;
+      user-select:none;
+    }
+    #hud .row{display:flex;gap:6px;align-items:center;flex-wrap:wrap;}
+    #hud .row + .row{margin-top:6px;}
+    #hud .pill{border:1px solid var(--line);border-radius:999px;padding:3px 6px;color:var(--muted);}
+    #hud .btn,#hud input,#hud select{
+      font:var(--font);
+      height:28px;
+      border:1px solid var(--line);
+      background:transparent;
+      color:var(--fg);
+      border-radius:10px;
+      padding:0 8px;
+    }
+    #hud .btn{cursor:pointer;}
+    #hud .btn:active{transform:translateY(1px);}
+    #hud .sp{flex:1;}
+    #hud input[type="text"]{min-width:220px;}
+
+    #main{
+      position:fixed;
+      left:10px; right:10px;
+      top:92px; bottom:52px;
+      display:grid;
+      grid-template-columns: 340px 1fr 420px;
+      gap:10px;
+      overflow:hidden;
+    }
+
+    #left,#right,#center{
+      border:1px solid var(--line);
+      background:var(--hud);
+      border-radius:var(--r);
+      overflow:hidden;
+      display:flex;
+      flex-direction:column;
+      min-height:0;
+    }
+    .head{
+      padding:8px;
+      border-bottom:1px solid var(--line);
+      display:flex;
+      gap:6px;
+      align-items:center;
+      background:rgba(0,0,0,0.12);
+    }
+    .head .t{color:var(--muted);}
+    .head .sp{flex:1;}
+    .head .btn,.head input,.head select{
+      font:var(--font);
+      height:26px;
+      border:1px solid var(--line);
+      background:transparent;
+      color:var(--fg);
+      border-radius:10px;
+      padding:0 8px;
+    }
+    .head .btn{cursor:pointer;}
+    .body{padding:8px;overflow:auto;min-height:0;}
+
+    /* list */
+    .card{
+      border:1px solid var(--line);
+      border-radius:12px;
+      padding:8px;
+      background:rgba(255,255,255,0.02);
+      cursor:pointer;
+    }
+    .card + .card{margin-top:8px;}
+    .card.active{outline:2px solid rgba(255,255,255,0.08);}
+    .row2{display:flex;gap:8px;align-items:center;}
+    .name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+    .tag{color:var(--muted);}
+    .dot{width:10px;height:10px;border-radius:999px;border:1px solid var(--line);display:inline-block;}
+    .dot.public{background:var(--fg);}
+    .dot.private{background:var(--muted);}
+    .dot.unset{background:transparent;}
+
+    /* form */
+    label{display:block;color:var(--muted);margin:8px 0 4px;}
+    input[type="text"], textarea, select{
+      width:100%;
+      font:var(--font);
+      color:var(--fg);
+      background:rgba(0,0,0,0.10);
+      border:1px solid var(--line);
+      border-radius:12px;
+      padding:8px;
+      outline:none;
+    }
+    textarea{min-height:120px;resize:vertical;}
+    .grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+    .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;}
+    .btnbar{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;}
+    .btn{
+      font:var(--font);
+      height:28px;
+      padding:0 10px;
+      border:1px solid var(--line);
+      background:transparent;
+      color:var(--fg);
+      border-radius:10px;
+      cursor:pointer;
+    }
+    .btn:active{transform:translateY(1px);}
+    .btn.danger{border-style:dashed;}
+    .mini{height:24px;padding:0 8px;border-radius:9px;}
+
+    /* table-ish */
+    .tblRow{
+      display:grid;
+      grid-template-columns: 120px 1fr 90px 90px;
+      gap:8px;
+      padding:6px 0;
+      border-bottom:1px dashed var(--line);
+      align-items:center;
+    }
+    .tblRow:last-child{border-bottom:none;}
+    .tblRow .c1{color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+    .tblRow .c2{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+    .tblRow .c3,.tblRow .c4{color:var(--muted);text-align:right;}
+
+    #status{
+      position:fixed;left:10px;right:10px;bottom:10px;z-index:40;
+      border:1px solid var(--line);
+      background:var(--hud);
+      border-radius:var(--r);
+      padding:6px 8px;
+      display:flex;gap:10px;align-items:center;
+      color:var(--muted);
+      user-select:none;
+    }
+    #status .sp{flex:1;}
+    #status .pill{border:1px solid var(--line);border-radius:999px;padding:3px 6px;}
+
+    @media (max-width: 1100px){
+      #main{grid-template-columns: 320px 1fr;}
+      #right{display:none;}
+    }
+  </style>
+</head>
+<body>
+<div id="app">
+  <div id="hud" class="ui">
+    <div class="row">
+      <span class="pill">SOCIAL CHANNELS MANAGER • PLATFORM / ACCOUNTS / NOTES / STRATEGY / DELIVERABLES</span>
+      <span class="sp"></span>
+      <span class="pill" id="pillSaved">SAVED</span>
+      <span class="pill" id="pillCount">0</span>
+    </div>
+    <div class="row">
+      <button class="btn" id="add">ADD CHANNEL</button>
+      <button class="btn" id="dup">DUPLICATE</button>
+      <button class="btn danger" id="del">DELETE</button>
+      <span class="pill">FILTER</span>
+      <input id="q" type="text" placeholder="search platform / handle / notes / tags..." />
+      <select id="fPlatform"></select>
+      <select id="fVis">
+        <option value="ALL">VIS: ALL</option>
+        <option value="PUBLIC">VIS: PUBLIC</option>
+        <option value="PRIVATE">VIS: PRIVATE</option>
+        <option value="UNSET">VIS: UNSET</option>
+      </select>
+      <span class="sp"></span>
+      <button class="btn" id="export">EXPORT</button>
+      <button class="btn" id="import">IMPORT</button>
+      <button class="btn" id="null">NULL (SHIFT+N)</button>
+      <button class="btn" id="invert">INVERT (SHIFT+I)</button>
+      <button class="btn" id="full">FULL (SHIFT+F)</button>
+    </div>
+  </div>
+
+  <div id="main">
+    <section id="left">
+      <div class="head">
+        <span class="t">CHANNELS</span>
+        <span class="sp"></span>
+        <button class="btn mini" id="sort">SORT</button>
+        <button class="btn mini" id="visToggleAll">TOGGLE VIS (SEL)</button>
+      </div>
+      <div class="body" id="list"></div>
+    </section>
+
+    <section id="center">
+      <div class="head">
+        <span class="t" id="focusTitle">FOCUS: NONE</span>
+        <span class="sp"></span>
+        <button class="btn mini" id="open">OPEN</button>
+        <button class="btn mini" id="copy">COPY LINK</button>
+      </div>
+      <div class="body">
+        <div class="grid2">
+          <div>
+            <label>PLATFORM</label>
+            <select id="platform"></select>
+          </div>
+          <div>
+            <label>VISIBILITY</label>
+            <select id="visibility">
+              <option value="UNSET">UNSET</option>
+              <option value="PUBLIC">PUBLIC</option>
+              <option value="PRIVATE">PRIVATE</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="grid2">
+          <div>
+            <label>ACCOUNT NAME / HANDLE</label>
+            <input id="handle" type="text" placeholder="@handle / display name" />
+          </div>
+          <div>
+            <label>ACCOUNT URL</label>
+            <input id="url" type="text" placeholder="https://..." />
+          </div>
+        </div>
+
+        <div class="grid3">
+          <div>
+            <label>OWNER / ROLE</label>
+            <input id="owner" type="text" placeholder="you / collaborator / brand persona" />
+          </div>
+          <div>
+            <label>FREQUENCY</label>
+            <select id="freq">
+              <option value="">(unset)</option>
+              <option value="DAILY">DAILY</option>
+              <option value="3X_WEEK">3X_WEEK</option>
+              <option value="WEEKLY">WEEKLY</option>
+              <option value="BIWEEKLY">BIWEEKLY</option>
+              <option value="MONTHLY">MONTHLY</option>
+            </select>
+          </div>
+          <div>
+            <label>STATUS</label>
+            <select id="statusSel">
+              <option value="ACTIVE">ACTIVE</option>
+              <option value="WARMING">WARMING</option>
+              <option value="DORMANT">DORMANT</option>
+              <option value="ARCHIVE">ARCHIVE</option>
+            </select>
+          </div>
+        </div>
+
+        <label>TAGS (comma)</label>
+        <input id="tags" type="text" placeholder="ketadata, kitty, doc, film, crypto..." />
+
+        <label>NOTES</label>
+        <textarea id="notes" placeholder="context, tone, constraints, audience, do/don't"></textarea>
+
+        <label>STRATEGY</label>
+        <textarea id="strategy" placeholder="angle, positioning, content pillars, hooks, repost logic, CTA"></textarea>
+
+        <label>DELIVERABLES / PIPELINE</label>
+        <textarea id="deliverables" placeholder="what to ship: threads, clips, reels, stories, newsletters, zines, etc."></textarea>
+
+        <label>METRICS / KPIs</label>
+        <textarea id="metrics" placeholder="followers, CTR, watch time, leads, revenue, saves, inbound DMs"></textarea>
+
+        <div class="btnbar">
+          <button class="btn" id="saveNow">SAVE</button>
+          <button class="btn" id="toggleVis">TOGGLE VIS</button>
+          <button class="btn" id="addDeliverable">ADD QUICK DELIVERABLE</button>
+          <button class="btn" id="addNote">ADD QUICK NOTE</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="right">
+      <div class="head">
+        <span class="t">OVERVIEW</span>
+        <span class="sp"></span>
+        <span class="t" id="summaryMeta"></span>
+      </div>
+      <div class="body" id="summary"></div>
+    </section>
+  </div>
+
+  <div id="status" class="ui">
+    <span class="pill" id="filePill"></span>
+    <span class="pill">SHIFT+I INVERT</span>
+    <span class="pill">SHIFT+N NULL</span>
+    <span class="pill">SHIFT+F FULL</span>
+    <span class="sp"></span>
+    <span class="pill" id="hint">CLICK A CHANNEL TO EDIT</span>
+  </div>
+</div>
+
+<input id="filePick" type="file" accept="application/json" style="display:none" />
+
+<script>
+(() => {
+  const FILE_ID = "KD_SOCIAL_CHANNELS_MANAGER_V1";
+  const STORE_KEY = "KD_STATE__" + FILE_ID;
+
+  const PLATFORMS = [
+    "Instagram","TikTok","X / Twitter","YouTube","YouTube Shorts","Twitch","Kick",
+    "Discord","Telegram","Reddit","Substack","Medium","Patreon","OnlyFans",
+    "SoundCloud","Spotify","Apple Music","Bandcamp",
+    "GitHub","Website","Newsletter","Pinterest","LinkedIn","Farcaster","Bluesky","Other"
+  ];
+
+  const $ = (id) => document.getElementById(id);
+
+  const pillSaved = $("pillSaved");
+  const pillCount = $("pillCount");
+  const filePill = $("filePill");
+
+  const listEl = $("list");
+  const focusTitle = $("focusTitle");
+
+  const qEl = $("q");
+  const fPlatform = $("fPlatform");
+  const fVis = $("fVis");
+
+  const addBtn = $("add");
+  const dupBtn = $("dup");
+  const delBtn = $("del");
+  const sortBtn = $("sort");
+  const visToggleAllBtn = $("visToggleAll");
+
+  const exportBtn = $("export");
+  const importBtn = $("import");
+  const filePick = $("filePick");
+
+  const nullBtn = $("null");
+  const invertBtn = $("invert");
+  const fullBtn = $("full");
+
+  const platformEl = $("platform");
+  const visibilityEl = $("visibility");
+  const handleEl = $("handle");
+  const urlEl = $("url");
+  const ownerEl = $("owner");
+  const freqEl = $("freq");
+  const statusEl = $("statusSel");
+  const tagsEl = $("tags");
+  const notesEl = $("notes");
+  const strategyEl = $("strategy");
+  const deliverablesEl = $("deliverables");
+  const metricsEl = $("metrics");
+
+  const saveNowBtn = $("saveNow");
+  const toggleVisBtn = $("toggleVis");
+  const addDeliverableBtn = $("addDeliverable");
+  const addNoteBtn = $("addNote");
+
+  const openBtn = $("open");
+  const copyBtn = $("copy");
+
+  const summaryEl = $("summary");
+  const summaryMeta = $("summaryMeta");
+
+  const setSaved = (v) => { pillSaved.textContent = v ? "SAVED" : "DIRTY"; };
+
+  const deepClone = (x) => JSON.parse(JSON.stringify(x));
+
+  const stateDefault = () => ({
+    meta: { fileId: FILE_ID, updatedAt: new Date().toISOString(), title: "SOCIAL CHANNELS" },
+    ui: { invert:false, nullMode:false, sortMode:"PLATFORM" },
+    selectedId: null,
+    channels: []
+  });
+
+  let state = null;
+  let saveTimer = null;
+
+  const load = () => {
+    try {
+      const raw = localStorage.getItem(STORE_KEY);
+      if (!raw) return stateDefault();
+      const parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed !== "object") return stateDefault();
+      if (!Array.isArray(parsed.channels)) parsed.channels = [];
+      if (!parsed.meta) parsed.meta = { fileId: FILE_ID, updatedAt: new Date().toISOString(), title: "SOCIAL CHANNELS" };
+      if (!parsed.ui) parsed.ui = { invert:false, nullMode:false, sortMode:"PLATFORM" };
+      return parsed;
+    } catch {
+      return stateDefault();
+    }
+  };
+
+  const save = () => {
+    try {
+      state.meta.updatedAt = new Date().toISOString();
+      localStorage.setItem(STORE_KEY, JSON.stringify(state));
+      setSaved(true);
+    } catch {}
+  };
+
+  const scheduleSave = () => {
+    setSaved(false);
+    if (saveTimer) clearTimeout(saveTimer);
+    saveTimer = setTimeout(save, 220);
+  };
+
+  const setInvert = (v) => {
+    state.ui.invert = !!v;
+    document.documentElement.classList.toggle("invert", state.ui.invert);
+    scheduleSave();
+  };
+  const setNull = (v) => {
+    state.ui.nullMode = !!v;
+    document.documentElement.classList.toggle("null", state.ui.nullMode);
+    scheduleSave();
+  };
+  const toggleFull = () => {
+    if (!document.fullscreenElement) document.documentElement.requestFullscreen?.();
+    else document.exitFullscreen?.();
+  };
+
+  const makeId = () => "ch_" + Date.now() + "_" + Math.floor(Math.random()*1e6);
+
+  const normalizeUrl = (u) => (u || "").trim();
+
+  const platformOptions = (sel, includeAll=false) => {
+    sel.innerHTML = "";
+    if (includeAll) {
+      const o = document.createElement("option");
+      o.value = "ALL";
+      o.textContent = "PLATFORM: ALL";
+      sel.appendChild(o);
+    }
+    const list = PLATFORMS.slice();
+    for (const p of list) {
+      const o = document.createElement("option");
+      o.value = p;
+      o.textContent = p;
+      sel.appendChild(o);
+    }
+  };
+
+  const dotClass = (v) => (v === "PUBLIC" ? "public" : v === "PRIVATE" ? "private" : "unset");
+
+  const filterPass = (c) => {
+    const q = (qEl.value || "").trim().toLowerCase();
+    const fp = fPlatform.value || "ALL";
+    const fv = fVis.value || "ALL";
+    if (fp !== "ALL" && c.platform !== fp) return false;
+    if (fv !== "ALL" && (c.visibility || "UNSET") !== fv) return false;
+    if (!q) return true;
+    const blob = [
+      c.platform, c.handle, c.url, c.owner, c.tags, c.notes, c.strategy, c.deliverables, c.metrics, c.status, c.frequency
+    ].join(" ").toLowerCase();
+    return blob.includes(q);
+  };
+
+  const getSelected = () => state.channels.find(x => x.id === state.selectedId) || null;
+
+  const ensureSelected = () => {
+    if (state.selectedId && state.channels.some(x => x.id === state.selectedId)) return;
+    state.selectedId = state.channels[0]?.id || null;
+  };
+
+  const renderCount = () => {
+    const visible = state.channels.filter(filterPass).length;
+    pillCount.textContent = visible + " / " + state.channels.length;
+  };
+
+  const sortChannels = () => {
+    const m = state.ui.sortMode || "PLATFORM";
+    const key = (c) => {
+      if (m === "PLATFORM") return (c.platform || "").toLowerCase();
+      if (m === "VIS") return (c.visibility || "UNSET") + "::" + (c.platform || "");
+      if (m === "STATUS") return (c.status || "") + "::" + (c.platform || "");
+      return (c.platform || "").toLowerCase();
+    };
+    state.channels.sort((a,b) => key(a).localeCompare(key(b)) || (a.handle||"").localeCompare(b.handle||""));
+  };
+
+  const renderList = () => {
+    listEl.innerHTML = "";
+    sortChannels();
+    ensureSelected();
+
+    const items = state.channels.filter(filterPass);
+
+    for (const c of items) {
+      const card = document.createElement("div");
+      card.className = "card" + (c.id === state.selectedId ? " active" : "");
+
+      const r1 = document.createElement("div");
+      r1.className = "row2";
+
+      const dot = document.createElement("span");
+      dot.className = "dot " + dotClass(c.visibility || "UNSET");
+
+      const name = document.createElement("div");
+      name.className = "name";
+      name.textContent = (c.platform || "—") + " • " + (c.handle || "(no handle)");
+
+      const tag = document.createElement("div");
+      tag.className = "tag";
+      tag.textContent = (c.status || "ACTIVE");
+
+      r1.appendChild(dot);
+      r1.appendChild(name);
+      r1.appendChild(tag);
+
+      const r2 = document.createElement("div");
+      r2.className = "row2";
+      r2.style.marginTop = "6px";
+
+      const u = document.createElement("div");
+      u.className = "tag";
+      u.style.flex = "1";
+      u.style.minWidth = "0";
+      u.style.overflow = "hidden";
+      u.style.textOverflow = "ellipsis";
+      u.style.whiteSpace = "nowrap";
+      u.textContent = c.url || "";
+
+      const freq = document.createElement("div");
+      freq.className = "tag";
+      freq.textContent = c.frequency || "";
+
+      r2.appendChild(u);
+      r2.appendChild(freq);
+
+      card.appendChild(r1);
+      card.appendChild(r2);
+
+      card.onclick = () => {
+        state.selectedId = c.id;
+        renderList();
+        renderForm();
+        scheduleSave();
+      };
+
+      listEl.appendChild(card);
+    }
+
+    renderCount();
+  };
+
+  const renderForm = () => {
+    const c = getSelected();
+    if (!c) {
+      focusTitle.textContent = "FOCUS: NONE";
+      $("hint").textContent = "ADD A CHANNEL";
+      platformEl.value = PLATFORMS[0];
+      visibilityEl.value = "UNSET";
+      handleEl.value = "";
+      urlEl.value = "";
+      ownerEl.value = "";
+      freqEl.value = "";
+      statusEl.value = "ACTIVE";
+      tagsEl.value = "";
+      notesEl.value = "";
+      strategyEl.value = "";
+      deliverablesEl.value = "";
+      metricsEl.value = "";
+      renderSummary();
+      return;
+    }
+
+    focusTitle.textContent = "FOCUS: " + (c.platform || "—") + " • " + (c.handle || "(no handle)");
+    $("hint").textContent = "EDIT FIELDS — AUTO-SAVE";
+
+    platformEl.value = c.platform || PLATFORMS[0];
+    visibilityEl.value = c.visibility || "UNSET";
+    handleEl.value = c.handle || "";
+    urlEl.value = c.url || "";
+    ownerEl.value = c.owner || "";
+    freqEl.value = c.frequency || "";
+    statusEl.value = c.status || "ACTIVE";
+    tagsEl.value = c.tags || "";
+    notesEl.value = c.notes || "";
+    strategyEl.value = c.strategy || "";
+    deliverablesEl.value = c.deliverables || "";
+    metricsEl.value = c.metrics || "";
+
+    renderSummary();
+  };
+
+  const bindField = (el, prop, transform=(v)=>v) => {
+    el.addEventListener("input", () => {
+      const c = getSelected();
+      if (!c) return;
+      c[prop] = transform(el.value);
+      renderList();
+      renderSummary();
+      scheduleSave();
+    });
+    el.addEventListener("change", () => {
+      const c = getSelected();
+      if (!c) return;
+      c[prop] = transform(el.value);
+      renderList();
+      renderSummary();
+      scheduleSave();
+    });
+  };
+
+  const renderSummary = () => {
+    const channels = state.channels;
+    const counts = { PUBLIC:0, PRIVATE:0, UNSET:0 };
+    const byPlatform = {};
+    const byStatus = {};
+
+    for (const c of channels) {
+      const v = (c.visibility || "UNSET");
+      counts[v] = (counts[v] || 0) + 1;
+      const p = c.platform || "—";
+      byPlatform[p] = (byPlatform[p] || 0) + 1;
+      const s = c.status || "—";
+      byStatus[s] = (byStatus[s] || 0) + 1;
+    }
+
+    summaryMeta.textContent = "UPDATED: " + (state.meta.updatedAt ? state.meta.updatedAt.slice(0,19).replace("T"," ") : "");
+
+    summaryEl.innerHTML = "";
+
+    const mk = (title, rows) => {
+      const box = document.createElement("div");
+      box.className = "card";
+      box.style.cursor = "default";
+      const h = document.createElement("div");
+      h.className = "row2";
+      const t = document.createElement("div");
+      t.className = "name";
+      t.textContent = title;
+      const m = document.createElement("div");
+      m.className = "tag";
+      m.textContent = "";
+      h.appendChild(t); h.appendChild(m);
+      box.appendChild(h);
+
+      for (const r of rows) {
+        const rr = document.createElement("div");
+        rr.className = "tblRow";
+        const c1 = document.createElement("div"); c1.className = "c1"; c1.textContent = r.k;
+        const c2 = document.createElement("div"); c2.className = "c2"; c2.textContent = r.v;
+        const c3 = document.createElement("div"); c3.className = "c3"; c3.textContent = r.n;
+        const c4 = document.createElement("div"); c4.className = "c4"; c4.textContent = "";
+        rr.appendChild(c1); rr.appendChild(c2); rr.appendChild(c3); rr.appendChild(c4);
+        box.appendChild(rr);
+      }
+
+      summaryEl.appendChild(box);
+    };
+
+    mk("VISIBILITY", [
+      { k:"PUBLIC", v:"", n:String(counts.PUBLIC||0) },
+      { k:"PRIVATE", v:"", n:String(counts.PRIVATE||0) },
+      { k:"UNSET", v:"", n:String(counts.UNSET||0) },
+    ]);
+
+    const platRows = Object.keys(byPlatform).sort((a,b)=>byPlatform[b]-byPlatform[a]).slice(0,12)
+      .map(k => ({ k, v:"", n:String(byPlatform[k]) }));
+    mk("TOP PLATFORMS", platRows.length ? platRows : [{k:"(none)",v:"",n:"0"}]);
+
+    const statusRows = Object.keys(byStatus).sort((a,b)=>byStatus[b]-byStatus[a])
+      .map(k => ({ k, v:"", n:String(byStatus[k]) }));
+    mk("STATUS", statusRows.length ? statusRows : [{k:"(none)",v:"",n:"0"}]);
+  };
+
+  // actions
+  const addChannel = (seedPlatform="Instagram") => {
+    const c = {
+      id: makeId(),
+      platform: seedPlatform,
+      visibility: "UNSET",
+      handle: "",
+      url: "",
+      owner: "",
+      frequency: "",
+      status: "ACTIVE",
+      tags: "",
+      notes: "",
+      strategy: "",
+      deliverables: "",
+      metrics: "",
+      createdAt: new Date().toISOString(),
+    };
+    state.channels.unshift(c);
+    state.selectedId = c.id;
+    renderList();
+    renderForm();
+    scheduleSave();
+  };
+
+  const duplicateChannel = () => {
+    const c = getSelected();
+    if (!c) return;
+    const copy = deepClone(c);
+    copy.id = makeId();
+    copy.handle = (copy.handle ? copy.handle + " (copy)" : "(copy)");
+    copy.createdAt = new Date().toISOString();
+    state.channels.unshift(copy);
+    state.selectedId = copy.id;
+    renderList();
+    renderForm();
+    scheduleSave();
+  };
+
+  const deleteChannel = () => {
+    const c = getSelected();
+    if (!c) return;
+    const ok = confirm("DELETE CHANNEL: " + (c.platform || "—") + " • " + (c.handle || "(no handle)") + " ?");
+    if (!ok) return;
+    state.channels = state.channels.filter(x => x.id !== c.id);
+    ensureSelected();
+    renderList();
+    renderForm();
+    scheduleSave();
+  };
+
+  const toggleSelectedVis = () => {
+    const c = getSelected();
+    if (!c) return;
+    const v = (c.visibility || "UNSET");
+    c.visibility = (v === "PUBLIC") ? "PRIVATE" : "PUBLIC";
+    renderList();
+    renderForm();
+    scheduleSave();
+  };
+
+  const openSelected = () => {
+    const c = getSelected();
+    if (!c) return;
+    const u = normalizeUrl(c.url);
+    if (!u) return;
+    window.open(u, "_blank", "noopener,noreferrer");
+  };
+
+  const copySelected = async () => {
+    const c = getSelected();
+    if (!c) return;
+    const u = normalizeUrl(c.url);
+    if (!u) return;
+    try { await navigator.clipboard.writeText(u); } catch {}
+  };
+
+  // exports/imports (real file download)
+  const download = (filename, text) => {
+    const blob = new Blob([text], { type:"application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url), 800);
+  };
+
+  const exportState = () => {
+    const out = deepClone(state);
+    out.meta.exportedAt = new Date().toISOString();
+    download("KD_social_channels.json", JSON.stringify(out, null, 2));
+  };
+
+  const importState = async (file) => {
+    try {
+      const parsed = JSON.parse(await file.text());
+      if (!parsed || typeof parsed !== "object") return;
+      if (!Array.isArray(parsed.channels)) return;
+      state = parsed;
+      if (!state.meta) state.meta = { fileId: FILE_ID, updatedAt: new Date().toISOString(), title: "SOCIAL CHANNELS" };
+      if (!state.ui) state.ui = { invert:false, nullMode:false, sortMode:"PLATFORM" };
+      if (state.meta.fileId !== FILE_ID) state.meta.fileId = FILE_ID; // enforce
+      ensureSelected();
+      setInvert(!!state.ui.invert);
+      setNull(!!state.ui.nullMode);
+      renderList();
+      renderForm();
+      save();
+    } catch {}
+  };
+
+  // bind UI
+  addBtn.onclick = () => addChannel(PLATFORMS[0]);
+  dupBtn.onclick = duplicateChannel;
+  delBtn.onclick = deleteChannel;
+
+  sortBtn.onclick = () => {
+    const next = (state.ui.sortMode === "PLATFORM") ? "VIS" : (state.ui.sortMode === "VIS") ? "STATUS" : "PLATFORM";
+    state.ui.sortMode = next;
+    sortBtn.textContent = "SORT: " + next;
+    renderList();
+    scheduleSave();
+  };
+
+  visToggleAllBtn.onclick = toggleSelectedVis;
+
+  qEl.addEventListener("input", () => { renderList(); renderSummary(); });
+  fPlatform.addEventListener("change", () => { renderList(); renderSummary(); });
+  fVis.addEventListener("change", () => { renderList(); renderSummary(); });
+
+  exportBtn.onclick = exportState;
+  importBtn.onclick = () => filePick.click();
+  filePick.addEventListener("change", async () => {
+    const f = filePick.files && filePick.files[0];
+    if (f) await importState(f);
+    filePick.value = "";
+  });
+
+  nullBtn.onclick = () => setNull(!state.ui.nullMode);
+  invertBtn.onclick = () => setInvert(!state.ui.invert);
+  fullBtn.onclick = () => toggleFull();
+
+  openBtn.onclick = openSelected;
+  copyBtn.onclick = copySelected;
+
+  saveNowBtn.onclick = () => save();
+  toggleVisBtn.onclick = toggleSelectedVis;
+
+  addDeliverableBtn.onclick = () => {
+    const c = getSelected(); if (!c) return;
+    const t = prompt("ADD DELIVERABLE (one line):");
+    if (!t) return;
+    c.deliverables = (c.deliverables ? (c.deliverables.trim() + "\n") : "") + "- " + t.trim();
+    deliverablesEl.value = c.deliverables;
+    renderList(); renderSummary(); scheduleSave();
+  };
+
+  addNoteBtn.onclick = () => {
+    const c = getSelected(); if (!c) return;
+    const t = prompt("ADD NOTE (one line):");
+    if (!t) return;
+    c.notes = (c.notes ? (c.notes.trim() + "\n") : "") + "- " + t.trim();
+    notesEl.value = c.notes;
+    renderList(); renderSummary(); scheduleSave();
+  };
+
+  // bind fields
+  bindField(platformEl, "platform", (v)=>v);
+  bindField(visibilityEl, "visibility", (v)=>v);
+  bindField(handleEl, "handle", (v)=>v);
+  bindField(urlEl, "url", (v)=>v);
+  bindField(ownerEl, "owner", (v)=>v);
+  bindField(freqEl, "frequency", (v)=>v);
+  bindField(statusEl, "status", (v)=>v);
+  bindField(tagsEl, "tags", (v)=>v);
+  bindField(notesEl, "notes", (v)=>v);
+  bindField(strategyEl, "strategy", (v)=>v);
+  bindField(deliverablesEl, "deliverables", (v)=>v);
+  bindField(metricsEl, "metrics", (v)=>v);
+
+  // hotkeys (avoid breaking typing)
+  window.addEventListener("keydown", (e) => {
+    const tag = (document.activeElement && document.activeElement.tagName || "").toLowerCase();
+    const typing = (tag === "input" || tag === "textarea");
+    if (e.shiftKey && (e.key === "I" || e.key === "i")) { e.preventDefault(); setInvert(!state.ui.invert); }
+    if (e.shiftKey && (e.key === "N" || e.key === "n")) { e.preventDefault(); setNull(!state.ui.nullMode); }
+    if (e.shiftKey && (e.key === "F" || e.key === "f")) { e.preventDefault(); toggleFull(); }
+    if (!typing && e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); openSelected(); }
+    if (e.key === "Escape" && state.ui.nullMode) { setNull(false); }
+  });
+
+  // init
+  filePill.textContent = "FILE_ID: " + FILE_ID;
+
+  platformOptions(platformEl, false);
+  platformOptions(fPlatform, true);
+  fPlatform.value = "ALL";
+
+  state = load();
+  if (!state.channels.length) {
+    // seed minimal
+    state.channels = [
+      { id: makeId(), platform:"Instagram", visibility:"UNSET", handle:"", url:"", owner:"", frequency:"", status:"ACTIVE", tags:"", notes:"", strategy:"", deliverables:"", metrics:"", createdAt:new Date().toISOString() },
+      { id: makeId(), platform:"TikTok", visibility:"UNSET", handle:"", url:"", owner:"", frequency:"", status:"WARMING", tags:"", notes:"", strategy:"", deliverables:"", metrics:"", createdAt:new Date().toISOString() },
+      { id: makeId(), platform:"X / Twitter", visibility:"PUBLIC", handle:"", url:"", owner:"", frequency:"DAILY", status:"ACTIVE", tags:"", notes:"", strategy:"", deliverables:"", metrics:"", createdAt:new Date().toISOString() }
+    ];
+  }
+
+  ensureSelected();
+  sortBtn.textContent = "SORT: " + (state.ui.sortMode || "PLATFORM");
+  setInvert(!!state.ui.invert);
+  setNull(!!state.ui.nullMode);
+
+  renderList();
+  renderForm();
+  renderSummary();
+  save();
+})();
+</script>
+
+<!--
+AE / EE / WB — KETADATA SERIALIZATION STAMP (MANDATORY)
+AE: BLACK DEFAULT • BRUTAL / CLEAN • UNIFORM TEXT SIZE • INVERT AFFECTS WHOLE APP
+EE: LIST + DETAIL EDITOR + OVERVIEW • FILTERS (PLATFORM/VIS/TEXT) • QUICK ADD DELIVERABLE/NOTE • SORT MODES
+WB: LOCAL-FIRST SAVE • EXPORT/IMPORT JSON (REAL DOWNLOAD) • NULL/INVERT/FULL HOTKEYS
+
+FILE_ID: "KD_SOCIAL_CHANNELS_MANAGER_V1"
+ROOM_ID: "K_SYS_UTIL"
+VERSION_ID: "V1"
+UPDATED_AT: "2026-01-04T00:00:00.000-05:00"
+CHANGELOG:
+- V1: Social channel records with platform/account link/notes/strategy/deliverables + filters + export/import
+-->
+</body>
+</html>
