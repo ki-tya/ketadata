@@ -1,0 +1,424 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>KETADATA — YOUTUBE ID MANAGER (KDTV1 CURATION)</title>
+<style>
+:root{
+  --bg:#0b0b0b; --fg:#f2f2f2;
+  --hair:rgba(242,242,242,.18); --hair2:rgba(242,242,242,.08);
+  --muted:rgba(242,242,242,.62);
+  --font:12px;
+}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);font-family:Arial,Helvetica,sans-serif;font-size:var(--font);overflow:hidden;}
+*{box-sizing:border-box;}
+button,input,textarea,select{font:inherit;color:var(--fg);background:transparent;border:1px solid var(--hair);padding:6px 8px;outline:none;}
+textarea{resize:none;}
+button{cursor:pointer;}
+button:hover{background:rgba(255,255,255,.06);}
+a{color:var(--fg);text-decoration:none;}
+a:hover{text-decoration:underline;}
+.wrap{position:absolute;inset:0;display:flex;gap:8px;padding:8px;}
+.col{border:1px solid var(--hair);background:rgba(0,0,0,.25);display:flex;flex-direction:column;min-height:0;}
+.left{width:440px;min-width:340px;}
+.right{flex:1;}
+.top{border-bottom:1px solid var(--hair);padding:8px;display:flex;gap:8px;align-items:center;}a
+.pill{border:1px solid var(--hair);padding:4px 8px;opacity:.95;white-space:nowrap;}
+.badge{border:1px solid var(--hair);padding:2px 6px;opacity:.85;white-space:nowrap;}
+.spacer{flex:1;}
+.muted{color:var(--muted);}
+.section{padding:8px;border-bottom:1px solid var(--hair);}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
+.row>*{flex:1;}
+.row .tight{flex:0;white-space:nowrap;}
+.hr{height:1px;background:var(--hair2);margin:8px 0;}
+
+.list{flex:1;overflow:auto;padding:8px;display:flex;flex-direction:column;gap:8px;}
+.item{border:1px solid var(--hair);background:rgba(0,0,0,.18);padding:8px;display:grid;grid-template-columns:120px 1fr 1fr 120px;gap:8px;align-items:center;}
+.item input, .item select{width:100%;}
+.actions{display:flex;gap:8px;justify-content:flex-end;}
+.actions button{flex:0;}
+
+.table{width:100%;border-collapse:collapse;}
+.table th,.table td{border:1px solid var(--hair);padding:6px 8px;vertical-align:top;}
+.table th{background:rgba(0,0,0,.35);}
+.small{font-size:var(--font);}
+
+.footerStamp{position:absolute;left:8px;bottom:8px;opacity:.55;pointer-events:none;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="col left">
+    <div class="top">
+      <div class="pill">YOUTUBE ID MANAGER</div>
+      <div class="badge" id="counts">0</div>
+      <div class="spacer"></div>
+      <div class="badge">KDTV1 CURATION</div>
+    </div>
+
+    <div class="section">
+      <textarea id="bulk" rows="8" placeholder="paste youtube urls (one per line)&#10;supports: watch?v=, youtu.be/, playlist?list=, channel/UC..., @handle, /user/, /c/"></textarea>
+      <div style="height:8px"></div>
+      <div class="row">
+        <button id="parseBtn" class="tight">PARSE</button>
+        <button id="dedupeBtn" class="tight">DEDUPE</button>
+        <button id="clearBtn" class="tight">CLEAR</button>
+      </div>
+      <div style="height:8px"></div>
+      <div class="row">
+        <input id="tag" placeholder="tag (optional)"/>
+        <input id="note" placeholder="note (optional)"/>
+        <button id="applyMetaBtn" class="tight">APPLY TO NEW</button>
+      </div>
+      <div style="height:8px"></div>
+      <div class="muted">
+        This extracts IDs only. It does not resolve @handle to channelId without the YouTube API.
+        Unresolved /c/ and /user/ entries are stored as CUSTOM.
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="row">
+        <button id="exportBtn" class="tight">EXPORT JSON</button>
+        <button id="exportCsvBtn" class="tight">EXPORT CSV</button>
+        <button id="importBtn" class="tight">IMPORT JSON</button>
+        <input id="importFile" type="file" accept="application/json" style="display:none"/>
+        <button id="copyKdtvBtn" class="tight">COPY KDTV1 PRELOAD JSON</button>
+      </div>
+      <div style="height:8px"></div>
+      <div class="row">
+        <button id="copyUrlsBtn" class="tight">COPY URLS</button>
+        <button id="copyIdsBtn" class="tight">COPY IDS</button>
+        <button id="wipeLsBtn" class="tight">WIPE LOCAL</button>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="pill">ENTRIES</div>
+      <div class="muted">Edit TYPE/ID/URL/TITLE/TAG/NOTE. Uploads playlist auto-derived for UC channels (UU + channelId.slice(2)).</div>
+    </div>
+
+    <div class="list" id="list"></div>
+  </div>
+
+  <div class="col right">
+    <div class="top">
+      <div class="pill">KDTV1 PRELOAD OUTPUT</div>
+      <div class="spacer"></div>
+      <div class="badge" id="sel">selected: —</div>
+    </div>
+
+    <div class="section">
+      <div class="row">
+        <div class="pill">GENERATED JSON</div>
+        <button id="refreshOutBtn" class="tight">REFRESH</button>
+      </div>
+      <div style="height:8px"></div>
+      <textarea id="out" rows="14" spellcheck="false"></textarea>
+      <div style="height:8px"></div>
+      <div class="muted">
+        Output shape: channels[], playlists[], videos[], handles[], customs[].
+      </div>
+    </div>
+
+    <div class="section" style="flex:1;min-height:0;overflow:auto;">
+      <table class="table small" id="summary">
+        <thead><tr><th>TYPE</th><th>COUNT</th><th>NOTES</th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <div class="hr"></div>
+      <div class="muted">
+        Rules: Channel IDs start UC. Uploads playlist often UU + channelId.slice(2). Playlist IDs often PL/UU/LL/OLAK5uy. Video IDs often 11 chars.
+      </div>
+    </div>
+
+    <div class="footerStamp">
+      AE/EE/WB · FILE_ID: "KETADATA_YT_ID_MANAGER_KDTV1" · ROOM_ID: "K_BASE" · VERSION_ID: "V1" · UPDATED_AT: "2026-01-04T05:26:04Z" · CHANGELOG: "YouTube ID extraction + curation list + KDTV1 preload export (local-first)"
+    </div>
+  </div>
+</div>
+
+<script>
+const LS_KEY = "KD_YT_ID_MANAGER_V1";
+const TYPES = ["CHANNEL","PLAYLIST","VIDEO","HANDLE","CUSTOM"];
+const state = { entries: [], metaForNew: {tag:"", note:""} };
+
+function uid(){ return "id_"+Math.random().toString(16).slice(2)+Date.now().toString(16); }
+function save(){ localStorage.setItem(LS_KEY, JSON.stringify(state)); }
+function load(){ try{ const raw=localStorage.getItem(LS_KEY); if(raw) Object.assign(state, JSON.parse(raw)); }catch(e){} }
+
+function downloadText(text, filename, mime="application/json") {
+  const blob = new Blob([text], {type:mime});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url), 1000);
+}
+async function copy(text){ try{ await navigator.clipboard.writeText(text); }catch(e){ alert("Copy failed"); } }
+
+function deriveUploadsPlaylistId(channelId) {
+  channelId = (channelId||"").trim();
+  if(channelId.startsWith("UC") && channelId.length>2) return "UU" + channelId.slice(2);
+  return "";
+}
+
+function parseYoutubeLine(line){
+  line = (line||"").trim();
+  if(!line) return null;
+
+  if(line.startsWith("UC") && line.length>=10) return {type:"CHANNEL", id: line, url:"https://www.youtube.com/channel/"+line};
+  if(line.startsWith("PL") || line.startsWith("UU") || line.startsWith("LL") || line.startsWith("OLAK5uy")) {
+    return {type:"PLAYLIST", id: line, url:"https://www.youtube.com/playlist?list="+line};
+  }
+  if(line.startsWith("@")) return {type:"HANDLE", id: line.replace("@",""), url:"https://www.youtube.com/@"+line.replace("@","")};
+  if(/^[a-zA-Z0-9_-]{11}$/.test(line)) return {type:"VIDEO", id: line, url:"https://www.youtube.com/watch?v="+line};
+
+  let u;
+  try { u = new URL(line); } catch(e) { return {type:"CUSTOM", id:"", url: line}; }
+
+  const host = u.hostname.replace("www.","").replace("m.","");
+  if(host!=="youtube.com" && host!=="youtu.be") return {type:"CUSTOM", id:"", url: line};
+
+  if(host==="youtu.be") {
+    const vid = u.pathname.split("/").filter(Boolean)[0] || "";
+    if(vid) return {type:"VIDEO", id: vid, url:"https://www.youtube.com/watch?v="+vid};
+  }
+
+  const list = u.searchParams.get("list");
+  if(list) return {type:"PLAYLIST", id: list, url:"https://www.youtube.com/playlist?list="+list};
+
+  const v = u.searchParams.get("v");
+  if(v) return {type:"VIDEO", id: v, url:"https://www.youtube.com/watch?v="+v};
+
+  if(u.pathname.startsWith("/channel/")) {
+    const cid = u.pathname.split("/channel/")[1].split("/")[0];
+    if(cid) return {type:"CHANNEL", id: cid, url:"https://www.youtube.com/channel/"+cid};
+  }
+
+  if(u.pathname.startsWith("/@")) {
+    const h = u.pathname.split("/@")[1].split("/")[0];
+    if(h) return {type:"HANDLE", id: h, url:"https://www.youtube.com/@"+h};
+  }
+
+  if(u.pathname.startsWith("/c/")) {
+    const c = u.pathname.split("/c/")[1].split("/")[0];
+    if(c) return {type:"CUSTOM", id: c, url: line, note:"unresolved /c/ name (needs API to map to UC...)"};
+  }
+  if(u.pathname.startsWith("/user/")) {
+    const us = u.pathname.split("/user/")[1].split("/")[0];
+    if(us) return {type:"CUSTOM", id: us, url: line, note:"unresolved /user/ name (needs API to map to UC...)"};
+  }
+
+  return {type:"CUSTOM", id:"", url: line};
+}
+
+function addEntry(p, meta) {
+  const e = {
+    entryId: uid(),
+    type: p.type || "CUSTOM",
+    id: (p.id||"").trim(),
+    url: (p.url||"").trim(),
+    title: "",
+    tag: (meta?.tag||"").trim(),
+    note: (p.note||meta?.note||"").trim(),
+    uploadsPlaylistId: ""
+  };
+  if(e.type==="CHANNEL" && e.id) e.uploadsPlaylistId = deriveUploadsPlaylistId(e.id);
+  state.entries.push(e);
+}
+
+function dedupe() {
+  const seen = new Set();
+  const out = [];
+  for(const e of state.entries) {
+    const k = [e.type, e.id, e.url].join("|");
+    if(seen.has(k)) continue;
+    seen.add(k);
+    out.push(e);
+  }
+  state.entries = out;
+}
+
+const $ = (id)=>document.getElementById(id);
+const listEl = $("list");
+const outEl = $("out");
+const countsEl = $("counts");
+const selEl = $("sel");
+const summaryTbody = document.querySelector("#summary tbody");
+
+let selectedId = null;
+
+function buildKdtvPreload() {
+  const channels=[], playlists=[], videos=[], handles=[], customs=[];
+  for(const e of state.entries) {
+    const base = { title:e.title||"", tag:e.tag||"", note:e.note||"", url:e.url||"" };
+    if(e.type==="CHANNEL") channels.push({...base, channelId:e.id||"", uploadsPlaylistId: e.uploadsPlaylistId||deriveUploadsPlaylistId(e.id||"")});
+    else if(e.type==="PLAYLIST") playlists.push({...base, playlistId:e.id||""});
+    else if(e.type==="VIDEO") videos.push({...base, videoId:e.id||""});
+    else if(e.type==="HANDLE") handles.push({...base, handle:e.id||""});
+    else customs.push({...base, ref:e.id||""});
+  }
+  return { fileId:"KETADATA_YT_ID_MANAGER_KDTV1", updatedAt:new Date().toISOString(), channels, playlists, videos, handles, customs };
+}
+
+function refreshOutput() {
+  outEl.value = JSON.stringify(buildKdtvPreload(), null, 2);
+}
+
+function renderSummary(){
+  const counts={};
+  for(const e of state.entries) counts[e.type]=(counts[e.type]||0)+1;
+  const rows=Object.entries(counts).sort((a,b)=>b[1]-a[1]);
+  summaryTbody.innerHTML="";
+  for(const [t,c] of rows) {
+    const tr=document.createElement("tr");
+    tr.innerHTML = "<td>"+t+"</td><td>"+c+"</td><td>"+((t==="HANDLE"||t==="CUSTOM")?"May be unresolved.":"")+"</td>";
+    summaryTbody.appendChild(tr);
+  }
+}
+
+function render() {
+  countsEl.textContent = String(state.entries.length);
+  listEl.innerHTML = "";
+  for(const e of state.entries) {
+    const d=document.createElement("div");
+    d.className="item";
+
+    const typeSel=document.createElement("select");
+    for(const t of TYPES){
+      const opt=document.createElement("option");
+      opt.value=t; opt.textContent=t;
+      if(t===e.type) opt.selected=true;
+      typeSel.appendChild(opt);
+    }
+    typeSel.onchange=()=>{
+      e.type=typeSel.value;
+      if(e.type==="CHANNEL") e.uploadsPlaylistId=deriveUploadsPlaylistId(e.id);
+      save(); refreshOutput(); renderSummary();
+    };
+
+    const idIn=document.createElement("input");
+    idIn.placeholder="id";
+    idIn.value=e.id||"";
+    idIn.oninput=()=>{
+      e.id=idIn.value.trim();
+      if(e.type==="CHANNEL") e.uploadsPlaylistId=deriveUploadsPlaylistId(e.id);
+      save(); refreshOutput(); renderSummary();
+      d.querySelector('input[placeholder="uploads"]').value = e.uploadsPlaylistId || "";
+    };
+
+    const urlIn=document.createElement("input");
+    urlIn.placeholder="url";
+    urlIn.value=e.url||"";
+    urlIn.oninput=()=>{ e.url=urlIn.value.trim(); save(); };
+
+    const act=document.createElement("div");
+    act.className="actions";
+    const openBtn=document.createElement("button"); openBtn.textContent="OPEN"; openBtn.onclick=()=>{ if(e.url) window.open(e.url,"_blank"); };
+    const copyBtn=document.createElement("button"); copyBtn.textContent="COPY ID"; copyBtn.onclick=()=>copy(e.id||"");
+    const delBtn=document.createElement("button"); delBtn.textContent="DEL"; delBtn.onclick=()=>{ state.entries=state.entries.filter(x=>x.entryId!==e.entryId); save(); render(); refreshOutput(); renderSummary(); };
+    act.appendChild(openBtn); act.appendChild(copyBtn); act.appendChild(delBtn);
+
+    const sub=document.createElement("div");
+    sub.style.gridColumn="1 / -1";
+    sub.style.display="grid";
+    sub.style.gridTemplateColumns="1fr 180px 1fr 200px";
+    sub.style.gap="8px";
+
+    const titleIn=document.createElement("input"); titleIn.placeholder="title"; titleIn.value=e.title||"";
+    titleIn.oninput=()=>{ e.title=titleIn.value; save(); refreshOutput(); };
+
+    const tagIn=document.createElement("input"); tagIn.placeholder="tag"; tagIn.value=e.tag||"";
+    tagIn.oninput=()=>{ e.tag=tagIn.value; save(); refreshOutput(); };
+
+    const noteIn=document.createElement("input"); noteIn.placeholder="note"; noteIn.value=e.note||"";
+    noteIn.oninput=()=>{ e.note=noteIn.value; save(); refreshOutput(); };
+
+    const up=document.createElement("input"); up.placeholder="uploads"; up.value=e.uploadsPlaylistId||"";
+    up.oninput=()=>{ e.uploadsPlaylistId=up.value.trim(); save(); refreshOutput(); };
+
+    sub.appendChild(titleIn); sub.appendChild(tagIn); sub.appendChild(noteIn); sub.appendChild(up);
+
+    d.appendChild(typeSel);
+    d.appendChild(idIn);
+    d.appendChild(urlIn);
+    d.appendChild(act);
+    d.appendChild(sub);
+
+    d.onclick=(ev)=>{
+      const t=(ev.target && ev.target.tagName || "").toLowerCase();
+      if(t==="input"||t==="select"||t==="button") return;
+      selectedId=e.entryId;
+      selEl.textContent="selected: "+(e.type+" "+(e.id||e.url||""));
+    };
+
+    listEl.appendChild(d);
+  }
+  refreshOutput();
+  renderSummary();
+}
+
+/* actions */
+$("applyMetaBtn").onclick=()=>{ state.metaForNew.tag=($("tag").value||"").trim(); state.metaForNew.note=($("note").value||"").trim(); save(); };
+
+$("parseBtn").onclick=()=>{
+  const lines = $("bulk").value.split(/\r?\n/);
+  const meta = state.metaForNew || {tag:"", note:""};
+  for(const line of lines) {
+    const p = parseYoutubeLine(line);
+    if(!p) continue;
+    addEntry(p, meta);
+  }
+  $("bulk").value="";
+  save(); render();
+};
+
+$("dedupeBtn").onclick=()=>{ dedupe(); save(); render(); };
+$("clearBtn").onclick=()=>{ $("bulk").value=""; };
+
+$("exportBtn").onclick=()=>{
+  const payload={ fileId:"KETADATA_YT_ID_MANAGER_KDTV1", updatedAt:new Date().toISOString(), entries: state.entries };
+  downloadText(JSON.stringify(payload,null,2), "KD_YT_IDS.json");
+};
+
+$("exportCsvBtn").onclick=()=>{
+  const header=["type","id","uploadsPlaylistId","title","tag","note","url"];
+  const rows=[header.join(",")];
+  for(const e of state.entries) {
+    const r=[e.type,e.id,e.uploadsPlaylistId,e.title,e.tag,e.note,e.url].map(x => '"' + String(x||"").replace(/"/g,'""') + '"');
+    rows.push(r.join(","));
+  }
+  downloadText(rows.join("\n"), "KD_YT_IDS.csv", "text/csv");
+};
+
+$("importBtn").onclick=()=>$("importFile").click();
+$("importFile").addEventListener("change", async (e)=>{
+  const f=e.target.files && e.target.files[0];
+  if(!f) return;
+  try {
+    const txt=await f.text();
+    const o=JSON.parse(txt);
+    if(o && Array.isArray(o.entries)) {
+      state.entries=o.entries;
+      save(); render();
+    }
+  } catch(err) { alert("Import failed: "+err.message); }
+  e.target.value="";
+});
+
+$("copyKdtvBtn").onclick=()=>copy(outEl.value||"");
+$("refreshOutBtn").onclick=()=>refreshOutput();
+
+$("copyUrlsBtn").onclick=()=>copy(state.entries.map(e=>e.url).filter(Boolean).join("\n"));
+$("copyIdsBtn").onclick=()=>copy(state.entries.map(e=>e.type+":"+ (e.id||"")).join("\n"));
+$("wipeLsBtn").onclick=()=>{ localStorage.removeItem(LS_KEY); state.entries=[]; save(); render(); };
+
+/* init */
+load();
+render();
+</script>
+</body>
+</html>
