@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>KETADATA — EXPERIMENTAL SURFACE</title>
+<style>
+:root{--bg:#0b0b0b;--fg:#f2f2f2;--muted:rgba(242,242,242,.6);--hair:rgba(242,242,242,.18);--panel:rgba(0,0,0,.55);--font:12px}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);font-family:Arial,Helvetica,sans-serif;font-size:var(--font);overflow:hidden}
+*{box-sizing:border-box}
+button,input,textarea{font:inherit;color:var(--fg);background:transparent;border:1px solid var(--hair);padding:6px 8px}
+button{cursor:pointer}
+button:hover{background:rgba(255,255,255,.06)}
+textarea{resize:none}
+.stage{position:absolute;inset:0}
+.frameWrap{position:absolute;inset:0}
+.frame{position:absolute;inset:0;border:0;width:100%;height:100%;background:#000}
+.fade{transition:opacity .45s ease}
+.hidden{opacity:0;pointer-events:none}
+.topbar{position:absolute;left:0;right:0;top:0;height:36px;display:flex;align-items:center;gap:8px;padding:0 8px;background:rgba(0,0,0,.65);border-bottom:1px solid var(--hair);z-index:10}
+.spacer{flex:1}
+.pill{border:1px solid var(--hair);padding:4px 8px;opacity:.9}
+.ctrl{position:absolute;left:8px;bottom:8px;right:8px;display:flex;gap:8px;align-items:center;background:var(--panel);border:1px solid var(--hair);padding:8px;z-index:10}
+.ctrl .group{display:flex;gap:6px;align-items:center}
+.panel{position:absolute;right:8px;top:44px;width:360px;background:var(--panel);border:1px solid var(--hair);padding:8px;z-index:10}
+.list{border:1px solid var(--hair);max-height:40vh;overflow:auto}
+.item{display:flex;gap:6px;align-items:center;padding:6px;border-bottom:1px solid rgba(255,255,255,.08)}
+.item:last-child{border-bottom:0}
+.item .t{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+kbd{border:1px solid var(--hair);padding:1px 4px;opacity:.8}
+body.invert{--bg:#f2f2f2;--fg:#0b0b0b;--muted:rgba(0,0,0,.6);--hair:rgba(0,0,0,.2);--panel:rgba(242,242,242,.75)}
+</style>
+</head>
+<body>
+<div class="stage">
+  <div class="topbar">
+    <div class="pill">EXPERIMENTAL SURFACE</div>
+    <div class="pill" id="counter">0 / 0</div>
+    <div class="spacer"></div>
+    <div class="pill">HOTKEYS: ←/→ · A auto · I invert · Esc exit</div>
+  </div>
+
+  <div class="frameWrap">
+    <iframe id="f0" class="frame fade"></iframe>
+    <iframe id="f1" class="frame fade hidden"></iframe>
+  </div>
+
+  <div class="panel">
+    <textarea id="paste" rows="6" placeholder="PASTE URLs (one per line)"></textarea>
+    <div style="height:6px"></div>
+    <button id="load">LOAD</button>
+    <div style="height:6px"></div>
+    <div class="list" id="list"></div>
+  </div>
+
+  <div class="ctrl">
+    <div class="group">
+      <button id="prev">PREV</button>
+      <button id="next">NEXT</button>
+    </div>
+    <div class="group">
+      <button id="auto">AUTO OFF</button>
+    </div>
+    <div class="group">
+      <label>INTENSITY</label>
+      <input id="intensity" type="range" min="0" max="100" value="50"/>
+    </div>
+  </div>
+</div>
+
+<script>
+const LS_KEY="KD_EXPERIMENTAL_SURFACE_V1";
+let state={urls:[],index:0,auto:false,intensity:50,invert:false};
+try{Object.assign(state,JSON.parse(localStorage.getItem(LS_KEY)||"{}"))}catch{}
+const f0=document.getElementById("f0"),f1=document.getElementById("f1");
+let active=0;
+const paste=document.getElementById("paste"),list=document.getElementById("list"),counter=document.getElementById("counter"),autoBtn=document.getElementById("auto"),intensity=document.getElementById("intensity");
+function save(){localStorage.setItem(LS_KEY,JSON.stringify(state))}
+function renderList(){list.innerHTML="";state.urls.forEach((u,i)=>{const d=document.createElement("div");d.className="item";d.innerHTML=`<div class="t">${u}</div>`;d.onclick=()=>go(i);list.appendChild(d)});counter.textContent=state.urls.length?(state.index+1+" / "+state.urls.length):"0 / 0"}
+function loadUrls(){const lines=paste.value.split(/\n+/).map(s=>s.trim()).filter(Boolean);state.urls=[...new Set(lines)];state.index=0;save();renderList();if(state.urls.length)mount(0)}
+function mount(i){if(!state.urls.length)return;state.index=(i+state.urls.length)%state.urls.length;const nextFrame=active?f0:f1,curFrame=active?f1:f0;nextFrame.src=state.urls[state.index];nextFrame.classList.remove("hidden");curFrame.classList.add("hidden");active=active?0:1;counter.textContent=(state.index+1)+" / "+state.urls.length;save()}
+function next(){mount(state.index+1)}function prev(){mount(state.index-1)}function go(i){mount(i)}
+let timer=null;function setAuto(on){state.auto=on;autoBtn.textContent=on?"AUTO ON":"AUTO OFF";if(timer){clearInterval(timer);timer=null}if(on){timer=setInterval(()=>next(),Math.max(1200,6000-state.intensity*40))}save()}
+document.getElementById("load").onclick=loadUrls;
+document.getElementById("next").onclick=next;
+document.getElementById("prev").onclick=prev;
+autoBtn.onclick=()=>setAuto(!state.auto);
+intensity.oninput=()=>{state.intensity=Number(intensity.value);save()}
+window.addEventListener("keydown",(e)=>{if(e.target&&(e.target.tagName==="TEXTAREA"||e.target.tagName==="INPUT"))return;if(e.key==="ArrowRight")next();if(e.key==="ArrowLeft")prev();if(e.key.toLowerCase()==="a")setAuto(!state.auto);if(e.key.toLowerCase()==="i"){state.invert=!state.invert;document.body.classList.toggle("invert",state.invert);save()}if(e.key==="Escape")window.location.href="about:blank"});
+document.body.classList.toggle("invert",state.invert);intensity.value=state.intensity;autoBtn.textContent=state.auto?"AUTO ON":"AUTO OFF";renderList();if(state.urls.length)mount(state.index);if(state.auto)setAuto(true);
+</script>
+</body>
+</html>
