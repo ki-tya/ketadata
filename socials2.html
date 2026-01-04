@@ -1,0 +1,750 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>KETADATA — SOCIAL MANAGER</title>
+  <style>
+    :root{
+      --bg:#000;
+      --fg:#f2f2f2;
+      --muted:#9a9a9a;
+      --line:#2a2a2a;
+      --hud:rgba(255,255,255,0.03);
+      --font:12px/1.15 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace;
+      --r:12px;
+    }
+    html,body{height:100%;margin:0;background:var(--bg);color:var(--fg);font:var(--font);overflow:hidden;}
+    *{box-sizing:border-box;}
+    a{color:var(--fg);text-decoration:none;}
+    a:hover{text-decoration:underline;}
+    button,input,textarea{font:var(--font);color:var(--fg);}
+    textarea,input{
+      background:rgba(0,0,0,0.28);
+      border:1px solid var(--line);
+      border-radius:10px;
+      outline:none;
+      padding:6px 8px;
+    }
+    textarea{resize:vertical;min-height:70px;}
+    input{height:28px;}
+    button{
+      height:28px;padding:0 10px;border:1px solid var(--line);
+      background:transparent;border-radius:10px;cursor:pointer;
+    }
+    button:active{transform:translateY(1px);}
+    button.on{background:rgba(255,255,255,0.06);}
+    .pill{border:1px solid var(--line);border-radius:999px;padding:3px 6px;color:var(--muted);background:rgba(0,0,0,0.14);white-space:nowrap;}
+    .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
+    .sp{flex:1;}
+    .sep{height:1px;background:rgba(255,255,255,0.06);margin:8px 0;}
+
+    /* Global */
+    #app{position:fixed;inset:0;}
+    #bgfx{position:fixed;inset:0;pointer-events:none;}
+    #workspace{position:fixed;inset:0;overflow:hidden;}
+
+    /* INVERT affects whole app */
+    html.invert #app{filter: invert(1) hue-rotate(180deg);}
+
+    /* NULL hides chrome */
+    html.null #hud, html.null #dock{display:none;}
+
+    /* HUD */
+    #hud{
+      position:fixed;left:10px;top:10px;z-index:80;width:420px;
+      border:1px solid var(--line);background:var(--hud);backdrop-filter: blur(6px);
+      border-radius:var(--r);overflow:hidden;user-select:none;
+    }
+    #hudHead{display:flex;gap:8px;align-items:center;padding:8px;border-bottom:1px solid var(--line);background:rgba(0,0,0,0.18);}
+    #hudHead .t{color:var(--muted);}
+    #hudBody{padding:8px;}
+    #hudBody.collapsed{display:none;}
+    #hud input[type="text"]{width:100%;}
+    #hud .kv{display:grid;grid-template-columns:110px 1fr;gap:8px;align-items:center;padding:6px 0;border-bottom:1px dashed rgba(255,255,255,0.08);}
+    #hud .kv:last-child{border-bottom:none;}
+    #hud label{color:var(--muted);}
+
+    /* Dock (all platforms list + export/import) */
+    #dock{
+      position:fixed;left:10px;right:10px;bottom:10px;z-index:70;
+      border:1px solid var(--line);background:rgba(0,0,0,0.30);
+      border-radius:var(--r);padding:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;
+      user-select:none;
+    }
+    #dock .list{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
+    #dock .mini{height:26px;padding:0 8px;border-radius:999px;}
+    #dock .muted{color:var(--muted);}
+
+    /* Platform modules (draggable panels) */
+    .mod{
+      position:absolute;min-width:360px;max-width:520px;
+      border:1px solid var(--line);border-radius:var(--r);
+      background:rgba(0,0,0,0.38);backdrop-filter: blur(6px);
+      overflow:hidden;
+    }
+    .modHead{
+      display:flex;gap:8px;align-items:center;
+      padding:8px;border-bottom:1px solid var(--line);
+      background:rgba(255,255,255,0.03);
+      cursor:grab;user-select:none;
+    }
+    .modHead:active{cursor:grabbing;}
+    .modHead .name{color:var(--fg);}
+    .modHead .meta{color:var(--muted);}
+    .modBody{padding:8px;display:flex;flex-direction:column;gap:8px;}
+    .modBody .subt{color:var(--muted);}
+
+    /* Accounts list */
+    .acct{
+      border:1px solid rgba(255,255,255,0.10);
+      border-radius:12px;
+      background:rgba(255,255,255,0.02);
+      padding:8px;
+      display:flex;flex-direction:column;gap:8px;
+    }
+    .grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+    /* FIX: button offset/clipping */
+    .grid3{
+      display:grid;
+      grid-template-columns: 1fr 1fr auto; /* was 1fr 1fr 90px */
+      gap:8px;
+      align-items:center;
+    }
+    .grid3 > input{min-width:0;} /* allow shrink without pushing button out */
+    .grid3 > button{
+      width:100%;
+      min-width:72px;
+      justify-self:stretch;
+    }
+
+    .tinybtn{height:28px;padding:0 10px;}
+    .danger{border-color:rgba(255,255,255,0.18);}
+    .danger:hover{border-color:rgba(255,255,255,0.35);}
+    .small{min-height:60px;}
+    .note{min-height:90px;}
+    .w100{width:100%;}
+  </style>
+</head>
+<body>
+<div id="app">
+  <canvas id="bgfx"></canvas>
+  <div id="workspace"></div>
+
+  <div id="hud">
+    <div id="hudHead">
+      <span class="t">KETADATA SOCIAL MANAGER</span>
+      <span class="sp"></span>
+      <span class="pill">SHIFT+I INVERT</span>
+      <span class="pill">SHIFT+N NULL</span>
+      <span class="pill">SHIFT+F FULL</span>
+      <button id="hudCollapse" class="mini">—</button>
+    </div>
+    <div id="hudBody">
+      <div class="kv">
+        <label>ADD PLATFORM</label>
+        <div class="row">
+          <input id="newPlatform" type="text" placeholder="e.g., INSTAGRAM / TIKTOK / X / YOUTUBE / TELEGRAM" class="w100"/>
+        </div>
+      </div>
+      <div class="row" style="margin-top:8px;">
+        <button id="addPlatformBtn">ADD</button>
+        <button id="arrangeBtn">ARRANGE</button>
+        <button id="pauseFxBtn" class="on">FX</button>
+        <span class="sp"></span>
+        <span class="pill" id="filePill"></span>
+      </div>
+      <div class="sep"></div>
+      <div class="row">
+        <button id="exportBtn">EXPORT (FILE)</button>
+        <button id="importBtn">IMPORT (FILE)</button>
+        <button id="resetBtn" class="danger">RESET STATE</button>
+        <input id="importFile" type="file" accept="application/json" style="display:none"/>
+      </div>
+      <div class="row" style="margin-top:8px;">
+        <span class="pill">CLICK PLATFORM CHIP TO FOCUS</span>
+        <span class="pill">DRAG PLATFORM HEAD TO MOVE</span>
+        <span class="pill">DBLCLICK CHIP = DELETE</span>
+      </div>
+    </div>
+  </div>
+
+  <div id="dock">
+    <span class="muted">PLATFORMS:</span>
+    <div class="list" id="platformChips"></div>
+    <span class="sp"></span>
+    <span class="pill" id="fpsPill">FPS: —</span>
+  </div>
+</div>
+
+<script>
+(() => {
+  const FILE_ID = "KD_SOCIAL_MANAGER_V1";
+  const STORE_KEY = "KD_STATE__" + FILE_ID;
+
+  const $ = (id)=>document.getElementById(id);
+
+  const workspace = $("workspace");
+  const bg = $("bgfx");
+  const bctx = bg.getContext("2d", { alpha:false });
+
+  const filePill = $("filePill");
+  const fpsPill = $("fpsPill");
+  filePill.textContent = "FILE_ID: " + FILE_ID;
+
+  const hudBody = $("hudBody");
+  const hudCollapse = $("hudCollapse");
+
+  const newPlatform = $("newPlatform");
+  const addPlatformBtn = $("addPlatformBtn");
+  const arrangeBtn = $("arrangeBtn");
+  const pauseFxBtn = $("pauseFxBtn");
+
+  const exportBtn = $("exportBtn");
+  const importBtn = $("importBtn");
+  const importFile = $("importFile");
+  const resetBtn = $("resetBtn");
+
+  const platformChips = $("platformChips");
+
+  const nowISO=()=>new Date().toISOString();
+  const uid=()=>Math.random().toString(16).slice(2)+Math.random().toString(16).slice(2);
+
+  const DPR = ()=>Math.max(1, Math.min(2.25, window.devicePixelRatio||1));
+  let W=0,H=0,D=1;
+
+  function resize(){
+    D = DPR();
+    W = Math.floor(window.innerWidth*D);
+    H = Math.floor(window.innerHeight*D);
+    bg.width = W; bg.height = H;
+    bg.style.width = window.innerWidth+"px";
+    bg.style.height = window.innerHeight+"px";
+    bctx.setTransform(1,0,0,1,0,0);
+  }
+  window.addEventListener("resize", resize, {passive:true});
+  resize();
+
+  // ---------- STATE ----------
+  function stateDefault(){
+    return {
+      meta:{ fileId: FILE_ID, updatedAt: nowISO() },
+      ui:{ invert:false, nullMode:false, hudCollapsed:false, fxOn:true, zTop: 10 },
+      platforms:[]
+    };
+  }
+  let state = loadState();
+
+  function loadState(){
+    try{
+      const raw = localStorage.getItem(STORE_KEY);
+      if(!raw) return stateDefault();
+      const p = JSON.parse(raw);
+      if(!p || typeof p!=="object") return stateDefault();
+      if(!p.meta) p.meta={};
+      if(!p.ui) p.ui={};
+      if(!Array.isArray(p.platforms)) p.platforms=[];
+      p.meta.fileId = FILE_ID;
+      return p;
+    }catch{ return stateDefault(); }
+  }
+  let saveT=null;
+  function saveState(){
+    try{
+      state.meta.updatedAt = nowISO();
+      localStorage.setItem(STORE_KEY, JSON.stringify(state));
+    }catch{}
+  }
+  function scheduleSave(){
+    if(saveT) clearTimeout(saveT);
+    saveT=setTimeout(saveState, 200);
+  }
+
+  function applyUI(){
+    document.documentElement.classList.toggle("invert", !!state.ui.invert);
+    document.documentElement.classList.toggle("null", !!state.ui.nullMode);
+    hudBody.classList.toggle("collapsed", !!state.ui.hudCollapsed);
+    hudCollapse.textContent = state.ui.hudCollapsed ? "+" : "—";
+    pauseFxBtn.classList.toggle("on", !!state.ui.fxOn);
+    pauseFxBtn.textContent = state.ui.fxOn ? "FX" : "FX OFF";
+  }
+  applyUI();
+
+  // ---------- DATA MODEL ----------
+  // platform: { id, name, x, y, w, z, notes, accounts:[{id,name,link,notes,strategy,deliverables}] }
+  function normalizePlatformName(s){
+    return String(s||"").trim().replace(/\s+/g," ").toUpperCase();
+  }
+  function addPlatform(name){
+    const n = normalizePlatformName(name);
+    if(!n) return;
+    if(state.platforms.some(p => p.name===n)) return;
+
+    const baseX = 40 + (state.platforms.length%3)*420;
+    const baseY = 90 + (Math.floor(state.platforms.length/3)%3)*260;
+
+    state.platforms.push({
+      id: "P_"+uid(),
+      name: n,
+      x: baseX,
+      y: baseY,
+      w: 420,
+      z: ++state.ui.zTop,
+      notes: "",
+      accounts:[]
+    });
+    scheduleSave();
+    render();
+  }
+
+  function removePlatform(pid){
+    state.platforms = state.platforms.filter(p=>p.id!==pid);
+    scheduleSave();
+    render();
+  }
+
+  function addAccount(pid, data){
+    const p = state.platforms.find(x=>x.id===pid);
+    if(!p) return;
+    p.accounts.push({
+      id:"A_"+uid(),
+      name: String(data.name||"").trim(),
+      link: String(data.link||"").trim(),
+      notes: String(data.notes||""),
+      strategy: String(data.strategy||""),
+      deliverables: String(data.deliverables||"")
+    });
+    scheduleSave();
+    render();
+  }
+
+  function removeAccount(pid, aid){
+    const p = state.platforms.find(x=>x.id===pid);
+    if(!p) return;
+    p.accounts = p.accounts.filter(a=>a.id!==aid);
+    scheduleSave();
+    render();
+  }
+
+  function bringToFront(pid){
+    const p = state.platforms.find(x=>x.id===pid);
+    if(!p) return;
+    p.z = ++state.ui.zTop;
+    scheduleSave();
+    render();
+  }
+
+  // ---------- EXPORT / IMPORT (REAL FILE DOWNLOAD) ----------
+  function downloadJSON(filename, obj){
+    const blob = new Blob([JSON.stringify(obj, null, 2)], {type:"application/json"});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  function exportState(){
+    downloadJSON(FILE_ID + "__STATE.json", state);
+  }
+
+  function importStateFromFile(file){
+    const fr = new FileReader();
+    fr.onload = () => {
+      try{
+        const parsed = JSON.parse(fr.result);
+        if(!parsed || typeof parsed!=="object") return;
+        if(!parsed.platforms || !Array.isArray(parsed.platforms)) return;
+
+        state = stateDefault();
+        state.platforms = parsed.platforms.map(p => ({
+          id: p.id || ("P_"+uid()),
+          name: normalizePlatformName(p.name),
+          x: Number.isFinite(p.x) ? p.x : 60,
+          y: Number.isFinite(p.y) ? p.y : 80,
+          w: Number.isFinite(p.w) ? p.w : 420,
+          z: Number.isFinite(p.z) ? p.z : (++state.ui.zTop),
+          notes: String(p.notes||""),
+          accounts: Array.isArray(p.accounts) ? p.accounts.map(a => ({
+            id: a.id || ("A_"+uid()),
+            name: String(a.name||"").trim(),
+            link: String(a.link||"").trim(),
+            notes: String(a.notes||""),
+            strategy: String(a.strategy||""),
+            deliverables: String(a.deliverables||"")
+          })) : []
+        })).filter(p => p.name);
+
+        if(parsed.ui && typeof parsed.ui==="object"){
+          state.ui.invert = !!parsed.ui.invert;
+          state.ui.nullMode = !!parsed.ui.nullMode;
+          state.ui.hudCollapsed = !!parsed.ui.hudCollapsed;
+          state.ui.fxOn = (parsed.ui.fxOn !== undefined) ? !!parsed.ui.fxOn : true;
+        }
+        state.ui.zTop = Math.max(10, ...state.platforms.map(p=>p.z||10));
+
+        applyUI();
+        saveState();
+        render();
+      }catch{}
+    };
+    fr.readAsText(file);
+  }
+
+  // ---------- RENDER ----------
+  function renderChips(){
+    platformChips.innerHTML = "";
+    state.platforms
+      .slice()
+      .sort((a,b)=>a.name.localeCompare(b.name))
+      .forEach(p=>{
+        const b = document.createElement("button");
+        b.className="mini";
+        b.textContent = p.name;
+        b.onclick = ()=>{ bringToFront(p.id); };
+        b.ondblclick = ()=>{ removePlatform(p.id); };
+        platformChips.appendChild(b);
+      });
+  }
+
+  function modEl(tag, cls, txt){
+    const e = document.createElement(tag);
+    if(cls) e.className = cls;
+    if(txt!==undefined) e.textContent = txt;
+    return e;
+  }
+
+  function renderPlatform(p){
+    const mod = modEl("div","mod");
+    mod.style.left = p.x + "px";
+    mod.style.top  = p.y + "px";
+    mod.style.width = p.w + "px";
+    mod.style.zIndex = p.z;
+
+    const head = modEl("div","modHead");
+    const name = modEl("div","name", p.name);
+    const meta = modEl("div","meta","ACCOUNTS: " + p.accounts.length);
+    meta.style.marginLeft="auto";
+    meta.style.color="var(--muted)";
+    head.appendChild(name);
+    head.appendChild(meta);
+
+    const del = modEl("button","tinybtn danger","DEL");
+    del.title = "Delete platform";
+    del.onclick = (e)=>{ e.stopPropagation(); removePlatform(p.id); };
+    head.appendChild(del);
+
+    // drag head
+    let dragging=false, sx=0, sy=0, ox=0, oy=0;
+    head.addEventListener("mousedown",(e)=>{
+      if(e.button!==0) return;
+      dragging=true;
+      bringToFront(p.id);
+      sx=e.clientX; sy=e.clientY;
+      ox=p.x; oy=p.y;
+      e.preventDefault();
+    });
+    window.addEventListener("mousemove",(e)=>{
+      if(!dragging) return;
+      p.x = ox + (e.clientX - sx);
+      p.y = oy + (e.clientY - sy);
+      mod.style.left = p.x + "px";
+      mod.style.top  = p.y + "px";
+    });
+    window.addEventListener("mouseup",()=>{
+      if(!dragging) return;
+      dragging=false;
+      scheduleSave();
+    });
+
+    const body = modEl("div","modBody");
+
+    // general notes
+    const subt = modEl("div","subt","GENERAL NOTES (PLATFORM)");
+    const notes = document.createElement("textarea");
+    notes.className="note";
+    notes.value = p.notes || "";
+    notes.addEventListener("input",()=>{ p.notes = notes.value; scheduleSave(); });
+    body.appendChild(subt);
+    body.appendChild(notes);
+
+    // add account bar (FIXED layout)
+    const addWrap = modEl("div","acct");
+    const addRow = modEl("div","grid3");
+
+    const inName = document.createElement("input");
+    inName.placeholder = "ACCOUNT NAME";
+
+    const inLink = document.createElement("input");
+    inLink.placeholder = "ACCOUNT LINK (URL)";
+
+    const addBtn = modEl("button","tinybtn","ADD");
+    addBtn.onclick = ()=>{
+      const nameV = inName.value.trim();
+      const linkV = inLink.value.trim();
+      if(!nameV && !linkV) return;
+      addAccount(p.id, { name:nameV || "(UNTITLED)", link:linkV });
+    };
+
+    addRow.appendChild(inName);
+    addRow.appendChild(inLink);
+    addRow.appendChild(addBtn);
+
+    addWrap.appendChild(modEl("div","subt","ADD ACCOUNT"));
+    addWrap.appendChild(addRow);
+    body.appendChild(addWrap);
+
+    // accounts list
+    if(p.accounts.length){
+      const aSub = modEl("div","subt","ACCOUNTS");
+      body.appendChild(aSub);
+    }
+
+    p.accounts.forEach(a=>{
+      const card = modEl("div","acct");
+      const top = modEl("div","grid3");
+
+      const n = document.createElement("input");
+      n.value = a.name || "";
+      n.placeholder="ACCOUNT NAME";
+      n.addEventListener("input",()=>{ a.name=n.value; scheduleSave(); });
+
+      const l = document.createElement("input");
+      l.value = a.link || "";
+      l.placeholder="ACCOUNT LINK (URL)";
+      l.addEventListener("input",()=>{ a.link=l.value; scheduleSave(); });
+
+      const rm = modEl("button","tinybtn danger","DEL");
+      rm.onclick = ()=>removeAccount(p.id, a.id);
+
+      top.appendChild(n);
+      top.appendChild(l);
+      top.appendChild(rm);
+
+      const grid = modEl("div","grid2");
+
+      const note = document.createElement("textarea");
+      note.className="small";
+      note.placeholder="SPECIFIC NOTES";
+      note.value = a.notes || "";
+      note.addEventListener("input",()=>{ a.notes=note.value; scheduleSave(); });
+
+      const strat = document.createElement("textarea");
+      strat.className="small";
+      strat.placeholder="STRATEGY";
+      strat.value = a.strategy || "";
+      strat.addEventListener("input",()=>{ a.strategy=strat.value; scheduleSave(); });
+
+      const deliv = document.createElement("textarea");
+      deliv.className="small";
+      deliv.placeholder="DELIVERABLES / NEXT POSTS / TASKS";
+      deliv.value = a.deliverables || "";
+      deliv.addEventListener("input",()=>{ a.deliverables=deliv.value; scheduleSave(); });
+
+      grid.appendChild(note);
+      grid.appendChild(strat);
+
+      card.appendChild(top);
+      card.appendChild(grid);
+      card.appendChild(deliv);
+
+      body.appendChild(card);
+    });
+
+    mod.appendChild(head);
+    mod.appendChild(body);
+
+    mod.addEventListener("mousedown", ()=> bringToFront(p.id));
+
+    return mod;
+  }
+
+  function render(){
+    renderChips();
+    workspace.innerHTML = "";
+    state.platforms
+      .slice()
+      .sort((a,b)=>(a.z||0)-(b.z||0))
+      .forEach(p=>{
+        if(!p.name) return;
+        workspace.appendChild(renderPlatform(p));
+      });
+  }
+  render();
+
+  // ---------- ARRANGE ----------
+  function arrange(){
+    const cols = Math.max(1, Math.floor((window.innerWidth - 60) / 440));
+    const baseX = 30, baseY = 80;
+    state.platforms.forEach((p,i)=>{
+      const c = i % cols;
+      const r = Math.floor(i / cols);
+      const jitterX = (Math.random()-0.5)*40;
+      const jitterY = (Math.random()-0.5)*40;
+      p.x = baseX + c*440 + jitterX;
+      p.y = baseY + r*260 + jitterY;
+      p.z = ++state.ui.zTop;
+    });
+    scheduleSave();
+    render();
+  }
+
+  // ---------- CONTROLS ----------
+  hudCollapse.onclick = ()=>{
+    state.ui.hudCollapsed = !state.ui.hudCollapsed;
+    applyUI();
+    scheduleSave();
+  };
+
+  addPlatformBtn.onclick = ()=>{
+    addPlatform(newPlatform.value);
+    newPlatform.value = "";
+    newPlatform.focus();
+  };
+  newPlatform.addEventListener("keydown",(e)=>{
+    if(e.key==="Enter"){ e.preventDefault(); addPlatformBtn.click(); }
+  });
+
+  arrangeBtn.onclick = arrange;
+
+  pauseFxBtn.onclick = ()=>{
+    state.ui.fxOn = !state.ui.fxOn;
+    applyUI();
+    scheduleSave();
+  };
+
+  exportBtn.onclick = exportState;
+  importBtn.onclick = ()=>importFile.click();
+  importFile.onchange = ()=>{
+    const f = importFile.files && importFile.files[0];
+    importFile.value = "";
+    if(f) importStateFromFile(f);
+  };
+
+  resetBtn.onclick = ()=>{
+    state = stateDefault();
+    applyUI();
+    saveState();
+    render();
+  };
+
+  // ---------- HOTKEYS ----------
+  function toggleFull(){
+    if(!document.fullscreenElement) document.documentElement.requestFullscreen?.();
+    else document.exitFullscreen?.();
+  }
+
+  window.addEventListener("keydown",(e)=>{
+    const tag=(document.activeElement && document.activeElement.tagName || "").toLowerCase();
+    const typing=(tag==="input"||tag==="textarea");
+    if(e.shiftKey && (e.key==="I"||e.key==="i")){ e.preventDefault(); state.ui.invert=!state.ui.invert; applyUI(); scheduleSave(); }
+    if(e.shiftKey && (e.key==="N"||e.key==="n")){ e.preventDefault(); state.ui.nullMode=!state.ui.nullMode; applyUI(); scheduleSave(); }
+    if(e.shiftKey && (e.key==="F"||e.key==="f")){ e.preventDefault(); toggleFull(); }
+    if(!typing && (e.key==="Escape") && state.ui.nullMode){ state.ui.nullMode=false; applyUI(); scheduleSave(); }
+  });
+
+  // ---------- BACKGROUND FX ----------
+  let lastT = performance.now();
+  let fpsAcc=0,fpsN=0,fpsOut=0;
+
+  const dots = [];
+  const DOTS_N = 220;
+  function initDots(){
+    dots.length=0;
+    for(let i=0;i<DOTS_N;i++){
+      dots.push({
+        x: Math.random()*W,
+        y: Math.random()*H,
+        r: 0.6 + Math.random()*1.6,
+        v: 0.12 + Math.random()*0.55,
+        p: Math.random()*Math.PI*2
+      });
+    }
+  }
+  initDots();
+
+  function drawFX(t){
+    bctx.setTransform(1,0,0,1,0,0);
+    bctx.fillStyle = "#000";
+    bctx.fillRect(0,0,W,H);
+
+    if(!state.ui.fxOn) return;
+
+    bctx.globalCompositeOperation = "lighter";
+    bctx.globalAlpha = 0.05;
+    bctx.strokeStyle = "#f2f2f2";
+    bctx.lineWidth = 1;
+    const step = Math.floor(140*D);
+    for(let y=0;y<=H;y+=step){
+      bctx.beginPath();
+      bctx.moveTo(0,y);
+      bctx.lineTo(W,y);
+      bctx.stroke();
+    }
+
+    for(const d of dots){
+      d.p += 0.006*d.v;
+      d.x += Math.cos(d.p)*0.35;
+      d.y += Math.sin(d.p*1.07)*0.35;
+
+      if(d.x<0) d.x+=W; if(d.x>W) d.x-=W;
+      if(d.y<0) d.y+=H; if(d.y>H) d.y-=H;
+
+      const pulse = 0.25 + 0.75*Math.max(0, Math.sin(t*0.002 + d.p));
+      const a = 0.05 + 0.10*pulse;
+      bctx.globalAlpha = a;
+      bctx.fillStyle = "#f2f2f2";
+      bctx.beginPath();
+      bctx.arc(d.x, d.y, d.r*D*(0.8+0.8*pulse), 0, Math.PI*2);
+      bctx.fill();
+    }
+
+    bctx.globalCompositeOperation = "source-over";
+    const g = bctx.createRadialGradient(W/2,H/2, Math.min(W,H)*0.12, W/2,H/2, Math.max(W,H)*0.62);
+    g.addColorStop(0,"rgba(0,0,0,0)");
+    g.addColorStop(1,"rgba(0,0,0,0.65)");
+    bctx.fillStyle = g;
+    bctx.globalAlpha = 1;
+    bctx.fillRect(0,0,W,H);
+  }
+
+  function loop(t){
+    const dt = Math.min(0.05, (t-lastT)/1000);
+    lastT = t;
+
+    fpsAcc += 1/dt; fpsN++;
+    if(fpsN>=12){
+      fpsOut = fpsAcc/fpsN;
+      fpsAcc=0; fpsN=0;
+      fpsPill.textContent = "FPS: " + Math.round(fpsOut);
+    }
+
+    drawFX(t);
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
+
+  // initial save
+  saveState();
+
+})();
+</script>
+
+<!--
+AE / EE / WB — KETADATA SERIALIZATION STAMP (MANDATORY)
+AE: BLACK DEFAULT • UNIFORM TEXT SIZE • BRUTAL MINIMAL HUD • MODULE PANELS • NULL HIDES CHROME • INVERT GLOBAL
+EE: PLATFORMS AS DRAGGABLE MODULES • PLATFORM GENERAL NOTES • ACCOUNTS UNDER PLATFORM • ACCOUNT STRATEGY/NOTES/DELIVERABLES • Z-STACK FOCUS
+WB: LOCAL-FIRST STATE • EXPORT = REAL FILE DOWNLOAD • IMPORT = FILE PICKER READ • SHIFT+I INVERT • SHIFT+N NULL • SHIFT+F FULL
+
+FILE_ID: "KD_SOCIAL_MANAGER_V1"
+ROOM_ID: "K_CORE_UTIL"
+VERSION_ID: "V1"
+UPDATED_AT: "2026-01-04T00:00:00.000-05:00"
+CHANGELOG:
+- V1: Fixed ADD button layout in module (grid3 auto column + stretch + min-width + input min-width:0).
+-->
+</body>
+</html>
