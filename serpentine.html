@@ -1,0 +1,809 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>KETADATA — DIGITAL ARTIFACT — SERPENTINE</title>
+  <style>
+    :root{
+      --bg:#000000;
+      --fg:#f2f2f2;
+      --muted:#9a9a9a;
+      --line:#2f2f2f;
+      --hud:rgba(255,255,255,0.03);
+      --hud2:rgba(0,0,0,0.25);
+      --font:12px/1.15 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace;
+      --r:12px;
+    }
+    html,body{height:100%;margin:0;background:var(--bg);color:var(--fg);font:var(--font);overflow:hidden;}
+    *{box-sizing:border-box;}
+    a{color:var(--fg);text-decoration:none;}
+    a:hover{text-decoration:underline;}
+
+    /* INVERT must affect whole page */
+    html.invert #app{filter: invert(1) hue-rotate(180deg);}
+    html.invert{background:#000;}
+
+    /* NULL = fullscreen/quiet/no chrome */
+    html.null #hud, html.null #status{display:none;}
+
+    #app{position:fixed;inset:0;}
+    canvas{position:fixed;inset:0;display:block;background:var(--bg);}
+
+    #hud{
+      position:fixed;left:10px;top:10px;z-index:50;
+      border:1px solid var(--line);
+      background:var(--hud);
+      backdrop-filter: blur(4px);
+      border-radius:var(--r);
+      width:360px;
+      overflow:hidden;
+      user-select:none;
+    }
+    #hudHead{
+      display:flex;gap:6px;align-items:center;
+      padding:8px;
+      border-bottom:1px solid var(--line);
+      background:rgba(0,0,0,0.18);
+    }
+    #hudHead .t{color:var(--muted);}
+    #hudHead .sp{flex:1;}
+    #hudHead .btn{
+      height:26px;padding:0 8px;border:1px solid var(--line);
+      background:transparent;color:var(--fg);border-radius:10px;cursor:pointer;
+      font:var(--font);
+    }
+    #hudHead .btn:active{transform:translateY(1px);}
+    #hudBody{padding:8px;display:block;}
+    #hudBody.collapsed{display:none;}
+
+    .row{display:flex;gap:8px;align-items:center;margin-bottom:8px;}
+    .pill{
+      border:1px solid var(--line);
+      border-radius:999px;
+      padding:3px 6px;
+      color:var(--muted);
+      background:rgba(0,0,0,0.12);
+      white-space:nowrap;
+    }
+    .btn{
+      height:28px;padding:0 10px;border:1px solid var(--line);
+      background:transparent;color:var(--fg);border-radius:10px;cursor:pointer;
+      font:var(--font);
+    }
+    .btn:active{transform:translateY(1px);}
+    .btn.on{background:rgba(255,255,255,0.06);}
+
+    label{color:var(--muted);}
+    input[type="range"]{width:100%;}
+    .kv{
+      display:grid;grid-template-columns: 120px 1fr;
+      gap:8px;align-items:center;
+      padding:6px 0;border-bottom:1px dashed rgba(255,255,255,0.08);
+    }
+    .kv:last-child{border-bottom:none;}
+    .v{color:var(--fg);opacity:0.92;}
+
+    #status{
+      position:fixed;left:10px;right:10px;bottom:10px;z-index:40;
+      border:1px solid var(--line);
+      background:var(--hud2);
+      border-radius:var(--r);
+      padding:6px 8px;
+      display:flex;gap:10px;align-items:center;
+      color:var(--muted);
+      user-select:none;
+    }
+    #status .sp{flex:1;}
+    #status .pill{border:1px solid var(--line);border-radius:999px;padding:3px 6px;}
+  </style>
+</head>
+<body>
+<div id="app">
+  <canvas id="c"></canvas>
+
+  <div id="hud">
+    <div id="hudHead">
+      <span class="t">KETADATA DIGITAL ARTIFACT</span>
+      <span class="sp"></span>
+      <button class="btn" id="collapseBtn" title="Collapse">—</button>
+      <button class="btn" id="pauseBtn" title="Pause">PAUSE</button>
+    </div>
+
+    <div id="hudBody">
+      <div class="row">
+        <span class="pill">SHIFT+I INVERT</span>
+        <span class="pill">SHIFT+N NULL</span>
+        <span class="pill">SHIFT+F FULL</span>
+      </div>
+
+      <div class="kv">
+        <label>ORGANISMS</label>
+        <div class="v"><input id="organisms" type="range" min="1" max="12" step="1" value="6"></div>
+      </div>
+      <div class="kv">
+        <label>SEGMENTS</label>
+        <div class="v"><input id="segments" type="range" min="18" max="120" step="1" value="64"></div>
+      </div>
+      <div class="kv">
+        <label>SPEED</label>
+        <div class="v"><input id="speed" type="range" min="0.2" max="3.0" step="0.05" value="1.25"></div>
+      </div>
+      <div class="kv">
+        <label>WIGGLE</label>
+        <div class="v"><input id="wiggle" type="range" min="0.0" max="2.0" step="0.02" value="1.00"></div>
+      </div>
+      <div class="kv">
+        <label>PLANKTON</label>
+        <div class="v"><input id="plankton" type="range" min="0" max="1200" step="20" value="560"></div>
+      </div>
+      <div class="kv">
+        <label>TRAIL</label>
+        <div class="v"><input id="trail" type="range" min="0.02" max="0.35" step="0.01" value="0.12"></div>
+      </div>
+      <div class="kv">
+        <label>GLOW</label>
+        <div class="v"><input id="glow" type="range" min="0" max="1" step="0.01" value="0.72"></div>
+      </div>
+
+      <div class="row" style="margin-top:10px;">
+        <button class="btn" id="regenBtn">REGEN</button>
+        <button class="btn" id="biolumeBtn">BIOLUME</button>
+        <button class="btn" id="monoBtn">MONO</button>
+      </div>
+      <div class="row">
+        <span class="pill">MOUSE MOVE: ATTRACT</span>
+        <span class="pill">CLICK: SPAWN</span>
+        <span class="pill">WHEEL: ZOOM</span>
+      </div>
+    </div>
+  </div>
+
+  <div id="status">
+    <span class="pill" id="filePill"></span>
+    <span class="pill" id="fpsPill">FPS: —</span>
+    <span class="sp"></span>
+    <span class="pill">BLACK DEFAULT</span>
+  </div>
+</div>
+
+<script>
+(() => {
+  const FILE_ID = "KD_SERPENTINE_ARTIFACT_V1";
+  const STORE_KEY = "KD_STATE__" + FILE_ID;
+
+  const canvas = document.getElementById("c");
+  const ctx = canvas.getContext("2d", { alpha: false });
+
+  const el = (id) => document.getElementById(id);
+
+  const hudBody = el("hudBody");
+  const collapseBtn = el("collapseBtn");
+  const pauseBtn = el("pauseBtn");
+
+  const organismsR = el("organisms");
+  const segmentsR  = el("segments");
+  const speedR     = el("speed");
+  const wiggleR    = el("wiggle");
+  const planktonR  = el("plankton");
+  const trailR     = el("trail");
+  const glowR      = el("glow");
+
+  const regenBtn = el("regenBtn");
+  const biolumeBtn = el("biolumeBtn");
+  const monoBtn = el("monoBtn");
+
+  const filePill = el("filePill");
+  const fpsPill = el("fpsPill");
+
+  filePill.textContent = "FILE_ID: " + FILE_ID;
+
+  const clamp = (x,a,b)=>Math.max(a,Math.min(b,x));
+  const lerp = (a,b,t)=>a+(b-a)*t;
+
+  // deterministic-ish hash noise (cheap)
+  const hash = (x,y) => {
+    let n = x*374761393 + y*668265263;
+    n = (n ^ (n >> 13)) >>> 0;
+    n = (n * 1274126177) >>> 0;
+    return (n ^ (n >> 16)) / 4294967295;
+  };
+  const smoothstep = (t)=>t*t*(3-2*t);
+  const noise2 = (x,y)=>{
+    const xi = Math.floor(x), yi = Math.floor(y);
+    const xf = x - xi, yf = y - yi;
+    const u = smoothstep(xf), v = smoothstep(yf);
+    const a = hash(xi,yi), b = hash(xi+1,yi), c = hash(xi,yi+1), d = hash(xi+1,yi+1);
+    return lerp(lerp(a,b,u), lerp(c,d,u), v);
+  };
+  const fbm2 = (x,y)=>{
+    let f=0, amp=0.5, freq=1;
+    for(let i=0;i<4;i++){
+      f += amp*noise2(x*freq,y*freq);
+      freq*=2; amp*=0.5;
+    }
+    return f;
+  };
+
+  const DPR = () => Math.max(1, Math.min(2.25, window.devicePixelRatio || 1));
+  let w=0,h=0,dpr=1;
+
+  const cam = { x:0, y:0, s:1.0 };
+  const mouse = { x:0, y:0, down:false, px:0, py:0, worldX:0, worldY:0, present:false };
+
+  const palette = {
+    mode: "BIOLUME", // BIOLUME | MONO
+    biolume: ["#78ffd6","#45caff","#b5fffc","#a855f7","#22c55e","#eab308"],
+    mono: ["#f2f2f2"]
+  };
+
+  const stateDefault = () => ({
+    meta: { fileId: FILE_ID, updatedAt: new Date().toISOString() },
+    ui: { invert:false, nullMode:false, paused:false, hudCollapsed:false },
+    params: {
+      organisms: +organismsR.value,
+      segments: +segmentsR.value,
+      speed: +speedR.value,
+      wiggle: +wiggleR.value,
+      plankton: +planktonR.value,
+      trail: +trailR.value,
+      glow: +glowR.value,
+      palette: palette.mode
+    }
+  });
+
+  let state = null;
+
+  const load = () => {
+    try {
+      const raw = localStorage.getItem(STORE_KEY);
+      if (!raw) return stateDefault();
+      const parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed !== "object") return stateDefault();
+      if (!parsed.ui) parsed.ui = {};
+      if (!parsed.params) parsed.params = {};
+      return parsed;
+    } catch {
+      return stateDefault();
+    }
+  };
+
+  let saveTimer=null;
+  const save = () => {
+    try {
+      state.meta.updatedAt = new Date().toISOString();
+      localStorage.setItem(STORE_KEY, JSON.stringify(state));
+    } catch {}
+  };
+  const scheduleSave = () => {
+    if (saveTimer) clearTimeout(saveTimer);
+    saveTimer = setTimeout(save, 220);
+  };
+
+  const setInvert = (v) => {
+    state.ui.invert = !!v;
+    document.documentElement.classList.toggle("invert", state.ui.invert);
+    scheduleSave();
+  };
+  const setNull = (v) => {
+    state.ui.nullMode = !!v;
+    document.documentElement.classList.toggle("null", state.ui.nullMode);
+    scheduleSave();
+  };
+  const toggleFull = () => {
+    if (!document.fullscreenElement) document.documentElement.requestFullscreen?.();
+    else document.exitFullscreen?.();
+  };
+
+  const resize = () => {
+    dpr = DPR();
+    w = Math.floor(window.innerWidth * dpr);
+    h = Math.floor(window.innerHeight * dpr);
+    canvas.width = w;
+    canvas.height = h;
+    canvas.style.width = window.innerWidth + "px";
+    canvas.style.height = window.innerHeight + "px";
+    ctx.setTransform(1,0,0,1,0,0);
+    ctx.imageSmoothingEnabled = true;
+  };
+
+  window.addEventListener("resize", resize, { passive:true });
+
+  const worldFromScreen = (sx,sy)=>{
+    const cx = (sx * dpr - w/2) / cam.s + cam.x;
+    const cy = (sy * dpr - h/2) / cam.s + cam.y;
+    return {x:cx,y:cy};
+  };
+
+  window.addEventListener("mousemove", (e)=>{
+    mouse.x = e.clientX; mouse.y = e.clientY;
+    const p = worldFromScreen(mouse.x, mouse.y);
+    mouse.worldX = p.x; mouse.worldY = p.y;
+    mouse.present = true;
+  }, { passive:true });
+
+  window.addEventListener("mousedown", (e)=>{
+    mouse.down = true; mouse.px = e.clientX; mouse.py = e.clientY;
+  }, { passive:true });
+  window.addEventListener("mouseup", ()=>{ mouse.down=false; }, { passive:true });
+
+  window.addEventListener("wheel", (e)=>{
+    const delta = Math.sign(e.deltaY);
+    const before = worldFromScreen(e.clientX, e.clientY);
+    cam.s = clamp(cam.s * (delta > 0 ? 0.92 : 1.08), 0.35, 2.85);
+    const after = worldFromScreen(e.clientX, e.clientY);
+    cam.x += (before.x - after.x);
+    cam.y += (before.y - after.y);
+  }, { passive:true });
+
+  // organism model (verlet chain + target steering)
+  const makeOrganism = (seed) => {
+    const nSeg = Math.max(8, Math.floor(params().segments));
+    const baseLen = 10 + (seed.r * 14);
+    const pos = { x: (seed.x), y: (seed.y) };
+    const col = pickColor(seed.k);
+
+    const pts = [];
+    for (let i=0;i<nSeg;i++){
+      pts.push({
+        x: pos.x - i*baseLen,
+        y: pos.y,
+        ox: pos.x - i*baseLen,
+        oy: pos.y
+      });
+    }
+
+    return {
+      id: "o_" + Math.floor(Math.random()*1e9),
+      k: seed.k,
+      hue: seed.k,
+      col,
+      len: baseLen,
+      pts,
+      t: Math.random()*1000,
+      phase: Math.random()*Math.PI*2,
+      mass: 0.85 + seed.r*0.35,
+      drift: 0.6 + seed.r*0.8
+    };
+  };
+
+  const params = () => ({
+    organisms: +organismsR.value,
+    segments: +segmentsR.value,
+    speed: +speedR.value,
+    wiggle: +wiggleR.value,
+    plankton: +planktonR.value,
+    trail: +trailR.value,
+    glow: +glowR.value,
+  });
+
+  const pickColor = (k) => {
+    const list = (palette.mode === "MONO") ? palette.mono : palette.biolume;
+    return list[Math.floor((k * list.length) % list.length)];
+  };
+
+  let organisms = [];
+
+  const regen = (centerX=0, centerY=0) => {
+    organisms = [];
+    const p = params();
+    const count = Math.max(1, Math.floor(p.organisms));
+    for (let i=0;i<count;i++){
+      const a = (i / count) * Math.PI*2;
+      const r = 60 + 120*Math.random();
+      const sx = centerX + Math.cos(a) * r;
+      const sy = centerY + Math.sin(a) * r;
+      organisms.push(makeOrganism({
+        x: sx + (Math.random()-0.5)*80,
+        y: sy + (Math.random()-0.5)*80,
+        r: Math.random(),
+        k: Math.random()
+      }));
+    }
+    scheduleSave();
+  };
+
+  const spawnAt = (x,y) => {
+    const count = Math.max(1, Math.min(3, Math.floor(1 + Math.random()*2)));
+    for (let i=0;i<count;i++){
+      organisms.push(makeOrganism({
+        x: x + (Math.random()-0.5)*30,
+        y: y + (Math.random()-0.5)*30,
+        r: Math.random(),
+        k: Math.random()
+      }));
+    }
+    const max = Math.max(1, Math.floor(params().organisms));
+    while (organisms.length > max) organisms.shift();
+    scheduleSave();
+  };
+
+  window.addEventListener("click", (e)=>{
+    // avoid clicking HUD -> only canvas region
+    const hud = document.getElementById("hud");
+    const r = hud.getBoundingClientRect();
+    const insideHud = (e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom);
+    if (insideHud) return;
+    const p = worldFromScreen(e.clientX, e.clientY);
+    spawnAt(p.x, p.y);
+  });
+
+  // draw helpers
+  const clearWithTrail = (alpha) => {
+    ctx.save();
+    ctx.setTransform(1,0,0,1,0,0);
+    ctx.globalCompositeOperation = "source-over";
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = "#000";
+    ctx.fillRect(0,0,w,h);
+    ctx.restore();
+  };
+
+  const setCamera = () => {
+    ctx.setTransform(cam.s, 0, 0, cam.s, w/2 - cam.x*cam.s, h/2 - cam.y*cam.s);
+  };
+
+  const drawPlankton = (t) => {
+    const p = params();
+    const n = Math.max(0, Math.floor(p.plankton));
+    if (!n) return;
+
+    const glow = p.glow;
+    ctx.save();
+    setCamera();
+
+    ctx.globalCompositeOperation = "lighter";
+    ctx.globalAlpha = 0.65 * (0.2 + 0.8*glow);
+
+    const span = 900;
+    const baseX = cam.x + (mouse.present ? (mouse.worldX-cam.x)*0.05 : 0);
+    const baseY = cam.y + (mouse.present ? (mouse.worldY-cam.y)*0.05 : 0);
+
+    for (let i=0;i<n;i++){
+      const k = i*97.13;
+      const nx = fbm2((t*0.00007) + k*0.001, (t*0.00004) + k*0.002);
+      const ny = fbm2((t*0.00005) + k*0.002, (t*0.00006) + k*0.001);
+      const x = baseX + (nx-0.5)*span;
+      const y = baseY + (ny-0.5)*span;
+      const pulse = 0.4 + 0.6*Math.sin(t*0.002 + k*0.02);
+      const r = 0.8 + 1.8*(0.2 + 0.8*pulse);
+
+      ctx.fillStyle = (palette.mode === "MONO") ? "#f2f2f2" : pickColor((nx+ny)*0.5);
+      ctx.beginPath();
+      ctx.arc(x,y,r,0,Math.PI*2);
+      ctx.fill();
+    }
+
+    ctx.restore();
+  };
+
+  const updateOrganism = (o, dt, t) => {
+    const p = params();
+    const speed = p.speed;
+    const wiggle = p.wiggle;
+
+    o.t += dt;
+
+    // head target: noise field + mild mouse attraction
+    const head = o.pts[0];
+    const n1 = fbm2(head.x*0.004 + t*0.00012*o.drift, head.y*0.004 + t*0.00008*o.drift);
+    const n2 = fbm2(head.x*0.004 - t*0.00010*o.drift, head.y*0.004 + t*0.00014*o.drift);
+    const ang = (n1*2-1) * Math.PI*1.2 + Math.sin(t*0.0015 + o.phase)*0.6*wiggle;
+
+    let vx = Math.cos(ang) * (22 * speed);
+    let vy = Math.sin(ang) * (22 * speed);
+
+    if (mouse.present){
+      const dx = mouse.worldX - head.x;
+      const dy = mouse.worldY - head.y;
+      const d = Math.sqrt(dx*dx+dy*dy) + 1e-6;
+      const pull = clamp(140 / d, 0, 1) * 18 * speed;
+      vx += (dx/d) * pull;
+      vy += (dy/d) * pull;
+    }
+
+    // verlet integrate
+    for (let i=0;i<o.pts.length;i++){
+      const pt = o.pts[i];
+      const px = pt.x, py = pt.y;
+      const ix = pt.x - pt.ox;
+      const iy = pt.y - pt.oy;
+
+      const damp = 0.92 - (i / o.pts.length) * 0.06;
+
+      let ax = 0, ay = 0;
+      if (i === 0){
+        ax = vx * 0.06;
+        ay = vy * 0.06;
+      } else {
+        // subtle micro-turbulence
+        const j = i * 19.1 + o.hue*999;
+        const tx = (noise2(t*0.0006 + j, j*0.01) - 0.5) * wiggle;
+        const ty = (noise2(t*0.0006 + j*0.2, j*0.01) - 0.5) * wiggle;
+        ax = tx * 0.18;
+        ay = ty * 0.18;
+      }
+
+      pt.ox = px;
+      pt.oy = py;
+      pt.x = px + ix*damp + ax;
+      pt.y = py + iy*damp + ay;
+    }
+
+    // constraints: keep segment lengths
+    const L = o.len;
+    for (let iter=0; iter<3; iter++){
+      for (let i=1;i<o.pts.length;i++){
+        const a = o.pts[i-1];
+        const b = o.pts[i];
+        const dx = b.x - a.x, dy = b.y - a.y;
+        const d = Math.sqrt(dx*dx+dy*dy) + 1e-6;
+        const diff = (d - L) / d;
+        const wA = (i===1) ? 0.10 : 0.25;
+        const wB = 1.0 - wA;
+        a.x += dx * diff * wA;
+        a.y += dy * diff * wA;
+        b.x -= dx * diff * wB;
+        b.y -= dy * diff * wB;
+      }
+    }
+  };
+
+  const drawOrganism = (o, t) => {
+    const p = params();
+    const glow = p.glow;
+
+    ctx.save();
+    setCamera();
+    ctx.globalCompositeOperation = "lighter";
+
+    // core ligament line
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+
+    // thickness breath
+    const breathe = 0.65 + 0.35*Math.sin(t*0.002 + o.phase);
+
+    // glow pass
+    if (glow > 0.01){
+      ctx.globalAlpha = 0.12 + 0.32*glow;
+      ctx.strokeStyle = o.col;
+      ctx.lineWidth = (3.5 + 10.0*glow) * breathe;
+      ctx.beginPath();
+      for (let i=0;i<o.pts.length;i++){
+        const pt = o.pts[i];
+        if (i===0) ctx.moveTo(pt.x, pt.y);
+        else ctx.lineTo(pt.x, pt.y);
+      }
+      ctx.stroke();
+    }
+
+    // filament pass
+    ctx.globalAlpha = 0.55 + 0.25*glow;
+    ctx.strokeStyle = (palette.mode === "MONO") ? "#f2f2f2" : o.col;
+    ctx.lineWidth = (1.0 + 1.4*glow) * breathe;
+    ctx.beginPath();
+    for (let i=0;i<o.pts.length;i++){
+      const pt = o.pts[i];
+      if (i===0) ctx.moveTo(pt.x, pt.y);
+      else ctx.lineTo(pt.x, pt.y);
+    }
+    ctx.stroke();
+
+    // lateral ligaments (connect/disconnect shimmer)
+    const n = o.pts.length;
+    const stride = Math.max(3, Math.floor(n/10));
+    for (let i=stride;i<n-1;i+=stride){
+      const pt = o.pts[i];
+      const next = o.pts[i+1];
+      const dx = next.x - pt.x, dy = next.y - pt.y;
+      const d = Math.sqrt(dx*dx+dy*dy)+1e-6;
+      const nx = -dy/d, ny = dx/d;
+
+      const swing = Math.sin(t*0.003 + i*0.35 + o.phase) * (8 + 18*glow);
+      const x2 = pt.x + nx * swing;
+      const y2 = pt.y + ny * swing;
+
+      const gate = 0.35 + 0.65*Math.max(0, Math.sin(t*0.0016 + i*0.22 + o.hue*5.0)); // connect/disconnect
+      if (gate < 0.55) continue;
+
+      ctx.globalAlpha = 0.10 + 0.25*gate*glow;
+      ctx.strokeStyle = (palette.mode === "MONO") ? "#f2f2f2" : o.col;
+      ctx.lineWidth = 0.8 + 1.1*glow;
+
+      ctx.beginPath();
+      ctx.moveTo(pt.x, pt.y);
+      ctx.lineTo(x2, y2);
+      ctx.stroke();
+
+      // tips as plankton bursts
+      ctx.globalAlpha = 0.15 + 0.35*gate*glow;
+      ctx.fillStyle = (palette.mode === "MONO") ? "#f2f2f2" : o.col;
+      ctx.beginPath();
+      ctx.arc(x2, y2, 0.8 + 1.8*glow, 0, Math.PI*2);
+      ctx.fill();
+    }
+
+    // head node
+    const head = o.pts[0];
+    ctx.globalAlpha = 0.35 + 0.45*glow;
+    ctx.fillStyle = (palette.mode === "MONO") ? "#f2f2f2" : o.col;
+    ctx.beginPath();
+    ctx.arc(head.x, head.y, 2.2 + 3.2*glow, 0, Math.PI*2);
+    ctx.fill();
+
+    ctx.restore();
+  };
+
+  // FPS
+  let lastT = performance.now();
+  let fpsAcc=0, fpsN=0, fpsOut=0;
+
+  const applyStateToUI = () => {
+    organismsR.value = String(clamp(state.params.organisms ?? +organismsR.value, 1, 12));
+    segmentsR.value  = String(clamp(state.params.segments ?? +segmentsR.value, 18, 120));
+    speedR.value     = String(clamp(state.params.speed ?? +speedR.value, 0.2, 3.0));
+    wiggleR.value    = String(clamp(state.params.wiggle ?? +wiggleR.value, 0.0, 2.0));
+    planktonR.value  = String(clamp(state.params.plankton ?? +planktonR.value, 0, 1200));
+    trailR.value     = String(clamp(state.params.trail ?? +trailR.value, 0.02, 0.35));
+    glowR.value      = String(clamp(state.params.glow ?? +glowR.value, 0, 1));
+
+    palette.mode = (state.params.palette === "MONO") ? "MONO" : "BIOLUME";
+    biolumeBtn.classList.toggle("on", palette.mode === "BIOLUME");
+    monoBtn.classList.toggle("on", palette.mode === "MONO");
+
+    document.documentElement.classList.toggle("invert", !!state.ui.invert);
+    document.documentElement.classList.toggle("null", !!state.ui.nullMode);
+
+    const collapsed = !!state.ui.hudCollapsed;
+    hudBody.classList.toggle("collapsed", collapsed);
+    collapseBtn.textContent = collapsed ? "+" : "—";
+
+    const paused = !!state.ui.paused;
+    pauseBtn.classList.toggle("on", paused);
+    pauseBtn.textContent = paused ? "PLAY" : "PAUSE";
+  };
+
+  const wireParam = (node, key) => {
+    node.addEventListener("input", ()=>{
+      state.params[key] = +node.value;
+      // live: if segments or organisms changed, regen to match geometry
+      if (key === "segments" || key === "organisms") regen(cam.x, cam.y);
+      scheduleSave();
+    });
+  };
+
+  const init = () => {
+    resize();
+    state = load();
+
+    // enforce identity
+    if (!state.meta) state.meta = {};
+    state.meta.fileId = FILE_ID;
+    if (!state.ui) state.ui = {};
+    if (!state.params) state.params = {};
+
+    applyStateToUI();
+
+    wireParam(organismsR, "organisms");
+    wireParam(segmentsR, "segments");
+    wireParam(speedR, "speed");
+    wireParam(wiggleR, "wiggle");
+    wireParam(planktonR, "plankton");
+    wireParam(trailR, "trail");
+    wireParam(glowR, "glow");
+
+    collapseBtn.onclick = () => {
+      state.ui.hudCollapsed = !state.ui.hudCollapsed;
+      applyStateToUI();
+      scheduleSave();
+    };
+
+    pauseBtn.onclick = () => {
+      state.ui.paused = !state.ui.paused;
+      applyStateToUI();
+      scheduleSave();
+    };
+
+    regenBtn.onclick = () => regen(cam.x, cam.y);
+
+    biolumeBtn.onclick = () => {
+      palette.mode = "BIOLUME";
+      state.params.palette = "BIOLUME";
+      applyStateToUI();
+      scheduleSave();
+    };
+    monoBtn.onclick = () => {
+      palette.mode = "MONO";
+      state.params.palette = "MONO";
+      applyStateToUI();
+      scheduleSave();
+    };
+
+    // initial organisms
+    regen(0,0);
+    // initial clear
+    ctx.setTransform(1,0,0,1,0,0);
+    ctx.fillStyle = "#000";
+    ctx.fillRect(0,0,w,h);
+    save();
+
+    requestAnimationFrame(loop);
+  };
+
+  // hotkeys (SHIFT-based; do not interfere with typing)
+  window.addEventListener("keydown", (e)=>{
+    const tag = (document.activeElement && document.activeElement.tagName || "").toLowerCase();
+    const typing = (tag === "input" || tag === "textarea");
+    if (e.shiftKey && (e.key === "I" || e.key === "i")) { e.preventDefault(); setInvert(!state.ui.invert); }
+    if (e.shiftKey && (e.key === "N" || e.key === "n")) { e.preventDefault(); setNull(!state.ui.nullMode); }
+    if (e.shiftKey && (e.key === "F" || e.key === "f")) { e.preventDefault(); toggleFull(); }
+    if (!typing && e.key === " "){ e.preventDefault(); state.ui.paused = !state.ui.paused; applyStateToUI(); scheduleSave(); }
+    if (e.key === "Escape" && state.ui.nullMode){ setNull(false); }
+  });
+
+  const loop = (now) => {
+    const dt = Math.min(0.033, (now - lastT)/1000);
+    lastT = now;
+
+    // fps
+    fpsAcc += 1/dt; fpsN++;
+    if (fpsN >= 12){
+      fpsOut = fpsAcc / fpsN;
+      fpsAcc = 0; fpsN = 0;
+      fpsPill.textContent = "FPS: " + Math.round(fpsOut);
+    }
+
+    const p = params();
+
+    // keep organism count matching slider
+    const want = Math.max(1, Math.floor(p.organisms));
+    while (organisms.length < want) organisms.push(makeOrganism({
+      x: cam.x + (Math.random()-0.5)*260,
+      y: cam.y + (Math.random()-0.5)*260,
+      r: Math.random(),
+      k: Math.random()
+    }));
+    while (organisms.length > want) organisms.shift();
+
+    // trail clear
+    clearWithTrail(p.trail);
+
+    // camera subtly follows mouse (easygoing, non-deterministic)
+    if (mouse.present){
+      cam.x = lerp(cam.x, mouse.worldX, 0.015);
+      cam.y = lerp(cam.y, mouse.worldY, 0.015);
+    }
+
+    if (!state.ui.paused){
+      for (const o of organisms) updateOrganism(o, dt, now);
+    }
+
+    // background plankton
+    drawPlankton(now);
+
+    // draw organisms
+    for (const o of organisms) drawOrganism(o, now);
+
+    requestAnimationFrame(loop);
+  };
+
+  init();
+})();
+</script>
+
+<!--
+AE / EE / WB — KETADATA SERIALIZATION STAMP (MANDATORY)
+AE: BLACK DEFAULT • UNIFORM TEXT SIZE • BRUTAL / CLEAN HUD • INVERT FILTER APPLIES TO WHOLE APP • NULL HIDES CHROME
+EE: SERPENTINE VERLET CHAINS • LIGAMENTS CONNECT/DISCONNECT • PLANKTON PULSE FIELD • MOUSE ATTRACTION • WHEEL ZOOM • CLICK SPAWN • PAUSE
+WB: LOCAL-FIRST PARAM SAVE • SHIFT+I INVERT • SHIFT+N NULL • SHIFT+F FULLSCREEN • SPACE PAUSE (non-typing contexts)
+
+FILE_ID: "KD_SERPENTINE_ARTIFACT_V1"
+ROOM_ID: "K_EXPERIMENT"
+VERSION_ID: "V1"
+UPDATED_AT: "2026-01-04T00:00:00.000-05:00"
+CHANGELOG:
+- V1: Serpentine locomotion digital artifact with plankton field + ligaments + KD hotkeys + black default
+-->
+</body>
+</html>
