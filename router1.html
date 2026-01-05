@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>KETADATA — FIELD ROUTER</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<style>
+  :root{
+    --bg:#000;
+    --fg:#fff;
+    --line:rgba(255,255,255,0.55);
+    --muted:rgba(255,255,255,0.50);
+    --muted2:rgba(255,255,255,0.30);
+  }
+  body.invert{
+    --bg:#fff;
+    --fg:#000;
+    --line:rgba(0,0,0,0.55);
+    --muted:rgba(0,0,0,0.50);
+    --muted2:rgba(0,0,0,0.30);
+  }
+
+  html, body{
+    margin:0; padding:0;
+    width:100%; height:100%;
+    background:var(--bg);
+    color:var(--fg);
+    font-family: Arial, Helvetica, sans-serif;
+    font-size:12px; /* uniform size */
+    line-height:1.2;
+    overflow:hidden;
+  }
+
+  #field{
+    position:relative;
+    width:100%;
+    height:100%;
+  }
+
+  .thing{
+    position:absolute;
+    min-width:180px;
+    min-height:90px;
+    width:220px;
+    height:120px;
+    border:1px solid var(--line);
+    background:transparent;
+    box-sizing:border-box;
+    resize:both;
+    overflow:hidden; /* internal scroll lives in body */
+  }
+
+  .grip{
+    padding:6px 8px;
+    border-bottom:1px solid var(--muted2);
+    color:var(--muted);
+    cursor:move;
+    user-select:none;
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+  }
+
+  .title{
+    display:inline-block;
+    color:var(--fg);
+    opacity:0.9;
+  }
+
+  .title[contenteditable="true"]{
+    outline:none;
+    cursor:text;
+  }
+
+  .body{
+    padding:8px;
+    height: calc(100% - 29px);
+    overflow:auto;
+    white-space:pre-wrap;
+    word-break:break-word;
+    cursor:text;
+  }
+  .body[contenteditable="true"]{ outline:none; }
+
+  .hint{
+    position:fixed;
+    left:10px; bottom:10px;
+    color:var(--muted);
+    opacity:0.75;
+    pointer-events:none;
+    user-select:none;
+  }
+
+  .hint .k{ opacity:0.95; color:var(--fg); }
+  .ghost{
+    position:fixed;
+    right:10px; bottom:10px;
+    color:var(--muted);
+    opacity:0.55;
+    pointer-events:none;
+    user-select:none;
+    text-align:right;
+  }
+
+  /* keep stage non-blocking */
+  #fileInput{
+    display:none;
+  }
+</style>
+</head>
+<body>
+  <div id="field"></div>
+
+  <div class="hint">
+    <span class="k">DBL-CLICK</span> new · <span class="k">DROP</span> text ·
+    <span class="k">SHIFT+I</span> invert ·
+    <span class="k">SHIFT+E</span> export ·
+    <span class="k">SHIFT+O</span> import ·
+    <span class="k">DEL</span> delete
+  </div>
+
+  <div class="ghost" id="statusLine">FIELD</div>
+
+  <input id="fileInput" type="file" accept="application/json,.json" />
+
+<script>
+(() => {
+  "use strict";
+
+  const LS_KEY = "KETADATA_FIELD_ROUTER_V2::state";
+  const field = document.getElementById("field");
+  const fileInput = document.getElementById("fileInput");
+  const statusLine = document.getElementById("statusLine");
+
+  const nowISO = () => new Date().toISOString();
+  const uid = () => "T_" + Math.random().toString(16).slice(2) + "_" + Date.now().toString(16);
+
+  const defaultState = () => ({
+    type: "KETADATA_FIELD_ROUTER_STATE",
+    version: "V2",
+    fileId: "KETADATA_FIELD_ROUTER_" + Date.now().toString(16),
+    updatedAt: nowISO(),
+    system: { invert: false },
+    ui: { selectedId: null },
+    things: [] // {id,x,y,w,h,title,body,createdAt,updatedAt}
+  });
+
+  let state = loadState();
+  let dirty = false;
+
+  function loadState(){
+    try{
+      const raw = localStorage.getItem(LS_KEY);
+      if(!raw){
+        const s = defaultState();
+        localStorage.setItem(LS_KEY, JSON.stringify(s));
+        return s;
+      }
+      const s = JSON.parse(raw);
+      if(!s.things) s.things = [];
+      if(!s.system) s.system = { invert:false };
+      if(!s.ui) s.ui = { selectedId:null };
+      if(!s.fileId) s.fileId = "KETADATA_FIELD_ROUTER_" + Date.now().toString(16);
+      if(!s.version) s.version = "V2";
+      return s;
+    } catch(e){
+      const s = defaultState();
+      localStorage.setItem(LS_KEY, JSON.stringify(s));
+      return s;
+    }
+  }
+
+  function markDirty(){ dirty = true; }
+
+  function save(){
+    state.updatedAt = nowISO();
+    localStorage.setItem(LS_KEY, JSON.stringify(state));
+    dirty = false;
+    renderStatus();
+  }
+
+  function applyInvert(){
+    document.body.classList.toggle("invert", !!state.system.invert);
+  }
+
+  function renderStatus(){
+    statusLine.textContent =
+      `FILE ${state.fileId} · ${state.things.length} THINGS · ${state.system.invert ? "INVERT" : "NORMAL"}`;
+  }
+
+  function download(filename, mime, text){
+    const blob = new Blob([text], { type: mime });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 250);
+  }
+
+  function exportState(){
+    const payload = {
+      type: "KETADATA_FIELD_ROUTER_EXPORT",
+      version: "V2",
+      fileId: state.fileId,
+      exportedAt: nowISO(),
+      system: { invert: !!state.system.invert },
+      ui: { selectedId: state.ui.selectedId },
+      things: state.things.map(t => ({
+        id: t.id,
+        x: t.x, y: t.y, w: t.w, h: t.h,
+        title: t.title || "",
+        body: t.body || "",
+        createdAt: t.createdAt || nowISO(),
+        updatedAt: t.updatedAt || nowISO()
+      }))
+    };
+    download(`KETADATA_FIELD_ROUTER_${state.fileId}.json`, "application/json", JSON.stringify(payload, null, 2));
+  }
+
+  async function importStateFromFile(file){
+    const txt = await file.text();
+    let obj;
+    try { obj = JSON.parse(txt); } catch(e) {
+      alert("IMPORT FAILED: INVALID JSON");
+      return;
+    }
+
+    if(!obj || !Array.isArray(obj.things)){
+      alert("IMPORT FAILED: MISSING THINGS[]");
+      return;
+    }
+
+    const ok = confirm("IMPORT WILL REPLACE THIS FIELD. CONTINUE?");
+    if(!ok) return;
+
+    state = {
+      type: "KETADATA_FIELD_ROUTER_STATE",
+      version: "V2",
+      fileId: obj.fileId || ("KETADATA_FIELD_ROUTER_" + Date.now().toString(16)),
+      updatedAt: nowISO(),
+      system: { invert: !!(obj.system && obj.system.invert) },
+      ui: { selectedId: (obj.ui && obj.ui.selectedId) || null },
+      things: obj.things.map(t => ({
+        id: String(t.id || uid()),
+        x: Number.isFinite(t.x) ? t.x : 40,
+        y: Number.isFinite(t.y) ? t.y : 40,
+        w: Number.isFinite(t.w) ? t.w : 220,
+        h: Number.isFinite(t.h) ? t.h : 120,
+        title: String(t.title || ""),
+        body: String(t.body || ""),
+        createdAt: t.createdAt || nowISO(),
+        updatedAt: nowISO()
+      }))
+    };
+
+    applyInvert();
+    render();
+    save();
+  }
+
+  function addThingAt(x, y, seedText=""){
+    const t = {
+      id: uid(),
+      x, y,
+      w: 220,
+      h: 120,
+      title: "",
+      body: seedText || "",
+      createdAt: nowISO(),
+      updatedAt: nowISO()
+    };
+    state.things.push(t);
+    markDirty();
+    render();
+    save();
+  }
+
+  function setSelected(id){
+    state.ui.selectedId = id;
+    markDirty();
+    // no heavy visual chrome; selection is implicit via focus
+    save();
+  }
+
+  function deleteSelected(){
+    const id = state.ui.selectedId;
+    if(!id) return;
+    const idx = state.things.findIndex(t => t.id === id);
+    if(idx < 0) return;
+    state.things.splice(idx, 1);
+    state.ui.selectedId = null;
+    markDirty();
+    render();
+    save();
+  }
+
+  function makeThingEl(t){
+    const el = document.createElement("div");
+    el.className = "thing";
+    el.style.left = t.x + "px";
+    el.style.top  = t.y + "px";
+    el.style.width  = t.w + "px";
+    el.style.height = t.h + "px";
+    el.dataset.id = t.id;
+
+    const grip = document.createElement("div");
+    grip.className = "grip";
+
+    const title = document.createElement("span");
+    title.className = "title";
+    title.contentEditable = "true";
+    title.spellcheck = false;
+    title.textContent = (t.title && t.title.trim()) ? t.title : "THING";
+    title.addEventListener("focus", () => setSelected(t.id));
+    title.addEventListener("input", () => {
+      t.title = title.textContent.trim();
+      t.updatedAt = nowISO();
+      markDirty();
+      save();
+    });
+
+    grip.appendChild(title);
+
+    const body = document.createElement("div");
+    body.className = "body";
+    body.contentEditable = "true";
+    body.spellcheck = false;
+    body.textContent = t.body || "";
+    body.addEventListener("focus", () => setSelected(t.id));
+    body.addEventListener("input", () => {
+      t.body = body.textContent;
+      t.updatedAt = nowISO();
+      markDirty();
+      save();
+    });
+
+    // Drag by grip only (typing never fights drag)
+    let ox=0, oy=0;
+    grip.addEventListener("mousedown", (e) => {
+      e.preventDefault();
+      setSelected(t.id);
+      ox = e.clientX - el.offsetLeft;
+      oy = e.clientY - el.offsetTop;
+
+      document.onmousemove = (ev) => {
+        t.x = ev.clientX - ox;
+        t.y = ev.clientY - oy;
+        el.style.left = t.x + "px";
+        el.style.top  = t.y + "px";
+      };
+
+      document.onmouseup = () => {
+        document.onmousemove = null;
+        document.onmouseup = null;
+        // capture resized dims too
+        t.w = el.offsetWidth;
+        t.h = el.offsetHeight;
+        t.updatedAt = nowISO();
+        markDirty();
+        save();
+      };
+    });
+
+    // Persist resize changes (mouseup anywhere over element)
+    el.addEventListener("mouseup", () => {
+      t.w = el.offsetWidth;
+      t.h = el.offsetHeight;
+      t.updatedAt = nowISO();
+      markDirty();
+      save();
+    });
+
+    el.appendChild(grip);
+    el.appendChild(body);
+
+    return el;
+  }
+
+  function render(){
+    field.innerHTML = "";
+    for(const t of state.things){
+      field.appendChild(makeThingEl(t));
+    }
+    renderStatus();
+  }
+
+  // --- FIELD gestures
+  field.addEventListener("dblclick", (e) => {
+    // avoid dblclick inside a thing
+    const targetThing = e.target.closest && e.target.closest(".thing");
+    if(targetThing) return;
+    addThingAt(e.clientX, e.clientY, "");
+  });
+
+  // Drop text scraps
+  field.addEventListener("dragover", (e) => e.preventDefault());
+  field.addEventListener("drop", (e) => {
+    e.preventDefault();
+    const text = e.dataTransfer.getData("text");
+    if(!text) return;
+    addThingAt(e.clientX, e.clientY, text);
+  });
+
+  // Clicking empty field clears selection
+  field.addEventListener("mousedown", (e) => {
+    const thing = e.target.closest && e.target.closest(".thing");
+    if(!thing){
+      state.ui.selectedId = null;
+      markDirty();
+      save();
+    }
+  });
+
+  // --- Hotkeys
+  document.addEventListener("keydown", (e) => {
+    const tag = (e.target && e.target.tagName) ? e.target.tagName.toLowerCase() : "";
+    const typing = (tag === "input" || tag === "textarea" || e.target.isContentEditable);
+
+    // invert
+    if(e.shiftKey && e.key.toLowerCase() === "i"){
+      e.preventDefault();
+      state.system.invert = !state.system.invert;
+      applyInvert();
+      markDirty();
+      save();
+      return;
+    }
+
+    // export
+    if(e.shiftKey && e.key.toLowerCase() === "e"){
+      e.preventDefault();
+      exportState();
+      return;
+    }
+
+    // import
+    if(e.shiftKey && e.key.toLowerCase() === "o"){
+      e.preventDefault();
+      fileInput.click();
+      return;
+    }
+
+    // delete selected (only if not typing)
+    if(!typing && (e.key === "Delete" || e.key === "Backspace")){
+      e.preventDefault();
+      deleteSelected();
+      return;
+    }
+  });
+
+  fileInput.addEventListener("change", async () => {
+    const f = fileInput.files && fileInput.files[0];
+    if(!f) return;
+    await importStateFromFile(f);
+    fileInput.value = "";
+  });
+
+  // Autosave safety
+  setInterval(() => { if(dirty) save(); }, 4000);
+
+  // Boot
+  applyInvert();
+  render();
+  save(); // ensure key exists
+
+  // Expose minimal debug
+  window.__KETADATA_FIELD_ROUTER__ = {
+    getState: () => JSON.parse(JSON.stringify(state)),
+    export: exportState,
+    clear: () => { localStorage.removeItem(LS_KEY); location.reload(); }
+  };
+})();
+</script>
+
+<!--
+AE: BLACK_FIELD / UNIFORM_TEXT / INDifferent_HINT
+EE: THINGS_ON_FIELD / GRIP_DRAG / DROP_SCRAPS / REAL_EXPORT_IMPORT / LOCAL_FIRST
+WB: HOTKEYS SHIFT+I invert SHIFT+E export SHIFT+O import / DELETE removes selected (non-typing)
+FILE_ID: KETADATA_FIELD_ROUTER
+ROOM_ID: FIELD
+VERSION: V2
+UPDATED_AT: 2026-01-04T00:00:00.000-05:00
+CHANGELOG:
+- V2: added real export/import download + file picker; drag handle prevents typing interference; persisted invert; delete selected; autosave.
+-->
+</body>
+</html>
