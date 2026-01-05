@@ -1,0 +1,665 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>KETADATA // FISHTANK</title>
+  <style>
+    :root{
+      --bg:#0b0c0f;
+      --fg:#e9edf2;
+      --muted:rgba(233,237,242,.55);
+      --hair:rgba(233,237,242,.14);
+      --panel:rgba(0,0,0,.35);
+      --panel2:rgba(0,0,0,.55);
+      --glass:rgba(233,237,242,.06);
+      --ring:rgba(233,237,242,.22);
+      --light:0;
+      --invert:0;
+      --motion:1;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%;margin:0}
+    body{
+      background:var(--bg);
+      color:var(--fg);
+      font:12px/1.25 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace;
+      overflow:hidden;
+      user-select:none;
+    }
+
+    /* INVERT + NULL */
+    body.invert{
+      filter: invert(1) hue-rotate(180deg);
+      background: #fff;
+    }
+    body.nullmode .chrome{display:none}
+    body.nullmode #hud{opacity:.0; pointer-events:none}
+
+    /* TANK */
+    #tank{
+      position:absolute; inset:0;
+      background: radial-gradient(1200px 800px at 50% 40%, rgba(40,90,120,.22), rgba(0,0,0,0) 60%),
+                  radial-gradient(900px 700px at 25% 75%, rgba(120,60,120,.12), rgba(0,0,0,0) 55%),
+                  linear-gradient(180deg, rgba(233,237,242,.03), rgba(0,0,0,0) 40%),
+                  linear-gradient(180deg, rgba(0,0,0,0), rgba(0,0,0,.25));
+    }
+    canvas{position:absolute; inset:0; width:100%; height:100%}
+
+    /* LIGHTS (1–6) */
+    #lights{
+      position:absolute; inset:0;
+      pointer-events:none;
+      opacity: calc(var(--light) / 6);
+      mix-blend-mode: screen;
+      background:
+        radial-gradient(900px 700px at 20% 30%, rgba(120,200,255,.18), rgba(0,0,0,0) 55%),
+        radial-gradient(700px 600px at 80% 35%, rgba(255,140,200,.12), rgba(0,0,0,0) 55%),
+        radial-gradient(900px 800px at 50% 85%, rgba(140,255,200,.10), rgba(0,0,0,0) 55%);
+    }
+
+    /* CHROME */
+    .chrome{
+      position:absolute; inset:0;
+      pointer-events:none;
+    }
+    #hud{
+      position:absolute;
+      top:10px; left:10px;
+      width: 360px;
+      border:1px solid var(--hair);
+      background:var(--panel);
+      backdrop-filter: blur(6px);
+      pointer-events:auto;
+    }
+    #hud .bar{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      padding:8px 8px;
+      border-bottom:1px solid var(--hair);
+      background: linear-gradient(180deg, rgba(233,237,242,.06), rgba(0,0,0,0));
+    }
+    #hud .bar .title{opacity:.9}
+    #hud .bar .meta{opacity:.55}
+    #hud .body{
+      padding:8px;
+      display:grid;
+      gap:8px;
+    }
+    .row{
+      display:flex;
+      gap:8px;
+      align-items:center;
+      flex-wrap:wrap;
+    }
+    .btn, .pill, input[type="range"]{
+      font:inherit;
+      color:inherit;
+    }
+    .btn{
+      border:1px solid var(--hair);
+      background:rgba(233,237,242,.04);
+      padding:6px 8px;
+      cursor:pointer;
+      user-select:none;
+    }
+    .btn:hover{background:rgba(233,237,242,.07)}
+    .btn:active{transform: translateY(1px)}
+    .pill{
+      border:1px solid var(--hair);
+      padding:6px 8px;
+      background:rgba(0,0,0,.18);
+      opacity:.85;
+    }
+    input[type="range"]{
+      width: 140px;
+      accent-color: var(--fg);
+    }
+    .label{opacity:.7}
+    .mini{opacity:.55}
+    .sep{height:1px;background:var(--hair);margin:2px 0}
+
+    /* NOTE (ANGULAR) */
+    #note{
+      position:absolute;
+      right:10px; top:10px;
+      width: 360px; height: 220px;
+      border:1px solid var(--hair);
+      background:var(--panel2);
+      pointer-events:auto;
+      display:none;
+    }
+    #note.open{display:block}
+    #note .bar{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      padding:8px 8px;
+      border-bottom:1px solid var(--hair);
+      background: linear-gradient(180deg, rgba(233,237,242,.06), rgba(0,0,0,0));
+      cursor:move;
+      user-select:none;
+    }
+    #note textarea{
+      width:100%; height: calc(100% - 34px);
+      border:0;
+      outline:none;
+      resize:none;
+      background:transparent;
+      color:var(--fg);
+      font:inherit;
+      padding:8px;
+      user-select:text;
+    }
+
+    /* SENSES (CIRCULAR) — bubbles hint */
+    #cornerBubbles{
+      position:absolute; left:10px; bottom:10px;
+      display:flex; gap:6px;
+      pointer-events:none;
+      opacity:.6;
+    }
+    .dot{
+      width:10px; height:10px; border-radius:50%;
+      border:1px solid var(--hair);
+      background:rgba(233,237,242,.06);
+    }
+
+    /* SUBTLE FRAME */
+    #frame{
+      position:absolute; inset:8px;
+      border:1px solid rgba(233,237,242,.08);
+      pointer-events:none;
+    }
+
+    /* SMALL STATUS */
+    #statusLine{
+      position:absolute; right:10px; bottom:10px;
+      border:1px solid var(--hair);
+      background:rgba(0,0,0,.25);
+      padding:6px 8px;
+      opacity:.75;
+      pointer-events:none;
+      max-width: 60vw;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+  </style>
+</head>
+<body>
+  <div id="tank">
+    <canvas id="c"></canvas>
+    <div id="lights"></div>
+  </div>
+
+  <div class="chrome">
+    <div id="frame"></div>
+
+    <div id="hud">
+      <div class="bar">
+        <div class="title">KETADATA // FISHTANK</div>
+        <div class="meta" id="meta">LIGHT 0 · INVERT 0 · NULL 0</div>
+      </div>
+
+      <div class="body">
+        <div class="row">
+          <div class="pill"><span class="label">HOTKEYS</span> <span class="mini">SHIFT+I INVERT · 1–6 LIGHT · SHIFT+N NULL · SHIFT+F FULLSCREEN · SHIFT+K NOTE</span></div>
+        </div>
+
+        <div class="sep"></div>
+
+        <div class="row">
+          <button class="btn" id="btnNote">NOTE</button>
+          <button class="btn" id="btnInvert">INVERT</button>
+          <button class="btn" id="btnNull">NULL</button>
+          <button class="btn" id="btnFull">FULL</button>
+          <span class="label">LIGHT</span>
+          <input type="range" id="rngLight" min="0" max="6" step="1" value="0" />
+          <span class="label">MOTION</span>
+          <button class="btn" id="btnMotion">ON</button>
+        </div>
+
+        <div class="row">
+          <span class="label">FISH</span>
+          <input type="range" id="rngFish" min="1" max="24" step="1" value="10" />
+          <span class="label">BUBBLES</span>
+          <input type="range" id="rngBub" min="0" max="60" step="1" value="26" />
+          <span class="label">CURRENT</span>
+          <input type="range" id="rngCur" min="0" max="100" step="1" value="35" />
+        </div>
+      </div>
+    </div>
+
+    <div id="note">
+      <div class="bar">
+        <div>KETA_NOTE</div>
+        <div class="mini" id="noteHint">SHIFT+K TO TOGGLE</div>
+      </div>
+      <textarea id="noteText" spellcheck="false" placeholder="KETA_NOTE — optional, movable, non-interfering."></textarea>
+    </div>
+
+    <div id="cornerBubbles" aria-hidden="true">
+      <div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div>
+    </div>
+
+    <div id="statusLine">READY</div>
+  </div>
+
+  <script>
+    // EE: state (local-first, single-file)
+    const FILE_ID = "KETADATA_FISHTANK_V1";
+    const LS_KEY = "KETADATA::" + FILE_ID + "::STATE";
+    const $ = (id)=>document.getElementById(id);
+
+    const state = {
+      light: 0,
+      invert: false,
+      nullMode: false,
+      fullscreen: false,
+      motion: true,
+      fishCount: 10,
+      bubbleRate: 26,
+      current: 0.35,
+      noteOpen: false,
+      notePos: { x: null, y: null },
+      noteText: ""
+    };
+
+    function loadState(){
+      try{
+        const raw = localStorage.getItem(LS_KEY);
+        if(!raw) return;
+        const s = JSON.parse(raw);
+        if(!s || typeof s !== "object") return;
+        Object.assign(state, s);
+      }catch(_){}
+    }
+    function saveState(){
+      try{ localStorage.setItem(LS_KEY, JSON.stringify(state)); }catch(_){}
+    }
+
+    // WB: apply
+    function applyState(){
+      document.body.classList.toggle("invert", !!state.invert);
+      document.body.classList.toggle("nullmode", !!state.nullMode);
+
+      document.documentElement.style.setProperty("--light", String(state.light));
+      document.documentElement.style.setProperty("--motion", state.motion ? "1" : "0");
+
+      $("rngLight").value = String(state.light);
+      $("rngFish").value = String(state.fishCount);
+      $("rngBub").value = String(state.bubbleRate);
+      $("rngCur").value = String(Math.round(state.current * 100));
+      $("btnMotion").textContent = state.motion ? "ON" : "OFF";
+
+      const meta = `LIGHT ${state.light} · INVERT ${state.invert?1:0} · NULL ${state.nullMode?1:0}`;
+      $("meta").textContent = meta;
+
+      $("noteText").value = state.noteText || "";
+      $("note").classList.toggle("open", !!state.noteOpen);
+
+      if(state.notePos && state.notePos.x != null && state.notePos.y != null){
+        $("note").style.left = state.notePos.x + "px";
+        $("note").style.top = state.notePos.y + "px";
+        $("note").style.right = "auto";
+      }
+
+      status(`FISH ${state.fishCount} · BUBBLES ${state.bubbleRate} · CURRENT ${Math.round(state.current*100)}`);
+    }
+
+    function status(t){
+      $("statusLine").textContent = t;
+    }
+
+    // AE: canvas fish tank
+    const canvas = $("c");
+    const ctx = canvas.getContext("2d", { alpha:true });
+    let W=0,H=0, DPR=1;
+
+    function resize(){
+      DPR = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+      W = Math.floor(window.innerWidth * DPR);
+      H = Math.floor(window.innerHeight * DPR);
+      canvas.width = W;
+      canvas.height = H;
+    }
+    window.addEventListener("resize", resize);
+
+    // fish (simple boids-ish drift)
+    const fish = [];
+    const bubbles = [];
+
+    function rand(a,b){ return a + Math.random()*(b-a); }
+
+    function spawnFish(n){
+      fish.length = 0;
+      for(let i=0;i<n;i++){
+        fish.push({
+          x: rand(0,W),
+          y: rand(0,H),
+          vx: rand(.15,.55) * DPR,
+          vy: rand(-.12,.12) * DPR,
+          s: rand(8,22) * DPR,
+          phase: rand(0, Math.PI*2),
+          turn: rand(.002,.01)
+        });
+      }
+    }
+
+    function tickBubbles(){
+      // bubbleRate ~ target average count and spawn density
+      const target = state.bubbleRate;
+      const spawnChance = Math.min(0.9, target / 60);
+      if(Math.random() < spawnChance){
+        bubbles.push({
+          x: rand(0,W),
+          y: H + rand(0, 40*DPR),
+          r: rand(2, 8)*DPR,
+          vy: rand(0.35, 1.1)*DPR,
+          wob: rand(0.004, 0.02),
+          ph: rand(0, Math.PI*2),
+          life: 0
+        });
+      }
+      while(bubbles.length > target){
+        bubbles.shift();
+      }
+    }
+
+    function drawFish(f){
+      // body: small capsule + tail (angular-ish), minimal
+      const dir = Math.atan2(f.vy, f.vx);
+      const px = f.x, py = f.y;
+      const len = f.s;
+      const wid = Math.max(2*DPR, f.s*0.22);
+
+      ctx.save();
+      ctx.translate(px, py);
+      ctx.rotate(dir);
+
+      // faint rim
+      ctx.strokeStyle = "rgba(233,237,242,.18)";
+      ctx.fillStyle = "rgba(233,237,242,.06)";
+
+      // body
+      ctx.beginPath();
+      ctx.moveTo(-len*0.5, 0);
+      ctx.quadraticCurveTo(-len*0.2, -wid, len*0.5, 0);
+      ctx.quadraticCurveTo(-len*0.2, wid, -len*0.5, 0);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      // tail (angular)
+      ctx.fillStyle = "rgba(233,237,242,.05)";
+      ctx.beginPath();
+      ctx.moveTo(-len*0.5, 0);
+      ctx.lineTo(-len*0.72, -wid*0.9);
+      ctx.lineTo(-len*0.62, 0);
+      ctx.lineTo(-len*0.72, wid*0.9);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      // eye (single dot)
+      ctx.fillStyle = "rgba(233,237,242,.26)";
+      ctx.beginPath();
+      ctx.arc(len*0.22, -wid*0.15, Math.max(1.2*DPR, wid*0.12), 0, Math.PI*2);
+      ctx.fill();
+
+      ctx.restore();
+    }
+
+    function drawBubble(b){
+      ctx.strokeStyle = "rgba(233,237,242,.14)";
+      ctx.fillStyle = "rgba(233,237,242,.03)";
+      ctx.beginPath();
+      ctx.arc(b.x, b.y, b.r, 0, Math.PI*2);
+      ctx.fill();
+      ctx.stroke();
+      // highlight
+      ctx.fillStyle = "rgba(233,237,242,.12)";
+      ctx.beginPath();
+      ctx.arc(b.x - b.r*0.35, b.y - b.r*0.35, Math.max(1*DPR, b.r*0.18), 0, Math.PI*2);
+      ctx.fill();
+    }
+
+    function step(){
+      // clear with slight persistence when motion on (water smear)
+      const motion = state.motion;
+      ctx.fillStyle = motion ? "rgba(0,0,0,.18)" : "rgba(0,0,0,1)";
+      ctx.fillRect(0,0,W,H);
+
+      // grid shimmer (very faint)
+      ctx.strokeStyle = "rgba(233,237,242,.035)";
+      ctx.lineWidth = 1*DPR;
+      const grid = 64*DPR;
+      for(let x = (performance.now()*0.01*DPR) % grid; x < W; x += grid){
+        ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke();
+      }
+      for(let y = (performance.now()*0.006*DPR) % grid; y < H; y += grid){
+        ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke();
+      }
+
+      // bubbles (circular / senses)
+      tickBubbles();
+      for(let i=bubbles.length-1;i>=0;i--){
+        const b = bubbles[i];
+        b.life += 1;
+        b.ph += b.wob;
+        b.y -= b.vy;
+        b.x += Math.sin(b.ph) * 0.35*DPR;
+        drawBubble(b);
+        if(b.y < -40*DPR) bubbles.splice(i,1);
+      }
+
+      // fish
+      const cur = state.current; // 0..1
+      for(const f of fish){
+        f.phase += 0.06;
+        const wave = Math.sin(f.phase) * 0.12 * DPR;
+
+        // slight current drift
+        f.vx += (cur*0.02*DPR);
+        f.vy += wave * 0.02;
+
+        // gentle turning
+        f.vy += Math.sin((f.x/W)*Math.PI*2 + f.phase) * f.turn;
+
+        // speed clamp
+        const sp = Math.hypot(f.vx,f.vy);
+        const max = 0.9*DPR + cur*0.9*DPR;
+        if(sp > max){
+          f.vx = (f.vx/sp)*max;
+          f.vy = (f.vy/sp)*max;
+        }
+
+        f.x += f.vx;
+        f.y += f.vy;
+
+        // wrap
+        if(f.x > W + 60*DPR) f.x = -60*DPR;
+        if(f.x < -60*DPR) f.x = W + 60*DPR;
+        if(f.y > H + 60*DPR) f.y = -60*DPR;
+        if(f.y < -60*DPR) f.y = H + 60*DPR;
+
+        drawFish(f);
+      }
+
+      // subtle tank glass edges
+      ctx.strokeStyle = "rgba(233,237,242,.09)";
+      ctx.lineWidth = 2*DPR;
+      ctx.strokeRect(8*DPR, 8*DPR, W-16*DPR, H-16*DPR);
+
+      requestAnimationFrame(step);
+    }
+
+    // NOTE drag (simple, no extra chrome)
+    (function noteDrag(){
+      const el = $("note");
+      const bar = el.querySelector(".bar");
+      let dragging=false, ox=0, oy=0;
+
+      bar.addEventListener("mousedown",(e)=>{
+        dragging=true;
+        const r = el.getBoundingClientRect();
+        ox = e.clientX - r.left;
+        oy = e.clientY - r.top;
+        e.preventDefault();
+      });
+      window.addEventListener("mousemove",(e)=>{
+        if(!dragging) return;
+        const x = Math.max(10, Math.min(window.innerWidth - 10 - el.offsetWidth, e.clientX - ox));
+        const y = Math.max(10, Math.min(window.innerHeight - 10 - el.offsetHeight, e.clientY - oy));
+        el.style.left = x + "px";
+        el.style.top = y + "px";
+        el.style.right = "auto";
+        state.notePos = { x, y };
+      });
+      window.addEventListener("mouseup",()=>{
+        if(!dragging) return;
+        dragging=false;
+        saveState();
+      });
+    })();
+
+    // Controls
+    function toggleNote(){
+      state.noteOpen = !state.noteOpen;
+      saveState(); applyState();
+    }
+    function toggleInvert(){
+      state.invert = !state.invert;
+      saveState(); applyState();
+    }
+    function toggleNull(){
+      state.nullMode = !state.nullMode;
+      saveState(); applyState();
+    }
+    async function toggleFullscreen(){
+      try{
+        if(!document.fullscreenElement){
+          await document.documentElement.requestFullscreen();
+          state.fullscreen = true;
+        } else {
+          await document.exitFullscreen();
+          state.fullscreen = false;
+        }
+      }catch(_){}
+      saveState(); applyState();
+    }
+
+    $("btnNote").addEventListener("click", toggleNote);
+    $("btnInvert").addEventListener("click", toggleInvert);
+    $("btnNull").addEventListener("click", toggleNull);
+    $("btnFull").addEventListener("click", toggleFullscreen);
+
+    $("rngLight").addEventListener("input",(e)=>{
+      state.light = parseInt(e.target.value,10) || 0;
+      saveState(); applyState();
+    });
+    $("rngFish").addEventListener("input",(e)=>{
+      state.fishCount = parseInt(e.target.value,10) || 10;
+      spawnFish(state.fishCount);
+      saveState(); applyState();
+    });
+    $("rngBub").addEventListener("input",(e)=>{
+      state.bubbleRate = parseInt(e.target.value,10) || 26;
+      saveState(); applyState();
+    });
+    $("rngCur").addEventListener("input",(e)=>{
+      const v = parseInt(e.target.value,10) || 0;
+      state.current = Math.max(0, Math.min(1, v/100));
+      saveState(); applyState();
+    });
+    $("btnMotion").addEventListener("click",()=>{
+      state.motion = !state.motion;
+      saveState(); applyState();
+    });
+
+    $("noteText").addEventListener("input",(e)=>{
+      state.noteText = e.target.value || "";
+      saveState();
+    });
+
+    // Hotkeys (do not interfere with typing)
+    function isTypingTarget(t){
+      if(!t) return false;
+      const tag = (t.tagName || "").toLowerCase();
+      return tag === "textarea" || tag === "input" || t.isContentEditable;
+    }
+
+    window.addEventListener("keydown",(e)=>{
+      const typing = isTypingTarget(e.target);
+
+      // SHIFT combos
+      if(e.shiftKey && e.key.toLowerCase() === "i"){
+        e.preventDefault();
+        toggleInvert();
+        return;
+      }
+      if(e.shiftKey && e.key.toLowerCase() === "n"){
+        e.preventDefault();
+        toggleNull();
+        return;
+      }
+      if(e.shiftKey && e.key.toLowerCase() === "f"){
+        e.preventDefault();
+        toggleFullscreen();
+        return;
+      }
+      if(e.shiftKey && e.key.toLowerCase() === "k"){
+        e.preventDefault();
+        toggleNote();
+        return;
+      }
+
+      // lights 1–6 (never blocks typing, but still allowed)
+      if(!e.shiftKey && !e.ctrlKey && !e.metaKey){
+        const k = e.key;
+        if(k >= "1" && k <= "6"){
+          state.light = parseInt(k,10);
+          saveState(); applyState();
+          return;
+        }
+        if(k === "0"){
+          state.light = 0;
+          saveState(); applyState();
+          return;
+        }
+      }
+
+      // SPACE reserved (only when not typing)
+      if(e.code === "Space" && !typing){
+        // quick pulse of current when not typing
+        e.preventDefault();
+        state.current = Math.min(1, state.current + 0.05);
+        saveState(); applyState();
+        return;
+      }
+    }, { passive:false });
+
+    // Boot
+    loadState();
+    resize();
+    spawnFish(state.fishCount);
+    applyState();
+    requestAnimationFrame(step);
+  </script>
+
+  <!--
+  AE: VISUAL (TANK CANVAS + LIGHTS)
+  EE: ENGINE (LOCAL-FIRST STATE, HOTKEYS, NOTE)
+  WB: WIRING BRIDGE (APPLY STATE TO UI/DOM)
+
+  FILE_ID: KETADATA_FISHTANK_V1
+  ROOM_ID: K_FISHTANK
+  VERSION_ID: V1
+  UPDATED_AT: 2026-01-05T00:00:00-05:00
+  CHANGELOG:
+  - V1: Single-file fishtank (fish + bubbles), lights 1–6, invert, null, fullscreen, movable KETA_NOTE, local-first persistence.
+  -->
+</body>
+</html>
