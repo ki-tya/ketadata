@@ -1,0 +1,2645 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>KETADATA_SURFACE_PLAYER_FULL_v2.html</title>
+
+<style>
+:root{
+  --bg:#000; --fg:#fff; --muted:#8a8a8a; --line:#222; --line2:#333;
+  --top:44px; --bot:34px;
+
+  --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace;
+  --sans: Arial, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+
+  --ctl-radius:0px;
+  --ctl-alpha:0.86;
+  --ctl-bg: rgba(0,0,0,var(--ctl-alpha));
+  --note-border: rgba(255,255,255,0.78);
+  --drawer-h: 0.52;
+}
+*{box-sizing:border-box}
+html,body{height:100%; margin:0}
+body{background:var(--bg); color:var(--fg); font-family:var(--sans); overflow:hidden; user-select:none}
+#root{position:fixed; inset:0; background:#000}
+#root.invert{filter:invert(1)}
+
+/* FULLSCREEN: hide chrome */
+#root.fs .topbar,
+#root.fs .bottombar,
+#root.fs .drawer,
+#root.fs .toast,
+#root.fs .ketaNote,
+#root.fs #armedBar,
+#root.fs #pinnedPanel,
+#root.fs #activeStrip,
+#root.fs #padPanel,
+#root.fs #playerPanel,
+#root.fs #ytPanel{display:none !important}
+
+/* BLACKOUT: hard black */
+#root.blackout .topbar,
+#root.blackout .bottombar,
+#root.blackout .drawer,
+#root.blackout .toast,
+#root.blackout .ketaNote,
+#root.blackout #armedBar,
+#root.blackout #pinnedPanel,
+#root.blackout #activeStrip,
+#root.blackout #padPanel,
+#root.blackout #playerPanel,
+#root.blackout #ytPanel{display:none !important}
+#root.blackout #root.blackout #stage{background:#000 !important; filter:none !important}
+#root.blackout #motion{display:none !important}
+
+/* Stage */
+#stage{position:absolute; inset:0; background:#000; pointer-events:none}
+#motion{
+  position:absolute; inset:0; pointer-events:none; opacity:0;
+  background:repeating-linear-gradient(135deg, rgba(255,255,255,0.06) 0px, rgba(255,255,255,0.06) 1px, rgba(0,0,0,0) 12px, rgba(0,0,0,0) 22px);
+  mix-blend-mode:screen;
+  transform:translate3d(0,0,0);
+}
+#motion.run{opacity:0.12; animation:scanflow 2.2s linear infinite}
+@keyframes scanflow{0%{transform:translate3d(-80px,60px,0)}100%{transform:translate3d(80px,-60px,0)}}
+
+/* FULL SCREEN SURFACE */
+#surfaceFrame{
+  position:absolute;
+  inset:0;
+  width:100%;
+  height:100%;
+  border:0;
+  background:#000;
+  z-index:1;
+  display:none; /* keep BASE visible until a surface is explicitly applied */
+}
+#surfaceFrame.on{display:block}
+
+/* Top bar */
+.topbar{
+  position:absolute; top:0; left:0; right:0; height:var(--top);
+  display:flex; align-items:center; justify-content:space-between;
+  padding:0 10px; border-bottom:1px solid var(--line);
+  background:linear-gradient(180deg,#070707,#000);
+  z-index:10;
+}
+.brand{display:flex; align-items:center; gap:10px; font-family:var(--mono); font-size:12px; letter-spacing:.10em; text-transform:uppercase}
+.brand .sq{width:10px; height:10px; border:1px solid var(--fg); background:#000}
+.roomBadge{display:flex; gap:8px; align-items:center; font-family:var(--mono); font-size:11px; letter-spacing:.10em; text-transform:uppercase; color:var(--muted); border:1px solid var(--line2); padding:4px 8px}
+.actions{display:flex; align-items:center; gap:8px; font-family:var(--mono); font-size:12px}
+.btn{
+  background:transparent; color:var(--fg);
+  border:1px solid var(--line2);
+  padding:6px 10px;
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  cursor:pointer;
+}
+.btn:hover{border-color:var(--fg)}
+.btn:active{transform:translateY(1px)}
+.kbd{border:1px solid var(--line2); padding:2px 6px; color:var(--muted); font-size:11px}
+.ketaIcon{
+  width:16px; height:16px;
+  border:2px solid var(--fg);
+  background:var(--fg);
+  cursor:pointer;
+}
+.ketaIcon.open{background:#000}
+
+/* Bottom bar */
+.bottombar{
+  position:absolute; left:0; right:0; bottom:0; height:var(--bot);
+  display:flex; align-items:center; justify-content:space-between;
+  padding:0 10px; border-top:1px solid var(--line);
+  background:linear-gradient(0deg,#070707,#000);
+  z-index:10;
+  font-family:var(--mono); font-size:11px; color:var(--muted);
+}
+.toggle{
+  border:1px solid var(--line2);
+  background:transparent;
+  color:var(--fg);
+  padding:4px 8px;
+  font-family:var(--mono);
+  font-size:11px;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  cursor:pointer;
+}
+.toggle:hover{border-color:var(--fg)}
+
+/* Drawer */
+.drawer{
+  position:absolute; left:0; right:0;
+  bottom:var(--bot);
+  height:calc((100vh - var(--top) - var(--bot)) * var(--drawer-h));
+  min-height:220px;
+  border-top:1px solid var(--line);
+  background:linear-gradient(180deg,#060606,#000);
+  display:none;
+  z-index:20;
+}
+.drawer.open{display:flex; flex-direction:column}
+.drawerSizer{
+  height:10px;
+  cursor:ns-resize;
+  border-bottom:1px solid var(--line);
+  background:linear-gradient(180deg,#0a0a0a,#050505);
+}
+.drawerHead{
+  padding:8px 10px;
+  border-bottom:1px solid var(--line);
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:.10em;
+  text-transform:uppercase;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+}
+.drawerBody{padding:10px; min-height:0; flex:1; overflow:auto}
+textarea{
+  width:100%;
+  border:1px solid var(--line2);
+  background:#050505;
+  color:var(--fg);
+  font-family:var(--mono);
+  font-size:12px;
+  padding:10px;
+  line-height:1.35;
+  outline:none;
+  resize:vertical;
+  min-height:120px;
+}
+input{outline:none}
+
+/* KETA NOTE */
+.ketaNote{
+  position:absolute; top:76px; right:16px; left:auto;
+  width:340px; height:220px;
+  display:none;
+  z-index:30;
+  resize:both;
+  overflow:hidden;
+  border-radius:var(--ctl-radius);
+  background:var(--ctl-bg);
+  border:1px solid var(--note-border);
+  backdrop-filter:blur(6px);
+}
+.ketaNote.open{display:flex; flex-direction:column}
+.ketaHead{
+  padding:8px 10px;
+  border-bottom:1px solid rgba(255,255,255,0.14);
+  font-family:var(--mono);
+  font-size:11px;
+  letter-spacing:.14em;
+  text-transform:uppercase;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  cursor:move;
+}
+.ketaBody{padding:10px; min-height:0; flex:1}
+.ketaNote textarea{
+  background:#000;
+  color:#fff;
+  border:1px solid rgba(255,255,255,0.22);
+  width:100%;
+  height:100%;
+  resize:none;
+  padding:10px;
+  outline:none;
+}
+.headBtn{
+  background:transparent;
+  color:var(--fg);
+  border:1px solid rgba(255,255,255,0.18);
+  padding:2px 8px;
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  cursor:pointer;
+}
+.headBtn:hover{border-color:rgba(255,255,255,0.6)}
+
+/* Armed bar */
+#armedBar{
+  position:absolute; left:10px; top:calc(var(--top) + 10px);
+  z-index:27;
+  display:none;
+  gap:8px;
+  align-items:center;
+  flex-wrap:wrap;
+  padding:8px 10px;
+  border:1px solid var(--line2);
+  background:rgba(0,0,0,0.86);
+  font-family:var(--mono); font-size:11px; letter-spacing:.08em; text-transform:uppercase;
+}
+#armedBar .label{color:var(--muted)}
+#armedBar .val{color:var(--fg)}
+#armedBar input{
+  background:#000; color:#fff; border:1px solid var(--line2);
+  padding:6px 8px; font-family:var(--mono); font-size:11px; letter-spacing:.08em;
+  width:340px; max-width:calc(100vw - 40px);
+}
+
+/* Pinned panel */
+#pinnedPanel{
+  position:absolute; left:10px; top:calc(var(--top) + 64px);
+  z-index:26; display:none; gap:8px; flex-wrap:wrap; align-items:flex-start;
+  padding:8px 10px; border:1px solid var(--line2);
+  background:rgba(0,0,0,0.86);
+  font-family:var(--mono); font-size:11px; letter-spacing:.08em; text-transform:uppercase;
+}
+
+/* Active strip */
+#activeStrip{
+  position:absolute; left:10px; top:calc(var(--top) + 122px);
+  z-index:25; display:none; gap:8px; flex-wrap:wrap; align-items:center;
+  padding:8px 10px; border:1px solid var(--line2);
+  background:rgba(0,0,0,0.86);
+  font-family:var(--mono); font-size:11px; letter-spacing:.08em; text-transform:uppercase;
+}
+#activeStrip .label{color:var(--muted)}
+
+/* Pad */
+#padPanel{
+  position:absolute;
+  left:14px;
+  top:calc(var(--top) + 170px);
+  width:360px;
+  height:360px;
+  display:none;
+  z-index:31;
+  border:1px solid rgba(255,255,255,0.22);
+  border-radius:var(--ctl-radius);
+  background:rgba(0,0,0,0.86);
+  backdrop-filter:blur(6px);
+  overflow:hidden;
+  resize:both;
+  min-width:340px;
+  min-height:260px;
+}
+#padPanel.open{display:flex; flex-direction:column}
+#padHead{
+  padding:8px 10px;
+  border-bottom:1px solid rgba(255,255,255,0.14);
+  font-family:var(--mono);
+  font-size:11px;
+  letter-spacing:.14em;
+  text-transform:uppercase;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  cursor:move;
+}
+#padBody{padding:10px; min-height:0; flex:1; display:flex; flex-direction:column; gap:10px}
+#padGrid{
+  flex:1;
+  display:grid;
+  grid-template-columns:repeat(4, 1fr);
+  grid-template-rows:repeat(4, 1fr);
+  gap:8px;
+  min-height:0;
+}
+.padCell{
+  border:1px solid rgba(255,255,255,0.18);
+  background:rgba(0,0,0,0.35);
+  padding:8px;
+  overflow:hidden;
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+  min-width:0;
+}
+.padCell .nm{
+  font-family:var(--mono);
+  font-size:11px;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  opacity:.95;
+}
+.padCell a{
+  color:var(--fg);
+  font-family:var(--mono);
+  font-size:11px;
+  letter-spacing:.02em;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  text-decoration:none;
+  border-bottom:1px solid rgba(255,255,255,0.18);
+  padding-bottom:2px;
+  opacity:.88;
+}
+.padCell a:hover{border-bottom-color:rgba(255,255,255,0.55); opacity:1}
+.padCell input{
+  width:100%;
+  background:#000;
+  color:#fff;
+  border:1px solid rgba(255,255,255,0.22);
+  padding:6px 8px;
+  font-family:var(--mono);
+  font-size:11px;
+  letter-spacing:.06em;
+  outline:none;
+  min-width:0;
+}
+
+/* Surface Player (overlay controller for full-screen surface) */
+#playerPanel{
+  position:absolute;
+  right:14px;
+  top:calc(var(--top) + 64px);
+  width:380px;
+  height:420px;
+  display:none;
+  z-index:32;
+  border:1px solid rgba(255,255,255,0.22);
+  border-radius:var(--ctl-radius);
+  background:rgba(0,0,0,0.86);
+  backdrop-filter:blur(6px);
+  overflow:hidden;
+  resize:both;
+  min-width:360px;
+  min-height:280px;
+}
+#playerPanel.open{display:flex; flex-direction:column}
+#playerHead{
+  padding:8px 10px;
+  border-bottom:1px solid rgba(255,255,255,0.14);
+  font-family:var(--mono);
+  font-size:11px;
+  letter-spacing:.14em;
+  text-transform:uppercase;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  cursor:move;
+}
+#playerBody{padding:10px; min-height:0; flex:1; overflow:auto}
+.playerRow{
+  border:1px solid rgba(255,255,255,0.18);
+  padding:8px 10px;
+  font-family:var(--mono);
+  font-size:11px;
+  letter-spacing:.06em;
+  text-transform:uppercase;
+  display:flex;
+  gap:8px;
+  align-items:center;
+  cursor:pointer;
+}
+.playerRow .nm{flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.playerRow .ix{color:var(--muted)}
+
+/* YT mini screen */
+#ytPanel{
+  position:absolute;
+  right:14px;
+  top:calc(var(--top) + 504px);
+  width:360px;
+  height:260px;
+  display:none;
+  z-index:33;
+  border:1px solid rgba(255,255,255,0.22);
+  border-radius:var(--ctl-radius);
+  background:rgba(0,0,0,0.86);
+  backdrop-filter:blur(6px);
+  overflow:hidden;
+  resize:both;
+  min-width:320px;
+  min-height:220px;
+}
+#ytPanel.open{display:flex; flex-direction:column}
+#ytHead{
+  padding:8px 10px;
+  border-bottom:1px solid rgba(255,255,255,0.14);
+  font-family:var(--mono);
+  font-size:11px;
+  letter-spacing:.14em;
+  text-transform:uppercase;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  cursor:move;
+}
+#ytBody{padding:10px; min-height:0; flex:1; overflow:auto}
+#ytFrame{
+  width:100%;
+  aspect-ratio:16/9;
+  border:1px solid rgba(255,255,255,0.18);
+  background:#000;
+}
+
+/* Toast */
+.toast{
+  position:absolute;
+  left:12px;
+  top:calc(var(--top) + 12px);
+  padding:8px 10px;
+  border:1px solid var(--line2);
+  background:rgba(8,8,8,0.82);
+  font-family:var(--mono);
+  font-size:11px;
+  letter-spacing:.06em;
+  color:var(--fg);
+  display:none;
+  z-index:40;
+}
+
+/* =========================================================
+AE ▸ SYSTEM LIGHTS (1–6)
+Mind: angular. Senses: circular. No pointer capture.
+========================================================= */
+:root{ --light:1; }
+#stage::before{
+  content:"";
+  position:absolute; inset:0;
+  pointer-events:none;
+  background:
+    radial-gradient(circle at 60% 40%,
+      rgba(255,255,255, calc(0.02 * var(--light))) 0%,
+      rgba(255,255,255, calc(0.01 * var(--light))) 28%,
+      rgba(0,0,0,0) 62%);
+  mix-blend-mode:screen;
+}
+
+</style>
+</head>
+
+<body>
+<div id="root">
+
+  <div id="stage"></div>
+  <div id="motion" aria-hidden="true"></div>
+
+  <!-- FULL SCREEN SURFACE -->
+  <iframe id="surfaceFrame" title="SURFACE" referrerpolicy="no-referrer"></iframe>
+
+  <!-- ARMED BAR -->
+  <div id="armedBar">
+    <span class="label">ARMED</span>
+    <span class="val" id="armedName">—</span>
+    <button class="btn" id="armedGo" style="padding:4px 8px; font-size:11px">GO</button>
+    <button class="btn" id="armedNewTab" style="padding:4px 8px; font-size:11px">NEW TAB</button>
+    <button class="btn" id="armedCopy" style="padding:4px 8px; font-size:11px">COPY URL</button>
+    <input id="armedUrl" readonly value="—" />
+  </div>
+
+  <div id="pinnedPanel"></div>
+  <div id="activeStrip"></div>
+
+  <!-- PAD -->
+  <div id="padPanel">
+    <div id="padHead">
+      <span id="padTitle">PAD</span>
+      <div style="display:flex; gap:8px; align-items:center">
+        <button class="headBtn" id="padEditBtn">EDIT</button>
+        <button class="headBtn" id="padCloseBtn">X</button>
+      </div>
+    </div>
+    <div id="padBody">
+      <div id="padGrid"></div>
+      <div style="display:flex; gap:8px; align-items:center; justify-content:space-between; font-family:var(--mono); font-size:11px; color:var(--muted); letter-spacing:.08em; text-transform:uppercase">
+        <span id="padHint">CLICK = ARM</span>
+        <span id="padSetId" style="opacity:.7">—</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- PLAYER -->
+  <div id="playerPanel">
+    <div id="playerHead">
+      <span id="playerTitle">PLAYER</span>
+      <div style="display:flex; gap:8px; align-items:center">
+        <button class="headBtn" id="playerPrev">◀</button>
+        <button class="headBtn" id="playerPlay">PLAY</button>
+        <button class="headBtn" id="playerNext">▶</button>
+        <button class="headBtn" id="playerClose">X</button>
+      </div>
+    </div>
+
+    <div id="playerBody">
+      <!-- INPUT (adds to queue) -->
+      <div style="font-family:var(--mono); font-size:12px; letter-spacing:.10em; text-transform:uppercase; color:var(--muted); margin-bottom:8px">INPUT</div>
+      <div style="display:flex; gap:8px; align-items:center">
+        <input id="playerInputUrl" spellcheck="false" autocomplete="off"
+          style="flex:1; background:#000; color:#fff; border:1px solid rgba(255,255,255,0.22); padding:6px 8px; font-family:var(--mono); font-size:11px; letter-spacing:.06em"
+          placeholder="URL OR YOUTUBE LINK" />
+        <button class="btn" id="playerAddInput" style="padding:4px 8px; font-size:11px">ADD</button>
+        <button class="btn" id="playerSurfaceInput" style="padding:4px 8px; font-size:11px">SURFACE</button>
+      </div>
+      <div style="margin-top:8px; display:flex; gap:8px; align-items:center; flex-wrap:wrap">
+        <button class="btn" id="playerInputToArmed" style="padding:4px 8px; font-size:11px">ARM INPUT</button>
+        <button class="btn" id="playerInputClear" style="padding:4px 8px; font-size:11px">CLEAR</button>
+        <button class="btn" id="playerOpenYT" style="padding:4px 8px; font-size:11px">YT</button>
+      </div>
+
+      <div style="margin-top:12px; border-top:1px solid var(--line); padding-top:10px">
+        <div style="display:flex; gap:8px; align-items:center; justify-content:space-between">
+          <div style="font-family:var(--mono); font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted)">NOW</div>
+          <div id="playerNowLabel" style="font-family:var(--mono); font-size:11px; letter-spacing:.06em; text-transform:uppercase; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:240px">—</div>
+        </div>
+
+        <div style="margin-top:8px; display:flex; gap:8px; align-items:center; flex-wrap:wrap">
+          <button class="btn" id="playerSurf" style="padding:4px 8px; font-size:11px">SURFACE</button>
+          <button class="btn" id="playerNewTabNow" style="padding:4px 8px; font-size:11px">NEW TAB</button>
+          <button class="btn" id="playerArmNow" style="padding:4px 8px; font-size:11px">ARM</button>
+          <button class="btn" id="playerAddArmed" style="padding:4px 8px; font-size:11px">ADD ARMED</button>
+        </div>
+
+        
+        <div style="margin-top:10px; border-top:1px solid var(--line); padding-top:10px">
+          <div style="font-family:var(--mono); font-size:12px; letter-spacing:.10em; text-transform:uppercase; color:var(--muted); margin-bottom:8px">TAG TO SET</div>
+          <div style="display:flex; gap:8px; align-items:center">
+            <input id="playerTagSet" spellcheck="false" autocomplete="off"
+              style="flex:1; background:#000; color:#fff; border:1px solid rgba(255,255,255,0.22); padding:6px 8px; font-family:var(--mono); font-size:11px; letter-spacing:.06em"
+              placeholder="SET NAME" />
+            <button class="btn" id="playerTagNow" style="padding:4px 8px; font-size:11px">TAG NOW</button>
+            <button class="btn" id="playerTagArmed" style="padding:4px 8px; font-size:11px">TAG ARMED</button>
+          </div>
+        </div>
+
+<div style="margin-top:10px; border-top:1px solid var(--line); padding-top:10px">
+          <div style="font-family:var(--mono); font-size:12px; letter-spacing:.10em; text-transform:uppercase; color:var(--muted); margin-bottom:8px">QUEUE</div>
+          <div id="playerQueue" style="display:flex; flex-direction:column; gap:6px"></div>
+          <div style="margin-top:8px; display:flex; gap:8px; align-items:center; flex-wrap:wrap">
+            <button class="btn" id="playerClear" style="padding:4px 8px; font-size:11px">CLEAR</button>
+            <button class="btn" id="playerFromActiveSet" style="padding:4px 8px; font-size:11px">LOAD ACTIVE SET</button>
+            <button class="btn" id="playerLoadKetaMono" style="padding:4px 8px; font-size:11px">LOAD KETA_MONO</button>
+          </div>
+
+          <div style="margin-top:10px; color:var(--muted); font-family:var(--mono); font-size:11px">
+            CLICK = SELECT. DBLCLICK = SURFACE.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- YT MINI SCREEN -->
+  <div id="ytPanel">
+    <div id="ytHead">
+      <span id="ytTitle">YT</span>
+      <div style="display:flex; gap:8px; align-items:center">
+        <button class="headBtn" id="ytApply">APPLY</button>
+        <button class="headBtn" id="ytClose">X</button>
+      </div>
+    </div>
+    <div id="ytBody">
+      <div style="font-family:var(--mono); font-size:12px; letter-spacing:.10em; text-transform:uppercase; color:var(--muted); margin-bottom:8px">EMBED</div>
+
+      <div style="display:flex; gap:8px; align-items:center; margin-bottom:8px">
+        <input id="ytInput" spellcheck="false" autocomplete="off"
+          style="flex:1; background:#000; color:#fff; border:1px solid rgba(255,255,255,0.22); padding:6px 8px; font-family:var(--mono); font-size:11px; letter-spacing:.06em"
+          placeholder="YOUTUBE URL / VIDEO ID / PLAYLIST ID" />
+        <button class="btn" id="ytFromArmed" style="padding:4px 8px; font-size:11px">ARMED</button>
+      </div>
+
+      <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; font-family:var(--mono); font-size:11px; letter-spacing:.06em; text-transform:uppercase; color:var(--muted)">
+        <label style="display:flex; gap:6px; align-items:center"><input type="checkbox" id="ytAutoplay" />AUTOPLAY</label>
+        <label style="display:flex; gap:6px; align-items:center"><input type="checkbox" id="ytMute" />MUTE</label>
+        <label style="display:flex; gap:6px; align-items:center"><input type="checkbox" id="ytLoop" />LOOP</label>
+        <label style="display:flex; gap:6px; align-items:center"><input type="checkbox" id="ytControls" checked />CONTROLS</label>
+      </div>
+
+      <div style="margin-top:8px; display:flex; gap:8px; align-items:center; flex-wrap:wrap">
+        <button class="btn" id="ytOpenTab" style="padding:4px 8px; font-size:11px">NEW TAB</button>
+        <button class="btn" id="ytClear" style="padding:4px 8px; font-size:11px">CLEAR</button>
+      </div>
+
+      <div style="margin-top:10px">
+        <iframe id="ytFrame" title="YT" referrerpolicy="no-referrer"></iframe>
+      </div>
+
+      <div style="margin-top:10px; color:var(--muted); font-family:var(--mono); font-size:11px">
+        INPUT: VIDEO URL/ID OR PLAYLIST ID. APPLY BUILDS EMBED WITH BASIC EFFECTS.
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <!-- TOP BAR -->
+  <div class="topbar">
+    <div style="display:flex; gap:10px; align-items:center">
+      <div class="brand">
+        <span class="sq"></span>
+        <span>KETADATA // SHELL8 // KERNEL</span>
+        <span style="color:var(--muted); letter-spacing:.02em; text-transform:none">v2 · SUR_BASE</span>
+      </div>
+      <div class="roomBadge"><span>ROOM</span><span id="roomName">SUR_BASE</span></div>
+    </div>
+
+    <div class="actions">
+      <button class="btn" id="btnImport">IMPORT</button>
+      <button class="btn" id="btnExport">EXPORT</button>
+      <button class="btn" id="btnCopy">COPY</button>
+            <span class="kbd" id="lightQuick" title="LIGHT 1–6">L1</span>
+
+      <span class="kbd" title="Run">Space</span>
+      <span class="kbd" title="Invert">Shift+I</span>
+      <span class="kbd" title="Blackout">Shift+N</span>
+      <span class="kbd" title="Fullscreen">Shift+F</span>
+      <span class="kbd" title="Landing">Shift+K</span>
+
+      <div id="ketaIcon" class="ketaIcon" title="KETA_NOTE"></div>
+    </div>
+  </div>
+
+  <!-- DRAWER -->
+  <div class="drawer" id="drawer">
+    <div class="drawerSizer" id="drawerSizer" title="DRAG"></div>
+
+    <div class="drawerHead">
+      <div>SYSTEM</div>
+      <div style="display:flex; gap:8px; align-items:center">
+        <span id="sig" style="color:var(--muted); font-family:var(--mono); font-size:11px">∅</span>
+        <button class="btn" id="btnGoBasedDiva9">BASED_DIVA9</button>
+        <button class="btn" id="btnToggleMotion">MOTION</button>
+        <button class="btn" id="btnCopyUniversals">COPY</button>
+        <button class="btn" id="btnCloseDrawer">CLOSE</button>
+      </div>
+    </div>
+
+    <div class="drawerBody">
+
+      <div style="display:flex; gap:8px; align-items:center; justify-content:space-between; margin-bottom:8px">
+        <div style="font-family:var(--mono); font-size:12px; letter-spacing:.10em; text-transform:uppercase; color:var(--muted)">SYSTEM UNIVERSALS</div>
+        <button class="btn" id="btnToggleUniversals" style="padding:4px 8px; font-size:11px">TOGGLE</button>
+      </div>
+      <textarea id="universals" spellcheck="false" autocomplete="off" placeholder="LAWS / REFERENCES"></textarea>
+
+      <div style="margin-top:12px; border-top:1px solid var(--line); padding-top:10px">
+        <div style="display:flex; gap:8px; align-items:center; justify-content:space-between; margin-bottom:8px">
+          <div style="font-family:var(--mono); font-size:12px; letter-spacing:.10em; text-transform:uppercase; color:var(--muted)">ACTIVE</div>
+          <button class="btn" id="btnToggleActive" style="padding:4px 8px; font-size:11px">TOGGLE</button>
+        </div>
+
+        <div id="activeBody">
+          <div style="display:flex; gap:8px; align-items:center; font-family:var(--mono); font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted)">
+            <span style="min-width:44px">NAME</span>
+            <input id="activeRoomBox" readonly style="flex:1; background:#000; color:#fff; border:1px solid var(--line2); padding:6px 8px; font-family:var(--mono);" placeholder="—" />
+          </div>
+
+          <div style="margin-top:8px; display:flex; gap:8px; align-items:center; font-family:var(--mono); font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted)">
+            <span style="min-width:44px">URL</span>
+            <input id="activeUrlBox" readonly style="flex:1; background:#000; color:#fff; border:1px solid var(--line2); padding:6px 8px; font-family:var(--mono);" placeholder="—" />
+          </div>
+
+          <div style="margin-top:8px; display:flex; gap:8px; align-items:center; flex-wrap:wrap">
+            <button class="btn" id="btnGoActive">GO</button>
+            <button class="btn" id="btnNewTabActive">NEW TAB</button>
+            <button class="btn" id="btnCopyActiveUrl">COPY URL</button>
+            <button class="btn" id="btnSurfaceActive">SURFACE</button>
+          </div>
+
+          <div style="margin-top:8px; color:var(--muted); font-family:var(--mono); font-size:11px">
+            CLICK = ARM. GO = NAV. SURFACE = LOAD FULL SCREEN.
+          </div>
+        </div>
+      </div>
+
+      <div id="setsBox" style="margin-top:10px; border-top:1px solid var(--line); padding-top:10px">
+        <div style="display:flex; gap:8px; align-items:center; justify-content:space-between; margin-bottom:8px">
+          <div style="font-family:var(--mono); font-size:12px; letter-spacing:.10em; text-transform:uppercase; color:var(--muted)">SETS</div>
+          <button class="btn" id="btnToggleSets" style="padding:4px 8px; font-size:11px">TOGGLE</button>
+        </div>
+
+        <div id="setsBody">
+          <div style="margin-top:8px; display:flex; gap:8px; align-items:center; font-family:var(--mono); font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted)">
+            <span>SET</span>
+            <input id="setNameInput" spellcheck="false" autocomplete="off"
+              style="flex:1; background:#000; color:#fff; border:1px solid var(--line2); padding:6px 8px; font-family:var(--mono);"
+              placeholder="NAME" />
+          </div>
+
+          <div style="margin-top:8px; display:flex; gap:8px; align-items:center; flex-wrap:wrap">
+            <button class="btn" id="btnCreateSet">CREATE</button>
+            <button class="btn" id="btnRenameSet">RENAME</button>
+            <button class="btn" id="btnDeleteSet">DELETE</button>
+            <button class="btn" id="btnPinSet">PIN/UNPIN</button>
+            <button class="btn" id="btnToActive">ADD TO ACTIVE</button>
+            <button class="btn" id="btnOpenPad">OPEN PAD</button>
+            <button class="btn" id="btnOpenPlayer">PLAYER</button>
+          </div>
+
+          <div style="margin-top:8px; color:var(--muted); font-family:var(--mono); font-size:11px">
+            BULK ITEMS: NAME | URL  OR URL
+          </div>
+
+          <textarea id="setItemsInput" spellcheck="false" autocomplete="off" style="min-height:120px; margin-top:8px"
+            placeholder="ITEMS:
+NAME | URL
+OR URL"></textarea>
+
+          <div style="margin-top:8px; display:flex; gap:8px; align-items:center; flex-wrap:wrap">
+            <button class="btn" id="btnSaveSetItems">SAVE ITEMS</button>
+            <button class="btn" id="btnClearSetItems">CLEAR</button>
+            <button class="btn" id="btnSurfaceFirst">SURFACE FIRST</button>
+            <button class="btn" id="btnLoadSetToPlayer">LOAD TO PLAYER</button>
+          </div>
+
+          <div style="margin-top:12px; border-top:1px solid var(--line); padding-top:10px">
+            <div style="font-family:var(--mono); font-size:12px; letter-spacing:.10em; text-transform:uppercase; color:var(--muted); margin-bottom:8px">
+              KETA_MONO FAST IMPORT
+            </div>
+            <textarea id="ketaMonoInput" spellcheck="false" autocomplete="off" style="min-height:120px"
+              placeholder="PASTE KETA_MONO:
+NAME | URL
+OR URL"></textarea>
+            <div style="margin-top:8px; display:flex; gap:8px; align-items:center; flex-wrap:wrap">
+              <button class="btn" id="btnBuildKetaMono">BUILD KETA_MONO</button>
+              <button class="btn" id="btnLoadKetaMono">LOAD KETA_MONO</button>
+              <button class="btn" id="btnImportKetaMonoJson">IMPORT KETA_MONO JSON</button>
+            </div>
+          </div>
+
+          <div style="margin-top:10px; border-top:1px solid var(--line); padding-top:10px">
+            <div style="font-family:var(--mono); font-size:12px; letter-spacing:.10em; text-transform:uppercase; color:var(--muted); margin-bottom:8px">PRELOADED LENSES</div>
+            <div id="preloadedList" style="display:flex; flex-direction:column; gap:6px"></div>
+            <div style="margin-top:8px; color:var(--muted); font-family:var(--mono); font-size:11px">CLICK = LOAD TO PLAYER (NO AUTOPLAY)</div>
+          </div>
+
+          <div style="margin-top:10px; border-top:1px solid var(--line); padding-top:10px">
+            <div style="font-family:var(--mono); font-size:12px; letter-spacing:.10em; text-transform:uppercase; color:var(--muted); margin-bottom:8px">SET LIST</div>
+            <div id="setList" style="display:flex; flex-direction:column; gap:6px"></div>
+            <div style="margin-top:8px; color:var(--muted); font-family:var(--mono); font-size:11px">
+              CLICK SET = LOAD EDITOR. CLICK ITEM = ARM.
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- BOTTOM BAR -->
+  <div class="bottombar">
+    <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap">
+      <button class="toggle" id="toggleSystem">SYSTEM</button>
+      <button class="toggle" id="toggleRun">RUN</button>
+      <button class="toggle" id="togglePlayer">PLAYER</button>
+      <button class="toggle" id="togglePad">PAD</button>
+<span>STATE: <span id="sig2">∅</span></span>
+      <span style="margin-left:8px">FS: <span id="fsLabel">OFF</span></span>
+      <span style="margin-left:8px">BLK: <span id="blkLabel">OFF</span></span>
+      <span style="margin-left:8px">LIGHTS: <span style="color:var(--fg)">1–6</span></span>
+    </div>
+    <div style="display:flex; gap:12px; align-items:center; flex-wrap:wrap">
+      <span>LIGHT: <span id="lightLabel">1</span></span>
+      <span>RUN: <span id="runLabel">OFF</span></span>
+      <span>MOTION: <span id="motionLabel">OFF</span></span>
+      <span>SURFACE: <span id="surfaceLabel">—</span></span>
+    </div>
+  </div>
+
+  <!-- KETA NOTE -->
+  <div class="ketaNote" id="ketaNote">
+    <div class="ketaHead" id="ketaHead">
+      <div>KETA_NOTE</div>
+      <button class="headBtn" id="btnHideNote">-</button>
+    </div>
+    <div class="ketaBody">
+      <textarea id="ketaText" spellcheck="false" autocomplete="off" placeholder="GLOBAL NOTE"></textarea>
+    </div>
+  </div>
+
+  <input id="file" type="file" accept="application/json" style="display:none" />
+  <input id="fileKetaMono" type="file" accept="application/json" style="display:none" />
+</div>
+
+<script>
+const BASED_DIVA9_URL = "based_diva9.html";
+function nowISO(){return new Date().toISOString();}
+const $=(id)=>document.getElementById(id);
+
+const root=$("root");
+const stage=$("stage");
+const motion=$("motion");
+const surfaceLabel=$("surfaceLabel");
+const lightQuick=$("lightQuick");
+const surfaceFrame=$("surfaceFrame");
+
+const ytFrame=$("ytFrame");
+
+// INDEPENDENT BASE STORAGE (PER-FILE; NO SOVEREIGN WRITES)
+const PAGE_ID = "BASED_DIVA9_WITH_SURFACE_PLAYER";
+const KEY_PREFIX = "KDT::BASE::INDEP::" + hash8(location.pathname + "|" + PAGE_ID);
+const STORAGE_KEY_MAIN   = KEY_PREFIX + "::STATE";
+const STORAGE_KEY_BACKUP = KEY_PREFIX + "::STATE::BACKUP";
+const STORAGE_KEY_TMP    = KEY_PREFIX + "::STATE::TMP";
+
+function loadFromKey(key){
+  try{ const raw=localStorage.getItem(key); if(!raw) return null; return JSON.parse(raw); }
+  catch(e){ return null; }
+}
+
+function uid8(){
+  const a=new Uint32Array(1);
+  try{crypto.getRandomValues(a);}catch(e){a[0]=Math.floor(Math.random()*1e9);}
+  return (a[0]>>>0).toString(16).padStart(8,"0");
+}
+function hash8(str){
+  const s=String(str||"");
+  let h=2166136261;
+  for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619);}
+  return (h>>>0).toString(16).slice(0,8);
+}
+function canonName(x){return String(x||"").trim().toUpperCase();}
+function deriveNameFromUrl(url){
+  try{
+    const u=new URL(url, location.href);
+    const path=(u.pathname||"").split("/").filter(Boolean);
+    const last=path.length?path[path.length-1]:(u.hostname||"LINK");
+    return String(last).replace(/\.(html?|php|aspx|jsp)$/i,"").replace(/[-_]+/g," ").trim().toUpperCase()||"LINK";
+  }catch(e){
+    return String(url||"LINK").trim().slice(0,28).toUpperCase()||"LINK";
+  }
+}
+function parseBulkLines(text){
+  return String(text||"").split(/\r?\n/).map(l=>l.trim()).filter(l=>l && !l.startsWith("#")).map(l=>{
+    let name="", url="";
+    if(l.includes("|")){
+      const parts=l.split("|");
+      name=(parts[0]||"").trim();
+      url=(parts.slice(1).join("|")||"").trim();
+    }else url=l.trim();
+    if(!url && name){ url=name; name=""; }
+    if(!name) name=deriveNameFromUrl(url);
+    return {name,url};
+  }).filter(x=>x.url);
+}
+
+/* =========
+KETA_MONO PRELOAD
+========= */
+const KETA_MONO_PRELOAD = {
+  name:"KETA-MONO",
+  items:[
+    {"url":"https://ketadata.com/capturegpt4.html","label":"capturegpt4.html"},
+    {"url":"https://ketadata.com/cube1.html","label":"cube1.html"},
+    {"url":"https://ketadata.com/sublime.html","label":"sublime.html"},
+    {"url":"https://ketadata.com/dmtzoom.html","label":"dmtzoom.html"},
+    {"url":"https://ketadata.com/cp1.html","label":"cp1.html"},
+    {"url":"https://ketadata.com/mandala3.html","label":"mandala3.html"},
+    {"url":"https://ketadata.com/funnel4.html","label":"funnel4.html"},
+    {"url":"https://ketadata.com/kitty.html","label":"kitty.html"},
+    {"url":"https://ketadata.com/polka2.html","label":"polka2.html"},
+    {"url":"https://ketadata.com/cube.html","label":"cube.html"},
+    {"url":"https://ketadata.com/coffee1.html","label":"coffee1.html"},
+    {"url":"https://ketadata.com/ripple2.html","label":"ripple2.html"},
+    {"url":"https://ketadata.com/holzer.html","label":"holzer.html"},
+    {"url":"https://ketadata.com/land.html","label":"land.html"},
+    {"url":"https://ketadata.com/snakes.html","label":"snakes.html"},
+    {"url":"https://ketadata.com/release.html","label":"release.html"},
+    {"url":"https://ketadata.com/index06.html","label":"index06.html"},
+    {"url":"https://ketadata.com/misc4.html","label":"misc4.html"},
+    {"url":"https://ketadata.com/release3.html","label":"release3.html"},
+    {"url":"https://ketadata.com/index07.html","label":"index07.html"},
+    {"url":"https://ketadata.com/capturegpt2.html","label":"capturegpt2.html"},
+    {"url":"https://ketadata.com/coffee.html","label":"coffee.html"},
+    {"url":"https://ketadata.com/003.html","label":"003.html"},
+    {"url":"https://ketadata.com/release2.html","label":"release2.html"},
+    {"url":"https://ketadata.com/misc7.html","label":"misc7.html"},
+    {"url":"https://ketadata.com/index0.html","label":"index0.html"},
+    {"url":"https://ketadata.com/misc8.html","label":"misc8.html"},
+    {"url":"https://ketadata.com/mcluhan.html","label":"mcluhan.html"},
+    {"url":"https://ketadata.com/sg.html","label":"sg.html"},
+    {"url":"https://ketadata.com/molecule.html","label":"molecule.html"},
+    {"url":"https://ketadata.com/capturegpt7.html","label":"capturegpt7.html"},
+    {"url":"https://ketadata.com/pool6.html","label":"pool6.html"},
+    {"url":"https://ketadata.com/chroma.html","label":"chroma.html"},
+    {"url":"https://ketadata.com/matryoshka.html","label":"matryoshka.html"},
+    {"url":"https://ketadata.com/matrix.html","label":"matrix.html"},
+    {"url":"https://ketadata.com/misc.html","label":"misc.html"},
+    {"url":"https://ketadata.com/misc2.html","label":"misc2.html"},
+    {"url":"https://ketadata.com/misc3.html","label":"misc3.html"},
+    {"url":"https://ketadata.com/misc5.html","label":"misc5.html"},
+    {"url":"https://ketadata.com/misc6.html","label":"misc6.html"},
+    {"url":"https://ketadata.com/capture.html","label":"capture.html"},
+    {"url":"https://ketadata.com/capturegpt.html","label":"capturegpt.html"},
+    {"url":"https://ketadata.com/capturegpt3.html","label":"capturegpt3.html"},
+    {"url":"https://ketadata.com/capturegpt5.html","label":"capturegpt5.html"},
+    {"url":"https://ketadata.com/capturegpt6.html","label":"capturegpt6.html"},
+    {"url":"https://ketadata.com/capturegpt8.html","label":"capturegpt8.html"},
+    {"url":"https://ketadata.com/newtrap.html","label":"newtrap.html"},
+    {"url":"https://ketadata.com/artaud.html","label":"artaud.html"},
+    {"url":"https://ketadata.com/bataille1.html","label":"bataille1.html"},
+    {"url":"https://ketadata.com/borges.html","label":"borges.html"},
+    {"url":"https://ketadata.com/burroughs.html","label":"burroughs.html"},
+    {"url":"https://ketadata.com/debord.html","label":"debord.html"},
+    {"url":"https://ketadata.com/deleuze.html","label":"deleuze.html"},
+    {"url":"https://ketadata.com/etal.html","label":"etal.html"},
+    {"url":"https://ketadata.com/goffman.html","label":"goffman.html"},
+    {"url":"https://ketadata.com/jung.html","label":"jung.html"},
+    {"url":"https://ketadata.com/christmas25.html","label":"christmas25.html"},
+    {"url":"https://ketadata.com/kmas.html","label":"kmas.html"},
+    {"url":"https://ketadata.com/aniversary1111.html","label":"aniversary1111.html"},
+    {"url":"https://ketadata.com/mandala.html","label":"mandala.html"},
+    {"url":"https://ketadata.com/mandala2.html","label":"mandala2.html"},
+    {"url":"https://ketadata.com/mandalagpt4.html","label":"mandalagpt4.html"},
+    {"url":"https://ketadata.com/hyperstition.html","label":"hyperstition.html"},
+    {"url":"https://ketadata.com/hyperstition5.html","label":"hyperstition5.html"},
+    {"url":"https://ketadata.com/pool5.html","label":"pool5.html"},
+    {"url":"https://ketadata.com/teleo.html","label":"teleo.html"},
+    {"url":"https://ketadata.com/teleo1.html","label":"teleo1.html"},
+    {"url":"https://ketadata.com/polka1.html","label":"polka1.html"},
+    {"url":"https://ketadata.com/polkadot.html","label":"polkadot.html"},
+    {"url":"https://ketadata.com/ripple.html","label":"ripple.html"},
+    {"url":"https://ketadata.com/ripple3.html","label":"ripple3.html"},
+    {"url":"https://ketadata.com/ripplegpt.html","label":"ripplegpt.html"},
+    {"url":"https://ketadata.com/sg1.html","label":"sg1.html"},
+    {"url":"https://ketadata.com/slopstream4.html","label":"slopstream4.html"},
+    {"url":"https://ketadata.com/slopstream6.html","label":"slopstream6.html"},
+    {"url":"https://ketadata.com/sovereignty.html","label":"sovereignty.html"},
+    {"url":"https://ketadata.com/substance.html","label":"substance.html"},
+    {"url":"https://ketadata.com/substrate.html","label":"substrate.html"},
+    {"url":"https://ketadata.com/substrate1.html","label":"substrate1.html"},
+    {"url":"https://ketadata.com/substrate3.html","label":"substrate3.html"},
+    {"url":"https://ketadata.com/release4.html","label":"release4.html"},
+    {"url":"https://ketadata.com/funnel.html","label":"funnel.html"},
+    {"url":"https://ketadata.com/funnel1.html","label":"funnel1.html"}
+  ]
+};
+
+/* =========
+STATE
+========= */
+const DEFAULT={
+  version:"KETADATA_SURFACE_PLAYER_v2",
+  updatedAt:nowISO(),
+  ketaNote:"",
+  universals:"",
+  ui:{
+    invert:false,
+    blackout:false,
+    fullscreen:false,
+
+    lightPreset:1,
+    lightRunning:false,
+    motionOn:false,
+
+    drawerOpen:false,
+    noteOpen:false,
+
+    universalsCollapsed:false,
+    activeCollapsed:false,
+    setsCollapsed:false,
+
+    pinnedSets:[],
+    activeSets:[],
+    activeSetId:"",
+
+    padOpen:false,
+    padEdit:false,
+    padRect:{x:null,y:null,w:360,h:360},
+
+    playerOpen:true,
+    playerRect:{x:null,y:null,w:380,h:420},
+    player:{queue:[], index:0, playing:false},
+
+    recent:[],
+
+    ytOpen:false,
+    ytRect:{x:null,y:null,w:360,h:260},
+    yt:{
+      input:"",
+      autoplay:true,
+      mute:true,
+      loop:false,
+      controls:true,
+      lastEmbedSrc:""
+    },
+
+    noteRect:{x:null,y:76,w:340,h:220},
+    drawerH:0.52,
+
+    surfaceUrl:"",
+    surfaceLabel:""
+  },
+  payload:{ sets:[] }
+};
+
+function deepFill(s){
+  if(!s || typeof s!=="object") return structuredClone(DEFAULT);
+  for(const k of Object.keys(DEFAULT)){ if(s[k]===undefined) s[k]=structuredClone(DEFAULT[k]); }
+  if(!s.ui || typeof s.ui!=="object") s.ui={};
+  for(const k of Object.keys(DEFAULT.ui)){ if(s.ui[k]===undefined) s.ui[k]=structuredClone(DEFAULT.ui[k]); }
+  if(!s.payload || typeof s.payload!=="object") s.payload={};
+  for(const k of Object.keys(DEFAULT.payload)){ if(s.payload[k]===undefined) s.payload[k]=structuredClone(DEFAULT.payload[k]); }
+
+  if(!Array.isArray(s.ui.pinnedSets)) s.ui.pinnedSets=[];
+  if(!Array.isArray(s.ui.activeSets)) s.ui.activeSets=[];
+  if(!Array.isArray(s.payload.sets)) s.payload.sets=[];
+  if(!s.ui.padRect || typeof s.ui.padRect!=="object") s.ui.padRect=structuredClone(DEFAULT.ui.padRect);
+  if(!s.ui.playerRect || typeof s.ui.playerRect!=="object") s.ui.playerRect=structuredClone(DEFAULT.ui.playerRect);
+  if(!s.ui.player || typeof s.ui.player!=="object") s.ui.player=structuredClone(DEFAULT.ui.player);
+  if(!Array.isArray(s.ui.recent)) s.ui.recent=[];
+
+  if(!s.ui.ytRect || typeof s.ui.ytRect!=="object") s.ui.ytRect=structuredClone(DEFAULT.ui.ytRect);
+  if(!s.ui.yt || typeof s.ui.yt!=="object") s.ui.yt=structuredClone(DEFAULT.ui.yt);
+
+  if(!Array.isArray(s.ui.player.queue)) s.ui.player.queue=[];
+  if(typeof s.ui.player.index!=="number") s.ui.player.index=0;
+  if(typeof s.ui.player.playing!=="boolean") s.ui.player.playing=false;
+
+  if(typeof s.ui.yt.input!=="string") s.ui.yt.input="";
+  if(typeof s.ui.yt.autoplay!=="boolean") s.ui.yt.autoplay=true;
+  if(typeof s.ui.yt.mute!=="boolean") s.ui.yt.mute=true;
+  if(typeof s.ui.yt.loop!=="boolean") s.ui.yt.loop=false;
+  if(typeof s.ui.yt.controls!=="boolean") s.ui.yt.controls=true;
+  if(typeof s.ui.yt.lastEmbedSrc!=="string") s.ui.yt.lastEmbedSrc="";
+
+  if(!s.ui.noteRect || typeof s.ui.noteRect!=="object") s.ui.noteRect=structuredClone(DEFAULT.ui.noteRect);
+  if(typeof s.ui.drawerH!=="number") s.ui.drawerH=DEFAULT.ui.drawerH;
+
+  // normalize sets
+  s.payload.sets = s.payload.sets.map(set=>{
+    const id=String((set&&set.id)||"").trim() || `SET_${uid8()}`;
+    const label=canonName((set&&set.label)||"SET") || "SET";
+    const items=Array.isArray(set&&set.items)?set.items:[];
+    const normItems=items.map(it=>{
+      const url=String((it&&it.url)||"").trim(); if(!url) return null;
+      const label2=canonName((it&&it.label)||"") || deriveNameFromUrl(url);
+      return {label:label2,url};
+    }).filter(Boolean);
+    return {id,label,items:normItems,createdAt:(set&&set.createdAt)||nowISO(),updatedAt:(set&&set.updatedAt)||nowISO()};
+  });
+
+  return s;
+}
+
+function getSetByIdFrom(state,id){
+  const sid=String(id||"").trim();
+  return (state.payload.sets||[]).find(s=>String(s.id)===sid)||null;
+}
+function getSetById(id){ return getSetByIdFrom(STATE,id); }
+
+let STATE = deepFill(loadFromKey(STORAGE_KEY_MAIN) || loadFromKey(STORAGE_KEY_BACKUP) || null);
+let _BOOTING=true;
+
+function stableSig(){
+  const core=JSON.stringify({
+    v:STATE.version,
+    k:hash8(STATE.ketaNote||""),
+    i:STATE.ui.invert,
+    f:STATE.ui.fullscreen,
+    b:STATE.ui.blackout,
+    p:STATE.ui.lightPreset,
+    r:STATE.ui.lightRunning,
+    m:STATE.ui.motionOn,
+    dh:STATE.ui.drawerH,
+    pinnedSets:STATE.ui.pinnedSets,
+    activeSets:STATE.ui.activeSets,
+    activeSetId:STATE.ui.activeSetId,
+    surface:STATE.ui.surfaceUrl,
+    player:hash8(JSON.stringify({q:STATE.ui.player.queue, i:STATE.ui.player.index, on:STATE.ui.player.playing})),
+    yt:hash8(JSON.stringify(STATE.ui.yt)),
+    setsSig:hash8(JSON.stringify((STATE.payload.sets||[]).map(s=>({id:s.id,l:s.label,n:(s.items||[]).length,u:s.updatedAt||""}))))
+  });
+  let h=2166136261;
+  for(let i=0;i<core.length;i++){h^=core.charCodeAt(i);h=Math.imul(h,16777619);}
+  return (h>>>0).toString(16).slice(0,8);
+}
+
+let toastTimer=null;
+function toast(msg){
+  if(STATE.ui.blackout || STATE.ui.fullscreen) return;
+  const t=$("toast");
+  t.textContent=msg;
+  t.style.display="block";
+  if(toastTimer) clearTimeout(toastTimer);
+  toastTimer=setTimeout(()=>{t.style.display="none";},900);
+}
+async function copy(text){
+  try{await navigator.clipboard.writeText(text); toast("COPIED");}
+  catch(e){toast("COPY FAILED");}
+}
+
+function persist(silent=false){
+  if(_BOOTING) return;
+  STATE.updatedAt=nowISO();
+  root.style.setProperty("--drawer-h", String(STATE.ui.drawerH));
+
+  const blob=JSON.stringify(STATE);
+  try{
+    localStorage.setItem(STORAGE_KEY_TMP, blob);
+    localStorage.setItem(STORAGE_KEY_MAIN, blob);
+    localStorage.setItem(STORAGE_KEY_BACKUP, blob);
+  }catch(e){}
+  if(!silent) render();
+}
+
+/* lifecycle flush */
+(function(){
+  const flush=()=>{ try{ persist(true); }catch(e){} };
+  
+function clamp(n,min,max){return Math.max(min,Math.min(max,n));}
+function setLight(n){
+  n = clamp(Number(n)||1,1,6);
+  STATE.system.light = n;
+  document.documentElement.style.setProperty("--light", String(n));
+  $("lightLabel").textContent = String(n);
+  if(lightQuick) lightQuick.textContent = "L"+String(n);
+  persist(false);
+}
+
+window.addEventListener("pagehide", flush, {capture:true});
+  window.addEventListener("beforeunload", flush, {capture:true});
+  document.addEventListener("visibilitychange", ()=>{ if(document.visibilityState==="hidden") flush(); }, {capture:true});
+})();
+
+function exportState(){
+  return JSON.stringify({ STORAGE_KEY: STORAGE_KEY_MAIN, STATE }, null, 2);
+}
+function exportFilename(){
+  const sig=stableSig();
+  const stamp=new Date().toISOString().replace(/[:.]/g,"-");
+  return `KETADATA_SURFACE_${sig}_${stamp}.json`;
+}
+function downloadJsonFile(filename, text){
+  const blob=new Blob([String(text||"")], {type:"application/json"});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement("a");
+  a.href=url; a.download=filename||"KETADATA_SURFACE_STATE.json";
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url), 250);
+}
+function importState(text){
+  const parsed=JSON.parse(text);
+  const incoming=(parsed && parsed.STATE) ? parsed.STATE : parsed;
+  STATE=deepFill(incoming);
+  stopLight(true);
+  if(STATE.ui.lightRunning && !STATE.ui.blackout) startLight(STATE.ui.lightPreset||1);
+  syncYTUIFromState();
+  applyYTEmbedFromState(true);
+  persist(false);
+}
+
+/* Sets */
+function ensurePinnedSets(){ if(!Array.isArray(STATE.ui.pinnedSets)) STATE.ui.pinnedSets=[]; }
+function isSetPinned(id){ ensurePinnedSets(); return STATE.ui.pinnedSets.includes(String(id||"").trim()); }
+function togglePinSet(id){
+  ensurePinnedSets();
+  const sid=String(id||"").trim();
+  const i=STATE.ui.pinnedSets.indexOf(sid);
+  if(i>=0) STATE.ui.pinnedSets.splice(i,1);
+  else STATE.ui.pinnedSets.push(sid);
+}
+function ensureActiveSets(){
+  if(!Array.isArray(STATE.ui.activeSets)) STATE.ui.activeSets=[];
+  STATE.ui.activeSets=STATE.ui.activeSets.map(String).filter(Boolean).filter(id=>!!getSetById(id));
+  if(STATE.ui.activeSetId && !getSetById(STATE.ui.activeSetId)) STATE.ui.activeSetId="";
+  if(!STATE.ui.activeSetId && STATE.ui.activeSets.length) STATE.ui.activeSetId=String(STATE.ui.activeSets[0]);
+}
+function addSetToActive(id){
+  const sid=String(id||"").trim();
+  if(!sid || !getSetById(sid)) return;
+  ensureActiveSets();
+  if(!STATE.ui.activeSets.includes(sid)) STATE.ui.activeSets.push(sid);
+  if(!STATE.ui.activeSetId) STATE.ui.activeSetId=sid;
+}
+let ACTIVE_SET_ID="";
+function setEditorFromSet(setObj){
+  if(!setObj) return;
+  ACTIVE_SET_ID=String(setObj.id);
+  $("setNameInput").value=canonName(setObj.label||"SET")||"SET";
+  $("setItemsInput").value=(setObj.items||[]).map(it=>{
+    const n=canonName(it.label||"")||deriveNameFromUrl(it.url);
+    return `${n} | ${String(it.url||"").trim()}`;
+  }).join("\n");
+}
+function createSet(label){
+  const l=canonName(label||"SET")||"SET";
+  const id=`SET_${uid8()}`;
+  const obj={id,label:l,items:[],createdAt:nowISO(),updatedAt:nowISO()};
+  STATE.payload.sets.unshift(obj);
+  ACTIVE_SET_ID=id;
+  return obj;
+}
+function renameSet(id,newLabel){
+  const s=getSetById(id); if(!s) return;
+  s.label=canonName(newLabel||s.label||"SET")||"SET";
+  s.updatedAt=nowISO();
+}
+function deleteSet(id){
+  const sid=String(id||"").trim(); if(!sid) return;
+  STATE.payload.sets=(STATE.payload.sets||[]).filter(s=>String(s.id)!==sid);
+  ensurePinnedSets(); STATE.ui.pinnedSets=STATE.ui.pinnedSets.filter(x=>x!==sid);
+  ensureActiveSets(); STATE.ui.activeSets=STATE.ui.activeSets.filter(x=>x!==sid);
+  if(STATE.ui.activeSetId===sid) STATE.ui.activeSetId=STATE.ui.activeSets[0]||"";
+  if(ACTIVE_SET_ID===sid) ACTIVE_SET_ID="";
+}
+function saveSetItems(id, bulkText){
+  const s=getSetById(id); if(!s) return;
+  const parsed=parseBulkLines(bulkText||"");
+  s.items=parsed.map(x=>({label:canonName(x.name||"")||deriveNameFromUrl(x.url),url:String(x.url||"").trim()}));
+  s.updatedAt=nowISO();
+}
+
+
+
+function renderPreloaded(){
+  const box=$("preloadedList");
+  if(!box) return;
+  box.innerHTML="";
+  const items=[
+    {id:"__RECENT", label:`RECENT (${(STATE.ui.recent||[]).length})`, get:lensRecent},
+    {id:"__UNPLAYED", label:`UNPLAYED`, get:lensUnplayed},
+    {id:"__REGISTRY", label:`REGISTRY (${registryUrls().length})`, get:registryUrls}
+  ];
+  for(const it of items){
+    const row=document.createElement('div');
+    row.className='row';
+    row.style.display='flex';
+    row.style.justifyContent='space-between';
+    row.style.alignItems='center';
+    row.style.gap='10px';
+    row.style.border='1px solid rgba(255,255,255,0.16)';
+    row.style.padding='6px 8px';
+    row.style.fontFamily='var(--mono)';
+    row.style.fontSize='11px';
+    row.style.letterSpacing='.06em';
+    row.style.textTransform='uppercase';
+    row.style.cursor='pointer';
+    row.textContent=it.label;
+    row.onclick=()=>{ loadLensToPlayer(it.get(), it.label); };
+    box.appendChild(row);
+  }
+}
+
+/* KETA_MONO upsert */
+function upsertSetByLabel(label){
+  const L=canonName(label||"SET")||"SET";
+  let s=(STATE.payload.sets||[]).find(x=>canonName(x.label)===L);
+  if(!s){ s=createSet(L); }
+  ACTIVE_SET_ID=s.id;
+  return s;
+}
+function buildKetaMonoFromTextarea(){
+  const txt=$("ketaMonoInput").value||"";
+  const s=upsertSetByLabel("KETA-MONO");
+  saveSetItems(s.id, txt);
+  if(!isSetPinned(s.id)) togglePinSet(s.id);
+  addSetToActive(s.id);
+  STATE.ui.activeSetId=s.id;
+  setEditorFromSet(getSetById(s.id));
+  toast("KETA_MONO READY");
+  persist();
+}
+function loadKetaMonoToEditor(){
+  const s=(STATE.payload.sets||[]).find(x=>canonName(x.label)==="KETA-MONO");
+  if(!s){ toast("NO KETA_MONO"); return; }
+  setEditorFromSet(s);
+  toast("KETA_MONO LOADED");
+  persist(true);
+}
+function importKetaMonoJsonText(text){
+  const obj=JSON.parse(text);
+  const setObj = obj && obj.set ? obj.set : obj;
+  const nm = canonName(setObj && (setObj.name||setObj.label) || "KETA-MONO");
+  const items = (setObj && Array.isArray(setObj.items)) ? setObj.items : [];
+  const s=upsertSetByLabel(nm);
+  s.items = items.map(it=>{
+    const url=String((it&&it.url)||"").trim();
+    if(!url) return null;
+    const label=canonName((it&&it.label)||"") || deriveNameFromUrl(url);
+    return {label,url};
+  }).filter(Boolean);
+  s.updatedAt=nowISO();
+  if(!isSetPinned(s.id)) togglePinSet(s.id);
+  addSetToActive(s.id);
+  STATE.ui.activeSetId=s.id;
+  setEditorFromSet(s);
+  toast("IMPORTED SET");
+  persist();
+}
+
+/* Click-arm / GO */
+let ARMED={name:"", url:""};
+function arm(name,url){
+  ARMED.name=canonName(name||"LINK")||"LINK";
+  ARMED.url=String(url||"").trim();
+  $("armedName").textContent=ARMED.name||"—";
+  $("armedUrl").value=ARMED.url||"—";
+  $("activeRoomBox").value=ARMED.name||"—";
+  $("activeUrlBox").value=ARMED.url||"—";
+  $("armedBar").style.display = (ARMED.url && !(STATE.ui.blackout||STATE.ui.fullscreen)) ? "flex":"none";
+}
+function finalizeBeforeNav(){ persist(true); }
+function go(url){
+  const u=String(url||"").trim(); if(!u) return;
+  finalizeBeforeNav();
+  window.location.href=u;
+}
+function openNewTab(url){
+  const u=String(url||"").trim(); if(!u) return;
+  finalizeBeforeNav();
+  window.open(u,"_blank","noopener,noreferrer");
+}
+
+/* URL normalizer (file:// safe)
+   - If you type "room.html" while running locally (file://), we resolve to https://ketadata.com/
+   - If running on http(s), we resolve relative URLs against the current page.
+*/
+const DEFAULT_SURFACE_ORIGIN = "https://ketadata.com/";
+function normalizeSurfaceUrl(raw){
+  const u = String(raw||"").trim();
+  if(!u) return "";
+  // allow absolute + special schemes
+  if(/^(https?:|about:|data:|blob:)/i.test(u)) return u;
+  // resolve relative when hosted (http/https)
+  try{
+    if(window.location && window.location.protocol !== "file:" && window.location.href){
+      return new URL(u, window.location.href).href;
+    }
+  }catch(e){}
+  // file:// (or other): pin to DEFAULT_SURFACE_ORIGIN
+  return DEFAULT_SURFACE_ORIGIN + u.replace(/^\/+/, "");
+}
+
+/* SURFACE = whole screen */
+function applySurface(url,label){
+  const raw=String(url||"").trim();
+  const u=normalizeSurfaceUrl(raw);
+  const lab = canonName(label||"") || (u?deriveNameFromUrl(u):"");
+  STATE.ui.surfaceUrl=u;
+  STATE.ui.surfaceLabel=lab;
+  $("surfaceLabel").textContent = u ? lab : "—";
+  if(!u){
+    surfaceFrame.classList.remove("on");
+    surfaceFrame.removeAttribute("src");
+    return;
+  }
+  surfaceFrame.classList.add("on");
+  surfaceFrame.src = u;
+  noteRecent(u,lab);
+}
+
+
+/* Recent surfaces (preloaded lenses) */
+function noteRecent(url,label){
+  const u=String(url||"").trim();
+  if(!u) return;
+  const lab=canonName(label||"")||deriveNameFromUrl(u);
+  const rec=STATE.ui.recent || (STATE.ui.recent=[]);
+  // remove existing
+  for(let i=rec.length-1;i>=0;i--){ if(rec[i] && String(rec[i].url)===u) rec.splice(i,1); }
+  rec.unshift({url:u,label:lab,at:nowISO()});
+  if(rec.length>80) rec.length=80;
+}
+function registryUrls(){
+  const out=[];
+  const seen=new Set();
+  function add(u,lab){
+    const url=String(u||"").trim();
+    if(!url||seen.has(url)) return;
+    seen.add(url);
+    out.push({url,label:canonName(lab||"")||deriveNameFromUrl(url)});
+  }
+  // sets
+  for(const s of (STATE.payload.sets||[])){
+    for(const it of (s.items||[])) add(it.url,it.label);
+  }
+  // player queue
+  for(const q of (STATE.ui.player.queue||[])) add(q.url,q.name||q.label);
+  // current surface
+  if(STATE.ui.surfaceUrl) add(STATE.ui.surfaceUrl, STATE.ui.surfaceLabel);
+  return out;
+}
+function lensRecent(){
+  return (STATE.ui.recent||[]).map(x=>({url:String(x.url||"").trim(), label:canonName(x.label||"")||deriveNameFromUrl(x.url)})).filter(x=>x.url);
+}
+function lensUnplayed(){
+  const reg=registryUrls();
+  const recentSet=new Set((STATE.ui.recent||[]).map(x=>String(x.url||"").trim()).filter(Boolean));
+  return reg.filter(x=>!recentSet.has(String(x.url).trim()));
+}
+function loadLensToPlayer(items,label){
+  const arr=(items||[]).map(x=>({url:String(x.url||"").trim(), name:canonName(x.label||x.name||"")||deriveNameFromUrl(x.url)})).filter(x=>x.url);
+  STATE.ui.player.queue=arr;
+  STATE.ui.player.index=0;
+  STATE.ui.player.playing=false;
+  renderPlayer();
+  toast(label||"LOADED");
+  persist();
+}
+function addUrlToSetByLabel(setLabel, url, itemLabel){
+  const u=String(url||"").trim();
+  if(!u) return;
+  const s=upsertSetByLabel(setLabel||"SET");
+  if(!Array.isArray(s.items)) s.items=[];
+  const exists=s.items.some(it=>String(it.url||"").trim()===u);
+  if(!exists){
+    s.items.unshift({label:canonName(itemLabel||"")||deriveNameFromUrl(u), url:u});
+    s.updatedAt=nowISO();
+  }
+  persist();
+  renderSetList();
+  renderPreloaded();
+  toast("TAGGED");
+}
+
+/* Lights (locked) */
+let lightInterval=null;
+let lightCount=0, lightAuxA=0, lightAuxB=0;
+function resetStage(){ stage.style.backgroundColor="#000"; stage.style.filter="none"; lightCount=0; lightAuxA=0; lightAuxB=0; }
+function stopLight(silent=false){
+  if(lightInterval){clearInterval(lightInterval); lightInterval=null;}
+  STATE.ui.lightRunning=false; resetStage();
+  if(!silent) persist(false);
+}
+function startLight(preset){
+  stopLight(true);
+  resetStage();
+  STATE.ui.lightPreset=preset;
+  STATE.ui.lightRunning=true;
+
+  if(preset===1){
+    lightInterval=setInterval(()=>{
+      const curr=stage.style.backgroundColor||"black";
+      stage.style.backgroundColor=(curr==="black"||curr==="rgb(0, 0, 0)")?"white":"black";
+      stage.style.filter="none";
+    },50);
+  }else if(preset===2){
+    lightInterval=setInterval(()=>{
+      lightAuxA=(lightAuxA+30)%360; lightAuxB+=0.5;
+      const l=50+Math.sin(lightAuxB)*40;
+      stage.style.backgroundColor=`hsl(${lightAuxA},100%,${l}%)`;
+      stage.style.filter="none";
+    },10);
+  }else if(preset===3){
+    lightInterval=setInterval(()=>{
+      lightCount++;
+      const beat=lightCount%16;
+      if(beat===0||beat===1){stage.style.backgroundColor="#fff";stage.style.filter="invert(1) contrast(3) brightness(2)";}
+      else if(beat===2){stage.style.backgroundColor="#000";stage.style.filter="invert(1) contrast(2)";}
+      else if(beat===3){stage.style.backgroundColor="#0f0";stage.style.filter="contrast(2) saturate(3)";}
+      else if(beat===4){stage.style.backgroundColor="#f0f";stage.style.filter="invert(1) hue-rotate(90deg)";}
+      else if(beat===5||beat===6){stage.style.backgroundColor="#0ff";stage.style.filter="invert(0.7) contrast(2)";}
+      else if(beat===7){stage.style.backgroundColor="#fff";stage.style.filter="invert(1) brightness(3)";}
+      else if(beat===8){stage.style.backgroundColor="#000";stage.style.filter="invert(1) contrast(3)";}
+      else if(beat===9||beat===10){stage.style.backgroundColor="#0f0";stage.style.filter="saturate(5) contrast(2)";}
+      else if(beat===11){stage.style.backgroundColor="#f0f";stage.style.filter="invert(1) saturate(3)";}
+      else {stage.style.backgroundColor="#08f";stage.style.filter="contrast(1.5) brightness(1.2)";}
+    },30);
+  }else if(preset===4){
+    lightInterval=setInterval(()=>{
+      lightAuxA+=0.08; lightCount++;
+      const red=Math.abs(Math.sin(lightAuxA))*255;
+      const pulse=Math.abs(Math.sin(lightAuxA*0.5));
+      const contrast=2+pulse*2;
+      const saturation=4+pulse*2;
+      if(lightCount%8===0){stage.style.backgroundColor="#000";stage.style.filter="brightness(3) contrast(3)";}
+      else{
+        stage.style.backgroundColor=`rgb(${red},0,0)`;
+        stage.style.filter=`contrast(${contrast}) saturate(${saturation}) brightness(${1.2+pulse*0.5})`;
+      }
+    },20);
+  }else if(preset===5){
+    lightInterval=setInterval(()=>{
+      lightAuxA+=15; lightAuxB=(lightAuxB+2)%100;
+      const hue=260+Math.sin(lightAuxA*0.1)*40;
+      const saturation=80+Math.cos(lightAuxA*0.05)*20;
+      const lightness=30+Math.sin(lightAuxB*0.1)*30;
+      const spiralBrightness=1+Math.abs(Math.sin(lightAuxA*0.05))*0.8;
+      const spiralContrast=1.5+Math.abs(Math.cos(lightAuxA*0.08))*1;
+      stage.style.backgroundColor=`hsl(${hue},${saturation}%,${lightness}%)`;
+      stage.style.filter=`contrast(${spiralContrast}) saturate(2) brightness(${spiralBrightness}) hue-rotate(${lightAuxA*0.5}deg)`;
+    },25);
+  }else if(preset===6){
+    lightInterval=setInterval(()=>{
+      lightCount++;
+      if(lightCount%50===0||lightCount%50===2){stage.style.backgroundColor="#fff";stage.style.filter="brightness(5) contrast(5)";}
+      else{stage.style.backgroundColor="#000";stage.style.filter="none";}
+    },30);
+  }
+
+  persist(false);
+}
+function selectPreset(p){
+  STATE.ui.lightPreset=p;
+  if(STATE.ui.lightRunning) startLight(p);
+  else persist(false);
+}
+function toggleRun(){
+  if(STATE.ui.blackout) return;
+  if(STATE.ui.lightRunning) stopLight(false);
+  else startLight(STATE.ui.lightPreset||1);
+}
+
+/* Motion */
+function syncMotion(){
+  if(STATE.ui.motionOn) motion.classList.add("run");
+  else motion.classList.remove("run");
+}
+
+/* UI setters */
+function setDrawer(on){
+  STATE.ui.drawerOpen=!!on;
+  if(on) STATE.ui.blackout=false;
+  persist(false);
+}
+function setKetaNote(on){
+  STATE.ui.noteOpen=!!on;
+  if(on){ STATE.ui.blackout=false; if(STATE.ui.noteRect) STATE.ui.noteRect.x=null; }
+  persist(false);
+}
+function setInvert(on){ STATE.ui.invert=!!on; persist(false); }
+
+let BLACKOUT_CACHE=null;
+function setBlackout(on){
+  const next=!!on;
+  if(next && !STATE.ui.blackout){
+    BLACKOUT_CACHE={
+      drawerOpen:!!STATE.ui.drawerOpen,
+      noteOpen:!!STATE.ui.noteOpen,
+      motionOn:!!STATE.ui.motionOn,
+      lightRunning:!!STATE.ui.lightRunning,
+      lightPreset:Number(STATE.ui.lightPreset||1),
+      padOpen:!!STATE.ui.padOpen,
+      playerOpen:!!STATE.ui.playerOpen,
+      ytOpen:!!STATE.ui.ytOpen
+    };
+  }
+  STATE.ui.blackout=next;
+  if(STATE.ui.blackout){
+    STATE.ui.motionOn=false;
+    stopLight(true);
+    resetStage();
+    motion.classList.remove("run");
+    STATE.ui.drawerOpen=false;
+    STATE.ui.noteOpen=false;
+    STATE.ui.padOpen=false;
+    STATE.ui.playerOpen=false;
+    STATE.ui.ytOpen=false;
+  }else{
+    if(BLACKOUT_CACHE){
+      STATE.ui.drawerOpen=!!BLACKOUT_CACHE.drawerOpen;
+      STATE.ui.noteOpen=!!BLACKOUT_CACHE.noteOpen;
+      STATE.ui.motionOn=!!BLACKOUT_CACHE.motionOn;
+      STATE.ui.padOpen=!!BLACKOUT_CACHE.padOpen;
+      STATE.ui.playerOpen=!!BLACKOUT_CACHE.playerOpen;
+      STATE.ui.ytOpen=!!BLACKOUT_CACHE.ytOpen;
+      const wasRunning=!!BLACKOUT_CACHE.lightRunning;
+      const wasPreset=Number(BLACKOUT_CACHE.lightPreset||1);
+      STATE.ui.lightPreset=wasPreset;
+      if(wasRunning) startLight(wasPreset);
+      BLACKOUT_CACHE=null;
+    }
+  }
+  persist(false);
+}
+function toggleBlackout(){ setBlackout(!STATE.ui.blackout); }
+function setFullscreen(on){ STATE.ui.fullscreen=!!on; persist(false); }
+function toggleFullscreen(){ setFullscreen(!STATE.ui.fullscreen); }
+
+/* PAD */
+function openPad(){
+  ensureActiveSets();
+  STATE.ui.padOpen=true;
+  $("padPanel").classList.add("open");
+  renderPad();
+  persist(true);
+}
+function closePad(){
+  STATE.ui.padOpen=false;
+  $("padPanel").classList.remove("open");
+  persist(true);
+}
+function renderPad(){
+  const panel=$("padPanel");
+  if(!STATE.ui.padOpen){
+    panel.classList.remove("open");
+    panel.style.display="none";
+    return;
+  }
+  panel.style.display="block";
+
+  ensureActiveSets();
+  const grid=$("padGrid");
+  grid.innerHTML="";
+
+  const max=16;
+  const slots=Array.from({length:max}, (_,i)=>String((STATE.ui.activeSets||[])[i]||"")).map(s=>s.trim());
+
+  for(let i=0;i<max;i++){
+    const sid=slots[i];
+    const setObj=sid?getSetById(sid):null;
+    const cell=document.createElement("div");
+    cell.className="padCell";
+
+    if(!STATE.ui.padEdit){
+      const nm=document.createElement("div");
+      nm.className="nm";
+      nm.textContent=setObj ? (canonName(setObj.label||"")||"SET") : "—";
+
+      const a=document.createElement("a");
+      const first=(setObj && Array.isArray(setObj.items) && setObj.items[0] && setObj.items[0].url) ? String(setObj.items[0].url).trim() : "";
+      a.href=first?first:"#";
+      a.textContent=first?first:"—";
+      a.addEventListener("click",(ev)=>ev.preventDefault());
+
+      cell.appendChild(nm);
+      cell.appendChild(a);
+
+      cell.addEventListener("click",()=>{
+        if(!setObj) return;
+        STATE.ui.activeSetId=setObj.id;
+        // load lens to player (no autoplay)
+        loadLensToPlayer((setObj.items||[]), setObj.label||"SET");
+        toast("ACTIVE SET");
+        persist(true);
+      });
+    }else{
+      // EDIT MODE: slot chooses/creates a set by label, and stores its id into activeSets slot index.
+      const nmIn=document.createElement("input");
+      nmIn.value=setObj ? String(setObj.label||"") : "";
+      nmIn.placeholder="SET NAME";
+
+      cell.appendChild(nmIn);
+
+      const commit=()=>{
+        const label=canonName(nmIn.value||"")||"";
+        ensureActiveSets();
+        if(!label){
+          // clear slot
+          STATE.ui.activeSets[i]="";
+          STATE.ui.activeSets=STATE.ui.activeSets.map(String);
+          persist(true);
+          renderPad();
+          return;
+        }
+        const s=upsertSetByLabel(label);
+        STATE.ui.activeSets[i]=String(s.id);
+        if(!STATE.ui.activeSetId) STATE.ui.activeSetId=String(s.id);
+        persist(true);
+        renderPad();
+      };
+
+      nmIn.addEventListener("keydown",(ev)=>{ if(ev.key==="Enter"){ ev.preventDefault(); nmIn.blur(); } });
+      nmIn.addEventListener("blur",commit);
+
+      cell.addEventListener("dblclick",(ev)=>{
+        ev.preventDefault();
+        nmIn.value="";
+        nmIn.focus();
+      });
+    }
+
+    grid.appendChild(cell);
+  }
+}
+
+/* PLAYER */
+function playerNow(){
+  const q=STATE.ui.player.queue||[];
+  const i=Math.max(0, Math.min(q.length-1, STATE.ui.player.index||0));
+  return q[i]||null;
+}
+function playerSetIndex(i){
+  const q=STATE.ui.player.queue||[];
+  if(!q.length){ STATE.ui.player.index=0; return; }
+  STATE.ui.player.index=Math.max(0, Math.min(q.length-1, i));
+}
+function playerRender(){
+  const panel=$("playerPanel");
+  if(!STATE.ui.playerOpen || STATE.ui.blackout || STATE.ui.fullscreen){
+    panel.classList.remove("open");
+    panel.style.display="none";
+    return;
+  }
+  panel.style.display="";
+  panel.classList.add("open");
+
+  const now=playerNow();
+  $("playerNowLabel").textContent = now ? (canonName(now.label||"")||deriveNameFromUrl(now.url)) : "—";
+  $("playerPlay").textContent = STATE.ui.player.playing ? "PAUSE" : "PLAY";
+
+  const qEl=$("playerQueue");
+  qEl.innerHTML="";
+  const q=(STATE.ui.player.queue||[]);
+  q.forEach((it, idx)=>{
+    const row=document.createElement("div");
+    row.className="playerRow";
+    if(idx===STATE.ui.player.index) row.style.borderColor="var(--fg)";
+    const ix=document.createElement("span");
+    ix.className="ix";
+    ix.textContent=String(idx+1).padStart(2,"0");
+    const nm=document.createElement("span");
+    nm.className="nm";
+    nm.textContent=canonName(it.label||"")||deriveNameFromUrl(it.url);
+    row.appendChild(ix); row.appendChild(nm);
+    row.addEventListener("click",()=>{
+      playerSetIndex(idx);
+      persist(true);
+      playerRender();
+    });
+    row.addEventListener("dblclick",()=>{
+      playerSetIndex(idx);
+      const cur=playerNow();
+      if(cur && cur.url) { applySurface(cur.url, cur.label); toast("SURFACE"); persist(true); }
+    });
+    qEl.appendChild(row);
+  });
+}
+function playerOpen(){ STATE.ui.playerOpen=true; persist(true); playerRender(); }
+function playerClose(){ STATE.ui.playerOpen=false; persist(true); playerRender(); }
+function playerLoadFromActiveSet(){
+  ensureActiveSets();
+  const setId=String(STATE.ui.activeSetId||"");
+  const setObj=getSetById(setId);
+  if(!setObj){ toast("NO ACTIVE SET"); return; }
+  const items=(setObj.items||[]).map(it=>({label:canonName(it.label||"")||deriveNameFromUrl(it.url), url:String(it.url||"").trim()})).filter(x=>x.url);
+  STATE.ui.player.queue=items;
+  STATE.ui.player.index=0;
+  toast("PLAYER LOADED");
+  persist(true);
+  playerRender();
+}
+function playerLoadKetaMono(){
+  const s=(STATE.payload.sets||[]).find(x=>canonName(x.label)==="KETA-MONO");
+  if(!s){ toast("NO KETA_MONO"); return; }
+  const items=(s.items||[]).map(it=>({label:canonName(it.label||"")||deriveNameFromUrl(it.url), url:String(it.url||"").trim()})).filter(x=>x.url);
+  STATE.ui.player.queue=items;
+  STATE.ui.player.index=0;
+  toast("KETA_MONO → PLAYER");
+  persist(true);
+  playerRender();
+}
+function playerAddArmed(){
+  const u=String(ARMED.url||"").trim();
+  if(!u){ toast("NO ARMED"); return; }
+  const label=canonName(ARMED.name||"")||deriveNameFromUrl(u);
+  STATE.ui.player.queue.push({label,url:u});
+  toast("ADDED");
+  persist(true);
+  playerRender();
+}
+function playerPrev(){ playerSetIndex((STATE.ui.player.index||0)-1); persist(true); playerRender(); }
+function playerNext(){ playerSetIndex((STATE.ui.player.index||0)+1); persist(true); playerRender(); }
+function playerTogglePlay(){ STATE.ui.player.playing=!STATE.ui.player.playing; persist(true); playerRender(); }
+function playerSurfaceNow(){
+  const cur=playerNow();
+  if(!cur || !cur.url){ toast("NO NOW"); return; }
+  applySurface(cur.url, cur.label);
+  toast("SURFACE");
+  persist(true);
+}
+
+/* Player Input */
+function normalizeUrlMaybe(u){
+  const raw=String(u||"").trim();
+  if(!raw) return "";
+  // if looks like plain youtube id (11 chars) treat as youtube watch url
+  if(/^[a-zA-Z0-9_-]{11}$/.test(raw)) return `https://www.youtube.com/watch?v=${raw}`;
+  // if looks like playlist id only
+  if(/^PL[a-zA-Z0-9_-]+$/.test(raw)) return `https://www.youtube.com/playlist?list=${raw}`;
+  // accept as-is
+  return raw;
+}
+function playerAddInputUrl(toSurface=false){
+  const inp=$("playerInputUrl");
+  const raw=normalizeUrlMaybe(inp.value);
+  if(!raw){ toast("NO INPUT"); return; }
+  const label=deriveNameFromUrl(raw);
+  STATE.ui.player.queue.push({label,url:raw});
+  STATE.ui.player.index = Math.max(0, (STATE.ui.player.queue.length-1));
+  toast("ADDED");
+  if(toSurface) { applySurface(raw,label); toast("SURFACE"); }
+  persist(true);
+  playerRender();
+}
+function playerArmInput(){
+  const raw=normalizeUrlMaybe($("playerInputUrl").value);
+  if(!raw){ toast("NO INPUT"); return; }
+  arm(deriveNameFromUrl(raw), raw);
+  toast("ARMED");
+  persist(true);
+}
+
+/* YT: parse + embed builder */
+function ytParse(input){
+  const s=String(input||"").trim();
+  if(!s) return {type:"none"};
+  // URL
+  try{
+    const u=new URL(s, location.href);
+    const host=(u.hostname||"").toLowerCase();
+    const path=(u.pathname||"");
+    const sp=u.searchParams;
+
+    // youtu.be/<id>
+    if(host.includes("youtu.be")){
+      const id=path.split("/").filter(Boolean)[0]||"";
+      if(id) return {type:"video", id, raw:s};
+    }
+
+    // youtube watch
+    if(host.includes("youtube.com")){
+      const vid=sp.get("v");
+      const list=sp.get("list");
+      if(vid) return {type:"video", id:vid, list:list||"", raw:s};
+      // playlist page
+      if(path.includes("/playlist") && list) return {type:"playlist", list, raw:s};
+      // embed
+      if(path.includes("/embed/")){
+        const id=path.split("/embed/")[1]?.split(/[?&#]/)[0]||"";
+        if(id) return {type:"video", id, list:list||"", raw:s};
+      }
+    }
+  }catch(e){}
+
+  // raw id inference
+  if(/^[a-zA-Z0-9_-]{11}$/.test(s)) return {type:"video", id:s, raw:s};
+  if(/^PL[a-zA-Z0-9_-]+$/.test(s)) return {type:"playlist", list:s, raw:s};
+  return {type:"unknown", raw:s};
+}
+
+function ytBuildEmbedSrc(){
+  const parsed=ytParse(STATE.ui.yt.input);
+  const ap=STATE.ui.yt.autoplay ? 1 : 0;
+  const mute=STATE.ui.yt.mute ? 1 : 0;
+  const loop=STATE.ui.yt.loop ? 1 : 0;
+  const ctrls=STATE.ui.yt.controls ? 1 : 0;
+
+  // modest branding + inline
+  const baseParams = new URLSearchParams();
+  baseParams.set("autoplay", String(ap));
+  baseParams.set("mute", String(mute));
+  baseParams.set("controls", String(ctrls));
+  baseParams.set("playsinline", "1");
+  baseParams.set("rel", "0");
+  baseParams.set("modestbranding", "1");
+
+  if(parsed.type==="video"){
+    // playlist (from list) can be used for autoplay queue
+    if(parsed.list){
+      baseParams.set("list", parsed.list);
+    }
+    if(loop){
+      // loop requires playlist param; set playlist to video id to loop single
+      baseParams.set("loop","1");
+      baseParams.set("playlist", parsed.id);
+      if(parsed.list) baseParams.set("playlist", parsed.list);
+    }
+    return `https://www.youtube.com/embed/${encodeURIComponent(parsed.id)}?${baseParams.toString()}`;
+  }
+
+  if(parsed.type==="playlist"){
+    baseParams.set("list", parsed.list);
+    if(loop) baseParams.set("loop","1");
+    // for playlist loop, set playlist param to list id (yt uses list)
+    return `https://www.youtube.com/embed/videoseries?${baseParams.toString()}`;
+  }
+
+  return "";
+}
+
+function syncYTUIFromState(){
+  $("ytInput").value = STATE.ui.yt.input || "";
+  $("ytAutoplay").checked = !!STATE.ui.yt.autoplay;
+  $("ytMute").checked = !!STATE.ui.yt.mute;
+  $("ytLoop").checked = !!STATE.ui.yt.loop;
+  $("ytControls").checked = !!STATE.ui.yt.controls;
+}
+
+function applyYTEmbedFromState(silent=false){
+  const src=ytBuildEmbedSrc();
+  STATE.ui.yt.lastEmbedSrc = src || "";
+  if(!src){
+    ytFrame.removeAttribute("src");
+    if(!silent) toast("YT CLEARED");
+    return;
+  }
+  ytFrame.src = src;
+  if(!silent) toast("YT APPLIED");
+}
+
+function ytOpen(){
+  STATE.ui.ytOpen=true;
+  persist(true);
+  renderYT();
+}
+function ytClose(){
+  STATE.ui.ytOpen=false;
+  persist(true);
+  renderYT();
+}
+function renderYT(){
+  const panel=$("ytPanel");
+  if(!STATE.ui.ytOpen || STATE.ui.blackout || STATE.ui.fullscreen){
+    panel.classList.remove("open");
+    panel.style.display="none";
+    return;
+  }
+  panel.style.display="";
+  panel.classList.add("open");
+  syncYTUIFromState();
+  // keep embed visible
+  if(STATE.ui.yt.lastEmbedSrc){
+    if(ytFrame.src !== STATE.ui.yt.lastEmbedSrc) ytFrame.src = STATE.ui.yt.lastEmbedSrc;
+  }
+}
+
+/* Render pinned/active/set list */
+function renderPinnedPanel(){
+  const el=$("pinnedPanel");
+  ensurePinnedSets();
+
+  if(STATE.ui.blackout || STATE.ui.fullscreen){ el.style.display="none"; el.innerHTML=""; return; }
+  if(!STATE.ui.pinnedSets.length){ el.style.display="none"; el.innerHTML=""; return; }
+
+  el.style.display="flex";
+  el.innerHTML="";
+  const label=document.createElement("span");
+  label.style.color="var(--muted)";
+  label.textContent="PINNED";
+  el.appendChild(label);
+
+  STATE.ui.pinnedSets.forEach(id=>{
+    const s=getSetById(id);
+    if(!s) return;
+    const chip=document.createElement("button");
+    chip.className="btn";
+    chip.style.padding="4px 8px";
+    chip.style.fontSize="11px";
+    chip.textContent=canonName(s.label||"SET");
+    chip.addEventListener("click",()=>{
+      STATE.ui.activeSetId=String(s.id);
+      persist(true);
+      toast("ACTIVE SET");
+      renderPad(); playerRender();
+    });
+    el.appendChild(chip);
+  });
+}
+function renderActiveStrip(){
+  const el=$("activeStrip");
+  ensureActiveSets();
+
+  if(STATE.ui.blackout || STATE.ui.fullscreen){ el.style.display="none"; el.innerHTML=""; return; }
+  if(!STATE.ui.activeSets.length){ el.style.display="none"; el.innerHTML=""; return; }
+
+  el.style.display="flex";
+  el.innerHTML="";
+  const label=document.createElement("span");
+  label.className="label";
+  label.textContent="ACTIVE";
+  el.appendChild(label);
+
+  STATE.ui.activeSets.slice(0,16).forEach(id=>{
+    const s=getSetById(id);
+    if(!s) return;
+    const b=document.createElement("button");
+    b.className="btn";
+    b.style.padding="4px 8px";
+    b.style.fontSize="11px";
+    b.textContent=canonName(s.label||"SET");
+    if(String(STATE.ui.activeSetId||"")===String(s.id)) b.style.borderColor="var(--fg)";
+    b.addEventListener("click",()=>{
+      STATE.ui.activeSetId=String(s.id);
+      toast("ACTIVE SET");
+      renderPad(); playerRender();
+      persist(true);
+    });
+    el.appendChild(b);
+  });
+}
+function renderSetList(){
+  const el=$("setList");
+  el.innerHTML="";
+  const sets=(STATE.payload.sets||[]).slice().sort((a,b)=>{
+    const ta=Date.parse(a.updatedAt||a.createdAt||0);
+    const tb=Date.parse(b.updatedAt||b.createdAt||0);
+    return tb-ta;
+  });
+
+  sets.forEach(s=>{
+    const row=document.createElement("div");
+    row.style.display="flex";
+    row.style.gap="8px";
+    row.style.alignItems="center";
+    row.style.border="1px solid var(--line2)";
+    row.style.padding="8px 10px";
+    row.style.fontFamily="var(--mono)";
+    row.style.fontSize="11px";
+    row.style.letterSpacing=".06em";
+    row.style.textTransform="uppercase";
+    row.style.cursor="pointer";
+
+    const left=document.createElement("div");
+    left.style.flex="1";
+    left.textContent=canonName(s.label||"SET");
+
+    const mid=document.createElement("div");
+    mid.style.color="var(--muted)";
+    mid.textContent=`${(s.items||[]).length} ITEMS`;
+
+    const pin=document.createElement("button");
+    pin.className="btn";
+    pin.style.padding="4px 8px";
+    pin.style.fontSize="11px";
+    pin.textContent=isSetPinned(s.id)?"UNPIN":"PIN";
+    pin.addEventListener("click",(ev)=>{
+      ev.stopPropagation();
+      togglePinSet(s.id);
+      toast(isSetPinned(s.id)?"SET PINNED":"SET UNPINNED");
+      persist(true);
+    });
+
+    row.addEventListener("click",()=>{
+      setEditorFromSet(s);
+      toast("SET LOADED");
+      persist(true);
+    });
+
+    if(String(ACTIVE_SET_ID||"")===String(s.id||"")) row.style.borderColor="var(--fg)";
+    row.appendChild(left); row.appendChild(mid); row.appendChild(pin);
+    el.appendChild(row);
+
+    if((s.items||[]).length){
+      const list=document.createElement("div");
+      list.style.display="flex";
+      list.style.flexWrap="wrap";
+      list.style.gap="6px";
+      list.style.marginTop="6px";
+
+      (s.items||[]).forEach(it=>{
+        const b=document.createElement("button");
+        b.className="btn";
+        b.style.padding="4px 8px";
+        b.style.fontSize="11px";
+        b.textContent=canonName(it.label||"") || deriveNameFromUrl(it.url);
+        b.addEventListener("click",(ev)=>{
+          ev.stopPropagation();
+          arm(b.textContent, it.url);
+          toast("ARMED");
+          persist(true);
+        });
+        list.appendChild(b);
+      });
+      el.appendChild(list);
+    }
+  });
+}
+
+/* Render */
+function render(){
+  root.classList.toggle("invert", !!STATE.ui.invert);
+  root.classList.toggle("blackout", !!STATE.ui.blackout);
+  root.classList.toggle("fs", !!STATE.ui.fullscreen);
+
+  const s=stableSig();
+  $("sig").textContent=s;
+  $("sig2").textContent=s;
+
+  $("fsLabel").textContent = STATE.ui.fullscreen ? "ON":"OFF";
+  $("blkLabel").textContent = STATE.ui.blackout ? "ON":"OFF";
+  $("lightLabel").textContent = String(STATE.ui.lightPreset||1);
+  $("runLabel").textContent = STATE.ui.lightRunning ? "ON":"OFF";
+  $("motionLabel").textContent = STATE.ui.motionOn ? "ON":"OFF";
+
+  $("drawer").classList.toggle("open", !!STATE.ui.drawerOpen);
+  root.style.setProperty("--drawer-h", String(STATE.ui.drawerH));
+
+  $("ketaIcon").classList.toggle("open", !!STATE.ui.noteOpen);
+  $("ketaNote").classList.toggle("open", !!STATE.ui.noteOpen);
+
+  $("armedBar").style.display = (!!ARMED.url && !(STATE.ui.blackout||STATE.ui.fullscreen)) ? "flex":"none";
+
+  $("ketaText").value = String(STATE.ketaNote||"");
+  $("universals").value = String(STATE.universals||"");
+  $("surfaceLabel").textContent = STATE.ui.surfaceUrl ? (STATE.ui.surfaceLabel||deriveNameFromUrl(STATE.ui.surfaceUrl)) : "—";
+
+  renderPinnedPanel();
+  renderActiveStrip();
+  renderSetList();
+  renderPreloaded();
+  renderPad();
+  playerRender();
+  renderYT();
+  syncMotion();
+}
+
+/* Hotkeys */
+function bindHotkeys(){
+  window.addEventListener("keydown",(ev)=>{
+    if(ev.repeat) return;
+    const ae=document.activeElement;
+    const typing = ae && (ae.tagName==="TEXTAREA" || ae.tagName==="INPUT");
+
+    if(ev.code==="Space"){
+      if(!typing){
+        ev.preventDefault();
+        toggleRun();
+        toast(STATE.ui.lightRunning ? "RUN ON" : "RUN OFF");
+      }
+      return;
+    }
+
+    if(ev.shiftKey && (ev.key==="I"||ev.key==="i")){ if(typing) return; ev.preventDefault(); setInvert(!STATE.ui.invert); return; }
+    if(ev.shiftKey && (ev.key==="N"||ev.key==="n")){ if(typing) return; ev.preventDefault(); toggleBlackout(); return; }
+    if(ev.shiftKey && (ev.key==="F"||ev.key==="f")){ if(typing) return; ev.preventDefault(); toggleFullscreen(); return; }
+
+    if(!typing && !ev.shiftKey && !ev.altKey && !ev.metaKey && !ev.ctrlKey){
+      const n=Number(ev.key);
+      if(n>=1 && n<=6){
+        ev.preventDefault();
+        selectPreset(n);
+        toast(`LIGHT ${n}`);
+      }
+    }
+  }, {passive:false});
+}
+
+/* Wiring */
+function bindUI(){
+  // SYSTEM now toggles Drawer (system back in system)
+  $("toggleSystem").addEventListener("click",()=>setDrawer(!STATE.ui.drawerOpen));
+  $("btnCloseDrawer").addEventListener("click",()=>setDrawer(false));
+
+  // explicit redirect button lives in SYSTEM head
+  $("btnGoBasedDiva9").addEventListener("click",()=>{ persist(true); window.location.href = BASED_DIVA9_URL; });
+
+  $("btnToggleMotion").addEventListener("click",()=>{ STATE.ui.motionOn=!STATE.ui.motionOn; persist(true); });
+
+  $("btnToggleUniversals").addEventListener("click",()=>{
+    STATE.ui.universalsCollapsed=!STATE.ui.universalsCollapsed;
+    $("universals").style.display = STATE.ui.universalsCollapsed ? "none":"block";
+    persist(true);
+  });
+  $("btnToggleActive").addEventListener("click",()=>{
+    STATE.ui.activeCollapsed=!STATE.ui.activeCollapsed;
+    $("activeBody").style.display = STATE.ui.activeCollapsed ? "none":"block";
+    persist(true);
+  });
+  $("btnToggleSets").addEventListener("click",()=>{
+    STATE.ui.setsCollapsed=!STATE.ui.setsCollapsed;
+    $("setsBody").style.display = STATE.ui.setsCollapsed ? "none":"block";
+    persist(true);
+  });
+
+  $("btnGoActive").addEventListener("click",()=>go(ARMED.url));
+  $("btnNewTabActive").addEventListener("click",()=>openNewTab(ARMED.url));
+  $("btnCopyActiveUrl").addEventListener("click",()=>copy(ARMED.url||""));
+  $("btnSurfaceActive").addEventListener("click",()=>{ if(!ARMED.url){toast("NO ARMED");return;} applySurface(ARMED.url, ARMED.name); toast("SURFACE"); persist(true); });
+
+  $("armedGo").addEventListener("click",()=>go(ARMED.url));
+  $("armedNewTab").addEventListener("click",()=>openNewTab(ARMED.url));
+  $("armedCopy").addEventListener("click",()=>copy(ARMED.url||""));
+
+  $("toggleRun").addEventListener("click",toggleRun);
+
+  $("ketaIcon").addEventListener("click",()=>setKetaNote(!STATE.ui.noteOpen));
+  $("btnHideNote").addEventListener("click",()=>setKetaNote(false));
+
+  $("ketaText").addEventListener("input",()=>{ STATE.ketaNote = $("ketaText").value; persist(true); });
+  $("universals").addEventListener("input",()=>{ STATE.universals = $("universals").value; persist(true); });
+
+  $("btnExport").addEventListener("click",()=>{ downloadJsonFile(exportFilename(), exportState()); toast("EXPORTED"); });
+  $("btnCopy").addEventListener("click",()=>copy(exportState()));
+  $("btnImport").addEventListener("click",()=>$("file").click());
+  $("file").addEventListener("change",(ev)=>{
+    const f=ev.target.files && ev.target.files[0];
+    if(!f) return;
+    const r=new FileReader();
+    r.onload=()=>{ try{importState(String(r.result||"")); toast("IMPORTED");}catch(e){toast("IMPORT FAIL");} };
+    r.readAsText(f);
+    ev.target.value="";
+  });
+
+  /* sets */
+  $("btnCreateSet").addEventListener("click",()=>{
+    const name=$("setNameInput").value||"SET";
+    const s=createSet(name);
+    setEditorFromSet(s);
+    toast("SET CREATED");
+    persist(true);
+  });
+  $("btnRenameSet").addEventListener("click",()=>{
+    const id=ACTIVE_SET_ID;
+    if(!id){toast("NO SET"); return;}
+    renameSet(id, $("setNameInput").value||"SET");
+    toast("RENAMED");
+    persist(true);
+  });
+  $("btnDeleteSet").addEventListener("click",()=>{
+    const id=ACTIVE_SET_ID;
+    if(!id){toast("NO SET"); return;}
+    deleteSet(id);
+    $("setNameInput").value="";
+    $("setItemsInput").value="";
+    toast("DELETED");
+    persist(true);
+  });
+  $("btnPinSet").addEventListener("click",()=>{
+    const id=ACTIVE_SET_ID;
+    if(!id){toast("NO SET"); return;}
+    togglePinSet(id);
+    toast(isSetPinned(id)?"SET PINNED":"SET UNPINNED");
+    persist(true);
+  });
+  $("btnToActive").addEventListener("click",()=>{
+    const id=ACTIVE_SET_ID;
+    if(!id){toast("NO SET"); return;}
+    addSetToActive(id);
+    STATE.ui.activeSetId=String(id);
+    toast("ADDED TO ACTIVE");
+    persist(true);
+  });
+  $("btnSaveSetItems").addEventListener("click",()=>{
+    const id=ACTIVE_SET_ID;
+    if(!id){toast("NO SET"); return;}
+    saveSetItems(id, $("setItemsInput").value||"");
+    toast("ITEMS SAVED");
+    persist(true);
+  });
+  $("btnClearSetItems").addEventListener("click",()=>{ $("setItemsInput").value=""; toast("CLEARED"); });
+
+  $("btnSurfaceFirst").addEventListener("click",()=>{
+    const id=ACTIVE_SET_ID;
+    const s=getSetById(id);
+    const first = s && s.items && s.items[0] ? s.items[0] : null;
+    if(!first){toast("NO FIRST"); return;}
+    applySurface(first.url, first.label);
+    toast("SURFACE");
+    persist(true);
+  });
+  $("btnLoadSetToPlayer").addEventListener("click",()=>{
+    const id=ACTIVE_SET_ID;
+    const s=getSetById(id);
+    if(!s){toast("NO SET"); return;}
+    STATE.ui.player.queue=(s.items||[]).map(it=>({label:canonName(it.label||"")||deriveNameFromUrl(it.url), url:String(it.url||"").trim()})).filter(x=>x.url);
+    STATE.ui.player.index=0;
+    STATE.ui.playerOpen=true;
+    toast("SET → PLAYER");
+    persist(true);
+    playerRender();
+  });
+
+  $("btnOpenPad").addEventListener("click",openPad);
+  $("btnOpenPlayer").addEventListener("click",()=>{ STATE.ui.playerOpen=!STATE.ui.playerOpen; persist(true); playerRender(); });
+
+  /* keta_mono */
+  $("btnBuildKetaMono").addEventListener("click", buildKetaMonoFromTextarea);
+  $("btnLoadKetaMono").addEventListener("click", loadKetaMonoToEditor);
+
+  $("btnImportKetaMonoJson").addEventListener("click",()=>$("fileKetaMono").click());
+  $("fileKetaMono").addEventListener("change",(ev)=>{
+    const f=ev.target.files && ev.target.files[0];
+    if(!f) return;
+    const r=new FileReader();
+    r.onload=()=>{ try{ importKetaMonoJsonText(String(r.result||"")); }catch(e){ toast("IMPORT FAIL"); } };
+    r.readAsText(f);
+    ev.target.value="";
+  });
+
+  /* pad controls */
+  $("padCloseBtn").addEventListener("click",closePad);
+  $("padEditBtn").addEventListener("click",()=>{
+    STATE.ui.padEdit=!STATE.ui.padEdit;
+    $("padEditBtn").textContent = STATE.ui.padEdit ? "DONE":"EDIT";
+    renderPad();
+    persist(true);
+  });
+
+  /* player controls */
+  $("togglePlayer").addEventListener("click",()=>{ STATE.ui.playerOpen=!STATE.ui.playerOpen; persist(true); playerRender(); });
+  $("togglePad").addEventListener("click",()=>{ STATE.ui.padOpen ? closePad() : openPad(); });
+
+  $("playerClose").addEventListener("click", playerClose);
+  $("playerPrev").addEventListener("click", playerPrev);
+  $("playerNext").addEventListener("click", playerNext);
+  $("playerPlay").addEventListener("click", playerTogglePlay);
+  $("playerSurf").addEventListener("click", playerSurfaceNow);
+  $("playerNewTabNow").addEventListener("click", ()=>{ const cur=playerNow(); if(!cur||!cur.url){toast("NO NOW");return;} openNewTab(cur.url); });
+  $("playerArmNow").addEventListener("click", ()=>{ const cur=playerNow(); if(!cur||!cur.url){toast("NO NOW");return;} arm(cur.label,cur.url); toast("ARMED"); persist(true); });
+  $("playerAddArmed").addEventListener("click", playerAddArmed);
+  $("playerClear").addEventListener("click", ()=>{ STATE.ui.player.queue=[]; STATE.ui.player.index=0; STATE.ui.player.playing=false; toast("CLEARED"); persist(true); playerRender(); });
+  $("playerFromActiveSet").addEventListener("click", playerLoadFromActiveSet);
+  $("playerLoadKetaMono").addEventListener("click", playerLoadKetaMono);
+
+  // player input wiring
+  $("playerAddInput").addEventListener("click", ()=>playerAddInputUrl(false));
+  $("playerSurfaceInput").addEventListener("click", ()=>playerAddInputUrl(true));
+  $("playerInputToArmed").addEventListener("click", playerArmInput);
+  $("playerInputClear").addEventListener("click", ()=>{ $("playerInputUrl").value=""; toast("CLEARED"); });
+  $("playerInputUrl").addEventListener("keydown",(ev)=>{ if(ev.key==="Enter"){ ev.preventDefault(); playerAddInputUrl(false); } });
+
+  // open yt panel from player
+  $("playerOpenYT").addEventListener("click", ()=>{ STATE.ui.ytOpen=!STATE.ui.ytOpen; persist(true); renderYT(); });
+
+  $("btnCopyUniversals").addEventListener("click",()=>copy(String(STATE.universals||"")));
+
+  /* YT */
+  const _tYT=$("toggleYT"); if(_tYT) _tYT.addEventListener("click", ()=>{ STATE.ui.ytOpen=!STATE.ui.ytOpen; persist(true); renderYT(); });
+$("ytClose").addEventListener("click", ytClose);
+  $("ytApply").addEventListener("click", ()=>{
+    // sync from UI into state, then build embed
+    STATE.ui.yt.input = $("ytInput").value || "";
+    STATE.ui.yt.autoplay = !!$("ytAutoplay").checked;
+    STATE.ui.yt.mute = !!$("ytMute").checked;
+    STATE.ui.yt.loop = !!$("ytLoop").checked;
+    STATE.ui.yt.controls = !!$("ytControls").checked;
+    applyYTEmbedFromState(false);
+    persist(true);
+  });
+  $("ytFromArmed").addEventListener("click", ()=>{
+    if(!ARMED.url){ toast("NO ARMED"); return; }
+    $("ytInput").value = ARMED.url;
+    STATE.ui.yt.input = ARMED.url;
+    persist(true);
+  });
+  $("ytOpenTab").addEventListener("click", ()=>{
+    const src=ytBuildEmbedSrc();
+    if(!src){ toast("NO YT"); return; }
+    openNewTab(src);
+  });
+  $("ytClear").addEventListener("click", ()=>{
+    $("ytInput").value="";
+    STATE.ui.yt.input="";
+    STATE.ui.yt.lastEmbedSrc="";
+    ytFrame.removeAttribute("src");
+    toast("YT CLEARED");
+    persist(true);
+  });
+
+  /* ESC closes overlays */
+  window.addEventListener("keydown",(ev)=>{
+    if(ev.key==="Escape"){
+      if(STATE.ui.ytOpen){ ytClose(); return; }
+      if(STATE.ui.playerOpen){ playerClose(); return; }
+      if(STATE.ui.padOpen){ closePad(); return; }
+      if(STATE.ui.drawerOpen){ setDrawer(false); return; }
+      if(STATE.ui.noteOpen){ setKetaNote(false); return; }
+    }
+  });
+
+  /* drawer sizer */
+  (function(){
+    const sizer=$("drawerSizer");
+    let dragging=false, startY=0, startH=STATE.ui.drawerH;
+    sizer.addEventListener("mousedown",(ev)=>{
+      dragging=true; startY=ev.clientY; startH=STATE.ui.drawerH;
+      ev.preventDefault();
+    });
+    window.addEventListener("mousemove",(ev)=>{
+      if(!dragging) return;
+      const dy = startY - ev.clientY;
+      const usable = (window.innerHeight - 44 - 34);
+      const px = (startH*usable) + dy;
+      const ratio = Math.max(0.18, Math.min(0.88, px/usable));
+      STATE.ui.drawerH=ratio;
+      root.style.setProperty("--drawer-h", String(ratio));
+      persist(true);
+    });
+    window.addEventListener("mouseup",()=>{
+      if(!dragging) return;
+      dragging=false;
+      persist(true);
+    });
+  })();
+
+  /* note drag */
+  (function(){
+    const head=$("ketaHead");
+    const note=$("ketaNote");
+    let dragging=false, sx=0, sy=0, ox=0, oy=0;
+    function applyPos(x,y){
+      note.style.left = x+"px";
+      note.style.top = y+"px";
+      note.style.right = "auto";
+      STATE.ui.noteRect.x=x; STATE.ui.noteRect.y=y;
+    }
+    if(STATE.ui.noteRect && STATE.ui.noteRect.x!=null){
+      applyPos(STATE.ui.noteRect.x, STATE.ui.noteRect.y||76);
+      note.style.width=(STATE.ui.noteRect.w||340)+"px";
+      note.style.height=(STATE.ui.noteRect.h||220)+"px";
+    }else{
+      note.style.right="16px"; note.style.top=(STATE.ui.noteRect.y||76)+"px";
+    }
+    head.addEventListener("mousedown",(ev)=>{
+      dragging=true; sx=ev.clientX; sy=ev.clientY;
+      const r=note.getBoundingClientRect(); ox=r.left; oy=r.top;
+      ev.preventDefault();
+    });
+    window.addEventListener("mousemove",(ev)=>{
+      if(!dragging) return;
+      const nx = Math.max(6, Math.min(window.innerWidth-60, ox + (ev.clientX-sx)));
+      const ny = Math.max(6, Math.min(window.innerHeight-60, oy + (ev.clientY-sy)));
+      applyPos(Math.round(nx), Math.round(ny));
+    });
+    window.addEventListener("mouseup",()=>{
+      if(!dragging) return;
+      dragging=false;
+      const r=note.getBoundingClientRect();
+      STATE.ui.noteRect.w=Math.round(r.width);
+      STATE.ui.noteRect.h=Math.round(r.height);
+      persist(true);
+    });
+  })();
+
+  /* pad drag */
+  (function(){
+    const head=$("padHead");
+    const panel=$("padPanel");
+    let dragging=false, sx=0, sy=0, ox=0, oy=0;
+    function applyPos(x,y){
+      panel.style.left = x+"px";
+      panel.style.top = y+"px";
+      STATE.ui.padRect.x=x; STATE.ui.padRect.y=y;
+    }
+    if(STATE.ui.padRect && STATE.ui.padRect.x!=null){
+      applyPos(STATE.ui.padRect.x, STATE.ui.padRect.y||170);
+      panel.style.width = (STATE.ui.padRect.w||360)+"px";
+      panel.style.height = (STATE.ui.padRect.h||360)+"px";
+    }
+    head.addEventListener("mousedown",(ev)=>{
+      dragging=true; sx=ev.clientX; sy=ev.clientY;
+      const r=panel.getBoundingClientRect(); ox=r.left; oy=r.top;
+      ev.preventDefault();
+    });
+    window.addEventListener("mousemove",(ev)=>{
+      if(!dragging) return;
+      const nx = Math.max(6, Math.min(window.innerWidth-60, ox + (ev.clientX-sx)));
+      const ny = Math.max(6, Math.min(window.innerHeight-60, oy + (ev.clientY-sy)));
+      applyPos(Math.round(nx), Math.round(ny));
+    });
+    window.addEventListener("mouseup",()=>{
+      if(!dragging) return;
+      dragging=false;
+      const r=panel.getBoundingClientRect();
+      STATE.ui.padRect.w=Math.round(r.width);
+      STATE.ui.padRect.h=Math.round(r.height);
+      persist(true);
+    });
+  })();
+
+  /* player drag */
+  (function(){
+    const head=$("playerHead");
+    const panel=$("playerPanel");
+    let dragging=false, sx=0, sy=0, ox=0, oy=0;
+    function applyPos(x,y){
+      panel.style.left = x+"px";
+      panel.style.top = y+"px";
+      panel.style.right = "auto";
+      STATE.ui.playerRect.x=x; STATE.ui.playerRect.y=y;
+    }
+    if(STATE.ui.playerRect && STATE.ui.playerRect.x!=null){
+      applyPos(STATE.ui.playerRect.x, STATE.ui.playerRect.y||64);
+      panel.style.width = (STATE.ui.playerRect.w||380)+"px";
+      panel.style.height = (STATE.ui.playerRect.h||420)+"px";
+    }
+    head.addEventListener("mousedown",(ev)=>{
+      dragging=true; sx=ev.clientX; sy=ev.clientY;
+      const r=panel.getBoundingClientRect(); ox=r.left; oy=r.top;
+      ev.preventDefault();
+    });
+    window.addEventListener("mousemove",(ev)=>{
+      if(!dragging) return;
+      const nx = Math.max(6, Math.min(window.innerWidth-60, ox + (ev.clientX-sx)));
+      const ny = Math.max(6, Math.min(window.innerHeight-60, oy + (ev.clientY-sy)));
+      applyPos(Math.round(nx), Math.round(ny));
+    });
+    window.addEventListener("mouseup",()=>{
+      if(!dragging) return;
+      dragging=false;
+      const r=panel.getBoundingClientRect();
+      STATE.ui.playerRect.w=Math.round(r.width);
+      STATE.ui.playerRect.h=Math.round(r.height);
+      persist(true);
+    });
+  })();
+
+  /* yt drag */
+  (function(){
+    const head=$("ytHead");
+    const panel=$("ytPanel");
+    let dragging=false, sx=0, sy=0, ox=0, oy=0;
+    function applyPos(x,y){
+      panel.style.left = x+"px";
+      panel.style.top = y+"px";
+      panel.style.right = "auto";
+      STATE.ui.ytRect.x=x; STATE.ui.ytRect.y=y;
+    }
+    if(STATE.ui.ytRect && STATE.ui.ytRect.x!=null){
+      applyPos(STATE.ui.ytRect.x, STATE.ui.ytRect.y||504);
+      panel.style.width = (STATE.ui.ytRect.w||360)+"px";
+      panel.style.height = (STATE.ui.ytRect.h||260)+"px";
+    }
+    head.addEventListener("mousedown",(ev)=>{
+      dragging=true; sx=ev.clientX; sy=ev.clientY;
+      const r=panel.getBoundingClientRect(); ox=r.left; oy=r.top;
+      ev.preventDefault();
+    });
+    window.addEventListener("mousemove",(ev)=>{
+      if(!dragging) return;
+      const nx = Math.max(6, Math.min(window.innerWidth-60, ox + (ev.clientX-sx)));
+      const ny = Math.max(6, Math.min(window.innerHeight-60, oy + (ev.clientY-sy)));
+      applyPos(Math.round(nx), Math.round(ny));
+    });
+    window.addEventListener("mouseup",()=>{
+      if(!dragging) return;
+      dragging=false;
+      const r=panel.getBoundingClientRect();
+      STATE.ui.ytRect.w=Math.round(r.width);
+      STATE.ui.ytRect.h=Math.round(r.height);
+      persist(true);
+    });
+  })();
+}
+
+/* boot seeds */
+function seedKetaMonoIfMissing(){
+  const exists=(STATE.payload.sets||[]).some(s=>canonName(s.label)==="KETA-MONO");
+  if(exists) return;
+
+  const s=createSet("KETA-MONO");
+  s.items = (KETA_MONO_PRELOAD.items||[]).map(it=>{
+    const url=String(it.url||"").trim();
+    if(!url) return null;
+    const label=canonName(it.label||"") || deriveNameFromUrl(url);
+    return {label,url};
+  }).filter(Boolean);
+  s.updatedAt=nowISO();
+
+  if(!isSetPinned(s.id)) togglePinSet(s.id);
+  addSetToActive(s.id);
+  STATE.ui.activeSetId=s.id;
+
+  STATE.ui.player.queue = s.items.map(it=>({label:it.label,url:it.url}));
+  STATE.ui.player.index = 0;
+
+}
+
+function applyYTOnBootIfAny(){
+  syncYTUIFromState();
+  if(STATE.ui.yt.lastEmbedSrc){
+    ytFrame.src = STATE.ui.yt.lastEmbedSrc;
+  }else{
+    // if there is input, build once
+    if(STATE.ui.yt.input){
+      applyYTEmbedFromState(true);
+    }
+  }
+}
+
+(function boot(){
+  seedKetaMonoIfMissing();
+  ensureActiveSets();
+
+  $("universals").style.display = STATE.ui.universalsCollapsed ? "none":"block";
+  $("activeBody").style.display = STATE.ui.activeCollapsed ? "none":"block";
+  $("setsBody").style.display = STATE.ui.setsCollapsed ? "none":"block";
+
+  bindHotkeys();
+  bindUI();
+
+  if(STATE.ui.surfaceUrl) arm(STATE.ui.surfaceLabel||deriveNameFromUrl(STATE.ui.surfaceUrl), STATE.ui.surfaceUrl);
+
+  syncMotion();
+  if(STATE.ui.lightRunning && !STATE.ui.blackout) startLight(STATE.ui.lightPreset||1);
+
+  applyYTOnBootIfAny();
+
+  _BOOTING=false;
+  render();
+  persist(true);
+})();
+
+</script>
+
+<!-- =========================================================
+WB ▸ SERIALIZATION STAMP (MANDATORY)
+AE/EE/WB + FILE_ID/ROOM_ID/VERSION/UPDATED_AT/CHANGELOG
+========================================================= -->
+<!--
+AE: KETADATA_SURFACE_PLAYER_FULL
+EE: KETADATA_SURFACE_PLAYER_v2
+WB: FULLSCREEN_SURFACE + SETS + PLAYER_INPUT + YT_MINI_SCREEN
+
+FILE_ID: "KDT_SURFACE_PLAYER_FULL_V2"
+ROOM_ID: "SURFACE"
+VERSION_ID: "V2"
+UPDATED_AT: 2026-01-05T15:00:00+00:00
+CHANGELOG:
+- PLAYER INPUT: add URL/YT link, arm, add to queue, surface input
+- YT MINI SCREEN: embed builder with AUTOPLAY/MUTE/LOOP/CONTROLS + preview iframe
+- SYSTEM restored: SYSTEM toggles Drawer; redirect moved to explicit BASED_DIVA9 button in system head
+- TOP BAR: remove redundant DRAWER button (SYSTEM icon remains)
+- BOOT: no auto-surface mount (seed/refresh stays pure Base)
+-->
+</body>
+</html>
