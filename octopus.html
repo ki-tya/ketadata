@@ -1,0 +1,648 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>KETADATA // OCTOPUS</title>
+  <style>
+    :root{
+      --bg:#0b0c0f;
+      --fg:#e9edf2;
+      --muted:rgba(233,237,242,.55);
+      --hair:rgba(233,237,242,.14);
+      --panel:rgba(0,0,0,.35);
+      --panel2:rgba(0,0,0,.55);
+      --glass:rgba(233,237,242,.06);
+      --ring:rgba(233,237,242,.22);
+      --light:0;
+      --motion:1;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%;margin:0}
+    body{
+      background:var(--bg);
+      color:var(--fg);
+      font:12px/1.25 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace;
+      overflow:hidden;
+      user-select:none;
+    }
+    body.invert{filter: invert(1) hue-rotate(180deg);}
+    body.nullmode .chrome{display:none}
+
+    #stage{position:absolute; inset:0;}
+    canvas{position:absolute; inset:0; width:100%; height:100%}
+
+    /* SYSTEM LIGHTS 1–6 */
+    #lights{
+      position:absolute; inset:0;
+      pointer-events:none;
+      opacity: calc(var(--light) / 6);
+      mix-blend-mode: screen;
+      background:
+        radial-gradient(900px 700px at 20% 30%, rgba(200,200,200,.18), rgba(0,0,0,0) 55%),
+        radial-gradient(700px 600px at 80% 35%, rgba(200,200,200,.12), rgba(0,0,0,0) 55%),
+        radial-gradient(900px 800px at 50% 85%, rgba(200,200,200,.10), rgba(0,0,0,0) 55%);
+    }
+
+    /* FRAME */
+    #frame{
+      position:absolute; inset:8px;
+      border:1px solid rgba(233,237,242,.08);
+      pointer-events:none;
+    }
+
+    /* HUD */
+    .chrome{position:absolute; inset:0; pointer-events:none;}
+    #hud{
+      position:absolute;
+      top:10px; left:10px;
+      width: 380px;
+      border:1px solid var(--hair);
+      background:var(--panel);
+      backdrop-filter: blur(6px);
+      pointer-events:auto;
+    }
+    #hud .bar{
+      display:flex; align-items:center; justify-content:space-between;
+      padding:8px;
+      border-bottom:1px solid var(--hair);
+      background: linear-gradient(180deg, rgba(233,237,242,.06), rgba(0,0,0,0));
+    }
+    #hud .body{padding:8px; display:grid; gap:8px;}
+    .row{display:flex; gap:8px; align-items:center; flex-wrap:wrap;}
+    .btn, .pill, input[type="range"]{font:inherit; color:inherit;}
+    .btn{
+      border:1px solid var(--hair);
+      background:rgba(233,237,242,.04);
+      padding:6px 8px;
+      cursor:pointer;
+      user-select:none;
+    }
+    .btn:hover{background:rgba(233,237,242,.07)}
+    .btn:active{transform: translateY(1px)}
+    .pill{
+      border:1px solid var(--hair);
+      padding:6px 8px;
+      background:rgba(0,0,0,.18);
+      opacity:.85;
+    }
+    input[type="range"]{width:140px; accent-color: var(--fg);}
+    .label{opacity:.7}
+    .mini{opacity:.55}
+    .sep{height:1px;background:var(--hair);margin:2px 0}
+
+    /* NOTE (ANGULAR) */
+    #note{
+      position:absolute;
+      right:10px; top:10px;
+      width: 380px; height: 220px;
+      border:1px solid var(--hair);
+      background:var(--panel2);
+      pointer-events:auto;
+      display:none;
+    }
+    #note.open{display:block}
+    #note .bar{
+      display:flex; align-items:center; justify-content:space-between;
+      padding:8px;
+      border-bottom:1px solid var(--hair);
+      background: linear-gradient(180deg, rgba(233,237,242,.06), rgba(0,0,0,0));
+      cursor:move;
+      user-select:none;
+    }
+    #note textarea{
+      width:100%; height: calc(100% - 34px);
+      border:0; outline:none; resize:none;
+      background:transparent; color:var(--fg);
+      font:inherit; padding:8px;
+      user-select:text;
+    }
+
+    /* STATUS */
+    #status{
+      position:absolute; right:10px; bottom:10px;
+      border:1px solid var(--hair);
+      background:rgba(0,0,0,.25);
+      padding:6px 8px;
+      opacity:.75;
+      pointer-events:none;
+      max-width: 60vw;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+
+    /* SENSES (CIRCULAR) */
+    #dots{
+      position:absolute; left:10px; bottom:10px;
+      display:flex; gap:6px;
+      pointer-events:none;
+      opacity:.6;
+    }
+    .dot{
+      width:10px; height:10px; border-radius:50%;
+      border:1px solid var(--hair);
+      background:rgba(233,237,242,.06);
+    }
+  </style>
+</head>
+<body>
+  <div id="stage">
+    <canvas id="c"></canvas>
+    <div id="lights"></div>
+  </div>
+
+  <div class="chrome">
+    <div id="frame"></div>
+
+    <div id="hud">
+      <div class="bar">
+        <div>KETADATA // OCTOPUS</div>
+        <div class="mini" id="meta">LIGHT 0 · INVERT 0 · NULL 0</div>
+      </div>
+      <div class="body">
+        <div class="row">
+          <div class="pill"><span class="label">HOTKEYS</span> <span class="mini">SHIFT+I INVERT · 1–6 LIGHT · SHIFT+N NULL · SHIFT+F FULLSCREEN · SHIFT+K NOTE</span></div>
+        </div>
+
+        <div class="sep"></div>
+
+        <div class="row">
+          <button class="btn" id="btnNote">NOTE</button>
+          <button class="btn" id="btnInvert">INVERT</button>
+          <button class="btn" id="btnNull">NULL</button>
+          <button class="btn" id="btnFull">FULL</button>
+          <span class="label">LIGHT</span>
+          <input type="range" id="rngLight" min="0" max="6" step="1" value="0" />
+          <span class="label">MOTION</span>
+          <button class="btn" id="btnMotion">ON</button>
+        </div>
+
+        <div class="row">
+          <span class="label">MAJESTY</span>
+          <input type="range" id="rngMaj" min="0" max="100" step="1" value="78" />
+          <span class="label">INK</span>
+          <input type="range" id="rngInk" min="0" max="100" step="1" value="32" />
+          <span class="label">TENTACLES</span>
+          <input type="range" id="rngTen" min="6" max="12" step="1" value="8" />
+        </div>
+
+        <div class="row">
+          <span class="label">RIPPLE</span>
+          <input type="range" id="rngRip" min="0" max="100" step="1" value="55" />
+          <span class="label">GRAIN</span>
+          <input type="range" id="rngGrn" min="0" max="100" step="1" value="22" />
+        </div>
+      </div>
+    </div>
+
+    <div id="note">
+      <div class="bar">
+        <div>KETA_NOTE</div>
+        <div class="mini">SHIFT+K TO TOGGLE</div>
+      </div>
+      <textarea id="noteText" spellcheck="false" placeholder="KETA_NOTE — optional, movable, non-interfering."></textarea>
+    </div>
+
+    <div id="dots" aria-hidden="true">
+      <div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div>
+    </div>
+
+    <div id="status">READY</div>
+  </div>
+
+  <script>
+    // EE: local-first state
+    const FILE_ID = "KETADATA_OCTOPUS_V1";
+    const LS_KEY = "KETADATA::" + FILE_ID + "::STATE";
+    const $ = (id)=>document.getElementById(id);
+
+    const state = {
+      light: 0,
+      invert: false,
+      nullMode: false,
+      motion: true,
+      majesty: 0.78,
+      ink: 0.32,
+      tentacles: 8,
+      ripple: 0.55,
+      grain: 0.22,
+      noteOpen: false,
+      notePos: { x: null, y: null },
+      noteText: ""
+    };
+
+    function loadState(){
+      try{
+        const raw = localStorage.getItem(LS_KEY);
+        if(!raw) return;
+        const s = JSON.parse(raw);
+        if(!s || typeof s !== "object") return;
+        Object.assign(state, s);
+      }catch(_){}
+    }
+    function saveState(){
+      try{ localStorage.setItem(LS_KEY, JSON.stringify(state)); }catch(_){}
+    }
+
+    // WB: apply state
+    function applyState(){
+      document.body.classList.toggle("invert", !!state.invert);
+      document.body.classList.toggle("nullmode", !!state.nullMode);
+
+      document.documentElement.style.setProperty("--light", String(state.light));
+      document.documentElement.style.setProperty("--motion", state.motion ? "1" : "0");
+
+      $("rngLight").value = String(state.light);
+      $("btnMotion").textContent = state.motion ? "ON" : "OFF";
+
+      $("rngMaj").value = String(Math.round(state.majesty*100));
+      $("rngInk").value = String(Math.round(state.ink*100));
+      $("rngTen").value = String(state.tentacles);
+      $("rngRip").value = String(Math.round(state.ripple*100));
+      $("rngGrn").value = String(Math.round(state.grain*100));
+
+      $("noteText").value = state.noteText || "";
+      $("note").classList.toggle("open", !!state.noteOpen);
+
+      if(state.notePos && state.notePos.x != null && state.notePos.y != null){
+        $("note").style.left = state.notePos.x + "px";
+        $("note").style.top = state.notePos.y + "px";
+        $("note").style.right = "auto";
+      }
+
+      $("meta").textContent = `LIGHT ${state.light} · INVERT ${state.invert?1:0} · NULL ${state.nullMode?1:0}`;
+      status(`MAJ ${Math.round(state.majesty*100)} · INK ${Math.round(state.ink*100)} · TEN ${state.tentacles}`);
+    }
+
+    function status(t){ $("status").textContent = t; }
+
+    // AE: canvas octopus
+    const canvas = $("c");
+    const ctx = canvas.getContext("2d", { alpha:true });
+    let W=0,H=0,DPR=1;
+
+    function resize(){
+      DPR = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+      W = Math.floor(window.innerWidth * DPR);
+      H = Math.floor(window.innerHeight * DPR);
+      canvas.width = W; canvas.height = H;
+    }
+    window.addEventListener("resize", resize);
+
+    function clamp(a,b,c){ return Math.max(b, Math.min(c, a)); }
+    function lerp(a,b,t){ return a + (b-a)*t; }
+    function rand(a,b){ return a + Math.random()*(b-a); }
+
+    function bg(time){
+      // brutal grayscale water-field
+      ctx.fillStyle = "rgba(0,0,0,1)";
+      ctx.fillRect(0,0,W,H);
+
+      // faint gradient aura
+      const g = ctx.createRadialGradient(W*0.52, H*0.38, 10*DPR, W*0.52, H*0.38, Math.max(W,H)*0.9);
+      g.addColorStop(0, "rgba(233,237,242,.06)");
+      g.addColorStop(0.45, "rgba(233,237,242,.02)");
+      g.addColorStop(1, "rgba(0,0,0,0)");
+      ctx.fillStyle = g;
+      ctx.fillRect(0,0,W,H);
+
+      // ripple grid shimmer
+      ctx.strokeStyle = "rgba(233,237,242,.035)";
+      ctx.lineWidth = 1*DPR;
+      const base = 64*DPR;
+      const r = state.ripple;
+      const t1 = time * 0.012 * DPR * (state.motion ? 1 : 0);
+      for(let x = (t1*40) % base; x < W; x += base){
+        const wob = Math.sin((x/W)*Math.PI*2 + t1) * (10*DPR*r);
+        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H + wob); ctx.stroke();
+      }
+      for(let y = (t1*24) % base; y < H; y += base){
+        const wob = Math.cos((y/H)*Math.PI*2 + t1) * (10*DPR*r);
+        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W + wob, y); ctx.stroke();
+      }
+
+      // grain
+      const gr = state.grain;
+      if(gr > 0){
+        const n = Math.floor(600 * gr);
+        ctx.fillStyle = "rgba(233,237,242,.05)";
+        for(let i=0;i<n;i++){
+          const x = (Math.random()*W)|0;
+          const y = (Math.random()*H)|0;
+          ctx.fillRect(x, y, 1*DPR, 1*DPR);
+        }
+      }
+
+      // frame line in-canvas (kept subtle; outer frame exists too)
+      ctx.strokeStyle = "rgba(233,237,242,.09)";
+      ctx.lineWidth = 2*DPR;
+      ctx.strokeRect(8*DPR, 8*DPR, W-16*DPR, H-16*DPR);
+    }
+
+    function drawOctopus(time){
+      const motion = state.motion ? 1 : 0;
+      const t = time * 0.0018 * motion;
+
+      // scale + center
+      const maj = state.majesty;              // 0..1
+      const scale = lerp(0.65, 1.25, maj) * DPR;
+      const cx = W * 0.52;
+      const cy = H * lerp(0.44, 0.52, 1-maj);
+
+      // silhouette ink
+      const ink = state.ink;                  // 0..1
+      const strokeA = lerp(0.10, 0.24, maj);
+      const fillA   = lerp(0.03, 0.10, maj);
+
+      // head dome
+      const headR = lerp(120, 210, maj) * scale;
+      const headH = lerp(140, 240, maj) * scale;
+
+      // underglow ring
+      const glow = ctx.createRadialGradient(cx, cy - headH*0.2, 10, cx, cy - headH*0.2, headR*1.4);
+      glow.addColorStop(0, "rgba(233,237,242,.10)");
+      glow.addColorStop(0.6, "rgba(233,237,242,.03)");
+      glow.addColorStop(1, "rgba(0,0,0,0)");
+      ctx.fillStyle = glow;
+      ctx.fillRect(0,0,W,H);
+
+      // HEAD (angular-ish through faceting)
+      ctx.save();
+      ctx.translate(cx, cy);
+
+      ctx.fillStyle = `rgba(233,237,242,${fillA})`;
+      ctx.strokeStyle = `rgba(233,237,242,${strokeA})`;
+      ctx.lineWidth = 2*DPR;
+
+      ctx.beginPath();
+      // dome with slight asymmetry
+      const wob = Math.sin(t*1.2)*0.06 + Math.cos(t*0.7)*0.04;
+      const R = headR*(1 + wob*0.2);
+      const Hh = headH*(1 - wob*0.1);
+      ctx.moveTo(0, -Hh);
+      ctx.bezierCurveTo(R*0.85, -Hh*0.85, R*1.05, -Hh*0.05, R*0.70, Hh*0.65);
+      ctx.bezierCurveTo(R*0.25, Hh*1.05, -R*0.25, Hh*1.05, -R*0.70, Hh*0.65);
+      ctx.bezierCurveTo(-R*1.05, -Hh*0.05, -R*0.85, -Hh*0.85, 0, -Hh);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      // facet lines (mind = angular)
+      ctx.strokeStyle = "rgba(233,237,242,.10)";
+      for(let i=0;i<6;i++){
+        const a = -Math.PI*0.75 + i*(Math.PI*0.30);
+        ctx.beginPath();
+        ctx.moveTo(Math.cos(a)*R*0.1, -Hh*0.8);
+        ctx.lineTo(Math.cos(a)*R*0.65, Hh*0.55);
+        ctx.stroke();
+      }
+
+      // eyes (simple, circular but minimal)
+      const eyeY = Hh*0.25;
+      const eyeX = R*0.34;
+      const eyeR = lerp(10, 18, maj) * scale;
+
+      ctx.fillStyle = "rgba(233,237,242,.06)";
+      ctx.strokeStyle = "rgba(233,237,242,.20)";
+      ctx.beginPath(); ctx.arc(-eyeX, eyeY, eyeR*1.2, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+      ctx.beginPath(); ctx.arc( eyeX, eyeY, eyeR*1.2, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+
+      ctx.fillStyle = "rgba(233,237,242,.26)";
+      ctx.beginPath(); ctx.arc(-eyeX, eyeY, eyeR*0.35, 0, Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc( eyeX, eyeY, eyeR*0.35, 0, Math.PI*2); ctx.fill();
+
+      ctx.restore();
+
+      // TENTACLES
+      const n = clamp(state.tentacles|0, 6, 12);
+      const baseSpread = lerp(0.85, 1.15, maj);
+      const baseY = cy + headH*0.62;
+      const maxLen = lerp(360, 640, maj) * scale;
+      const thickness = lerp(26, 44, maj) * scale;
+
+      for(let i=0;i<n;i++){
+        const k = i/(n-1 || 1);
+        const ang = lerp(-Math.PI*0.90, -Math.PI*0.10, k);
+        const side = (k - 0.5) * 2;
+
+        // anchor points
+        const ax = cx + Math.cos(ang)*headR*0.55*baseSpread;
+        const ay = baseY + Math.sin(ang)*headR*0.10;
+
+        // curvature controls
+        const curl = 0.85 + 0.35*Math.sin(t*0.8 + i*0.9);
+        const bend = (0.55 + 0.45*Math.cos(t*0.6 + i*0.7)) * side;
+
+        const c1x = ax + side * headR * 0.22 + Math.cos(ang)*headR*0.25;
+        const c1y = ay + headR*0.28;
+
+        const c2x = ax + bend * headR * 0.55 + Math.sin(t + i)*headR*0.12;
+        const c2y = ay + maxLen * 0.55 * curl;
+
+        const ex  = ax + bend * headR * 0.70 + Math.sin(t*1.2 + i)*headR*0.20;
+        const ey  = ay + maxLen * 0.95 * curl;
+
+        // tentacle stroke geometry by layered paths
+        const w0 = thickness * lerp(1.0, 0.7, k<0.5 ? (0.5-k)*2 : (k-0.5)*2);
+        const w1 = thickness*0.70;
+        const w2 = thickness*0.22;
+
+        // silhouette / ink wash (optional)
+        if(ink > 0){
+          ctx.lineCap = "round";
+          ctx.strokeStyle = `rgba(0,0,0,${0.18*ink})`;
+          ctx.lineWidth = w0*1.35;
+          ctx.beginPath();
+          ctx.moveTo(ax, ay);
+          ctx.bezierCurveTo(c1x, c1y, c2x, c2y, ex, ey);
+          ctx.stroke();
+        }
+
+        // main tentacle
+        ctx.lineCap = "round";
+        ctx.strokeStyle = `rgba(233,237,242,${strokeA})`;
+        ctx.lineWidth = w0;
+        ctx.beginPath();
+        ctx.moveTo(ax, ay);
+        ctx.bezierCurveTo(c1x, c1y, c2x, c2y, ex, ey);
+        ctx.stroke();
+
+        // inner rib (angular mind line)
+        ctx.strokeStyle = "rgba(233,237,242,.08)";
+        ctx.lineWidth = Math.max(1.5*DPR, w2);
+        ctx.beginPath();
+        ctx.moveTo(ax, ay);
+        ctx.bezierCurveTo(c1x, c1y, c2x, c2y, ex, ey);
+        ctx.stroke();
+
+        // suction cups (circular senses) — minimal cadence
+        const cups = Math.floor(lerp(8, 16, maj));
+        for(let j=0;j<cups;j++){
+          const u = (j+1)/(cups+2);
+          // cubic bezier point + tangent approximation
+          const p = bezPoint(ax,ay, c1x,c1y, c2x,c2y, ex,ey, u);
+          const tan = bezTangent(ax,ay, c1x,c1y, c2x,c2y, ex,ey, u);
+          const len = Math.hypot(tan.x, tan.y) || 1;
+          const nx = -tan.y/len;
+          const ny = tan.x/len;
+
+          const ww = lerp(w1, w2, u);
+          const r = Math.max(2*DPR, ww*0.16);
+          const off = ww*0.22;
+
+          const bx = p.x + nx*off;
+          const by = p.y + ny*off;
+
+          ctx.fillStyle = "rgba(233,237,242,.03)";
+          ctx.strokeStyle = "rgba(233,237,242,.12)";
+          ctx.lineWidth = 1*DPR;
+          ctx.beginPath();
+          ctx.arc(bx, by, r, 0, Math.PI*2);
+          ctx.fill();
+          ctx.stroke();
+
+          ctx.fillStyle = "rgba(233,237,242,.08)";
+          ctx.beginPath();
+          ctx.arc(bx - r*0.25, by - r*0.25, Math.max(1*DPR, r*0.25), 0, Math.PI*2);
+          ctx.fill();
+        }
+      }
+
+      // ground haze
+      const haze = ctx.createLinearGradient(0, H*0.65, 0, H);
+      haze.addColorStop(0, "rgba(0,0,0,0)");
+      haze.addColorStop(1, "rgba(0,0,0,.35)");
+      ctx.fillStyle = haze;
+      ctx.fillRect(0,0,W,H);
+    }
+
+    function bezPoint(x0,y0, x1,y1, x2,y2, x3,y3, t){
+      const mt = 1-t;
+      const a = mt*mt*mt;
+      const b = 3*mt*mt*t;
+      const c = 3*mt*t*t;
+      const d = t*t*t;
+      return { x: a*x0 + b*x1 + c*x2 + d*x3, y: a*y0 + b*y1 + c*y2 + d*y3 };
+    }
+    function bezTangent(x0,y0, x1,y1, x2,y2, x3,y3, t){
+      const mt = 1-t;
+      // derivative of cubic bezier
+      const x = 3*mt*mt*(x1-x0) + 6*mt*t*(x2-x1) + 3*t*t*(x3-x2);
+      const y = 3*mt*mt*(y1-y0) + 6*mt*t*(y2-y1) + 3*t*t*(y3-y2);
+      return { x, y };
+    }
+
+    function loop(time){
+      bg(time);
+      drawOctopus(time);
+      requestAnimationFrame(loop);
+    }
+
+    // NOTE drag
+    (function noteDrag(){
+      const el = $("note");
+      const bar = el.querySelector(".bar");
+      let dragging=false, ox=0, oy=0;
+
+      bar.addEventListener("mousedown",(e)=>{
+        dragging=true;
+        const r = el.getBoundingClientRect();
+        ox = e.clientX - r.left;
+        oy = e.clientY - r.top;
+        e.preventDefault();
+      });
+      window.addEventListener("mousemove",(e)=>{
+        if(!dragging) return;
+        const x = Math.max(10, Math.min(window.innerWidth - 10 - el.offsetWidth, e.clientX - ox));
+        const y = Math.max(10, Math.min(window.innerHeight - 10 - el.offsetHeight, e.clientY - oy));
+        el.style.left = x + "px";
+        el.style.top = y + "px";
+        el.style.right = "auto";
+        state.notePos = { x, y };
+      });
+      window.addEventListener("mouseup",()=>{
+        if(!dragging) return;
+        dragging=false;
+        saveState();
+      });
+    })();
+
+    // Controls
+    function toggleNote(){ state.noteOpen = !state.noteOpen; saveState(); applyState(); }
+    function toggleInvert(){ state.invert = !state.invert; saveState(); applyState(); }
+    function toggleNull(){ state.nullMode = !state.nullMode; saveState(); applyState(); }
+    async function toggleFullscreen(){
+      try{
+        if(!document.fullscreenElement) await document.documentElement.requestFullscreen();
+        else await document.exitFullscreen();
+      }catch(_){}
+    }
+
+    $("btnNote").addEventListener("click", toggleNote);
+    $("btnInvert").addEventListener("click", toggleInvert);
+    $("btnNull").addEventListener("click", toggleNull);
+    $("btnFull").addEventListener("click", toggleFullscreen);
+
+    $("rngLight").addEventListener("input",(e)=>{ state.light = parseInt(e.target.value,10)||0; saveState(); applyState(); });
+
+    $("btnMotion").addEventListener("click",()=>{ state.motion = !state.motion; saveState(); applyState(); });
+
+    $("rngMaj").addEventListener("input",(e)=>{ state.majesty = (parseInt(e.target.value,10)||0)/100; saveState(); applyState(); });
+    $("rngInk").addEventListener("input",(e)=>{ state.ink = (parseInt(e.target.value,10)||0)/100; saveState(); applyState(); });
+    $("rngTen").addEventListener("input",(e)=>{ state.tentacles = parseInt(e.target.value,10)||8; saveState(); applyState(); });
+    $("rngRip").addEventListener("input",(e)=>{ state.ripple = (parseInt(e.target.value,10)||0)/100; saveState(); applyState(); });
+    $("rngGrn").addEventListener("input",(e)=>{ state.grain = (parseInt(e.target.value,10)||0)/100; saveState(); applyState(); });
+
+    $("noteText").addEventListener("input",(e)=>{ state.noteText = e.target.value || ""; saveState(); });
+
+    // Hotkeys (no typing interference)
+    function isTypingTarget(t){
+      if(!t) return false;
+      const tag = (t.tagName || "").toLowerCase();
+      return tag === "textarea" || tag === "input" || t.isContentEditable;
+    }
+
+    window.addEventListener("keydown",(e)=>{
+      const typing = isTypingTarget(e.target);
+
+      if(e.shiftKey && e.key.toLowerCase()==="i"){ e.preventDefault(); toggleInvert(); return; }
+      if(e.shiftKey && e.key.toLowerCase()==="n"){ e.preventDefault(); toggleNull(); return; }
+      if(e.shiftKey && e.key.toLowerCase()==="f"){ e.preventDefault(); toggleFullscreen(); return; }
+      if(e.shiftKey && e.key.toLowerCase()==="k"){ e.preventDefault(); toggleNote(); return; }
+
+      if(!e.shiftKey && !e.ctrlKey && !e.metaKey){
+        const k = e.key;
+        if(k>="1" && k<="6"){ state.light = parseInt(k,10); saveState(); applyState(); return; }
+        if(k==="0"){ state.light = 0; saveState(); applyState(); return; }
+      }
+
+      // SPACE is reserved; only acts when not typing
+      if(e.code === "Space" && !typing){
+        e.preventDefault();
+        state.majesty = Math.min(1, state.majesty + 0.03);
+        saveState(); applyState();
+      }
+    }, { passive:false });
+
+    // Boot
+    loadState();
+    resize();
+    applyState();
+    requestAnimationFrame(loop);
+  </script>
+
+  <!--
+  AE: VISUAL (CANVAS OCTOPUS + GRIDS + LIGHTS)
+  EE: ENGINE (LOCAL-FIRST STATE, HOTKEYS, NOTE)
+  WB: WIRING BRIDGE (APPLY STATE TO UI/DOM)
+
+  FILE_ID: KETADATA_OCTOPUS_V1
+  ROOM_ID: K_OCTOPUS
+  VERSION_ID: V1
+  UPDATED_AT: 2026-01-05T00:00:00-05:00
+  CHANGELOG:
+  - V1: Majestic monochrome octopus canvas. Lights 1–6, invert, null, fullscreen, movable KETA_NOTE, local-first persistence.
+  -->
+</body>
+</html>
