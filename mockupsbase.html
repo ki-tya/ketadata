@@ -1,0 +1,1177 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>SHELL8_KERNEL_V2_SUR_BASE — MOCKUP (SYSTEM DRAWER + PAD)</title>
+  <style>
+    :root{
+      --bg:#0b0b0b;
+      --fg:#eaeaea;
+      --muted:#9a9a9a;
+      --line:#2a2a2a;
+      --panel:#111;
+      --panel2:#0f0f0f;
+      --chip:#141414;
+      --hit: 30px;
+      --padW: 560px;
+      --padH: 420px;
+      --zLights: 1;
+      --zStage: 5;
+      --zTop: 50;
+      --zDrawer: 60;
+      --zPad: 70;
+      --zSpec: 80;
+    }
+    *{ box-sizing:border-box; }
+    html,body{ height:100%; }
+    body{
+      margin:0;
+      background:var(--bg);
+      color:var(--fg);
+      font: 12px/1.2 Arial, Helvetica, sans-serif;
+      overflow:hidden;
+      user-select:none;
+    }
+    button,input,textarea{
+      font: 12px/1.2 Arial, Helvetica, sans-serif;
+      color:var(--fg);
+      background:transparent;
+      border:1px solid var(--line);
+      outline:none;
+    }
+    button{
+      height: var(--hit);
+      padding: 0 10px;
+      cursor:pointer;
+    }
+    button:hover{ border-color:#3a3a3a; }
+    button:active{ transform: translateY(1px); }
+    input{
+      height: var(--hit);
+      padding: 0 8px;
+      background: #0c0c0c;
+    }
+    textarea{
+      padding:8px;
+      background:#0c0c0c;
+      resize:none;
+    }
+
+    /* LIGHTS (ambient, always-there, never blocks clicks) */
+    #LIGHTS_LAYER{
+      position:fixed; inset:0;
+      z-index: var(--zLights);
+      pointer-events:none;
+      opacity:0.35;
+      background:
+        radial-gradient(circle at 20% 20%, rgba(255,255,255,0.08), transparent 40%),
+        radial-gradient(circle at 70% 50%, rgba(255,255,255,0.06), transparent 45%),
+        radial-gradient(circle at 40% 80%, rgba(255,255,255,0.05), transparent 50%);
+      filter: contrast(140%);
+    }
+    #LIGHTS_NOISE{
+      position:absolute; inset:-20%;
+      background:
+        repeating-linear-gradient(0deg, rgba(255,255,255,0.03) 0 1px, transparent 1px 3px),
+        repeating-linear-gradient(90deg, rgba(255,255,255,0.02) 0 1px, transparent 1px 4px);
+      mix-blend-mode: overlay;
+      animation: drift 6s linear infinite;
+    }
+    @keyframes drift{
+      0%{ transform: translate(0,0); opacity:0.55; }
+      50%{ transform: translate(-2%,1%); opacity:0.35; }
+      100%{ transform: translate(0,0); opacity:0.55; }
+    }
+
+    /* STAGE (substrate) */
+    #STAGE{
+      position:fixed; inset:0;
+      z-index: var(--zStage);
+      pointer-events:none;
+    }
+
+    /* TOP BAR */
+    #TOPBAR{
+      position:fixed; left:0; right:0; top:0;
+      height: 32px;
+      display:flex; align-items:center;
+      padding: 0 8px;
+      gap:8px;
+      background: rgba(0,0,0,0.55);
+      border-bottom: 1px solid var(--line);
+      z-index: var(--zTop);
+      pointer-events:auto;
+    }
+    #TOPBAR .title{
+      color:var(--muted);
+      letter-spacing:0.3px;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      flex:1;
+    }
+    .pill{
+      height: var(--hit);
+      padding: 0 10px;
+      border: 1px solid var(--line);
+      display:flex; align-items:center;
+      background: rgba(0,0,0,0.25);
+    }
+    .muted{ color:var(--muted); }
+
+    /* SYSTEM DRAWER */
+    #DRAWER{
+      position:fixed;
+      top:32px; bottom:0; right:0;
+      width: 320px;
+      background: rgba(10,10,10,0.94);
+      border-left: 1px solid var(--line);
+      z-index: var(--zDrawer);
+      transform: translateX(101%);
+      transition: transform 120ms linear;
+      pointer-events:auto;
+      display:flex;
+      flex-direction:column;
+    }
+    #DRAWER.open{ transform: translateX(0); }
+    #DRAWER .sec{
+      border-top:1px solid var(--line);
+      padding: 10px;
+    }
+    #DRAWER .sec:first-child{ border-top:none; }
+    #DRAWER .row{
+      display:flex; gap:8px; align-items:center;
+      margin-top:8px;
+    }
+    #DRAWER .row:first-child{ margin-top:0; }
+    #DRAWER .k{
+      width: 96px;
+      color:var(--muted);
+      flex:none;
+    }
+    #DRAWER .v{
+      flex:1;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      white-space:nowrap;
+    }
+    #DRAWER .btnrow{
+      display:flex; gap:8px; flex-wrap:wrap;
+      margin-top:8px;
+    }
+    #DRAWER .btnrow button{ flex: 1 0 auto; }
+
+    /* PAD (floating) */
+    #PAD{
+      position:fixed;
+      left: 18px; top: 60px;
+      width: var(--padW);
+      height: var(--padH);
+      background: rgba(12,12,12,0.96);
+      border: 1px solid var(--line);
+      z-index: var(--zPad);
+      display:none;
+      pointer-events:auto;
+    }
+    #PAD.open{ display:block; }
+    #PAD_HEAD{
+      height: 32px;
+      display:flex; align-items:center;
+      gap:8px;
+      padding: 0 8px;
+      border-bottom: 1px solid var(--line);
+      cursor: move;
+      background: rgba(0,0,0,0.35);
+    }
+    #PAD_HEAD .tabs{
+      display:flex; gap:8px;
+    }
+    #PAD_HEAD .tabs button{
+      height: 24px;
+      padding: 0 8px;
+      border-color: var(--line);
+      background: rgba(0,0,0,0.25);
+    }
+    #PAD_HEAD .tabs button.on{
+      border-color: #4a4a4a;
+      background: rgba(255,255,255,0.06);
+    }
+    #PAD_HEAD .spacer{ flex:1; }
+    #PAD_BODY{
+      height: calc(100% - 32px);
+      padding: 10px;
+      overflow:auto;
+    }
+    .subhead{
+      display:flex; align-items:center; gap:8px;
+      margin-bottom: 8px;
+    }
+    .subhead .spacer{ flex:1; }
+    .list{
+      border:1px solid var(--line);
+      background: rgba(0,0,0,0.20);
+    }
+    .item{
+      display:flex; align-items:center; gap:8px;
+      padding: 8px;
+      border-top:1px solid var(--line);
+    }
+    .item:first-child{ border-top:none; }
+    .item .name{
+      width: 160px;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      white-space:nowrap;
+    }
+    .item .url{
+      flex:1;
+      color:var(--muted);
+      overflow:hidden;
+      text-overflow:ellipsis;
+      white-space:nowrap;
+    }
+    .item .actions{ display:flex; gap:6px; }
+    .item button{ height: 24px; padding: 0 8px; }
+    .chk{ width:14px; height:14px; border:1px solid var(--line); display:inline-block; background:#0c0c0c; }
+    .chk.on{ background:#eaeaea; border-color:#eaeaea; }
+    .mini{
+      height:24px;
+      padding:0 8px;
+    }
+    .inline{
+      display:flex; gap:8px; align-items:center;
+      margin: 8px 0;
+    }
+    .inline input{ flex:1; }
+    .hint{ color:var(--muted); }
+
+    /* SPEC MODULE */
+    .spec{
+      position:fixed;
+      left: 120px; top: 120px;
+      width: 420px; height: 300px;
+      background: rgba(12,12,12,0.97);
+      border:1px solid var(--line);
+      z-index: var(--zSpec);
+      display:flex;
+      flex-direction:column;
+      pointer-events:auto;
+    }
+    .specHead{
+      height: 32px;
+      display:flex; align-items:center;
+      gap:8px;
+      padding: 0 8px;
+      border-bottom:1px solid var(--line);
+      cursor: move;
+      background: rgba(0,0,0,0.35);
+    }
+    .specHead input{
+      height:24px;
+      flex:1;
+    }
+    .specBody{
+      flex:1;
+      padding:8px;
+      display:flex;
+    }
+    .specBody textarea{
+      width:100%;
+      height:100%;
+      border:1px solid var(--line);
+    }
+    .specFoot{
+      display:flex;
+      gap:8px;
+      padding: 8px;
+      border-top:1px solid var(--line);
+    }
+    .specFoot button{ flex:1; }
+
+    /* PLAYER (kept minimal; does not autoplay) */
+    #PLAYER{
+      position:fixed;
+      left: 10px;
+      right: 340px;
+      bottom: 10px;
+      height: 44px;
+      z-index: var(--zTop);
+      pointer-events:auto;
+      display:flex;
+      gap:8px;
+      align-items:center;
+      padding: 6px;
+      border:1px solid var(--line);
+      background: rgba(0,0,0,0.45);
+    }
+    #PLAYER input{ flex:1; height: 30px; }
+    #PLAYER button{ height: 30px; }
+    #NOW{
+      width: 220px;
+      overflow:hidden;
+      white-space:nowrap;
+      text-overflow:ellipsis;
+      color:var(--muted);
+    }
+
+    /* SURFACE FRAME (only when explicitly played) */
+    #surfaceFrame{
+      position:fixed;
+      inset: 32px 320px 60px 0;
+      border:none;
+      z-index: 40;
+      display:none;
+      background: transparent;
+      pointer-events:auto;
+    }
+    #surfaceFrame.on{ display:block; }
+
+    /* KETA NOTE (operator core) */
+    #KETA_NOTE{
+      position:fixed;
+      left: 10px;
+      top: 44px;
+      width: 260px;
+      height: 120px;
+      z-index: var(--zTop);
+      pointer-events:auto;
+      background: rgba(0,0,0,0.35);
+      border:1px solid var(--line);
+      padding:8px;
+    }
+    #KETA_NOTE textarea{
+      width:100%;
+      height:100%;
+      border:1px solid var(--line);
+    }
+  </style>
+</head>
+<body>
+  <div id="LIGHTS_LAYER"><div id="LIGHTS_NOISE"></div></div>
+  <div id="STAGE"></div>
+
+  <div id="TOPBAR">
+    <button id="BTN_SYSTEM">SYSTEM</button>
+    <button id="BTN_PAD">PAD</button>
+    <div class="pill muted" id="NOW">NOW: NONE</div>
+    <div class="title">SHELL8_KERNEL_V2_SUR_BASE — MOCKUP (SYSTEM DRAWER + PAD)</div>
+  </div>
+
+  <div id="KETA_NOTE">
+    <textarea id="ketaNoteText" placeholder="KETA_NOTE (stream)"></textarea>
+  </div>
+
+  <iframe id="surfaceFrame" title="surface"></iframe>
+
+  <div id="DRAWER">
+    <div class="sec" id="SEC_UNIVERSALS">
+      <div class="row"><div class="k">UNIVERSALS</div><div class="v muted">keep your existing toggles here</div></div>
+      <div class="btnrow">
+        <button data-light="1">LIGHT 1</button>
+        <button data-light="2">LIGHT 2</button>
+        <button data-light="3">LIGHT 3</button>
+        <button data-light="4">LIGHT 4</button>
+        <button data-light="5">LIGHT 5</button>
+        <button data-light="6">LIGHT 6</button>
+      </div>
+      <div class="btnrow">
+        <button id="BTN_INVERT">INVERT</button>
+        <button id="BTN_NULL">NULL</button>
+        <button id="BTN_FS">FULL</button>
+      </div>
+    </div>
+
+    <div class="sec" id="SEC_STATUS">
+      <div class="row"><div class="k">BASE ID</div><div class="v" id="STAT_BASE">SHELL8_KERNEL_V2</div></div>
+      <div class="row"><div class="k">STORAGE</div><div class="v" id="STAT_STORAGE">—</div></div>
+      <div class="row"><div class="k">SURFACE</div><div class="v" id="STAT_SURFACE">NONE</div></div>
+      <div class="row"><div class="k">ACTIVE SET</div><div class="v" id="STAT_SET">NONE</div></div>
+    </div>
+
+    <div class="sec" id="SEC_STORAGE">
+      <div class="row"><div class="k">STORAGE</div><div class="v muted">operator I/O</div></div>
+      <div class="btnrow">
+        <button id="BTN_EXP_STATE">EXPORT BASE</button>
+        <button id="BTN_EXP_ALL">EXPORT ALL</button>
+      </div>
+      <div class="btnrow">
+        <button id="BTN_IMP">IMPORT</button>
+        <button id="BTN_CLEAR">CLEAR BASE</button>
+      </div>
+      <input type="file" id="FILE_IN" accept="application/json" style="display:none" />
+    </div>
+
+    <div class="sec" id="SEC_REGISTRY">
+      <div class="row"><div class="k">REGISTRY</div><div class="v muted">counts + route to PAD</div></div>
+      <div class="row"><div class="k">SURFACES</div><div class="v" id="COUNT_SURF">0</div></div>
+      <div class="row"><div class="k">SETS</div><div class="v" id="COUNT_SETS">0</div></div>
+      <div class="row"><div class="k">SPECS</div><div class="v" id="COUNT_SPECS">0</div></div>
+      <div class="btnrow">
+        <button id="BTN_PAD_SURF">OPEN PAD</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="PAD">
+    <div id="PAD_HEAD">
+      <div class="tabs">
+        <button class="on" data-tab="surf">SURFACES</button>
+        <button data-tab="sets">SETS</button>
+        <button data-tab="specs">SPECS</button>
+      </div>
+      <div class="spacer"></div>
+      <button id="PAD_CLOSE" class="mini">CLOSE</button>
+    </div>
+    <div id="PAD_BODY"></div>
+  </div>
+
+  <div id="PLAYER">
+    <input id="playerUrl" placeholder="surface url (room.html or full url)" />
+    <button id="BTN_ARM">ARM</button>
+    <button id="BTN_PLAY">PLAY</button>
+    <button id="BTN_EJECT">EJECT</button>
+    <div id="NOW" class="pill muted">NOW: NONE</div>
+  </div>
+
+  <script>
+    /* MOCKUP STATE (local-first, minimal) */
+    const BASE_KEY = "KDT::SHELL8_KERNEL_V2::MOCKUP_STATE";
+    const DEFAULT_STATE = {
+      system: { light: 1, invert: false, nullMode: false },
+      player: { armedUrl: "", nowUrl: "" },
+      registry: {
+        surfaces: [
+          { id: cryptoId(), name: "room.html", url: "room.html", pinned: true, visible: true },
+          { id: cryptoId(), name: "map.html", url: "map.html", pinned: true, visible: true },
+          { id: cryptoId(), name: "bleak.html", url: "bleak.html", pinned: false, visible: true },
+        ],
+        sets: [
+          { id: cryptoId(), name: "KETA CORE", items: ["room.html","map.html"] },
+        ],
+        specs: [
+          { id: cryptoId(), name: "", body: "unnamed field of attention\n\n- " }
+        ]
+      },
+      ketaNote: ""
+    };
+
+    let STATE = loadState();
+
+    /* Utilities */
+    function cryptoId(){
+      try{
+        return (crypto?.randomUUID?.() || ("id_"+Math.random().toString(16).slice(2)));
+      }catch(e){
+        return "id_"+Math.random().toString(16).slice(2);
+      }
+    }
+    function saveState(){
+      try{ localStorage.setItem(BASE_KEY, JSON.stringify(STATE)); }catch(e){}
+      renderAll();
+    }
+    function loadState(){
+      try{
+        const raw = localStorage.getItem(BASE_KEY);
+        if(!raw) return structuredClone(DEFAULT_STATE);
+        const s = JSON.parse(raw);
+        return deepFill(structuredClone(DEFAULT_STATE), s);
+      }catch(e){
+        return structuredClone(DEFAULT_STATE);
+      }
+    }
+    function deepFill(base, incoming){
+      if(incoming && typeof incoming === "object"){
+        for(const k of Object.keys(incoming)){
+          if(incoming[k] && typeof incoming[k] === "object" && !Array.isArray(incoming[k])){
+            if(!base[k] || typeof base[k] !== "object") base[k] = {};
+            deepFill(base[k], incoming[k]);
+          } else {
+            base[k] = incoming[k];
+          }
+        }
+      }
+      return base;
+    }
+    function fmtBytes(n){
+      if(!Number.isFinite(n)) return "—";
+      const u = ["B","KB","MB","GB"];
+      let i=0, v=n;
+      while(v>1024 && i<u.length-1){ v/=1024; i++; }
+      return v.toFixed(i?1:0)+" "+u[i];
+    }
+    function storageBytes(){
+      let total = 0;
+      for(let i=0;i<localStorage.length;i++){
+        const k = localStorage.key(i);
+        const v = localStorage.getItem(k) || "";
+        total += (k.length + v.length) * 2;
+      }
+      return total;
+    }
+    function resolveUrl(u){
+      u = (u||"").trim();
+      if(!u) return "";
+      if(/^https?:\/\//i.test(u)) return u;
+      if(/^file:\/\//i.test(location.href)){
+        return "https://ketadata.com/" + u.replace(/^\//,"");
+      }
+      // same-origin relative
+      try{
+        return new URL(u, location.href).toString();
+      }catch(e){
+        return u;
+      }
+    }
+
+    /* SYSTEM: lights + invert + null (mock behavior only) */
+    function applySystemVisuals(){
+      const inv = !!STATE.system.invert;
+      const nul = !!STATE.system.nullMode;
+      document.body.style.filter = inv ? "invert(1)" : "none";
+      document.getElementById("LIGHTS_LAYER").style.opacity = nul ? "0.0" : "0.35";
+    }
+
+    /* Drawer toggle */
+    const drawer = document.getElementById("DRAWER");
+    document.getElementById("BTN_SYSTEM").addEventListener("click", ()=>{
+      drawer.classList.toggle("open");
+    });
+
+    /* Top PAD button */
+    document.getElementById("BTN_PAD").addEventListener("click", ()=>{
+      openPad(true);
+    });
+    document.getElementById("BTN_PAD_SURF").addEventListener("click", ()=>{
+      openPad(true);
+    });
+
+    /* Universals */
+    drawer.querySelectorAll("[data-light]").forEach(btn=>{
+      btn.addEventListener("click", ()=>{
+        STATE.system.light = Number(btn.getAttribute("data-light")) || 1;
+        saveState();
+      });
+    });
+    document.getElementById("BTN_INVERT").addEventListener("click", ()=>{
+      STATE.system.invert = !STATE.system.invert;
+      saveState();
+    });
+    document.getElementById("BTN_NULL").addEventListener("click", ()=>{
+      STATE.system.nullMode = !STATE.system.nullMode;
+      saveState();
+    });
+    document.getElementById("BTN_FS").addEventListener("click", ()=>{
+      if(!document.fullscreenElement) document.documentElement.requestFullscreen().catch(()=>{});
+      else document.exitFullscreen().catch(()=>{});
+    });
+
+    /* Storage actions */
+    document.getElementById("BTN_EXP_STATE").addEventListener("click", ()=>{
+      downloadJson("base_state.json", { [BASE_KEY]: STATE });
+    });
+    document.getElementById("BTN_EXP_ALL").addEventListener("click", ()=>{
+      const all = {};
+      for(let i=0;i<localStorage.length;i++){
+        const k = localStorage.key(i);
+        all[k] = localStorage.getItem(k);
+      }
+      downloadJson("localStorage_dump.json", all);
+    });
+    document.getElementById("BTN_IMP").addEventListener("click", ()=>{
+      document.getElementById("FILE_IN").click();
+    });
+    document.getElementById("FILE_IN").addEventListener("change", (e)=>{
+      const f = e.target.files && e.target.files[0];
+      if(!f) return;
+      const r = new FileReader();
+      r.onload = ()=>{
+        try{
+          const data = JSON.parse(String(r.result||"{}"));
+          if(data && data[BASE_KEY]){
+            STATE = deepFill(structuredClone(DEFAULT_STATE), data[BASE_KEY]);
+            saveState();
+          }
+        }catch(err){}
+        e.target.value = "";
+      };
+      r.readAsText(f);
+    });
+    document.getElementById("BTN_CLEAR").addEventListener("click", ()=>{
+      localStorage.removeItem(BASE_KEY);
+      STATE = structuredClone(DEFAULT_STATE);
+      saveState();
+    });
+
+    function downloadJson(filename, obj){
+      const blob = new Blob([JSON.stringify(obj, null, 2)], {type:"application/json"});
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(()=>URL.revokeObjectURL(a.href), 500);
+    }
+
+    /* KETA NOTE */
+    const ketaNoteText = document.getElementById("ketaNoteText");
+    ketaNoteText.addEventListener("input", ()=>{
+      STATE.ketaNote = ketaNoteText.value;
+      saveState();
+    });
+
+    /* Player (no autoplay) */
+    const playerUrl = document.getElementById("playerUrl");
+    document.getElementById("BTN_ARM").addEventListener("click", ()=>{
+      STATE.player.armedUrl = playerUrl.value.trim();
+      saveState();
+    });
+    document.getElementById("BTN_PLAY").addEventListener("click", ()=>{
+      const u = STATE.player.armedUrl || playerUrl.value.trim();
+      if(!u) return;
+      playSurface(u);
+    });
+    document.getElementById("BTN_EJECT").addEventListener("click", ()=>{
+      ejectSurface();
+    });
+
+    function playSurface(u){
+      const resolved = resolveUrl(u);
+      STATE.player.nowUrl = u.trim();
+      // show iframe only on explicit play
+      const frame = document.getElementById("surfaceFrame");
+      frame.src = resolved;
+      frame.classList.add("on");
+      document.getElementById("STAT_SURFACE").textContent = u.trim();
+      renderNow();
+      saveState();
+    }
+    function ejectSurface(){
+      STATE.player.nowUrl = "";
+      const frame = document.getElementById("surfaceFrame");
+      frame.classList.remove("on");
+      frame.src = "about:blank";
+      renderNow();
+      saveState();
+    }
+
+    function renderNow(){
+      const now = STATE.player.nowUrl ? ("NOW: "+STATE.player.nowUrl) : "NOW: NONE";
+      document.querySelectorAll("#NOW").forEach(el=>el.textContent = now);
+      document.getElementById("STAT_SURFACE").textContent = STATE.player.nowUrl || "NONE";
+    }
+
+    /* PAD */
+    const PAD = document.getElementById("PAD");
+    const PAD_BODY = document.getElementById("PAD_BODY");
+    const PAD_HEAD = document.getElementById("PAD_HEAD");
+    let PAD_TAB = "surf";
+    document.getElementById("PAD_CLOSE").addEventListener("click", ()=> openPad(false));
+
+    PAD_HEAD.querySelectorAll("[data-tab]").forEach(btn=>{
+      btn.addEventListener("click", (e)=>{
+        PAD_HEAD.querySelectorAll("[data-tab]").forEach(b=>b.classList.remove("on"));
+        btn.classList.add("on");
+        PAD_TAB = btn.getAttribute("data-tab");
+        renderPad();
+      });
+    });
+
+    function openPad(on){
+      PAD.classList.toggle("open", !!on);
+      if(on) renderPad();
+    }
+
+    /* PAD drag */
+    (function padDrag(){
+      let dragging=false, ox=0, oy=0;
+      PAD_HEAD.addEventListener("mousedown", (e)=>{
+        // do not drag when clicking tab buttons
+        if(e.target && (e.target.tagName==="BUTTON" || e.target.tagName==="INPUT")) return;
+        dragging=true;
+        const r = PAD.getBoundingClientRect();
+        ox = e.clientX - r.left;
+        oy = e.clientY - r.top;
+      });
+      window.addEventListener("mousemove", (e)=>{
+        if(!dragging) return;
+        PAD.style.left = Math.max(0, e.clientX - ox) + "px";
+        PAD.style.top  = Math.max(32, e.clientY - oy) + "px";
+      });
+      window.addEventListener("mouseup", ()=> dragging=false);
+    })();
+
+    function renderPad(){
+      if(PAD_TAB === "surf") renderPadSurfaces();
+      if(PAD_TAB === "sets") renderPadSets();
+      if(PAD_TAB === "specs") renderPadSpecs();
+    }
+
+    function renderPadSurfaces(){
+      const surfaces = [...STATE.registry.surfaces];
+      surfaces.sort((a,b)=> (b.pinned|0)-(a.pinned|0));
+      PAD_BODY.innerHTML = "";
+      const head = document.createElement("div");
+      head.className = "subhead";
+      head.innerHTML = `
+        <div class="muted">SURFACES</div>
+        <div class="spacer"></div>
+        <button id="ADD_SURF" class="mini">+ ADD</button>
+        <button id="SHOW_SEL" class="mini">SHOW</button>
+        <button id="HIDE_SEL" class="mini">HIDE</button>
+      `;
+      PAD_BODY.appendChild(head);
+
+      const list = document.createElement("div");
+      list.className = "list";
+      list.id = "SURF_LIST";
+      PAD_BODY.appendChild(list);
+
+      surfaces.forEach(s=>{
+        const it = document.createElement("div");
+        it.className = "item";
+        it.innerHTML = `
+          <div class="chk ${s.visible?'on':''}" data-id="${s.id}" title="select"></div>
+          <div class="name" title="${escapeHtml(s.name||'')}" contenteditable="true" data-field="name" data-id="${s.id}">${escapeHtml(s.name||"(unnamed)")}</div>
+          <div class="url" title="${escapeHtml(s.url||'')}" contenteditable="true" data-field="url" data-id="${s.id}">${escapeHtml(s.url||"")}</div>
+          <div class="actions">
+            <button data-act="pin" data-id="${s.id}">${s.pinned ? "UNPIN" : "PIN"}</button>
+            <button data-act="arm" data-id="${s.id}">ARM</button>
+            <button data-act="del" data-id="${s.id}">DEL</button>
+          </div>
+        `;
+        list.appendChild(it);
+      });
+
+      const hint = document.createElement("div");
+      hint.className="hint";
+      hint.style.marginTop="8px";
+      hint.textContent = "click checkbox to select; edit name/url inline; ARM pushes url to player (no autoplay).";
+      PAD_BODY.appendChild(hint);
+
+      // binds
+      document.getElementById("ADD_SURF").onclick = ()=>{
+        STATE.registry.surfaces.unshift({ id: cryptoId(), name:"", url:"", pinned:false, visible:true });
+        saveState(); renderPadSurfaces();
+      };
+      document.getElementById("SHOW_SEL").onclick = ()=> setVisibleSelected(true);
+      document.getElementById("HIDE_SEL").onclick = ()=> setVisibleSelected(false);
+
+      list.querySelectorAll(".chk").forEach(ch=>{
+        ch.addEventListener("click", ()=>{
+          ch.classList.toggle("on");
+          const id = ch.getAttribute("data-id");
+          const s = STATE.registry.surfaces.find(x=>x.id===id);
+          if(s){ s.visible = ch.classList.contains("on"); saveState(); }
+        });
+      });
+
+      list.querySelectorAll("[data-act]").forEach(btn=>{
+        btn.addEventListener("click", ()=>{
+          const id = btn.getAttribute("data-id");
+          const act = btn.getAttribute("data-act");
+          const s = STATE.registry.surfaces.find(x=>x.id===id);
+          if(!s) return;
+          if(act==="pin"){ s.pinned = !s.pinned; saveState(); renderPadSurfaces(); }
+          if(act==="arm"){
+            playerUrl.value = s.url || s.name || "";
+            STATE.player.armedUrl = playerUrl.value.trim();
+            saveState();
+          }
+          if(act==="del"){
+            STATE.registry.surfaces = STATE.registry.surfaces.filter(x=>x.id!==id);
+            // also remove from sets by url/name match
+            const key = (s.url||s.name||"").trim();
+            STATE.registry.sets.forEach(set=>{
+              set.items = set.items.filter(it=>it!==key);
+            });
+            saveState(); renderPadSurfaces();
+          }
+        });
+      });
+
+      // inline edits
+      list.querySelectorAll('[contenteditable="true"]').forEach(el=>{
+        el.addEventListener("input", ()=>{
+          const id = el.getAttribute("data-id");
+          const field = el.getAttribute("data-field");
+          const s = STATE.registry.surfaces.find(x=>x.id===id);
+          if(!s) return;
+          const val = el.textContent.trim();
+          s[field] = val;
+          saveState();
+        });
+      });
+    }
+
+    function setVisibleSelected(on){
+      // in this mock, checkbox itself is visibility; apply bulk based on current UI selection state
+      const list = document.getElementById("SURF_LIST");
+      if(!list) return;
+      list.querySelectorAll(".chk").forEach(ch=>{
+        const id = ch.getAttribute("data-id");
+        const s = STATE.registry.surfaces.find(x=>x.id===id);
+        if(!s) return;
+        s.visible = !!on;
+        ch.classList.toggle("on", !!on);
+      });
+      saveState();
+    }
+
+    function renderPadSets(){
+      PAD_BODY.innerHTML = "";
+      const head = document.createElement("div");
+      head.className = "subhead";
+      head.innerHTML = `
+        <div class="muted">SETS</div>
+        <div class="spacer"></div>
+        <button id="NEW_SET" class="mini">+ NEW SET</button>
+      `;
+      PAD_BODY.appendChild(head);
+
+      const list = document.createElement("div");
+      list.className = "list";
+      PAD_BODY.appendChild(list);
+
+      STATE.registry.sets.forEach(set=>{
+        const it = document.createElement("div");
+        it.className = "item";
+        it.innerHTML = `
+          <div class="name" contenteditable="true" data-setname="${escapeHtml(set.name)}">${escapeHtml(set.name)}</div>
+          <div class="url">${set.items.length} items</div>
+          <div class="actions">
+            <button data-act="open" data-id="${set.id}">OPEN</button>
+            <button data-act="load" data-id="${set.id}">LOAD</button>
+            <button data-act="del" data-id="${set.id}">DEL</button>
+          </div>
+        `;
+        list.appendChild(it);
+      });
+
+      const hint = document.createElement("div");
+      hint.className="hint";
+      hint.style.marginTop="8px";
+      hint.textContent = "OPEN edits set items; LOAD copies set items into the player input (no autoplay).";
+      PAD_BODY.appendChild(hint);
+
+      document.getElementById("NEW_SET").onclick = ()=>{
+        STATE.registry.sets.unshift({ id: cryptoId(), name: "NEW SET", items: [] });
+        saveState(); renderPadSets();
+      };
+
+      list.querySelectorAll('[contenteditable="true"]').forEach(el=>{
+        el.addEventListener("input", ()=>{
+          const oldName = el.getAttribute("data-setname") || "";
+          const set = STATE.registry.sets.find(s=>s.name===oldName) || STATE.registry.sets.find(s=>s.id && el.parentElement?.querySelector("[data-act='open']") );
+          // minimal: rename by first match on oldName
+          const s = STATE.registry.sets.find(x=>x.name===oldName);
+          if(s){
+            s.name = el.textContent.trim() || "SET";
+            el.setAttribute("data-setname", s.name);
+            saveState();
+          }
+        });
+      });
+
+      list.querySelectorAll("[data-act]").forEach(btn=>{
+        btn.addEventListener("click", ()=>{
+          const id = btn.getAttribute("data-id");
+          const act = btn.getAttribute("data-act");
+          const set = STATE.registry.sets.find(s=>s.id===id);
+          if(!set) return;
+          if(act==="del"){
+            STATE.registry.sets = STATE.registry.sets.filter(s=>s.id!==id);
+            saveState(); renderPadSets();
+          }
+          if(act==="load"){
+            // load into player input (queue-ish) without autoplay
+            playerUrl.value = set.items.join("\n");
+            STATE.player.armedUrl = "";
+            saveState();
+          }
+          if(act==="open"){
+            renderSetEditor(set);
+          }
+        });
+      });
+    }
+
+    function renderSetEditor(set){
+      PAD_BODY.innerHTML = "";
+      const head = document.createElement("div");
+      head.className = "subhead";
+      head.innerHTML = `
+        <div class="muted">SET: <span id="SET_NAME">${escapeHtml(set.name)}</span></div>
+        <div class="spacer"></div>
+        <button id="SET_BACK" class="mini">BACK</button>
+      `;
+      PAD_BODY.appendChild(head);
+
+      const tools = document.createElement("div");
+      tools.className = "inline";
+      tools.innerHTML = `
+        <button id="ADD_ARMED" class="mini">ADD ARMED</button>
+        <button id="ADD_SELECTED" class="mini">ADD VISIBLE SURFACES</button>
+        <button id="SET_LOAD" class="mini">LOAD INTO PLAYER</button>
+      `;
+      PAD_BODY.appendChild(tools);
+
+      const list = document.createElement("div");
+      list.className = "list";
+      PAD_BODY.appendChild(list);
+
+      set.items.forEach((u, idx)=>{
+        const it = document.createElement("div");
+        it.className = "item";
+        it.innerHTML = `
+          <div class="name" contenteditable="true" data-idx="${idx}">${escapeHtml(u)}</div>
+          <div class="url muted">item</div>
+          <div class="actions">
+            <button data-act="rm" data-idx="${idx}">DEL</button>
+          </div>
+        `;
+        list.appendChild(it);
+      });
+
+      const addInline = document.createElement("div");
+      addInline.className = "inline";
+      addInline.innerHTML = `
+        <input id="NEW_ITEM" placeholder="paste url or name" />
+        <button id="ADD_ITEM" class="mini">ADD</button>
+      `;
+      PAD_BODY.appendChild(addInline);
+
+      document.getElementById("SET_BACK").onclick = ()=> renderPadSets();
+      document.getElementById("SET_LOAD").onclick = ()=>{
+        playerUrl.value = set.items.join("\n");
+        saveState();
+      };
+      document.getElementById("ADD_ITEM").onclick = ()=>{
+        const v = (document.getElementById("NEW_ITEM").value||"").trim();
+        if(!v) return;
+        set.items.push(v);
+        document.getElementById("NEW_ITEM").value="";
+        saveState(); renderSetEditor(set);
+      };
+      document.getElementById("ADD_ARMED").onclick = ()=>{
+        const v = (STATE.player.armedUrl || playerUrl.value || "").trim();
+        if(!v) return;
+        // if multiline, split
+        v.split("\n").map(s=>s.trim()).filter(Boolean).forEach(x=>{
+          if(!set.items.includes(x)) set.items.push(x);
+        });
+        saveState(); renderSetEditor(set);
+      };
+      document.getElementById("ADD_SELECTED").onclick = ()=>{
+        const vis = STATE.registry.surfaces.filter(s=>s.visible).map(s=>(s.url||s.name||"").trim()).filter(Boolean);
+        vis.forEach(x=>{ if(!set.items.includes(x)) set.items.push(x); });
+        saveState(); renderSetEditor(set);
+      };
+
+      list.querySelectorAll("[data-act='rm']").forEach(btn=>{
+        btn.addEventListener("click", ()=>{
+          const idx = Number(btn.getAttribute("data-idx"));
+          set.items.splice(idx,1);
+          saveState(); renderSetEditor(set);
+        });
+      });
+      list.querySelectorAll('[contenteditable="true"]').forEach(el=>{
+        el.addEventListener("input", ()=>{
+          const idx = Number(el.getAttribute("data-idx"));
+          set.items[idx] = el.textContent.trim();
+          saveState();
+        });
+      });
+    }
+
+    function renderPadSpecs(){
+      PAD_BODY.innerHTML = "";
+      const head = document.createElement("div");
+      head.className = "subhead";
+      head.innerHTML = `
+        <div class="muted">SPECS</div>
+        <div class="spacer"></div>
+        <button id="NEW_SPEC" class="mini">+ NEW SPEC</button>
+      `;
+      PAD_BODY.appendChild(head);
+
+      const list = document.createElement("div");
+      list.className = "list";
+      PAD_BODY.appendChild(list);
+
+      STATE.registry.specs.forEach(sp=>{
+        const display = sp.name && sp.name.trim() ? sp.name.trim() : "(unnamed)";
+        const it = document.createElement("div");
+        it.className = "item";
+        it.innerHTML = `
+          <div class="name">${escapeHtml(display)}</div>
+          <div class="url muted">spec note</div>
+          <div class="actions">
+            <button data-act="open" data-id="${sp.id}">OPEN</button>
+            <button data-act="del" data-id="${sp.id}">DEL</button>
+          </div>
+        `;
+        list.appendChild(it);
+      });
+
+      const hint = document.createElement("div");
+      hint.className="hint";
+      hint.style.marginTop="8px";
+      hint.textContent = "NEW SPEC opens immediately; naming is optional inside the module (no prompt).";
+      PAD_BODY.appendChild(hint);
+
+      document.getElementById("NEW_SPEC").onclick = ()=>{
+        const sp = { id: cryptoId(), name: "", body: (STATE.ketaNote || "").trim() ? (STATE.ketaNote + "\n\n") : "" };
+        STATE.registry.specs.unshift(sp);
+        saveState();
+        openSpecModule(sp);
+        renderPadSpecs();
+      };
+
+      list.querySelectorAll("[data-act]").forEach(btn=>{
+        btn.addEventListener("click", ()=>{
+          const id = btn.getAttribute("data-id");
+          const act = btn.getAttribute("data-act");
+          const sp = STATE.registry.specs.find(s=>s.id===id);
+          if(!sp) return;
+          if(act==="del"){
+            STATE.registry.specs = STATE.registry.specs.filter(s=>s.id!==id);
+            saveState(); renderPadSpecs();
+          }
+          if(act==="open"){
+            openSpecModule(sp);
+          }
+        });
+      });
+    }
+
+    function openSpecModule(sp){
+      const el = document.createElement("div");
+      el.className = "spec";
+      el.innerHTML = `
+        <div class="specHead">
+          <span class="muted">SPEC</span>
+          <input placeholder="name (optional)" value="${escapeAttr(sp.name||"")}" />
+          <button class="mini" data-act="close">CLOSE</button>
+        </div>
+        <div class="specBody">
+          <textarea>${escapeHtml(sp.body||"")}</textarea>
+        </div>
+        <div class="specFoot">
+          <button data-act="addToSet">ADD TO SET</button>
+          <button data-act="arm">ARM</button>
+        </div>
+      `;
+      document.body.appendChild(el);
+
+      // position cascade
+      const n = document.querySelectorAll(".spec").length;
+      el.style.left = (80 + (n*18))+"px";
+      el.style.top  = (90 + (n*14))+"px";
+
+      // drag
+      const head = el.querySelector(".specHead");
+      let dragging=false, ox=0, oy=0;
+      head.addEventListener("mousedown", (e)=>{
+        if(e.target && (e.target.tagName==="BUTTON" || e.target.tagName==="INPUT")) return;
+        dragging=true;
+        const r = el.getBoundingClientRect();
+        ox = e.clientX - r.left;
+        oy = e.clientY - r.top;
+      });
+      window.addEventListener("mousemove", (e)=>{
+        if(!dragging) return;
+        el.style.left = Math.max(0, e.clientX - ox) + "px";
+        el.style.top  = Math.max(32, e.clientY - oy) + "px";
+      });
+      window.addEventListener("mouseup", ()=> dragging=false);
+
+      const nameIn = el.querySelector("input");
+      const bodyTa = el.querySelector("textarea");
+      nameIn.addEventListener("input", ()=>{
+        sp.name = nameIn.value;
+        saveState();
+        // update pad list counts without forcing tab
+        renderCounts();
+      });
+      bodyTa.addEventListener("input", ()=>{
+        sp.body = bodyTa.value;
+        saveState();
+      });
+
+      el.querySelector("[data-act='close']").addEventListener("click", ()=>{
+        el.remove();
+      });
+
+      el.querySelector("[data-act='arm']").addEventListener("click", ()=>{
+        // arm by spec "name" (if exists) or just "SPEC:<id>" anchor
+        const token = sp.name && sp.name.trim() ? sp.name.trim() : ("SPEC:"+sp.id);
+        playerUrl.value = token;
+        STATE.player.armedUrl = token;
+        saveState();
+      });
+
+      el.querySelector("[data-act='addToSet']").addEventListener("click", ()=>{
+        const setName = prompt("Set name (adds this spec token).") || "";
+        const nm = setName.trim();
+        if(!nm) return;
+        let set = STATE.registry.sets.find(s=>s.name===nm);
+        if(!set){
+          set = { id: cryptoId(), name: nm, items: [] };
+          STATE.registry.sets.unshift(set);
+        }
+        const token = sp.name && sp.name.trim() ? sp.name.trim() : ("SPEC:"+sp.id);
+        if(!set.items.includes(token)) set.items.push(token);
+        saveState();
+      });
+    }
+
+    function escapeHtml(s){
+      return String(s ?? "")
+        .replaceAll("&","&amp;")
+        .replaceAll("<","&lt;")
+        .replaceAll(">","&gt;");
+    }
+    function escapeAttr(s){
+      return escapeHtml(s).replaceAll('"',"&quot;");
+    }
+
+    /* Render counts + status */
+    function renderCounts(){
+      document.getElementById("COUNT_SURF").textContent = String(STATE.registry.surfaces.length);
+      document.getElementById("COUNT_SETS").textContent = String(STATE.registry.sets.length);
+      document.getElementById("COUNT_SPECS").textContent = String(STATE.registry.specs.length);
+    }
+    function renderStatus(){
+      document.getElementById("STAT_STORAGE").textContent = fmtBytes(storageBytes());
+      document.getElementById("STAT_SET").textContent = "NONE";
+      renderNow();
+    }
+
+    function renderAll(){
+      applySystemVisuals();
+      renderCounts();
+      renderStatus();
+      ketaNoteText.value = STATE.ketaNote || "";
+    }
+
+    // boot
+    renderAll();
+  </script>
+
+  <!--
+  AE/EE/WB SERIALIZATION STAMP
+  AE: MOCKUP_UI
+  EE: MOCKUP_STATE
+  WB: MOCKUP_WIRING
+  FILE_ID: "SHELL8_KERNEL_V2_SUR_BASE_MOCKUP_SYSTEM_PAD"
+  ROOM_ID: "K_ROOM"
+  VERSION: "V0"
+  UPDATED_AT: "2026-01-05T00:00:00.000Z"
+  CHANGELOG:
+  - Mockup-only single-file HTML for SYSTEM drawer + PAD (SURFACES/SETS/SPECS)
+  - No autoplay; lights are ambient always-on layer; player explicit
+  -->
+</body>
+</html>
