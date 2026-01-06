@@ -1,0 +1,1011 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>KETADATA // FACE</title>
+  <style>
+    :root{
+      --bg:#000;
+      --fg:#fff;
+      --muted:rgba(255,255,255,.58);
+      --hair:rgba(255,255,255,.10);
+      --panel:rgba(0,0,0,.35);
+      --panel2:rgba(0,0,0,.62);
+      --motion:1;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%;margin:0}
+    body{
+      background:var(--bg);
+      color:var(--fg);
+      font:10px/1.3 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace;
+      overflow:hidden;
+      user-select:none;
+      letter-spacing: 0.03em;
+    }
+
+    body.invert{ filter: invert(1) hue-rotate(180deg); background:#fff; }
+    body.nullmode .chrome{display:none}
+    body.nullmode #controls{opacity:0; pointer-events:none}
+    body.nullmode #info{opacity:0; pointer-events:none}
+
+    #field{
+      position:absolute; inset:0;
+      background:
+        radial-gradient(1800px 1400px at 50% 45%, rgba(255,255,255,.12), rgba(0,0,0,0) 70%),
+        radial-gradient(1200px 1100px at 30% 80%, rgba(255,255,255,.06), rgba(0,0,0,0) 65%),
+        radial-gradient(1000px 900px at 75% 25%, rgba(255,255,255,.04), rgba(0,0,0,0) 62%),
+        linear-gradient(180deg, rgba(255,255,255,.06), rgba(0,0,0,0) 50%),
+        linear-gradient(180deg, rgba(0,0,0,0), rgba(0,0,0,.55));
+    }
+    canvas{position:absolute; inset:0; width:100%; height:100%}
+
+    .chrome{position:absolute; inset:0; pointer-events:none}
+
+    #controls{
+      position:absolute;
+      top:12px; right:12px;
+      border:1px solid var(--hair);
+      background:var(--panel);
+      backdrop-filter: blur(8px);
+      padding:8px 10px;
+      opacity:.88;
+      display:flex;
+      gap:10px;
+      align-items:center;
+      pointer-events:auto;
+    }
+    .btn{
+      border:1px solid var(--hair);
+      background:rgba(255,255,255,.03);
+      padding:5px 8px;
+      cursor:pointer;
+      font:inherit;
+      color:inherit;
+      transition: all 0.15s ease;
+    }
+    .btn:hover{background:rgba(255,255,255,.08);}
+    .btn:active{transform: translateY(1px);}
+    .sep{opacity:.6}
+
+    #info{
+      position:absolute;
+      bottom:12px; left:12px;
+      border:1px solid var(--hair);
+      background:var(--panel);
+      backdrop-filter: blur(8px);
+      padding:8px 10px;
+      opacity:.78;
+      max-width:60vw;
+      pointer-events:none;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+
+    .corner{
+      position:absolute;
+      width:40px; height:40px;
+      border:1px solid var(--hair);
+      opacity:.4;
+      pointer-events:none;
+    }
+    .corner.tl{top:12px; left:12px; border-right:none; border-bottom:none;}
+    .corner.tr{top:12px; right:12px; border-left:none; border-bottom:none;}
+    .corner.bl{bottom:12px; left:12px; border-right:none; border-top:none;}
+    .corner.br{bottom:12px; right:12px; border-left:none; border-top:none;}
+
+    /* NOTE (ANGULAR) */
+    #note{
+      position:absolute;
+      right:12px; top:62px;
+      width:340px; height:220px;
+      border:1px solid var(--hair);
+      background:var(--panel2);
+      backdrop-filter: blur(8px);
+      pointer-events:auto;
+      display:none;
+    }
+    #note.open{display:block}
+    #note .bar{
+      display:flex; align-items:center; justify-content:space-between;
+      padding:8px 8px;
+      border-bottom:1px solid var(--hair);
+      background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(0,0,0,0));
+      cursor:move;
+      user-select:none;
+    }
+    #note textarea{
+      width:100%; height: calc(100% - 34px);
+      border:0; outline:none; resize:none;
+      background:transparent;
+      color:var(--fg);
+      font:inherit;
+      padding:8px;
+      user-select:text;
+    }
+  </style>
+</head>
+<body>
+  <div id="field"><canvas id="c"></canvas></div>
+
+  <div class="chrome">
+    <div class="corner tl"></div>
+    <div class="corner tr"></div>
+    <div class="corner bl"></div>
+    <div class="corner br"></div>
+
+    <div id="controls">
+      <button class="btn" id="btnNote">NOTE</button>
+      <button class="btn" id="btnInvert">INVERT</button>
+      <button class="btn" id="btnNull">NULL</button>
+      <button class="btn" id="btnFull">FULL</button>
+      <span class="sep">|</span>
+      <button class="btn" id="btnBlink">BLINK</button>
+      <button class="btn" id="btnBreath">BREATH</button>
+    </div>
+
+    <div id="info">KETADATA // FACE · SHIFT+I INVERT · SHIFT+N NULL · SHIFT+F FULL · SHIFT+K NOTE · SPACE BLINK</div>
+
+    <div id="note">
+      <div class="bar">
+        <div>KETA_NOTE</div>
+        <div style="opacity:.58">SHIFT+K</div>
+      </div>
+      <textarea id="noteText" spellcheck="false" placeholder="KETA_NOTE — optional, movable, non-interfering."></textarea>
+    </div>
+  </div>
+
+<script>
+/* =========================
+   EE: LOCAL-FIRST STATE
+========================= */
+const FILE_ID = "KETADATA_FACE_V2_STABLE";
+const LS_KEY = "KETADATA::" + FILE_ID + "::STATE";
+const $ = (id)=>document.getElementById(id);
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const lerp=(a,b,t)=>a+(b-a)*t;
+
+const state = {
+  invert:false,
+  nullMode:false,
+  fullscreen:false,
+  motion:true,
+
+  breathOn:true,
+  autoBlink:true,
+
+  // animation
+  breathPhase:0,
+  whiskerPhase:0,
+  furPhase:0,
+
+  // blink scheduler
+  blinkT:0,              // 0..1, eyelid closure
+  blinkState:"idle",      // idle|closing|opening
+  nextBlinkAt:0,          // ms
+
+  // note
+  noteOpen:false,
+  notePos:{x:null,y:null},
+  noteText:"",
+
+  // deterministic seed
+  seed: 0x2F6E2B1D
+};
+
+function loadState(){
+  try{
+    const raw = localStorage.getItem(LS_KEY);
+    if(!raw) return;
+    const s = JSON.parse(raw);
+    if(!s || typeof s!=="object") return;
+    Object.assign(state, s);
+  }catch(_){}
+}
+function saveState(){
+  try{ localStorage.setItem(LS_KEY, JSON.stringify(state)); }catch(_){}
+}
+function applyState(){
+  document.body.classList.toggle("invert", !!state.invert);
+  document.body.classList.toggle("nullmode", !!state.nullMode);
+  document.documentElement.style.setProperty("--motion", state.motion ? "1" : "0");
+
+  $("noteText").value = state.noteText || "";
+  $("note").classList.toggle("open", !!state.noteOpen);
+  if(state.notePos && state.notePos.x!=null && state.notePos.y!=null){
+    $("note").style.left = state.notePos.x + "px";
+    $("note").style.top = state.notePos.y + "px";
+    $("note").style.right = "auto";
+  }
+}
+
+/* =========================
+   RNG (DETERMINISTIC)
+========================= */
+function xorshift32(){
+  // mutates state.seed
+  let x = (state.seed >>> 0);
+  x ^= (x << 13) >>> 0;
+  x ^= (x >>> 17) >>> 0;
+  x ^= (x << 5) >>> 0;
+  state.seed = x >>> 0;
+  return (x >>> 0) / 4294967296;
+}
+function seededRange(a,b){ return a + (b-a)*xorshift32(); }
+
+/* =========================
+   CANVAS SETUP
+========================= */
+const canvas = $("c");
+const ctx = canvas.getContext("2d", { alpha:true });
+let W=0,H=0,DPR=1;
+
+function resize(){
+  DPR = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+  W = Math.floor(window.innerWidth * DPR);
+  H = Math.floor(window.innerHeight * DPR);
+  canvas.width = W;
+  canvas.height = H;
+  buildAssets(); // rebuild on resize
+}
+addEventListener("resize", resize);
+
+function inv(){
+  return document.body.classList.contains("invert");
+}
+function col(alpha){
+  return inv() ? `rgba(10,12,15,${alpha})` : `rgba(255,255,255,${alpha})`;
+}
+
+/* =========================
+   PRECOMPUTED ASSETS
+   - no per-frame Math.random
+   - “creature” not “noise”
+========================= */
+let assets = null;
+
+function buildAssets(){
+  // reset seed deterministically but keep user’s stored seed stable
+  // (do not overwrite state.seed here)
+  const localSeed = state.seed >>> 0;
+  let tmpSeed = localSeed;
+
+  function rx(){
+    // local xorshift32
+    let x = (tmpSeed >>> 0);
+    x ^= (x << 13) >>> 0;
+    x ^= (x >>> 17) >>> 0;
+    x ^= (x << 5) >>> 0;
+    tmpSeed = x >>> 0;
+    return (x >>> 0) / 4294967296;
+  }
+  function rr(a,b){ return a + (b-a)*rx(); }
+
+  // face scale chosen in render; store strand fields normalized to head ellipse
+  const fur = [];
+  const furCount = 280; // fuller but stable
+
+  // We model head ellipse in normalized space: x in [-1..1], y in [-1..1]
+  // Strand anchors around perimeter with small inward/outward variance.
+  for(let i=0;i<furCount;i++){
+    const u = (i / furCount) * Math.PI*2;
+    const jitter = rr(-0.02, 0.02);
+    const ang = u + jitter;
+
+    // ellipse perimeter (normalized)
+    const ex = Math.cos(ang);
+    const ey = Math.sin(ang) * 1.05;
+
+    // outward direction approximately radial, with slight tangent bend
+    const bend = rr(-0.22, 0.22);
+    const dir = ang + bend;
+
+    const layerPick = rr(0,1);
+    let layer = 2;
+    if(layerPick < 0.33) layer = 0;
+    else if(layerPick < 0.72) layer = 1;
+
+    const len = (layer===0 ? rr(0.08,0.15) : layer===1 ? rr(0.06,0.12) : rr(0.04,0.09));
+    const thick = (layer===0 ? rr(1.4,2.0) : layer===1 ? rr(1.0,1.6) : rr(0.7,1.2));
+    const alpha = (layer===0 ? rr(0.06,0.10) : layer===1 ? rr(0.07,0.12) : rr(0.10,0.18));
+
+    fur.push({
+      ax: ex, ay: ey,
+      dir, len, thick, alpha, layer,
+      // micro wobble params (deterministic)
+      w1: rr(0.6, 1.8),
+      w2: rr(0.6, 1.6),
+      ph: rr(0, Math.PI*2)
+    });
+  }
+
+  // ear tufts (deterministic, fixed)
+  const earTufts = [];
+  for(const side of [-1,1]){
+    for(let i=0;i<10;i++){
+      const t = i/10;
+      earTufts.push({
+        side,
+        // position along ear rim (normalized in ear-local space)
+        u: rr(0.15, 0.95),
+        len: rr(0.05, 0.10),
+        a: rr(0.08, 0.16),
+        w: rr(0.7, 1.5),
+        ph: rr(0, Math.PI*2)
+      });
+    }
+  }
+
+  // whiskers (deterministic, smoother)
+  const whiskers = [];
+  for(const side of [-1,1]){
+    for(let row=-1; row<=1; row++){
+      whiskers.push({
+        side, row,
+        // control strengths
+        c1: rr(0.22, 0.30),
+        c2: rr(0.58, 0.70),
+        end: rr(0.80, 0.92),
+        lift: rr(-0.05, 0.04),
+        a: rr(0.24, 0.38)
+      });
+    }
+  }
+
+  assets = {
+    fur,
+    earTufts,
+    whiskers,
+
+    // cached gradients rebuilt per resize + per render scale (filled later)
+    cache: {
+      headGrad: null,
+      noseGrad: null
+    }
+  };
+}
+
+/* =========================
+   BLINK SCHEDULER (STABLE)
+========================= */
+function scheduleNextBlink(now){
+  // 2.8s..6.5s, deterministic RNG
+  const dt = (2800 + xorshift32()*3700);
+  state.nextBlinkAt = now + dt;
+}
+function triggerBlink(now){
+  if(state.blinkState !== "idle") return;
+  state.blinkState = "closing";
+  state.blinkT = 0;
+  // next scheduled after current finishes
+  scheduleNextBlink(now);
+}
+
+/* =========================
+   DRAW: CAT FACE
+========================= */
+function drawCatFace(cx, cy, S, now){
+  // motion gates
+  const motion = state.motion ? 1 : 0;
+
+  // breathing: slower, heavier
+  if(state.breathOn && motion){
+    state.breathPhase += 0.0022;
+  }
+  const breath = state.breathOn ? Math.sin(state.breathPhase) * 0.014 : 0;
+  const breathY = breath * S;
+
+  // subtle phases (slow)
+  if(motion){
+    state.whiskerPhase += 0.0032;
+    state.furPhase += 0.0014;
+  }
+
+  ctx.save();
+  ctx.translate(cx, cy + breathY);
+  ctx.lineJoin = "round";
+  ctx.lineCap = "round";
+
+  /* HEAD MASS */
+  // deep shadow base
+  ctx.fillStyle = "rgba(0,0,0,0.18)";
+  ctx.beginPath();
+  ctx.ellipse(0, S*0.02, S*0.85, S*0.88, 0, 0, Math.PI*2);
+  ctx.fill();
+
+  // volume shadow
+  ctx.fillStyle = "rgba(0,0,0,0.10)";
+  ctx.beginPath();
+  ctx.ellipse(0, 0, S*0.82, S*0.85, 0, 0, Math.PI*2);
+  ctx.fill();
+
+  // main head gradient (cache per draw scale)
+  const gKey = `${Math.round(S)}:${inv()?1:0}`;
+  if(!assets.cache.headGrad || assets.cache.headGradKey !== gKey){
+    const hg = ctx.createRadialGradient(0, -S*0.35, 0, 0, 0, S*1.1);
+    hg.addColorStop(0, col(0.20));
+    hg.addColorStop(0.35, col(0.12));
+    hg.addColorStop(0.70, col(0.06));
+    hg.addColorStop(1, "rgba(0,0,0,0.08)");
+    assets.cache.headGrad = hg;
+    assets.cache.headGradKey = gKey;
+  }
+
+  ctx.fillStyle = assets.cache.headGrad;
+  ctx.beginPath();
+  ctx.ellipse(0, 0, S*0.80, S*0.83, 0, 0, Math.PI*2);
+  ctx.fill();
+
+  // forehead ridge
+  ctx.strokeStyle = col(0.15);
+  ctx.lineWidth = 2*DPR;
+  ctx.beginPath();
+  ctx.arc(0, -S*0.45, S*0.35, Math.PI*0.85, Math.PI*0.15);
+  ctx.stroke();
+
+  // temporal ridge
+  ctx.strokeStyle = col(0.08);
+  ctx.lineWidth = 1.5*DPR;
+  ctx.beginPath();
+  ctx.moveTo(-S*0.55, -S*0.25);
+  ctx.quadraticCurveTo(-S*0.20, -S*0.42, 0, -S*0.48);
+  ctx.quadraticCurveTo(S*0.20, -S*0.42, S*0.55, -S*0.25);
+  ctx.stroke();
+
+  // main outline (crisp)
+  ctx.strokeStyle = col(0.95);
+  ctx.lineWidth = 3.5*DPR;
+  ctx.beginPath();
+  ctx.ellipse(0, 0, S*0.80, S*0.83, 0, 0, Math.PI*2);
+  ctx.stroke();
+
+  /* FUR: precomputed strands, slight slow sway (no flicker) */
+  const sway = state.motion ? 1 : 0;
+  for(const f of assets.fur){
+    // head ellipse scale
+    const ax = f.ax * S*0.78;
+    const ay = f.ay * S*0.80;
+
+    // micro sway based on index + time (deterministic)
+    const wob = (Math.sin(state.furPhase*f.w1 + f.ph) * 0.012 +
+                 Math.cos(state.furPhase*f.w2 + f.ph*0.7) * 0.008) * sway;
+
+    const dir = f.dir + wob;
+    const len = f.len * S;
+    const x2 = ax + Math.cos(dir)*len;
+    const y2 = ay + Math.sin(dir)*len*1.04;
+
+    // layer styling
+    let a = f.alpha;
+    let lw = f.thick*DPR;
+
+    // deeper layers slightly darker
+    if(f.layer === 0){
+      ctx.strokeStyle = "rgba(0,0,0,0.11)";
+      ctx.lineWidth = lw;
+    } else if(f.layer === 1){
+      ctx.strokeStyle = col(a);
+      ctx.lineWidth = lw;
+    } else {
+      ctx.strokeStyle = col(a);
+      ctx.lineWidth = Math.max(0.8*DPR, lw*0.8);
+    }
+
+    ctx.beginPath();
+    ctx.moveTo(ax, ay);
+    ctx.lineTo(x2, y2);
+    ctx.stroke();
+  }
+
+  /* EARS (stable, detailed) */
+  function drawEar(side){
+    const flip = side;
+    const ex = flip * S*0.55;
+    const ey = -S*0.60;
+
+    // shadow
+    ctx.fillStyle = "rgba(0,0,0,0.15)";
+    ctx.beginPath();
+    ctx.moveTo(ex, ey);
+    ctx.lineTo(ex + flip*S*0.28, ey - S*0.50);
+    ctx.lineTo(ex + flip*S*0.10, ey - S*0.08);
+    ctx.closePath();
+    ctx.fill();
+
+    // ear mass
+    const eg = ctx.createRadialGradient(ex + flip*S*0.15, ey - S*0.25, 0, ex + flip*S*0.15, ey - S*0.25, S*0.35);
+    eg.addColorStop(0, col(0.10));
+    eg.addColorStop(1, col(0.04));
+
+    ctx.fillStyle = eg;
+    ctx.beginPath();
+    ctx.moveTo(ex, ey);
+    ctx.lineTo(ex + flip*S*0.26, ey - S*0.48);
+    ctx.lineTo(ex + flip*S*0.08, ey - S*0.08);
+    ctx.closePath();
+    ctx.fill();
+
+    // outline
+    ctx.strokeStyle = col(0.95);
+    ctx.lineWidth = 3*DPR;
+    ctx.stroke();
+
+    // inner detail
+    ctx.strokeStyle = col(0.18);
+    ctx.lineWidth = 2*DPR;
+    ctx.beginPath();
+    ctx.moveTo(ex + flip*S*0.06, ey - S*0.12);
+    ctx.lineTo(ex + flip*S*0.20, ey - S*0.38);
+    ctx.stroke();
+
+    ctx.strokeStyle = col(0.12);
+    ctx.lineWidth = 1.5*DPR;
+    ctx.beginPath();
+    ctx.moveTo(ex + flip*S*0.08, ey - S*0.16);
+    ctx.lineTo(ex + flip*S*0.22, ey - S*0.42);
+    ctx.stroke();
+
+    // tufts (deterministic)
+    for(const tuft of assets.earTufts){
+      if(tuft.side !== flip) continue;
+      const t = tuft.u;
+      const sx = ex + flip*S*(0.06 + t*0.18);
+      const sy = ey - S*(0.10 + t*0.36);
+      const w = Math.sin(state.furPhase*tuft.w + tuft.ph) * (0.012*sway);
+      ctx.strokeStyle = col(tuft.a);
+      ctx.lineWidth = 0.8*DPR;
+      ctx.beginPath();
+      ctx.moveTo(sx, sy);
+      ctx.lineTo(sx + flip*S*(0.05 + w), sy - S*(0.07 + tuft.len));
+      ctx.stroke();
+    }
+  }
+  drawEar(-1);
+  drawEar(1);
+
+  /* BLINK (stable ease, no twitch) */
+  const blink = clamp(state.blinkT, 0, 1);
+  const eyeOpen = 1 - blink;
+
+  function drawEye(side){
+    const ex = side * S*0.32;
+    const ey = -S*0.12;
+
+    // socket
+    ctx.fillStyle = "rgba(0,0,0,0.20)";
+    ctx.beginPath();
+    ctx.ellipse(ex, ey, S*0.18, S*0.15, 0, 0, Math.PI*2);
+    ctx.fill();
+
+    // ridge
+    ctx.strokeStyle = col(0.10);
+    ctx.lineWidth = 2*DPR;
+    ctx.beginPath();
+    ctx.arc(ex, ey, S*0.20, -Math.PI*0.25, Math.PI*1.25);
+    ctx.stroke();
+
+    if(eyeOpen > 0.10){
+      // sclera
+      const sg = ctx.createRadialGradient(ex, ey, 0, ex, ey, S*0.14);
+      sg.addColorStop(0, col(0.15));
+      sg.addColorStop(1, col(0.08));
+      ctx.fillStyle = sg;
+      ctx.beginPath();
+      ctx.ellipse(ex, ey, S*0.14*eyeOpen, S*0.12*eyeOpen, 0, 0, Math.PI*2);
+      ctx.fill();
+
+      // iris (monochrome depth)
+      const ig = ctx.createRadialGradient(ex, ey, 0, ex, ey, S*0.10);
+      ig.addColorStop(0, "rgba(80,80,80,0.9)");
+      ig.addColorStop(0.4, "rgba(50,50,50,0.8)");
+      ig.addColorStop(0.7, "rgba(30,30,30,0.6)");
+      ig.addColorStop(1, "rgba(10,10,10,0.3)");
+      ctx.fillStyle = ig;
+      ctx.beginPath();
+      ctx.ellipse(ex, ey, S*0.10*eyeOpen, S*0.10*eyeOpen, 0, 0, Math.PI*2);
+      ctx.fill();
+
+      // pupil
+      ctx.fillStyle = "rgba(0,0,0,1)";
+      ctx.beginPath();
+      ctx.ellipse(ex, ey, S*0.022, S*0.075*eyeOpen, 0, 0, Math.PI*2);
+      ctx.fill();
+
+      // outline
+      ctx.strokeStyle = col(0.95);
+      ctx.lineWidth = 3*DPR;
+      ctx.beginPath();
+      ctx.ellipse(ex, ey, S*0.14*eyeOpen, S*0.12*eyeOpen, 0, 0, Math.PI*2);
+      ctx.stroke();
+
+      // catchlights
+      ctx.fillStyle = "rgba(255,255,255,0.85)";
+      ctx.beginPath();
+      ctx.ellipse(ex - S*0.045, ey - S*0.030, S*0.028, S*0.022, -Math.PI*0.25, 0, Math.PI*2);
+      ctx.fill();
+      ctx.fillStyle = "rgba(255,255,255,0.45)";
+      ctx.beginPath();
+      ctx.arc(ex + S*0.035, ey - S*0.015, S*0.015, 0, Math.PI*2);
+      ctx.fill();
+
+      // lid lines
+      ctx.strokeStyle = col(0.25);
+      ctx.lineWidth = 1.5*DPR;
+      ctx.beginPath();
+      ctx.arc(ex, ey, S*0.14*eyeOpen, Math.PI*0.15, Math.PI*0.85);
+      ctx.stroke();
+
+      ctx.strokeStyle = col(0.12);
+      ctx.lineWidth = 1*DPR;
+      ctx.beginPath();
+      ctx.arc(ex, ey - S*0.02, S*0.16, Math.PI*0.90, Math.PI*0.10);
+      ctx.stroke();
+
+    } else {
+      // closed eye
+      ctx.strokeStyle = col(0.95);
+      ctx.lineWidth = 3*DPR;
+      ctx.beginPath();
+      ctx.ellipse(ex, ey, S*0.14, S*0.022, 0, 0, Math.PI*2);
+      ctx.stroke();
+
+      // lashes (stable, symmetric)
+      for(let i=-4; i<=4; i++){
+        const a = 0.26 - Math.abs(i)*0.03;
+        ctx.strokeStyle = col(clamp(a,0.06,0.26));
+        ctx.lineWidth = (1.2 - Math.abs(i)*0.1)*DPR;
+        ctx.beginPath();
+        ctx.moveTo(ex + i*S*0.030, ey);
+        ctx.lineTo(ex + i*S*0.030 + side*S*0.006, ey - S*0.022);
+        ctx.stroke();
+      }
+    }
+  }
+  drawEye(-1);
+  drawEye(1);
+
+  /* NOSE + MUZZLE */
+  const noseX = 0;
+  const noseY = S*0.35;
+
+  ctx.fillStyle = "rgba(0,0,0,0.12)";
+  ctx.beginPath();
+  ctx.ellipse(noseX, noseY - S*0.15, S*0.08, S*0.20, 0, 0, Math.PI*2);
+  ctx.fill();
+
+  // nose gradient cache
+  if(!assets.cache.noseGrad || assets.cache.noseGradKey !== gKey){
+    const ng = ctx.createRadialGradient(noseX, noseY - S*0.02, 0, noseX, noseY, S*0.12);
+    ng.addColorStop(0, "rgba(100,100,100,0.9)");
+    ng.addColorStop(0.6, "rgba(70,70,70,0.85)");
+    ng.addColorStop(1, "rgba(40,40,40,0.75)");
+    assets.cache.noseGrad = ng;
+    assets.cache.noseGradKey = gKey;
+  }
+
+  ctx.fillStyle = assets.cache.noseGrad;
+  ctx.strokeStyle = col(0.95);
+  ctx.lineWidth = 2.5*DPR;
+  ctx.beginPath();
+  ctx.moveTo(noseX - S*0.055, noseY - S*0.05);
+  ctx.lineTo(noseX + S*0.055, noseY - S*0.05);
+  ctx.lineTo(noseX, noseY + S*0.05);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+
+  // nostrils
+  ctx.fillStyle = "rgba(0,0,0,0.75)";
+  ctx.beginPath();
+  ctx.ellipse(noseX - S*0.025, noseY + S*0.010, S*0.018, S*0.025, Math.PI*0.3, 0, Math.PI*2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.ellipse(noseX + S*0.025, noseY + S*0.010, S*0.018, S*0.025, -Math.PI*0.3, 0, Math.PI*2);
+  ctx.fill();
+
+  // wet highlight
+  ctx.fillStyle = "rgba(255,255,255,0.45)";
+  ctx.beginPath();
+  ctx.ellipse(noseX - S*0.015, noseY - S*0.025, S*0.020, S*0.015, -Math.PI*0.3, 0, Math.PI*2);
+  ctx.fill();
+
+  // philtrum
+  ctx.strokeStyle = col(0.35);
+  ctx.lineWidth = 2*DPR;
+  ctx.beginPath();
+  ctx.moveTo(noseX, noseY + S*0.05);
+  ctx.lineTo(noseX, noseY + S*0.12);
+  ctx.stroke();
+
+  // muzzle pads
+  ctx.fillStyle = "rgba(0,0,0,0.08)";
+  ctx.beginPath();
+  ctx.ellipse(-S*0.22, noseY + S*0.08, S*0.18, S*0.14, 0, 0, Math.PI*2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.ellipse(S*0.22, noseY + S*0.08, S*0.18, S*0.14, 0, 0, Math.PI*2);
+  ctx.fill();
+
+  ctx.fillStyle = col(0.06);
+  ctx.beginPath();
+  ctx.ellipse(-S*0.22, noseY + S*0.08, S*0.16, S*0.12, 0, 0, Math.PI*2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.ellipse(S*0.22, noseY + S*0.08, S*0.16, S*0.12, 0, 0, Math.PI*2);
+  ctx.fill();
+
+  // mouth line
+  ctx.strokeStyle = col(0.40);
+  ctx.lineWidth = 2.5*DPR;
+  ctx.beginPath();
+  ctx.moveTo(-S*0.32, noseY + S*0.05);
+  ctx.quadraticCurveTo(noseX, noseY + S*0.18, S*0.32, noseY + S*0.05);
+  ctx.stroke();
+
+  // chin highlight
+  ctx.fillStyle = col(0.08);
+  ctx.beginPath();
+  ctx.ellipse(noseX, noseY + S*0.25, S*0.12, S*0.08, 0, 0, Math.PI*2);
+  ctx.fill();
+
+  /* WHISKERS (stable, slow drift) */
+  const wph = state.whiskerPhase;
+  // follicles
+  ctx.fillStyle = "rgba(0,0,0,0.20)";
+  for(let side of [-1,1]){
+    for(let row=-1; row<=1; row++){
+      const wx = side * S*0.28;
+      const wy = noseY + S*0.08 + row*S*0.075;
+      ctx.beginPath();
+      ctx.arc(wx, wy, S*0.015, 0, Math.PI*2);
+      ctx.fill();
+    }
+  }
+
+  for(const w of assets.whiskers){
+    const side = w.side;
+    const row = w.row;
+
+    const baseX = side * S*0.28;
+    const baseY = noseY + S*0.08 + row*S*0.075;
+
+    const wob = (Math.sin(wph + row*1.2) * 0.020 + Math.cos(wph*0.7 + row*1.1) * 0.014) * (0.9*sway);
+
+    // base whisker
+    ctx.strokeStyle = col(w.a);
+    ctx.lineWidth = (2.1 - Math.abs(row)*0.3)*DPR;
+    ctx.beginPath();
+    ctx.moveTo(baseX, baseY);
+    ctx.bezierCurveTo(
+      baseX + side*S*(w.c1), baseY + S*(-0.04 + w.lift) + wob,
+      baseX + side*S*(w.c2), baseY + wob - row*S*0.03,
+      baseX + side*S*(w.end), baseY + wob*2.1 - row*S*0.045
+    );
+    ctx.stroke();
+
+    // whisker highlight
+    ctx.strokeStyle = col(0.14);
+    ctx.lineWidth = 0.9*DPR;
+    ctx.beginPath();
+    ctx.moveTo(baseX, baseY - DPR);
+    ctx.bezierCurveTo(
+      baseX + side*S*(w.c1), baseY + S*(-0.045 + w.lift) + wob,
+      baseX + side*S*(w.c2), baseY + wob - row*S*0.032,
+      baseX + side*S*(w.end), baseY + wob*2.1 - row*S*0.048
+    );
+    ctx.stroke();
+  }
+
+  // eyebrow tufts (stable)
+  for(let side of [-1,1]){
+    for(let i=0; i<3; i++){
+      const bx = side * S*0.48;
+      const by = -S*0.32;
+      ctx.strokeStyle = col(0.20 - i*0.03);
+      ctx.lineWidth = (1.4 - i*0.25)*DPR;
+      ctx.beginPath();
+      ctx.moveTo(bx, by);
+      ctx.lineTo(bx + side*S*0.12, by - S*(0.10 - i*0.01));
+      ctx.stroke();
+    }
+  }
+
+  ctx.restore();
+}
+
+/* =========================
+   FRAME RENDER LOOP
+========================= */
+let lastSaveAt = 0;
+
+function render(now){
+  // stable background (very slow)
+  const bgA = 0.020;
+  ctx.fillStyle = `rgba(0,0,0,${bgA})`;
+  ctx.fillRect(0,0,W,H);
+
+  // subtle scanline (constant, not competing)
+  ctx.strokeStyle = col(0.006);
+  ctx.lineWidth = 1*DPR;
+  const scanY = ((now*0.06) % H);
+  ctx.beginPath();
+  ctx.moveTo(0, scanY);
+  ctx.lineTo(W, scanY);
+  ctx.stroke();
+
+  // blink state machine
+  if(state.motion){
+    if(state.autoBlink && state.blinkState === "idle" && now >= state.nextBlinkAt){
+      triggerBlink(now);
+    }
+
+    if(state.blinkState === "closing"){
+      // 110ms close
+      state.blinkT += 1/7.0;
+      if(state.blinkT >= 1){
+        state.blinkT = 1;
+        state.blinkState = "opening";
+      }
+    } else if(state.blinkState === "opening"){
+      // 140ms open (slightly slower for realism)
+      state.blinkT -= 1/9.0;
+      if(state.blinkT <= 0){
+        state.blinkT = 0;
+        state.blinkState = "idle";
+      }
+    }
+  }
+
+  const cx = W/2;
+  const cy = H/2;
+  const scale = Math.min(W,H) * 0.45;
+
+  drawCatFace(cx, cy, scale, now);
+
+  // subtle frame
+  ctx.strokeStyle = col(0.03);
+  ctx.lineWidth = 1*DPR;
+  ctx.strokeRect(15*DPR, 15*DPR, W-30*DPR, H-30*DPR);
+
+  // autosave occasionally
+  if(now - lastSaveAt > 1200){
+    lastSaveAt = now;
+    saveState();
+  }
+
+  requestAnimationFrame(render);
+}
+
+/* =========================
+   CONTROLS + HOTKEYS
+========================= */
+function toggleInvert(){
+  state.invert = !state.invert;
+  saveState(); applyState();
+}
+function toggleNull(){
+  state.nullMode = !state.nullMode;
+  saveState(); applyState();
+}
+async function toggleFullscreen(){
+  try{
+    if(!document.fullscreenElement){
+      await document.documentElement.requestFullscreen();
+      state.fullscreen = true;
+    }else{
+      await document.exitFullscreen();
+      state.fullscreen = false;
+    }
+  }catch(_){}
+  saveState(); applyState();
+}
+function toggleNote(){
+  state.noteOpen = !state.noteOpen;
+  saveState(); applyState();
+}
+function blinkNow(){
+  triggerBlink(performance.now());
+}
+
+$("btnInvert").addEventListener("click", toggleInvert);
+$("btnNull").addEventListener("click", toggleNull);
+$("btnFull").addEventListener("click", toggleFullscreen);
+$("btnNote").addEventListener("click", toggleNote);
+$("btnBlink").addEventListener("click", blinkNow);
+$("btnBreath").addEventListener("click", ()=>{
+  state.breathOn = !state.breathOn;
+  saveState();
+});
+
+$("noteText").addEventListener("input",(e)=>{
+  state.noteText = e.target.value || "";
+  saveState();
+});
+
+// NOTE drag
+(function noteDrag(){
+  const el = $("note");
+  const bar = el.querySelector(".bar");
+  let dragging=false, ox=0, oy=0;
+
+  bar.addEventListener("mousedown",(e)=>{
+    dragging=true;
+    const r = el.getBoundingClientRect();
+    ox = e.clientX - r.left;
+    oy = e.clientY - r.top;
+    e.preventDefault();
+  });
+  window.addEventListener("mousemove",(e)=>{
+    if(!dragging) return;
+    const x = Math.max(10, Math.min(window.innerWidth - 10 - el.offsetWidth, e.clientX - ox));
+    const y = Math.max(10, Math.min(window.innerHeight - 10 - el.offsetHeight, e.clientY - oy));
+    el.style.left = x + "px";
+    el.style.top = y + "px";
+    el.style.right = "auto";
+    state.notePos = { x, y };
+  });
+  window.addEventListener("mouseup",()=>{
+    if(!dragging) return;
+    dragging=false;
+    saveState();
+  });
+})();
+
+function isTypingTarget(t){
+  if(!t) return false;
+  const tag = (t.tagName||"").toLowerCase();
+  return tag==="textarea" || tag==="input" || t.isContentEditable;
+}
+
+window.addEventListener("keydown",(e)=>{
+  const typing = isTypingTarget(e.target);
+
+  if(e.shiftKey && e.key.toLowerCase()==="i"){ e.preventDefault(); toggleInvert(); return; }
+  if(e.shiftKey && e.key.toLowerCase()==="n"){ e.preventDefault(); toggleNull(); return; }
+  if(e.shiftKey && e.key.toLowerCase()==="f"){ e.preventDefault(); toggleFullscreen(); return; }
+  if(e.shiftKey && e.key.toLowerCase()==="k"){ e.preventDefault(); toggleNote(); return; }
+
+  if(e.code==="Space" && !typing){
+    e.preventDefault();
+    blinkNow();
+    return;
+  }
+}, {passive:false});
+
+/* =========================
+   BOOT
+========================= */
+loadState();
+
+// if seed looks empty, set once (and persist)
+if(!state.seed || typeof state.seed !== "number"){
+  state.seed = (Math.random()*1e9) >>> 0;
+  saveState();
+}
+
+resize();
+buildAssets();
+applyState();
+
+// schedule blink from “now”
+scheduleNextBlink(performance.now());
+
+requestAnimationFrame(render);
+</script>
+
+<!--
+AE: VISUAL (MONOCHROME FACE PORTRAIT, PRECOMPUTED FUR/WHISKERS, SLOW BREATH, STABLE BLINK)
+EE: ENGINE (LOCAL-FIRST STATE, BLINK SCHEDULER, HOTKEYS, NOTE, FULLSCREEN/INVERT/NULL)
+WB: WIRING BRIDGE (APPLY STATE TO DOM, CONTROLS)
+
+FILE_ID: "KETADATA_FACE_V2_STABLE"
+ROOM_ID: "K_FACE"
+VERSION_ID: "V2"
+UPDATED_AT: "2026-01-06T00:00:00-05:00"
+CHANGELOG:
+- V2: Removed per-frame randomness (no flicker). Precomputed fur/tufts/whiskers. Added NULL/FULLSCREEN/NOTE + local-first persistence. Added stable blink scheduler + slower breathing.
+-->
+</body>
+</html>
