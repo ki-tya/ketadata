@@ -1,0 +1,750 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>KETADATA // FACE</title>
+  <style>
+    :root{
+      --bg:#000;
+      --fg:#fff;
+      --muted:rgba(255,255,255,.58);
+      --hair:rgba(255,255,255,.10);
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%;margin:0}
+    body{
+      background:var(--bg);
+      color:var(--fg);
+      font:10px/1.3 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace;
+      overflow:hidden;
+      user-select:none;
+      letter-spacing: 0.03em;
+    }
+
+    body.invert{ filter: invert(1) hue-rotate(180deg); background:#fff; }
+
+    #field{
+      position:absolute; inset:0;
+      background:
+        radial-gradient(1800px 1400px at 50% 45%, rgba(255,255,255,.12), rgba(0,0,0,0) 70%),
+        radial-gradient(1200px 1100px at 30% 80%, rgba(255,255,255,.06), rgba(0,0,0,0) 65%),
+        radial-gradient(1000px 900px at 75% 25%, rgba(255,255,255,.04), rgba(0,0,0,0) 62%),
+        linear-gradient(180deg, rgba(255,255,255,.06), rgba(0,0,0,0) 50%),
+        linear-gradient(180deg, rgba(0,0,0,0), rgba(0,0,0,.55));
+    }
+    canvas{position:absolute; inset:0; width:100%; height:100%}
+
+    #controls{
+      position:absolute;
+      top:12px; right:12px;
+      border:1px solid var(--hair);
+      background:rgba(0,0,0,.35);
+      backdrop-filter: blur(8px);
+      padding:8px 10px;
+      opacity:.88;
+      font-size: 10px;
+      display:flex;
+      gap:10px;
+      align-items:center;
+    }
+    .btn{
+      border:1px solid var(--hair);
+      background:rgba(255,255,255,.03);
+      padding:5px 8px;
+      cursor:pointer;
+      font:inherit;
+      color:inherit;
+      transition: all 0.15s ease;
+    }
+    .btn:hover{background:rgba(255,255,255,.08);}
+    .btn:active{transform: translateY(1px);}
+
+    #info{
+      position:absolute;
+      bottom:12px; left:12px;
+      border:1px solid var(--hair);
+      background:rgba(0,0,0,.35);
+      backdrop-filter: blur(8px);
+      padding:8px 10px;
+      opacity:.78;
+      font-size: 10px;
+      max-width:50vw;
+    }
+
+    .corner{
+      position:absolute;
+      width:40px; height:40px;
+      border:1px solid var(--hair);
+      opacity:.4;
+    }
+    .corner.tl{top:12px; left:12px; border-right:none; border-bottom:none;}
+    .corner.tr{top:12px; right:12px; border-left:none; border-bottom:none;}
+    .corner.bl{bottom:12px; left:12px; border-right:none; border-top:none;}
+    .corner.br{bottom:12px; right:12px; border-left:none; border-top:none;}
+  </style>
+</head>
+<body>
+  <div id="field"><canvas id="c"></canvas></div>
+
+  <div class="corner tl"></div>
+  <div class="corner tr"></div>
+  <div class="corner bl"></div>
+  <div class="corner br"></div>
+
+  <div id="controls">
+    <button class="btn" id="btnInvert">INVERT</button>
+    <span style="opacity:.6">|</span>
+    <button class="btn" id="btnBlink">BLINK</button>
+    <button class="btn" id="btnBreath">BREATH</button>
+  </div>
+
+  <div id="info">
+    KETADATA // FACE · HYPER-REALISTIC RENDER · SHIFT+I INVERT · SPACE BLINK
+  </div>
+
+<script>
+const $ = (id)=>document.getElementById(id);
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const lerp=(a,b,t)=>a+(b-a)*t;
+
+const canvas = $("c");
+const ctx = canvas.getContext("2d", { alpha:true });
+let W=0,H=0,DPR=1;
+
+function resize(){
+  DPR = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+  W = Math.floor(window.innerWidth * DPR);
+  H = Math.floor(window.innerHeight * DPR);
+  canvas.width = W;
+  canvas.height = H;
+}
+addEventListener("resize", resize);
+
+const state = {
+  blink: 0,
+  breathPhase: 0,
+  whiskerPhase: 0,
+  furPhase: 0,
+  invert: false
+};
+
+function col(base, alpha){ 
+  return document.body.classList.contains("invert") 
+    ? `rgba(10,12,15,${alpha})` 
+    : `rgba(255,255,255,${alpha})`;
+}
+
+function drawCatFace(cx, cy, scale, t){
+  const S = scale;
+  
+  // Breathing subtle movement
+  state.breathPhase += 0.006;
+  const breath = Math.sin(state.breathPhase) * 0.015;
+  const breathY = breath * S;
+  
+  ctx.save();
+  ctx.translate(cx, cy + breathY);
+  ctx.lineJoin = "round";
+  ctx.lineCap = "round";
+
+  // === HEAD STRUCTURE ===
+  
+  // Deep shadow base (skull depth)
+  ctx.fillStyle = 'rgba(0,0,0,0.18)';
+  ctx.beginPath();
+  ctx.ellipse(0, S*0.02, S*0.85, S*0.88, 0, 0, Math.PI*2);
+  ctx.fill();
+  
+  // Secondary shadow layer (volume)
+  ctx.fillStyle = 'rgba(0,0,0,0.10)';
+  ctx.beginPath();
+  ctx.ellipse(0, 0, S*0.82, S*0.85, 0, 0, Math.PI*2);
+  ctx.fill();
+  
+  // Main head mass with sophisticated gradient
+  const headGrad = ctx.createRadialGradient(0, -S*0.35, 0, 0, 0, S*1.1);
+  headGrad.addColorStop(0, col(255, 0.20));
+  headGrad.addColorStop(0.35, col(255, 0.12));
+  headGrad.addColorStop(0.70, col(255, 0.06));
+  headGrad.addColorStop(1, 'rgba(0,0,0,0.08)');
+  
+  ctx.fillStyle = headGrad;
+  ctx.beginPath();
+  ctx.ellipse(0, 0, S*0.80, S*0.83, 0, 0, Math.PI*2);
+  ctx.fill();
+  
+  // Forehead highlight ridge
+  ctx.strokeStyle = col(255, 0.15);
+  ctx.lineWidth = 2*DPR;
+  ctx.beginPath();
+  ctx.arc(0, -S*0.45, S*0.35, Math.PI*0.85, Math.PI*0.15);
+  ctx.stroke();
+  
+  // Cheekbone structure (bilateral)
+  ctx.strokeStyle = 'rgba(0,0,0,0.10)';
+  ctx.lineWidth = 3*DPR;
+  ctx.beginPath();
+  ctx.arc(-S*0.45, S*0.10, S*0.30, -Math.PI*0.4, Math.PI*0.3);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(S*0.45, S*0.10, S*0.30, Math.PI*0.7, Math.PI*1.4);
+  ctx.stroke();
+  
+  // Temporal ridge (brow definition)
+  ctx.strokeStyle = col(255, 0.08);
+  ctx.lineWidth = 1.5*DPR;
+  ctx.beginPath();
+  ctx.moveTo(-S*0.55, -S*0.25);
+  ctx.quadraticCurveTo(-S*0.20, -S*0.42, 0, -S*0.48);
+  ctx.quadraticCurveTo(S*0.20, -S*0.42, S*0.55, -S*0.25);
+  ctx.stroke();
+  
+  // Main head outline (crisp edge)
+  ctx.strokeStyle = col(255, 0.95);
+  ctx.lineWidth = 3.5*DPR;
+  ctx.beginPath();
+  ctx.ellipse(0, 0, S*0.80, S*0.83, 0, 0, Math.PI*2);
+  ctx.stroke();
+
+  // === MULTI-LAYER FUR RENDERING ===
+  
+  state.furPhase += 0.002;
+  const furCount = 180;
+  
+  // Layer 1: Deep fur (darkest, base layer)
+  ctx.strokeStyle = 'rgba(0,0,0,0.12)';
+  ctx.lineWidth = 1.8*DPR;
+  for(let i=0; i<furCount*0.6; i++){
+    const angle = (i/furCount/0.6) * Math.PI*2 + state.furPhase*0.3;
+    const dist = S*0.72 + Math.random()*S*0.08;
+    const x = Math.cos(angle) * dist;
+    const y = Math.sin(angle) * dist * 1.04;
+    const len = (S*0.12 + Math.random()*S*0.08);
+    const spread = Math.random()*0.4 - 0.2;
+    
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(
+      x + Math.cos(angle + spread)*len,
+      y + Math.sin(angle + spread)*len*1.04
+    );
+    ctx.stroke();
+  }
+  
+  // Layer 2: Mid-tone fur
+  ctx.strokeStyle = col(255, 0.08);
+  ctx.lineWidth = 1.4*DPR;
+  for(let i=0; i<furCount*0.8; i++){
+    const angle = (i/furCount/0.8) * Math.PI*2 + state.furPhase*0.5;
+    const dist = S*0.74 + Math.random()*S*0.06;
+    const x = Math.cos(angle) * dist;
+    const y = Math.sin(angle) * dist * 1.04;
+    const len = (S*0.10 + Math.random()*S*0.06);
+    const spread = Math.random()*0.35 - 0.175;
+    
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(
+      x + Math.cos(angle + spread)*len,
+      y + Math.sin(angle + spread)*len*1.04
+    );
+    ctx.stroke();
+  }
+  
+  // Layer 3: Top highlights
+  ctx.strokeStyle = col(255, 0.18);
+  ctx.lineWidth = 1*DPR;
+  for(let i=0; i<furCount*0.5; i++){
+    const angle = (i/furCount/0.5) * Math.PI*2 + state.furPhase*0.7;
+    const dist = S*0.76 + Math.random()*S*0.04;
+    const x = Math.cos(angle) * dist;
+    const y = Math.sin(angle) * dist * 1.04;
+    const len = (S*0.08 + Math.random()*S*0.04);
+    
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(
+      x + Math.cos(angle)*len,
+      y + Math.sin(angle)*len*1.04
+    );
+    ctx.stroke();
+  }
+  
+  // === EARS (DETAILED) ===
+  
+  function drawEar(side){
+    const flip = side;
+    const ex = flip * S*0.55;
+    const ey = -S*0.60;
+    
+    // Ear shadow (depth)
+    ctx.fillStyle = 'rgba(0,0,0,0.15)';
+    ctx.beginPath();
+    ctx.moveTo(ex, ey);
+    ctx.lineTo(ex + flip*S*0.28, ey - S*0.50);
+    ctx.lineTo(ex + flip*S*0.10, ey - S*0.08);
+    ctx.closePath();
+    ctx.fill();
+    
+    // Ear mass
+    const earGrad = ctx.createRadialGradient(
+      ex + flip*S*0.15, ey - S*0.25, 0,
+      ex + flip*S*0.15, ey - S*0.25, S*0.35
+    );
+    earGrad.addColorStop(0, col(255, 0.10));
+    earGrad.addColorStop(1, col(255, 0.04));
+    
+    ctx.fillStyle = earGrad;
+    ctx.beginPath();
+    ctx.moveTo(ex, ey);
+    ctx.lineTo(ex + flip*S*0.26, ey - S*0.48);
+    ctx.lineTo(ex + flip*S*0.08, ey - S*0.08);
+    ctx.closePath();
+    ctx.fill();
+    
+    // Ear outline
+    ctx.strokeStyle = col(255, 0.95);
+    ctx.lineWidth = 3*DPR;
+    ctx.beginPath();
+    ctx.moveTo(ex, ey);
+    ctx.lineTo(ex + flip*S*0.26, ey - S*0.48);
+    ctx.lineTo(ex + flip*S*0.08, ey - S*0.08);
+    ctx.closePath();
+    ctx.stroke();
+    
+    // Inner ear detail (multiple layers)
+    ctx.strokeStyle = col(255, 0.20);
+    ctx.lineWidth = 2*DPR;
+    ctx.beginPath();
+    ctx.moveTo(ex + flip*S*0.06, ey - S*0.12);
+    ctx.lineTo(ex + flip*S*0.20, ey - S*0.38);
+    ctx.stroke();
+    
+    ctx.strokeStyle = col(255, 0.12);
+    ctx.lineWidth = 1.5*DPR;
+    ctx.beginPath();
+    ctx.moveTo(ex + flip*S*0.08, ey - S*0.16);
+    ctx.lineTo(ex + flip*S*0.22, ey - S*0.42);
+    ctx.stroke();
+    
+    // Ear fur tufts
+    for(let i=0; i<8; i++){
+      ctx.strokeStyle = col(255, 0.10 + Math.random()*0.08);
+      ctx.lineWidth = 0.8*DPR;
+      const t = i/8;
+      const sx = ex + flip*S*(0.08 + t*0.16);
+      const sy = ey - S*(0.10 + t*0.36);
+      ctx.beginPath();
+      ctx.moveTo(sx, sy);
+      ctx.lineTo(sx + flip*S*0.06, sy - S*0.08);
+      ctx.stroke();
+    }
+  }
+  
+  drawEar(-1);
+  drawEar(1);
+
+  // === EYES (HYPER-DETAILED) ===
+  
+  const blink = clamp(state.blink, 0, 1);
+  const eyeOpen = 1 - blink;
+  
+  function drawEye(side){
+    const ex = side * S*0.32;
+    const ey = -S*0.12;
+    
+    // Eye socket (deep recess)
+    ctx.fillStyle = 'rgba(0,0,0,0.20)';
+    ctx.beginPath();
+    ctx.ellipse(ex, ey, S*0.18, S*0.15, 0, 0, Math.PI*2);
+    ctx.fill();
+    
+    // Orbital bone ridge
+    ctx.strokeStyle = col(255, 0.10);
+    ctx.lineWidth = 2*DPR;
+    ctx.beginPath();
+    ctx.arc(ex, ey, S*0.20, -Math.PI*0.25, Math.PI*1.25);
+    ctx.stroke();
+    
+    if(eyeOpen > 0.15){
+      // Sclera (eye white) with subtle gradient
+      const scleraGrad = ctx.createRadialGradient(ex, ey, 0, ex, ey, S*0.14);
+      scleraGrad.addColorStop(0, col(255, 0.15));
+      scleraGrad.addColorStop(1, col(255, 0.08));
+      
+      ctx.fillStyle = scleraGrad;
+      ctx.beginPath();
+      ctx.ellipse(ex, ey, S*0.14*eyeOpen, S*0.12*eyeOpen, 0, 0, Math.PI*2);
+      ctx.fill();
+      
+      // Iris (complex gradient)
+      const irisGrad = ctx.createRadialGradient(ex, ey, 0, ex, ey, S*0.10);
+      irisGrad.addColorStop(0, 'rgba(80,80,80,0.9)');
+      irisGrad.addColorStop(0.4, 'rgba(50,50,50,0.8)');
+      irisGrad.addColorStop(0.7, 'rgba(30,30,30,0.6)');
+      irisGrad.addColorStop(1, 'rgba(10,10,10,0.3)');
+      
+      ctx.fillStyle = irisGrad;
+      ctx.beginPath();
+      ctx.ellipse(ex, ey, S*0.10*eyeOpen, S*0.10*eyeOpen, 0, 0, Math.PI*2);
+      ctx.fill();
+      
+      // Iris texture (radial lines)
+      ctx.strokeStyle = 'rgba(0,0,0,0.15)';
+      ctx.lineWidth = 0.5*DPR;
+      for(let i=0; i<12; i++){
+        const ang = (i/12)*Math.PI*2;
+        ctx.beginPath();
+        ctx.moveTo(ex + Math.cos(ang)*S*0.03, ey + Math.sin(ang)*S*0.03);
+        ctx.lineTo(ex + Math.cos(ang)*S*0.09*eyeOpen, ey + Math.sin(ang)*S*0.09*eyeOpen);
+        ctx.stroke();
+      }
+      
+      // Pupil (vertical slit with gradient)
+      const pupilGrad = ctx.createLinearGradient(ex, ey - S*0.08, ex, ey + S*0.08);
+      pupilGrad.addColorStop(0, 'rgba(0,0,0,1)');
+      pupilGrad.addColorStop(0.5, 'rgba(0,0,0,0.98)');
+      pupilGrad.addColorStop(1, 'rgba(0,0,0,1)');
+      
+      ctx.fillStyle = pupilGrad;
+      ctx.beginPath();
+      ctx.ellipse(ex, ey, S*0.022, S*0.075*eyeOpen, 0, 0, Math.PI*2);
+      ctx.fill();
+      
+      // Pupil edge highlight
+      ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+      ctx.lineWidth = 0.5*DPR;
+      ctx.beginPath();
+      ctx.ellipse(ex - S*0.004, ey, S*0.022, S*0.075*eyeOpen, 0, Math.PI*1.2, Math.PI*1.8);
+      ctx.stroke();
+      
+      // Eye outline (almond shape)
+      ctx.strokeStyle = col(255, 0.95);
+      ctx.lineWidth = 3*DPR;
+      ctx.beginPath();
+      ctx.ellipse(ex, ey, S*0.14*eyeOpen, S*0.12*eyeOpen, 0, 0, Math.PI*2);
+      ctx.stroke();
+      
+      // Highlights (multi-layer)
+      // Primary catchlight
+      ctx.fillStyle = 'rgba(255,255,255,0.85)';
+      ctx.beginPath();
+      ctx.ellipse(ex - S*0.045, ey - S*0.030, S*0.028, S*0.022, -Math.PI*0.25, 0, Math.PI*2);
+      ctx.fill();
+      
+      // Secondary highlight
+      ctx.fillStyle = 'rgba(255,255,255,0.45)';
+      ctx.beginPath();
+      ctx.arc(ex + S*0.035, ey - S*0.015, S*0.015, 0, Math.PI*2);
+      ctx.fill();
+      
+      // Tertiary subtle highlight
+      ctx.fillStyle = 'rgba(255,255,255,0.25)';
+      ctx.beginPath();
+      ctx.arc(ex + S*0.050, ey + S*0.040, S*0.010, 0, Math.PI*2);
+      ctx.fill();
+      
+      // Lower eyelid line
+      ctx.strokeStyle = col(255, 0.25);
+      ctx.lineWidth = 1.5*DPR;
+      ctx.beginPath();
+      ctx.arc(ex, ey, S*0.14*eyeOpen, Math.PI*0.15, Math.PI*0.85);
+      ctx.stroke();
+      
+      // Upper eyelid crease
+      ctx.strokeStyle = col(255, 0.12);
+      ctx.lineWidth = 1*DPR;
+      ctx.beginPath();
+      ctx.arc(ex, ey - S*0.02, S*0.16, Math.PI*0.90, Math.PI*0.10);
+      ctx.stroke();
+      
+      // Tear duct detail
+      ctx.fillStyle = col(255, 0.08);
+      ctx.beginPath();
+      ctx.ellipse(ex - side*S*0.12, ey, S*0.020, S*0.015, 0, 0, Math.PI*2);
+      ctx.fill();
+      
+    } else {
+      // Closed eye (detailed lid)
+      ctx.strokeStyle = col(255, 0.95);
+      ctx.lineWidth = 3*DPR;
+      ctx.beginPath();
+      ctx.ellipse(ex, ey, S*0.14, S*0.022, 0, 0, Math.PI*2);
+      ctx.stroke();
+      
+      // Eyelash detail
+      for(let i=-4; i<=4; i++){
+        ctx.strokeStyle = col(255, 0.30 - Math.abs(i)*0.03);
+        ctx.lineWidth = (1.2 - Math.abs(i)*0.1)*DPR;
+        ctx.beginPath();
+        ctx.moveTo(ex + i*S*0.030, ey);
+        ctx.lineTo(ex + i*S*0.030 + side*S*0.005, ey - S*0.025);
+        ctx.stroke();
+      }
+      
+      // Lower lash line
+      ctx.strokeStyle = col(255, 0.15);
+      ctx.lineWidth = 1*DPR;
+      ctx.beginPath();
+      ctx.arc(ex, ey, S*0.14, Math.PI*0.15, Math.PI*0.85);
+      ctx.stroke();
+    }
+  }
+  
+  drawEye(-1);
+  drawEye(1);
+
+  // === NOSE (HYPER-DETAILED) ===
+  
+  const noseX = 0;
+  const noseY = S*0.35;
+  
+  // Nose bridge shadow
+  ctx.fillStyle = 'rgba(0,0,0,0.12)';
+  ctx.beginPath();
+  ctx.ellipse(noseX, noseY - S*0.15, S*0.08, S*0.20, 0, 0, Math.PI*2);
+  ctx.fill();
+  
+  // Nose mass (gradient)
+  const noseGrad = ctx.createRadialGradient(noseX, noseY - S*0.02, 0, noseX, noseY, S*0.12);
+  noseGrad.addColorStop(0, 'rgba(100,100,100,0.9)');
+  noseGrad.addColorStop(0.6, 'rgba(70,70,70,0.85)');
+  noseGrad.addColorStop(1, 'rgba(40,40,40,0.75)');
+  
+  ctx.fillStyle = noseGrad;
+  ctx.strokeStyle = col(255, 0.95);
+  ctx.lineWidth = 2.5*DPR;
+  ctx.beginPath();
+  ctx.moveTo(noseX - S*0.055, noseY - S*0.05);
+  ctx.lineTo(noseX + S*0.055, noseY - S*0.05);
+  ctx.lineTo(noseX, noseY + S*0.05);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  
+  // Nostril cavities (deep shadows)
+  ctx.fillStyle = 'rgba(0,0,0,0.75)';
+  ctx.beginPath();
+  ctx.ellipse(noseX - S*0.025, noseY + S*0.010, S*0.018, S*0.025, Math.PI*0.3, 0, Math.PI*2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.ellipse(noseX + S*0.025, noseY + S*0.010, S*0.018, S*0.025, -Math.PI*0.3, 0, Math.PI*2);
+  ctx.fill();
+  
+  // Nostril rim highlights
+  ctx.strokeStyle = col(255, 0.35);
+  ctx.lineWidth = 1*DPR;
+  ctx.beginPath();
+  ctx.arc(noseX - S*0.025, noseY + S*0.010, S*0.020, Math.PI*1.1, Math.PI*1.8);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(noseX + S*0.025, noseY + S*0.010, S*0.020, Math.PI*1.2, Math.PI*2.1);
+  ctx.stroke();
+  
+  // Nose highlight (wet surface)
+  ctx.fillStyle = 'rgba(255,255,255,0.45)';
+  ctx.beginPath();
+  ctx.ellipse(noseX - S*0.015, noseY - S*0.025, S*0.020, S*0.015, -Math.PI*0.3, 0, Math.PI*2);
+  ctx.fill();
+  
+  // Philtrum (nose to mouth)
+  ctx.strokeStyle = col(255, 0.35);
+  ctx.lineWidth = 2*DPR;
+  ctx.beginPath();
+  ctx.moveTo(noseX, noseY + S*0.05);
+  ctx.lineTo(noseX, noseY + S*0.12);
+  ctx.stroke();
+  
+  // Philtrum shadow
+  ctx.strokeStyle = 'rgba(0,0,0,0.15)';
+  ctx.lineWidth = 3*DPR;
+  ctx.beginPath();
+  ctx.moveTo(noseX, noseY + S*0.05);
+  ctx.lineTo(noseX, noseY + S*0.12);
+  ctx.stroke();
+
+  // === MUZZLE ===
+  
+  // Muzzle pads (cheek puffs with shadow)
+  ctx.fillStyle = 'rgba(0,0,0,0.08)';
+  ctx.beginPath();
+  ctx.ellipse(-S*0.22, noseY + S*0.08, S*0.18, S*0.14, 0, 0, Math.PI*2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.ellipse(S*0.22, noseY + S*0.08, S*0.18, S*0.14, 0, 0, Math.PI*2);
+  ctx.fill();
+  
+  ctx.fillStyle = col(255, 0.06);
+  ctx.beginPath();
+  ctx.ellipse(-S*0.22, noseY + S*0.08, S*0.16, S*0.12, 0, 0, Math.PI*2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.ellipse(S*0.22, noseY + S*0.08, S*0.16, S*0.12, 0, 0, Math.PI*2);
+  ctx.fill();
+  
+  // Muzzle line (mouth)
+  ctx.strokeStyle = col(255, 0.40);
+  ctx.lineWidth = 2.5*DPR;
+  ctx.beginPath();
+  ctx.moveTo(-S*0.32, noseY + S*0.05);
+  ctx.quadraticCurveTo(noseX, noseY + S*0.18, S*0.32, noseY + S*0.05);
+  ctx.stroke();
+  
+  // Lip line detail
+  ctx.strokeStyle = col(255, 0.20);
+  ctx.lineWidth = 1*DPR;
+  ctx.beginPath();
+  ctx.moveTo(-S*0.28, noseY + S*0.06);
+  ctx.quadraticCurveTo(noseX, noseY + S*0.15, S*0.28, noseY + S*0.06);
+  ctx.stroke();
+  
+  // Chin highlight
+  ctx.fillStyle = col(255, 0.08);
+  ctx.beginPath();
+  ctx.ellipse(noseX, noseY + S*0.25, S*0.12, S*0.08, 0, 0, Math.PI*2);
+  ctx.fill();
+
+  // === WHISKERS (HYPER-REALISTIC) ===
+  
+  state.whiskerPhase += 0.008;
+  
+  // Whisker follicles (pores)
+  ctx.fillStyle = 'rgba(0,0,0,0.20)';
+  for(let side of [-1,1]){
+    for(let row=-1; row<=1; row++){
+      const wx = side * S*0.28;
+      const wy = noseY + S*0.08 + row*S*0.075;
+      ctx.beginPath();
+      ctx.arc(wx, wy, S*0.015, 0, Math.PI*2);
+      ctx.fill();
+    }
+  }
+  
+  // Whiskers (multi-layer with natural taper)
+  for(let side of [-1,1]){
+    for(let row=-1; row<=1; row++){
+      const baseX = side * S*0.28;
+      const baseY = noseY + S*0.08 + row*S*0.075;
+      const wobble = Math.sin(state.whiskerPhase + row*1.5) * S*0.025;
+      const wobble2 = Math.cos(state.whiskerPhase*0.7 + row*1.2) * S*0.018;
+      
+      // Base whisker (thicker)
+      ctx.strokeStyle = col(255, 0.35 - Math.abs(row)*0.05);
+      ctx.lineWidth = (2.2 - Math.abs(row)*0.3)*DPR;
+      ctx.beginPath();
+      ctx.moveTo(baseX, baseY);
+      ctx.bezierCurveTo(
+        baseX + side*S*0.25, baseY - S*0.04 + wobble2,
+        baseX + side*S*0.65, baseY + wobble - row*S*0.03,
+        baseX + side*S*0.85, baseY + wobble*2.2 - row*S*0.045
+      );
+      ctx.stroke();
+      
+      // Highlight on whisker (top surface)
+      ctx.strokeStyle = col(255, 0.18);
+      ctx.lineWidth = (0.8 - Math.abs(row)*0.1)*DPR;
+      ctx.beginPath();
+      ctx.moveTo(baseX, baseY - DPR);
+      ctx.bezierCurveTo(
+        baseX + side*S*0.25, baseY - S*0.045 + wobble2,
+        baseX + side*S*0.65, baseY + wobble - row*S*0.032,
+        baseX + side*S*0.85, baseY + wobble*2.2 - row*S*0.048
+      );
+      ctx.stroke();
+    }
+  }
+  
+  // Eyebrow whiskers (short tufts)
+  for(let side of [-1,1]){
+    for(let i=0; i<3; i++){
+      const bx = side * S*0.48;
+      const by = -S*0.32;
+      ctx.strokeStyle = col(255, 0.25 - i*0.05);
+      ctx.lineWidth = (1.5 - i*0.3)*DPR;
+      ctx.beginPath();
+      ctx.moveTo(bx, by);
+      ctx.lineTo(
+        bx + side*S*0.12,
+        by - S*0.10 + i*S*0.020
+      );
+      ctx.stroke();
+    }
+  }
+
+  ctx.restore();
+}
+
+function render(t){
+  // Subtle background pulse
+  ctx.fillStyle = `rgba(0,0,0,${0.015 + Math.sin(t*0.0003)*0.005})`;
+  ctx.fillRect(0,0,W,H);
+  
+  // Subtle scanning line
+  ctx.strokeStyle = col(255, 0.008);
+  ctx.lineWidth = 1*DPR;
+  const scanY = ((t*0.1) % H);
+  ctx.beginPath();
+  ctx.moveTo(0, scanY);
+  ctx.lineTo(W, scanY);
+  ctx.stroke();
+  
+  // Blink decay
+  if(state.blink > 0) state.blink = Math.max(0, state.blink - 0.035);
+  
+  // Auto blink (occasional)
+  if(state.blink <= 0 && Math.random() < 0.0012) state.blink = 1.3;
+  
+  const cx = W/2;
+  const cy = H/2;
+  const scale = Math.min(W,H) * 0.45;
+  
+  drawCatFace(cx, cy, scale, t);
+  
+  // Subtle frame
+  ctx.strokeStyle = col(255, 0.03);
+  ctx.lineWidth = 1*DPR;
+  ctx.strokeRect(15*DPR, 15*DPR, W-30*DPR, H-30*DPR);
+  
+  requestAnimationFrame(render);
+}
+
+// Controls
+function toggleInvert(){ 
+  state.invert = !state.invert;
+  document.body.classList.toggle("invert", state.invert);
+}
+function triggerBlink(){ state.blink = 1.3; }
+
+$("btnInvert").addEventListener("click", toggleInvert);
+$("btnBlink").addEventListener("click", triggerBlink);
+$("btnBreath").addEventListener("click", ()=>{ state.breathPhase += Math.PI*0.5; });
+
+window.addEventListener("keydown",(e)=>{
+  if(e.shiftKey && e.key.toLowerCase()==="i"){ e.preventDefault(); toggleInvert(); }
+  if(e.code==="Space"){ e.preventDefault(); triggerBlink(); }
+}, {passive:false});
+
+// Boot
+resize();
+requestAnimationFrame(render);
+</script>
+
+<!--
+FILE_ID: "KETADATA_FACE_HYPER"
+VERSION: "HYPER-REALISTIC_CLOSEUP"
+UPDATED_AT: "2026-01-06"
+FEATURES:
+- FULL-SCREEN CAT FACE PORTRAIT
+- PUSHED STRUCTURE: Multi-layer skull depth shadows, sophisticated radial gradients, forehead highlight ridge, bilateral cheekbone structure, temporal ridge (brow definition), crisp head outline
+- 3-LAYER FUR: 180 strands total - deep/mid/highlight layers with natural directional flow and random variation
+- HYPER-DETAILED EARS: Depth shadows, gradient mass, multi-layer inner ear detail, fur tufts (8 per ear)
+- EXTREME EYE DETAIL: Deep socket recess, orbital bone ridge, sclera gradient, complex iris gradient with radial texture lines, vertical slit pupil with edge highlights, 3-level catchlights (primary/secondary/tertiary), lower eyelid line, upper lid crease, tear duct detail, eyelash detail when closed
+- NOSE STRUCTURE: Bridge shadow, gradient mass, deep nostril cavities with rim highlights, wet surface highlight, detailed philtrum with shadow
+- MUZZLE ANATOMY: Cheek puff shadows and highlights, detailed mouth line with lip detail, chin highlight
+- WHISKER REALISM: Follicle pores, multi-layer whiskers with natural bezier curves, top surface highlights, varied widths, eyebrow tufts
+- SUBTLE ANIMATION: Breathing movement, auto-blink, whisker wobble, slow fur phase rotation
+- MINIMAL UI: Corner markers, clean controls, info bar
+-->
+</body>
+</html>
