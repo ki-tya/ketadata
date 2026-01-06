@@ -1,0 +1,593 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>KETADATA // BIG EYES</title>
+<style>
+  :root{
+    --bg:#000; --fg:#fff;
+    --muted:rgba(255,255,255,.58);
+    --hair:rgba(255,255,255,.14);
+    --panel:rgba(0,0,0,.42);
+    --panel2:rgba(0,0,0,.62);
+    --motion:1;
+    --intensity:0.75;
+    --blinkBias:0.18;
+    --scan:0.35;
+    --pupil:0.16; /* 0..1 (smaller = darker / bigger pupil area) */
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%; margin:0}
+  body{
+    background:var(--bg);
+    color:var(--fg);
+    font:12px/1.25 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace;
+    overflow:hidden;
+    user-select:none;
+    letter-spacing:.03em;
+  }
+  body.invert{ filter: invert(1) hue-rotate(180deg); background:#fff; }
+  body.nullmode .chrome{display:none}
+  body.nullmode #hud{opacity:0; pointer-events:none}
+
+  #field{
+    position:absolute; inset:0;
+    background:
+      radial-gradient(1900px 1400px at 50% 40%, rgba(255,255,255,.10), rgba(0,0,0,0) 62%),
+      radial-gradient(1200px 900px at 25% 75%, rgba(255,255,255,.05), rgba(0,0,0,0) 60%),
+      linear-gradient(180deg, rgba(255,255,255,.03), rgba(0,0,0,0) 55%),
+      linear-gradient(180deg, rgba(0,0,0,0), rgba(0,0,0,.62));
+  }
+  canvas{position:absolute; inset:0; width:100%; height:100%}
+
+  .chrome{position:absolute; inset:0; pointer-events:none}
+  #frame{position:absolute; inset:8px; border:1px solid rgba(255,255,255,.08); pointer-events:none}
+
+  #hud{
+    position:absolute;
+    top:10px; left:10px;
+    width:390px;
+    border:1px solid var(--hair);
+    background:var(--panel);
+    backdrop-filter: blur(8px);
+    pointer-events:auto;
+  }
+  #hud .bar{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:8px 8px;
+    border-bottom:1px solid var(--hair);
+    background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(0,0,0,0));
+  }
+  #hud .body{padding:8px; display:grid; gap:8px}
+  .row{display:flex; gap:8px; align-items:center; flex-wrap:wrap}
+  .btn, input[type="range"]{font:inherit; color:inherit}
+  .btn{
+    border:1px solid var(--hair);
+    background:rgba(255,255,255,.03);
+    padding:6px 8px;
+    cursor:pointer;
+    user-select:none;
+  }
+  .btn:hover{background:rgba(255,255,255,.08)}
+  .btn:active{transform: translateY(1px)}
+  .pill{
+    border:1px solid var(--hair);
+    padding:6px 8px;
+    background:rgba(0,0,0,.18);
+    opacity:.86;
+  }
+  input[type="range"]{width:150px; accent-color: var(--fg)}
+  .label{opacity:.72}
+  .mini{opacity:.58}
+  .sep{height:1px;background:var(--hair);margin:2px 0}
+
+  #note{
+    position:absolute;
+    right:10px; top:10px;
+    width:360px; height:220px;
+    border:1px solid var(--hair);
+    background:var(--panel2);
+    pointer-events:auto;
+    display:none;
+  }
+  #note.open{display:block}
+  #note .bar{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:8px 8px;
+    border-bottom:1px solid var(--hair);
+    background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(0,0,0,0));
+    cursor:move;
+    user-select:none;
+  }
+  #note textarea{
+    width:100%; height: calc(100% - 34px);
+    border:0; outline:none; resize:none;
+    background:transparent;
+    color:var(--fg);
+    font:inherit;
+    padding:8px;
+    user-select:text;
+  }
+
+  #cornerDots{position:absolute; left:10px; bottom:10px; display:flex; gap:6px; pointer-events:none; opacity:.6}
+  .dot{width:10px; height:10px; border-radius:50%; border:1px solid var(--hair); background:rgba(255,255,255,.05)}
+  #statusLine{
+    position:absolute; right:10px; bottom:10px;
+    border:1px solid var(--hair);
+    background:rgba(0,0,0,.25);
+    padding:6px 8px;
+    opacity:.78;
+    pointer-events:none;
+    max-width:60vw;
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+  }
+</style>
+</head>
+<body>
+  <div id="field"><canvas id="c"></canvas></div>
+
+  <div class="chrome">
+    <div id="frame"></div>
+
+    <div id="hud">
+      <div class="bar">
+        <div style="opacity:.92">KETADATA // BIG EYES</div>
+        <div class="mini" id="meta">INVERT 0 · NULL 0</div>
+      </div>
+      <div class="body">
+        <div class="row">
+          <div class="pill"><span class="label">HOTKEYS</span> <span class="mini">SHIFT+I INVERT · SHIFT+N NULL · SHIFT+F FULL · SHIFT+K NOTE · SPACE BLINK · CLICK PULSE</span></div>
+        </div>
+
+        <div class="sep"></div>
+
+        <div class="row">
+          <button class="btn" id="btnNote">NOTE</button>
+          <button class="btn" id="btnInvert">INVERT</button>
+          <button class="btn" id="btnNull">NULL</button>
+          <button class="btn" id="btnFull">FULL</button>
+          <span class="label">MOTION</span>
+          <button class="btn" id="btnMotion">ON</button>
+        </div>
+
+        <div class="row">
+          <span class="label">INTENSE</span>
+          <input type="range" id="rngInt" min="0" max="100" step="1" value="75" />
+          <span class="label">SCAN</span>
+          <input type="range" id="rngScan" min="0" max="100" step="1" value="35" />
+          <span class="label">PUPIL</span>
+          <input type="range" id="rngPupil" min="0" max="100" step="1" value="16" />
+        </div>
+
+        <div class="row">
+          <span class="label">RESET</span>
+          <button class="btn" id="btnReset">GO</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="note">
+      <div class="bar">
+        <div>KETA_NOTE</div>
+        <div class="mini">SHIFT+K TO TOGGLE</div>
+      </div>
+      <textarea id="noteText" spellcheck="false" placeholder="KETA_NOTE — optional, movable, non-interfering."></textarea>
+    </div>
+
+    <div id="cornerDots" aria-hidden="true">
+      <div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div>
+    </div>
+
+    <div id="statusLine">READY</div>
+  </div>
+
+<script>
+const FILE_ID = "KETADATA_BIG_EYES_DARKPUPIL_V1";
+const LS_KEY = "KETADATA::" + FILE_ID + "::STATE";
+const $ = (id)=>document.getElementById(id);
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const lerp=(a,b,t)=>a+(b-a)*t;
+
+const state = {
+  invert:false, nullMode:false, fullscreen:false, motion:true,
+  intensity:0.75, scan:0.35, pupilKnob:0.16,
+  noteOpen:false, notePos:{x:null,y:null}, noteText:"",
+  blink:0,
+  irisPulse:0,
+  seed:(Math.random()*1e9)>>>0
+};
+
+function loadState(){
+  try{
+    const raw = localStorage.getItem(LS_KEY);
+    if(!raw) return;
+    const s = JSON.parse(raw);
+    if(!s || typeof s!=="object") return;
+    Object.assign(state, s);
+  }catch(_){}
+}
+function saveState(){ try{ localStorage.setItem(LS_KEY, JSON.stringify(state)); }catch(_){ } }
+function status(t){ $("statusLine").textContent = t; }
+
+function applyState(){
+  document.body.classList.toggle("invert", !!state.invert);
+  document.body.classList.toggle("nullmode", !!state.nullMode);
+  $("btnMotion").textContent = state.motion ? "ON" : "OFF";
+  $("meta").textContent = `INVERT ${state.invert?1:0} · NULL ${state.nullMode?1:0}`;
+
+  $("rngInt").value = String(Math.round(state.intensity*100));
+  $("rngScan").value = String(Math.round(state.scan*100));
+  $("rngPupil").value = String(Math.round(state.pupilKnob*100));
+
+  $("noteText").value = state.noteText || "";
+  $("note").classList.toggle("open", !!state.noteOpen);
+  if(state.notePos && state.notePos.x!=null && state.notePos.y!=null){
+    $("note").style.left = state.notePos.x + "px";
+    $("note").style.top = state.notePos.y + "px";
+    $("note").style.right = "auto";
+  }
+
+  status(`INTENSE ${Math.round(state.intensity*100)} · SCAN ${Math.round(state.scan*100)} · PUPIL ${Math.round(state.pupilKnob*100)} · BLINK ${Math.round(clamp(state.blink,0,1)*100)}`);
+}
+
+/* canvas */
+const canvas = $("c");
+const ctx = canvas.getContext("2d", { alpha:true });
+let W=0,H=0,DPR=1;
+
+function resize(){
+  DPR = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+  W = Math.floor(window.innerWidth * DPR);
+  H = Math.floor(window.innerHeight * DPR);
+  canvas.width = W;
+  canvas.height = H;
+}
+addEventListener("resize", resize);
+
+function inv(){ return document.body.classList.contains("invert"); }
+function col(a){ return inv() ? `rgba(10,12,15,${a})` : `rgba(255,255,255,${a})`; }
+
+function rand(){
+  state.seed = (state.seed * 1664525 + 1013904223) >>> 0;
+  return (state.seed >>> 8) / 16777216;
+}
+
+/* iris texture */
+function irisSpokes(r0, r1, spokes, a0){
+  ctx.strokeStyle = col(a0);
+  ctx.lineWidth = 1*DPR;
+  for(let i=0;i<spokes;i++){
+    const ang = (i/spokes)*Math.PI*2 + (rand()*0.05 - 0.025);
+    const rr0 = r0*(0.92 + rand()*0.16);
+    const rr1 = r1*(0.92 + rand()*0.16);
+    ctx.beginPath();
+    ctx.moveTo(Math.cos(ang)*rr0, Math.sin(ang)*rr0);
+    ctx.lineTo(Math.cos(ang)*rr1, Math.sin(ang)*rr1);
+    ctx.stroke();
+  }
+}
+
+function drawScan(t){
+  const scan = clamp(state.scan, 0, 1);
+  if(scan <= 0.02) return;
+
+  const y = ((t*0.085) % H);
+  const band = (16 + 54*scan) * DPR;
+
+  ctx.fillStyle = col(0.010 + 0.020*scan);
+  ctx.fillRect(0, y-band*0.5, W, band);
+
+  ctx.strokeStyle = col(0.014 + 0.034*scan);
+  ctx.lineWidth = 1*DPR;
+  ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke();
+
+  ctx.strokeStyle = col(0.006 + 0.010*scan);
+  ctx.lineWidth = 1*DPR;
+  const grid = (88 - 34*scan) * DPR;
+  const ox = ((t*0.010*DPR) % grid);
+  for(let x=ox; x < W; x += grid){
+    ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke();
+  }
+}
+
+/* BIG EYE: single, centered, huge */
+function drawHugeEye(cx, cy, S, t){
+  const intense = clamp(state.intensity, 0, 1);
+  const pulse = clamp(state.irisPulse, 0, 1);
+  const life = state.motion ? 1 : 0;
+
+  // micro drift (slow)
+  const mx = Math.sin(t*0.00035) * S*0.010 * (0.35 + 0.65*intense) * life;
+  const my = Math.cos(t*0.00028) * S*0.008 * (0.30 + 0.70*intense) * life;
+
+  // blink
+  const lid = clamp(clamp(state.blink,0,1) * (0.65 + 0.55*(1-state.pupilKnob)), 0, 1);
+  const open = 1 - lid;
+
+  // outer geometry
+  const w = S*1.05;
+  const h = S*0.58;
+
+  ctx.save();
+  ctx.translate(cx + mx, cy + my);
+
+  // socket depth shadow
+  ctx.fillStyle = "rgba(0,0,0,0.34)";
+  ctx.beginPath();
+  ctx.ellipse(0, S*0.06, w*0.54, h*0.60, 0, 0, Math.PI*2);
+  ctx.fill();
+
+  // sclera gradient
+  const scl = ctx.createRadialGradient(-w*0.22, -h*0.18, 0, 0, 0, w*0.70);
+  scl.addColorStop(0, col(0.11 + 0.05*intense));
+  scl.addColorStop(0.52, col(0.06 + 0.03*intense));
+  scl.addColorStop(1, "rgba(0,0,0,0.12)");
+  ctx.fillStyle = scl;
+
+  // almond fill
+  ctx.beginPath();
+  ctx.moveTo(-w*0.78, 0);
+  ctx.quadraticCurveTo(-w*0.22, -h*0.82*open, 0, -h*0.64*open);
+  ctx.quadraticCurveTo(w*0.22, -h*0.82*open, w*0.78, 0);
+  ctx.quadraticCurveTo(w*0.18, h*0.84*open, 0, h*0.64*open);
+  ctx.quadraticCurveTo(-w*0.18, h*0.84*open, -w*0.78, 0);
+  ctx.closePath();
+  ctx.fill();
+
+  if(open > 0.06){
+    // iris + pupil (very large iris, very dark pupil)
+    const lookX = Math.sin(t*0.00018) * w*0.03 * (0.3 + 0.7*intense) * life;
+    const lookY = Math.cos(t*0.00015) * h*0.03 * (0.3 + 0.7*intense) * life;
+    const ix = lookX;
+    const iy = lookY;
+
+    const limbusR = S*(0.285 + 0.085*intense) * (1 + 0.12*pulse);  // BIG IRIS
+    const irisR = limbusR*0.78;
+
+    // iris gradient (mono)
+    const ig = ctx.createRadialGradient(ix - limbusR*0.28, iy - limbusR*0.28, 0, ix, iy, limbusR*1.05);
+    ig.addColorStop(0, col(0.18 + 0.12*intense));
+    ig.addColorStop(0.45, col(0.10 + 0.08*intense));
+    ig.addColorStop(0.80, col(0.06 + 0.06*intense));
+    ig.addColorStop(1, "rgba(0,0,0,0.28)");
+    ctx.fillStyle = ig;
+    ctx.beginPath();
+    ctx.ellipse(ix, iy, limbusR, limbusR*0.97, 0, 0, Math.PI*2);
+    ctx.fill();
+
+    // limbus ring (edge)
+    ctx.strokeStyle = col(0.30 + 0.35*intense);
+    ctx.lineWidth = (3.0 + 2.4*intense)*DPR;
+    ctx.beginPath();
+    ctx.ellipse(ix, iy, limbusR, limbusR*0.97, 0, 0, Math.PI*2);
+    ctx.stroke();
+
+    // iris texture
+    ctx.save();
+    ctx.translate(ix, iy);
+    irisSpokes(irisR*0.22, limbusR*0.94, Math.floor(120 + 160*intense), 0.05 + 0.09*intense);
+    // rings
+    ctx.strokeStyle = col(0.10 + 0.12*intense);
+    ctx.lineWidth = 1*DPR;
+    for(let k=0;k<5;k++){
+      const rr = irisR*(0.45 + k*0.14);
+      ctx.beginPath();
+      ctx.ellipse(0,0, rr, rr*0.97, 0, 0, Math.PI*2);
+      ctx.stroke();
+    }
+    ctx.restore();
+
+    // HUGE DARK PUPIL (round; dark as void)
+    const p = clamp(state.pupilKnob, 0, 1);        // user knob
+    const pupilR = limbusR*(0.38 + (1-p)*0.22);    // lower knob => bigger pupil
+    ctx.fillStyle = "rgba(0,0,0,0.995)";
+    ctx.beginPath();
+    ctx.ellipse(ix, iy, pupilR*(1+0.08*pulse), pupilR*(1+0.08*pulse), 0, 0, Math.PI*2);
+    ctx.fill();
+
+    // pupil edge micro highlight (keeps it looking wet, but still DARK)
+    ctx.strokeStyle = col(0.08 + 0.10*intense);
+    ctx.lineWidth = 1*DPR;
+    ctx.beginPath();
+    ctx.ellipse(ix - pupilR*0.12, iy - pupilR*0.10, pupilR, pupilR, 0, Math.PI*1.05, Math.PI*1.75);
+    ctx.stroke();
+
+    // catchlights (strong)
+    const hlA = 0.78 + 0.18*intense;
+    ctx.fillStyle = `rgba(255,255,255,${hlA})`;
+    ctx.beginPath();
+    ctx.ellipse(ix - limbusR*0.45, iy - limbusR*0.42, limbusR*0.22, limbusR*0.15, -0.45, 0, Math.PI*2);
+    ctx.fill();
+
+    ctx.fillStyle = `rgba(255,255,255,${0.34 + 0.22*intense})`;
+    ctx.beginPath();
+    ctx.arc(ix + limbusR*0.34, iy - limbusR*0.22, limbusR*0.09, 0, Math.PI*2);
+    ctx.fill();
+
+    // wetline
+    ctx.strokeStyle = col(0.14 + 0.18*intense);
+    ctx.lineWidth = 2*DPR;
+    ctx.beginPath();
+    ctx.moveTo(-w*0.62, h*0.18*open);
+    ctx.quadraticCurveTo(0, h*0.44*open, w*0.62, h*0.18*open);
+    ctx.stroke();
+  }
+
+  // lid lines (heavy)
+  ctx.strokeStyle = col(0.90);
+  ctx.lineWidth = (4.0 + 2.0*intense)*DPR;
+  ctx.beginPath();
+  ctx.moveTo(-w*0.80, 0);
+  ctx.quadraticCurveTo(-w*0.22, -h*0.86*open, 0, -h*0.66*open);
+  ctx.quadraticCurveTo(w*0.22, -h*0.86*open, w*0.80, 0);
+  ctx.stroke();
+
+  ctx.strokeStyle = col(0.34);
+  ctx.lineWidth = 2*DPR;
+  ctx.beginPath();
+  ctx.moveTo(-w*0.78, 0);
+  ctx.quadraticCurveTo(0, h*0.88*open, w*0.78, 0);
+  ctx.stroke();
+
+  // crease
+  ctx.strokeStyle = col(0.10 + 0.12*intense);
+  ctx.lineWidth = 1*DPR;
+  ctx.beginPath();
+  ctx.moveTo(-w*0.58, -h*0.32);
+  ctx.quadraticCurveTo(0, -h*(0.92 - 0.28*open), w*0.58, -h*0.32);
+  ctx.stroke();
+
+  ctx.restore();
+}
+
+function render(){
+  const t = performance.now();
+  const intense = clamp(state.intensity, 0, 1);
+
+  // persistence wash
+  const alpha = state.motion ? (0.16 + 0.10*(1-intense)) : 1.0;
+  ctx.fillStyle = `rgba(0,0,0,${alpha})`;
+  ctx.fillRect(0,0,W,H);
+
+  // blink sim
+  if(state.blink > 0) state.blink = Math.max(0, state.blink - (0.050 + 0.035*intense));
+  const blinkChance = (0.00045 + 0.00080*intense) * (state.motion ? 1 : 0);
+  if(state.blink <= 0 && Math.random() < blinkChance) state.blink = 1.25;
+
+  // iris pulse decay
+  if(state.irisPulse > 0) state.irisPulse = Math.max(0, state.irisPulse - 0.030);
+
+  // massive eye
+  const cx = W/2;
+  const cy = H/2;
+  const S = Math.min(W,H) * 0.70; /* BIGGER THAN BEFORE */
+  drawHugeEye(cx, cy, S, t);
+
+  // grain
+  ctx.fillStyle = col(0.006 + 0.010*intense);
+  for(let i=0;i<90;i++){
+    const x = Math.random()*W;
+    const y = Math.random()*H;
+    ctx.fillRect(x, y, 1*DPR, 1*DPR);
+  }
+
+  drawScan(t);
+
+  // border
+  ctx.strokeStyle = col(0.03 + 0.03*intense);
+  ctx.lineWidth = 1*DPR;
+  ctx.strokeRect(10*DPR, 10*DPR, W-20*DPR, H-20*DPR);
+
+  requestAnimationFrame(render);
+}
+
+/* controls */
+function toggleNote(){ state.noteOpen=!state.noteOpen; saveState(); applyState(); }
+function toggleInvert(){ state.invert=!state.invert; saveState(); applyState(); }
+function toggleNull(){ state.nullMode=!state.nullMode; saveState(); applyState(); }
+async function toggleFullscreen(){
+  try{
+    if(!document.fullscreenElement){ await document.documentElement.requestFullscreen(); state.fullscreen=true; }
+    else { await document.exitFullscreen(); state.fullscreen=false; }
+  }catch(_){}
+  saveState(); applyState();
+}
+function toggleMotion(){ state.motion=!state.motion; saveState(); applyState(); }
+function triggerBlink(){ state.blink = 1.25; saveState(); applyState(); }
+function pulse(){ state.irisPulse = 1.0; saveState(); applyState(); }
+
+function resetSim(){
+  state.blink = 0;
+  state.irisPulse = 0;
+  state.seed = (Math.random()*1e9)>>>0;
+  saveState(); applyState();
+}
+
+$("btnNote").addEventListener("click", toggleNote);
+$("btnInvert").addEventListener("click", toggleInvert);
+$("btnNull").addEventListener("click", toggleNull);
+$("btnFull").addEventListener("click", toggleFullscreen);
+$("btnMotion").addEventListener("click", toggleMotion);
+$("btnReset").addEventListener("click", resetSim);
+
+$("rngInt").addEventListener("input",(e)=>{ state.intensity = clamp((parseInt(e.target.value,10)||75)/100, 0, 1); saveState(); applyState(); });
+$("rngScan").addEventListener("input",(e)=>{ state.scan = clamp((parseInt(e.target.value,10)||35)/100, 0, 1); saveState(); applyState(); });
+$("rngPupil").addEventListener("input",(e)=>{ state.pupilKnob = clamp((parseInt(e.target.value,10)||16)/100, 0, 1); saveState(); applyState(); });
+
+$("noteText").addEventListener("input",(e)=>{ state.noteText = e.target.value || ""; saveState(); });
+
+window.addEventListener("click",(e)=>{
+  const path = e.composedPath ? e.composedPath() : [];
+  if(path.some(n => n && n.id && (n.id==="hud" || n.id==="note"))) return;
+  pulse();
+}, {passive:true});
+
+/* hotkeys */
+function isTypingTarget(t){
+  if(!t) return false;
+  const tag = (t.tagName||"").toLowerCase();
+  return tag==="textarea" || tag==="input" || t.isContentEditable;
+}
+window.addEventListener("keydown",(e)=>{
+  const typing = isTypingTarget(e.target);
+
+  if(e.shiftKey && e.key.toLowerCase()==="i"){ e.preventDefault(); toggleInvert(); return; }
+  if(e.shiftKey && e.key.toLowerCase()==="n"){ e.preventDefault(); toggleNull(); return; }
+  if(e.shiftKey && e.key.toLowerCase()==="f"){ e.preventDefault(); toggleFullscreen(); return; }
+  if(e.shiftKey && e.key.toLowerCase()==="k"){ e.preventDefault(); toggleNote(); return; }
+  if(e.code==="Space" && !typing){ e.preventDefault(); triggerBlink(); return; }
+}, { passive:false });
+
+/* NOTE drag */
+(function noteDrag(){
+  const el = $("note");
+  const bar = el.querySelector(".bar");
+  let dragging=false, ox=0, oy=0;
+
+  bar.addEventListener("mousedown",(e)=>{
+    dragging=true;
+    const r = el.getBoundingClientRect();
+    ox = e.clientX - r.left;
+    oy = e.clientY - r.top;
+    e.preventDefault();
+  });
+  window.addEventListener("mousemove",(e)=>{
+    if(!dragging) return;
+    const x = Math.max(10, Math.min(window.innerWidth - 10 - el.offsetWidth, e.clientX - ox));
+    const y = Math.max(10, Math.min(window.innerHeight - 10 - el.offsetHeight, e.clientY - oy));
+    el.style.left = x + "px";
+    el.style.top = y + "px";
+    el.style.right = "auto";
+    state.notePos = { x, y };
+  });
+  window.addEventListener("mouseup",()=>{
+    if(!dragging) return;
+    dragging=false;
+    saveState();
+  });
+})();
+
+/* boot */
+loadState();
+resize();
+applyState();
+requestAnimationFrame(render);
+</script>
+
+<!--
+AE: VISUAL (SINGLE HUGE EYE, VERY LARGE IRIS, VERY DARK ROUND PUPIL, CONTROLLED MONO HIGHLIGHTS, SCAN + GRAIN)
+EE: ENGINE (LOCAL-FIRST state, blink + iris pulse, sliders, hotkeys, note, fullscreen/invert/null)
+WB: WIRING BRIDGE (applyState to DOM, persistence, controls)
+
+FILE_ID: "KETADATA_BIG_EYES_DARKPUPIL_V1"
+ROOM_ID: "K_BIG_EYES"
+VERSION: "V1"
+UPDATED_AT: "2026-01-06T00:00:00.000-05:00"
+CHANGELOG:
+- V1: Single massive eye closeup with very dark pupil; mono-only; local-first persistence.
+-->
+</body>
+</html>
