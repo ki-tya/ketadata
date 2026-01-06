@@ -1,0 +1,916 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>KETADATA // FACE // ANGULAR</title>
+  <style>
+    :root{
+      --bg:#000;
+      --fg:#fff;
+      --muted:rgba(255,255,255,.58);
+      --hair:rgba(255,255,255,.10);
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%;margin:0}
+    body{
+      background:var(--bg);
+      color:var(--fg);
+      font:10px/1.3 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace;
+      overflow:hidden;
+      user-select:none;
+      letter-spacing: 0.03em;
+    }
+
+    body.invert{ filter: invert(1) hue-rotate(180deg); background:#fff; }
+
+    #field{
+      position:absolute; inset:0;
+      background:
+        radial-gradient(1800px 1400px at 50% 45%, rgba(255,255,255,.12), rgba(0,0,0,0) 70%),
+        radial-gradient(1200px 1100px at 30% 80%, rgba(255,255,255,.06), rgba(0,0,0,0) 65%),
+        radial-gradient(1000px 900px at 75% 25%, rgba(255,255,255,.04), rgba(0,0,0,0) 62%),
+        linear-gradient(180deg, rgba(255,255,255,.06), rgba(0,0,0,0) 50%),
+        linear-gradient(180deg, rgba(0,0,0,0), rgba(0,0,0,.55));
+    }
+    canvas{position:absolute; inset:0; width:100%; height:100%}
+
+    #controls{
+      position:absolute;
+      top:12px; right:12px;
+      border:1px solid var(--hair);
+      background:rgba(0,0,0,.35);
+      backdrop-filter: blur(8px);
+      padding:8px 10px;
+      opacity:.88;
+      font-size: 10px;
+      display:flex;
+      gap:10px;
+      align-items:center;
+    }
+    .btn{
+      border:1px solid var(--hair);
+      background:rgba(255,255,255,.03);
+      padding:5px 8px;
+      cursor:pointer;
+      font:inherit;
+      color:inherit;
+      transition: all 0.15s ease;
+    }
+    .btn:hover{background:rgba(255,255,255,.08);}
+    .btn:active{transform: translateY(1px);}
+
+    #info{
+      position:absolute;
+      bottom:12px; left:12px;
+      border:1px solid var(--hair);
+      background:rgba(0,0,0,.35);
+      backdrop-filter: blur(8px);
+      padding:8px 10px;
+      opacity:.78;
+      font-size: 10px;
+      max-width:50vw;
+    }
+
+    .corner{
+      position:absolute;
+      width:40px; height:40px;
+      border:1px solid var(--hair);
+      opacity:.4;
+    }
+    .corner.tl{top:12px; left:12px; border-right:none; border-bottom:none;}
+    .corner.tr{top:12px; right:12px; border-left:none; border-bottom:none;}
+    .corner.bl{bottom:12px; left:12px; border-right:none; border-top:none;}
+    .corner.br{bottom:12px; right:12px; border-left:none; border-top:none;}
+  </style>
+</head>
+<body>
+  <div id="field"><canvas id="c"></canvas></div>
+
+  <div class="corner tl"></div>
+  <div class="corner tr"></div>
+  <div class="corner bl"></div>
+  <div class="corner br"></div>
+
+  <div id="controls">
+    <button class="btn" id="btnInvert">INVERT</button>
+    <span style="opacity:.6">|</span>
+    <button class="btn" id="btnBlink">BLINK</button>
+    <button class="btn" id="btnBreath">BREATH</button>
+  </div>
+
+  <div id="info">
+    KETADATA // FACE · SEVERE ANGULAR GEOMETRY · SHIFT+I INVERT · SPACE BLINK
+  </div>
+
+<script>
+const $ = (id)=>document.getElementById(id);
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const lerp=(a,b,t)=>a+(b-a)*t;
+
+const canvas = $("c");
+const ctx = canvas.getContext("2d", { alpha:true });
+let W=0,H=0,DPR=1;
+
+function resize(){
+  DPR = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+  W = Math.floor(window.innerWidth * DPR);
+  H = Math.floor(window.innerHeight * DPR);
+  canvas.width = W;
+  canvas.height = H;
+}
+addEventListener("resize", resize);
+
+const state = {
+  blink: 0,
+  breathPhase: 0,
+  whiskerPhase: 0,
+  furPhase: 0,
+  invert: false
+};
+
+function col(base, alpha){ 
+  return document.body.classList.contains("invert") 
+    ? `rgba(10,12,15,${alpha})` 
+    : `rgba(255,255,255,${alpha})`;
+}
+
+function drawCatFace(cx, cy, scale, t){
+  const S = scale;
+  
+  // Breathing subtle movement
+  state.breathPhase += 0.006;
+  const breath = Math.sin(state.breathPhase) * 0.015;
+  const breathY = breath * S;
+  
+  ctx.save();
+  ctx.translate(cx, cy + breathY);
+  ctx.lineJoin = "round";
+  ctx.lineCap = "round";
+
+  // === HEAD STRUCTURE (ANGULAR) ===
+  
+  // Deep shadow base (angular skull)
+  ctx.fillStyle = 'rgba(0,0,0,0.22)';
+  ctx.beginPath();
+  ctx.moveTo(-S*0.65, -S*0.45);
+  ctx.lineTo(S*0.65, -S*0.45);
+  ctx.lineTo(S*0.78, S*0.10);
+  ctx.lineTo(S*0.60, S*0.70);
+  ctx.lineTo(0, S*0.85);
+  ctx.lineTo(-S*0.60, S*0.70);
+  ctx.lineTo(-S*0.78, S*0.10);
+  ctx.closePath();
+  ctx.fill();
+  
+  // Secondary shadow layer (harsh geometry)
+  ctx.fillStyle = 'rgba(0,0,0,0.12)';
+  ctx.beginPath();
+  ctx.moveTo(-S*0.62, -S*0.42);
+  ctx.lineTo(S*0.62, -S*0.42);
+  ctx.lineTo(S*0.75, S*0.08);
+  ctx.lineTo(S*0.58, S*0.68);
+  ctx.lineTo(0, S*0.82);
+  ctx.lineTo(-S*0.58, S*0.68);
+  ctx.lineTo(-S*0.75, S*0.08);
+  ctx.closePath();
+  ctx.fill();
+  
+  // Main head mass with harsh gradient
+  const headGrad = ctx.createRadialGradient(0, -S*0.40, 0, 0, 0, S*1.2);
+  headGrad.addColorStop(0, col(255, 0.25));
+  headGrad.addColorStop(0.30, col(255, 0.14));
+  headGrad.addColorStop(0.65, col(255, 0.07));
+  headGrad.addColorStop(1, 'rgba(0,0,0,0.12)');
+  
+  ctx.fillStyle = headGrad;
+  ctx.beginPath();
+  ctx.moveTo(-S*0.60, -S*0.40);
+  ctx.lineTo(S*0.60, -S*0.40);
+  ctx.lineTo(S*0.73, S*0.06);
+  ctx.lineTo(S*0.56, S*0.66);
+  ctx.lineTo(0, S*0.80);
+  ctx.lineTo(-S*0.56, S*0.66);
+  ctx.lineTo(-S*0.73, S*0.06);
+  ctx.closePath();
+  ctx.fill();
+  
+  // Forehead plane (sharp geometric ridge)
+  ctx.strokeStyle = col(255, 0.20);
+  ctx.lineWidth = 2.5*DPR;
+  ctx.beginPath();
+  ctx.moveTo(-S*0.45, -S*0.52);
+  ctx.lineTo(0, -S*0.58);
+  ctx.lineTo(S*0.45, -S*0.52);
+  ctx.stroke();
+  
+  // Sharp cheekbone planes (bilateral hard angles)
+  ctx.fillStyle = 'rgba(0,0,0,0.15)';
+  // Left cheek plane
+  ctx.beginPath();
+  ctx.moveTo(-S*0.68, -S*0.10);
+  ctx.lineTo(-S*0.50, S*0.10);
+  ctx.lineTo(-S*0.35, S*0.35);
+  ctx.lineTo(-S*0.55, S*0.20);
+  ctx.closePath();
+  ctx.fill();
+  // Right cheek plane
+  ctx.beginPath();
+  ctx.moveTo(S*0.68, -S*0.10);
+  ctx.lineTo(S*0.50, S*0.10);
+  ctx.lineTo(S*0.35, S*0.35);
+  ctx.lineTo(S*0.55, S*0.20);
+  ctx.closePath();
+  ctx.fill();
+  
+  // Harsh cheekbone highlight edges
+  ctx.strokeStyle = col(255, 0.12);
+  ctx.lineWidth = 2*DPR;
+  ctx.beginPath();
+  ctx.moveTo(-S*0.70, -S*0.05);
+  ctx.lineTo(-S*0.52, S*0.15);
+  ctx.lineTo(-S*0.38, S*0.38);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(S*0.70, -S*0.05);
+  ctx.lineTo(S*0.52, S*0.15);
+  ctx.lineTo(S*0.38, S*0.38);
+  ctx.stroke();
+  
+  // Severe brow ridge (angular prominence)
+  ctx.strokeStyle = col(255, 0.10);
+  ctx.lineWidth = 3*DPR;
+  ctx.beginPath();
+  ctx.moveTo(-S*0.58, -S*0.28);
+  ctx.lineTo(-S*0.25, -S*0.45);
+  ctx.lineTo(0, -S*0.50);
+  ctx.lineTo(S*0.25, -S*0.45);
+  ctx.lineTo(S*0.58, -S*0.28);
+  ctx.stroke();
+  
+  // Main head outline (sharp angular edge)
+  ctx.strokeStyle = col(255, 0.98);
+  ctx.lineWidth = 4*DPR;
+  ctx.beginPath();
+  ctx.moveTo(-S*0.60, -S*0.40);
+  ctx.lineTo(S*0.60, -S*0.40);
+  ctx.lineTo(S*0.73, S*0.06);
+  ctx.lineTo(S*0.56, S*0.66);
+  ctx.lineTo(0, S*0.80);
+  ctx.lineTo(-S*0.56, S*0.66);
+  ctx.lineTo(-S*0.73, S*0.06);
+  ctx.closePath();
+  ctx.stroke();
+  
+  // Jaw line emphasis (severe definition)
+  ctx.strokeStyle = 'rgba(0,0,0,0.18)';
+  ctx.lineWidth = 3*DPR;
+  ctx.beginPath();
+  ctx.moveTo(-S*0.73, S*0.06);
+  ctx.lineTo(-S*0.56, S*0.66);
+  ctx.lineTo(0, S*0.80);
+  ctx.lineTo(S*0.56, S*0.66);
+  ctx.lineTo(S*0.73, S*0.06);
+  ctx.stroke();
+
+  // === MULTI-LAYER FUR RENDERING ===
+  
+  state.furPhase += 0.002;
+  const furCount = 180;
+  
+  // Layer 1: Deep fur (darkest, base layer)
+  ctx.strokeStyle = 'rgba(0,0,0,0.12)';
+  ctx.lineWidth = 1.8*DPR;
+  for(let i=0; i<furCount*0.6; i++){
+    const angle = (i/furCount/0.6) * Math.PI*2 + state.furPhase*0.3;
+    const dist = S*0.72 + Math.random()*S*0.08;
+    const x = Math.cos(angle) * dist;
+    const y = Math.sin(angle) * dist * 1.04;
+    const len = (S*0.12 + Math.random()*S*0.08);
+    const spread = Math.random()*0.4 - 0.2;
+    
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(
+      x + Math.cos(angle + spread)*len,
+      y + Math.sin(angle + spread)*len*1.04
+    );
+    ctx.stroke();
+  }
+  
+  // Layer 2: Mid-tone fur
+  ctx.strokeStyle = col(255, 0.08);
+  ctx.lineWidth = 1.4*DPR;
+  for(let i=0; i<furCount*0.8; i++){
+    const angle = (i/furCount/0.8) * Math.PI*2 + state.furPhase*0.5;
+    const dist = S*0.74 + Math.random()*S*0.06;
+    const x = Math.cos(angle) * dist;
+    const y = Math.sin(angle) * dist * 1.04;
+    const len = (S*0.10 + Math.random()*S*0.06);
+    const spread = Math.random()*0.35 - 0.175;
+    
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(
+      x + Math.cos(angle + spread)*len,
+      y + Math.sin(angle + spread)*len*1.04
+    );
+    ctx.stroke();
+  }
+  
+  // Layer 3: Top highlights
+  ctx.strokeStyle = col(255, 0.18);
+  ctx.lineWidth = 1*DPR;
+  for(let i=0; i<furCount*0.5; i++){
+    const angle = (i/furCount/0.5) * Math.PI*2 + state.furPhase*0.7;
+    const dist = S*0.76 + Math.random()*S*0.04;
+    const x = Math.cos(angle) * dist;
+    const y = Math.sin(angle) * dist * 1.04;
+    const len = (S*0.08 + Math.random()*S*0.04);
+    
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(
+      x + Math.cos(angle)*len,
+      y + Math.sin(angle)*len*1.04
+    );
+    ctx.stroke();
+  }
+  
+  // === EARS (SEVERE ANGULAR) ===
+  
+  function drawEar(side){
+    const flip = side;
+    const ex = flip * S*0.60;
+    const ey = -S*0.62;
+    
+    // Ear shadow (sharp angular)
+    ctx.fillStyle = 'rgba(0,0,0,0.20)';
+    ctx.beginPath();
+    ctx.moveTo(ex, ey);
+    ctx.lineTo(ex + flip*S*0.32, ey - S*0.62);
+    ctx.lineTo(ex + flip*S*0.08, ey - S*0.05);
+    ctx.closePath();
+    ctx.fill();
+    
+    // Ear mass (harsh gradient)
+    const earGrad = ctx.createLinearGradient(
+      ex, ey,
+      ex + flip*S*0.32, ey - S*0.62
+    );
+    earGrad.addColorStop(0, col(255, 0.12));
+    earGrad.addColorStop(0.7, col(255, 0.06));
+    earGrad.addColorStop(1, col(255, 0.02));
+    
+    ctx.fillStyle = earGrad;
+    ctx.beginPath();
+    ctx.moveTo(ex, ey);
+    ctx.lineTo(ex + flip*S*0.30, ey - S*0.60);
+    ctx.lineTo(ex + flip*S*0.06, ey - S*0.05);
+    ctx.closePath();
+    ctx.fill();
+    
+    // Sharp ear outline
+    ctx.strokeStyle = col(255, 0.98);
+    ctx.lineWidth = 3.5*DPR;
+    ctx.beginPath();
+    ctx.moveTo(ex, ey);
+    ctx.lineTo(ex + flip*S*0.30, ey - S*0.60);
+    ctx.lineTo(ex + flip*S*0.06, ey - S*0.05);
+    ctx.closePath();
+    ctx.stroke();
+    
+    // Inner ear angular detail
+    ctx.strokeStyle = col(255, 0.25);
+    ctx.lineWidth = 2.5*DPR;
+    ctx.beginPath();
+    ctx.moveTo(ex + flip*S*0.05, ey - S*0.10);
+    ctx.lineTo(ex + flip*S*0.24, ey - S*0.48);
+    ctx.stroke();
+    
+    ctx.strokeStyle = col(255, 0.15);
+    ctx.lineWidth = 1.5*DPR;
+    ctx.beginPath();
+    ctx.moveTo(ex + flip*S*0.08, ey - S*0.16);
+    ctx.lineTo(ex + flip*S*0.26, ey - S*0.52);
+    ctx.stroke();
+    
+    // Severe ear edge highlight
+    ctx.strokeStyle = col(255, 0.20);
+    ctx.lineWidth = 2*DPR;
+    ctx.beginPath();
+    ctx.moveTo(ex + flip*S*0.28, ey - S*0.58);
+    ctx.lineTo(ex + flip*S*0.30, ey - S*0.60);
+    ctx.lineTo(ex + flip*S*0.08, ey - S*0.06);
+    ctx.stroke();
+    
+    // Angular fur tufts (sharp spikes)
+    for(let i=0; i<6; i++){
+      ctx.strokeStyle = col(255, 0.12 + Math.random()*0.08);
+      ctx.lineWidth = (1.2 - i*0.15)*DPR;
+      const t = i/6;
+      const sx = ex + flip*S*(0.08 + t*0.20);
+      const sy = ey - S*(0.12 + t*0.45);
+      ctx.beginPath();
+      ctx.moveTo(sx, sy);
+      ctx.lineTo(sx + flip*S*0.08, sy - S*0.12);
+      ctx.stroke();
+    }
+  }
+  
+  drawEar(-1);
+  drawEar(1);
+
+  // === EYES (SEVERE ANGULAR) ===
+  
+  const blink = clamp(state.blink, 0, 1);
+  const eyeOpen = 1 - blink;
+  
+  function drawEye(side){
+    const ex = side * S*0.35;
+    const ey = -S*0.12;
+    
+    // Eye socket (harsh angular recess)
+    ctx.fillStyle = 'rgba(0,0,0,0.25)';
+    ctx.beginPath();
+    ctx.moveTo(ex - side*S*0.16, ey - S*0.08);
+    ctx.lineTo(ex + side*S*0.18, ey - S*0.10);
+    ctx.lineTo(ex + side*S*0.18, ey + S*0.14);
+    ctx.lineTo(ex - side*S*0.14, ey + S*0.12);
+    ctx.closePath();
+    ctx.fill();
+    
+    // Orbital bone ridge (sharp angular)
+    ctx.strokeStyle = col(255, 0.12);
+    ctx.lineWidth = 2.5*DPR;
+    ctx.beginPath();
+    ctx.moveTo(ex - side*S*0.18, ey - S*0.10);
+    ctx.lineTo(ex + side*S*0.20, ey - S*0.12);
+    ctx.lineTo(ex + side*S*0.20, ey + S*0.16);
+    ctx.lineTo(ex - side*S*0.16, ey + S*0.14);
+    ctx.closePath();
+    ctx.stroke();
+    
+    if(eyeOpen > 0.15){
+      // Sclera (angular almond)
+      const scleraGrad = ctx.createRadialGradient(ex, ey, 0, ex, ey, S*0.15);
+      scleraGrad.addColorStop(0, col(255, 0.18));
+      scleraGrad.addColorStop(1, col(255, 0.09));
+      
+      ctx.fillStyle = scleraGrad;
+      ctx.beginPath();
+      // Severe almond shape (angular points)
+      ctx.moveTo(ex - side*S*0.16*eyeOpen, ey);
+      ctx.bezierCurveTo(
+        ex - side*S*0.12*eyeOpen, ey - S*0.14*eyeOpen,
+        ex + side*S*0.08*eyeOpen, ey - S*0.14*eyeOpen,
+        ex + side*S*0.16*eyeOpen, ey
+      );
+      ctx.bezierCurveTo(
+        ex + side*S*0.08*eyeOpen, ey + S*0.12*eyeOpen,
+        ex - side*S*0.12*eyeOpen, ey + S*0.12*eyeOpen,
+        ex - side*S*0.16*eyeOpen, ey
+      );
+      ctx.closePath();
+      ctx.fill();
+      
+      // Iris (harsh gradient)
+      const irisGrad = ctx.createRadialGradient(ex + side*S*0.01, ey, 0, ex, ey, S*0.11);
+      irisGrad.addColorStop(0, 'rgba(90,90,90,0.95)');
+      irisGrad.addColorStop(0.35, 'rgba(60,60,60,0.85)');
+      irisGrad.addColorStop(0.70, 'rgba(30,30,30,0.65)');
+      irisGrad.addColorStop(1, 'rgba(10,10,10,0.35)');
+      
+      ctx.fillStyle = irisGrad;
+      ctx.beginPath();
+      ctx.arc(ex, ey, S*0.11*eyeOpen, 0, Math.PI*2);
+      ctx.fill();
+      
+      // Iris angular texture (sharp radial)
+      ctx.strokeStyle = 'rgba(0,0,0,0.20)';
+      ctx.lineWidth = 0.8*DPR;
+      for(let i=0; i<16; i++){
+        const ang = (i/16)*Math.PI*2;
+        ctx.beginPath();
+        ctx.moveTo(ex + Math.cos(ang)*S*0.02, ey + Math.sin(ang)*S*0.02);
+        ctx.lineTo(ex + Math.cos(ang)*S*0.10*eyeOpen, ey + Math.sin(ang)*S*0.10*eyeOpen);
+        ctx.stroke();
+      }
+      
+      // Pupil (severe vertical slit)
+      const pupilGrad = ctx.createLinearGradient(ex, ey - S*0.09, ex, ey + S*0.09);
+      pupilGrad.addColorStop(0, 'rgba(0,0,0,1)');
+      pupilGrad.addColorStop(0.5, 'rgba(0,0,0,1)');
+      pupilGrad.addColorStop(1, 'rgba(0,0,0,1)');
+      
+      ctx.fillStyle = pupilGrad;
+      ctx.beginPath();
+      // Sharp angular slit
+      ctx.moveTo(ex - S*0.018, ey - S*0.085*eyeOpen);
+      ctx.lineTo(ex + S*0.018, ey - S*0.085*eyeOpen);
+      ctx.lineTo(ex + S*0.028, ey);
+      ctx.lineTo(ex + S*0.018, ey + S*0.085*eyeOpen);
+      ctx.lineTo(ex - S*0.018, ey + S*0.085*eyeOpen);
+      ctx.lineTo(ex - S*0.028, ey);
+      ctx.closePath();
+      ctx.fill();
+      
+      // Pupil edge (sharp highlight)
+      ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+      ctx.lineWidth = 0.5*DPR;
+      ctx.beginPath();
+      ctx.moveTo(ex - S*0.025, ey);
+      ctx.lineTo(ex - S*0.020, ey - S*0.080*eyeOpen);
+      ctx.stroke();
+      
+      // Angular almond eye outline (severe)
+      ctx.strokeStyle = col(255, 0.98);
+      ctx.lineWidth = 3.5*DPR;
+      ctx.beginPath();
+      ctx.moveTo(ex - side*S*0.16*eyeOpen, ey);
+      ctx.bezierCurveTo(
+        ex - side*S*0.12*eyeOpen, ey - S*0.14*eyeOpen,
+        ex + side*S*0.08*eyeOpen, ey - S*0.14*eyeOpen,
+        ex + side*S*0.16*eyeOpen, ey
+      );
+      ctx.bezierCurveTo(
+        ex + side*S*0.08*eyeOpen, ey + S*0.12*eyeOpen,
+        ex - side*S*0.12*eyeOpen, ey + S*0.12*eyeOpen,
+        ex - side*S*0.16*eyeOpen, ey
+      );
+      ctx.closePath();
+      ctx.stroke();
+      
+      // Sharp catchlight (single harsh highlight)
+      ctx.fillStyle = 'rgba(255,255,255,0.90)';
+      ctx.beginPath();
+      ctx.moveTo(ex - S*0.050, ey - S*0.035);
+      ctx.lineTo(ex - S*0.030, ey - S*0.045);
+      ctx.lineTo(ex - S*0.025, ey - S*0.020);
+      ctx.closePath();
+      ctx.fill();
+      
+      // Secondary sharp highlight
+      ctx.fillStyle = 'rgba(255,255,255,0.50)';
+      ctx.beginPath();
+      ctx.moveTo(ex + S*0.040, ey - S*0.010);
+      ctx.lineTo(ex + S*0.050, ey - S*0.015);
+      ctx.lineTo(ex + S*0.045, ey);
+      ctx.closePath();
+      ctx.fill();
+      
+      // Harsh lower lid line
+      ctx.strokeStyle = col(255, 0.30);
+      ctx.lineWidth = 2*DPR;
+      ctx.beginPath();
+      ctx.moveTo(ex - side*S*0.14, ey + S*0.10);
+      ctx.lineTo(ex + side*S*0.14, ey + S*0.10);
+      ctx.stroke();
+      
+      // Angular upper lid crease
+      ctx.strokeStyle = col(255, 0.15);
+      ctx.lineWidth = 1.5*DPR;
+      ctx.beginPath();
+      ctx.moveTo(ex - side*S*0.16, ey - S*0.02);
+      ctx.lineTo(ex + side*S*0.18, ey - S*0.04);
+      ctx.stroke();
+      
+      // Tear duct (angular)
+      ctx.fillStyle = col(255, 0.10);
+      ctx.beginPath();
+      ctx.moveTo(ex - side*S*0.14, ey - S*0.01);
+      ctx.lineTo(ex - side*S*0.12, ey + S*0.01);
+      ctx.lineTo(ex - side*S*0.14, ey + S*0.02);
+      ctx.closePath();
+      ctx.fill();
+      
+    } else {
+      // Closed eye (harsh angular line)
+      ctx.strokeStyle = col(255, 0.98);
+      ctx.lineWidth = 3.5*DPR;
+      ctx.beginPath();
+      ctx.moveTo(ex - side*S*0.16, ey);
+      ctx.lineTo(ex + side*S*0.16, ey);
+      ctx.stroke();
+      
+      // Angular eyelash detail
+      for(let i=-5; i<=5; i++){
+        ctx.strokeStyle = col(255, 0.35 - Math.abs(i)*0.03);
+        ctx.lineWidth = (1.5 - Math.abs(i)*0.12)*DPR;
+        const lx = ex + i*S*0.028;
+        ctx.beginPath();
+        ctx.moveTo(lx, ey);
+        ctx.lineTo(lx + side*S*0.008 + Math.sign(i)*S*0.004, ey - S*0.030);
+        ctx.stroke();
+      }
+    }
+  }
+  
+  drawEye(-1);
+  drawEye(1);
+
+  // === NOSE (SEVERE ANGULAR) ===
+  
+  const noseX = 0;
+  const noseY = S*0.38;
+  
+  // Nose bridge shadow (harsh angular plane)
+  ctx.fillStyle = 'rgba(0,0,0,0.18)';
+  ctx.beginPath();
+  ctx.moveTo(noseX - S*0.06, noseY - S*0.22);
+  ctx.lineTo(noseX + S*0.06, noseY - S*0.22);
+  ctx.lineTo(noseX + S*0.08, noseY - S*0.10);
+  ctx.lineTo(noseX, noseY);
+  ctx.lineTo(noseX - S*0.08, noseY - S*0.10);
+  ctx.closePath();
+  ctx.fill();
+  
+  // Nose mass (sharp angular gradient)
+  const noseGrad = ctx.createLinearGradient(noseX, noseY - S*0.08, noseX, noseY + S*0.06);
+  noseGrad.addColorStop(0, 'rgba(110,110,110,0.95)');
+  noseGrad.addColorStop(0.5, 'rgba(80,80,80,0.90)');
+  noseGrad.addColorStop(1, 'rgba(50,50,50,0.80)');
+  
+  ctx.fillStyle = noseGrad;
+  ctx.strokeStyle = col(255, 0.98);
+  ctx.lineWidth = 3*DPR;
+  
+  // Sharp angular nose shape
+  ctx.beginPath();
+  ctx.moveTo(noseX - S*0.065, noseY - S*0.06);
+  ctx.lineTo(noseX, noseY - S*0.08);
+  ctx.lineTo(noseX + S*0.065, noseY - S*0.06);
+  ctx.lineTo(noseX + S*0.045, noseY + S*0.02);
+  ctx.lineTo(noseX, noseY + S*0.06);
+  ctx.lineTo(noseX - S*0.045, noseY + S*0.02);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  
+  // Severe nostril cavities (angular)
+  ctx.fillStyle = 'rgba(0,0,0,0.85)';
+  // Left nostril
+  ctx.beginPath();
+  ctx.moveTo(noseX - S*0.035, noseY + S*0.005);
+  ctx.lineTo(noseX - S*0.018, noseY - S*0.005);
+  ctx.lineTo(noseX - S*0.015, noseY + S*0.025);
+  ctx.lineTo(noseX - S*0.030, noseY + S*0.030);
+  ctx.closePath();
+  ctx.fill();
+  // Right nostril
+  ctx.beginPath();
+  ctx.moveTo(noseX + S*0.035, noseY + S*0.005);
+  ctx.lineTo(noseX + S*0.018, noseY - S*0.005);
+  ctx.lineTo(noseX + S*0.015, noseY + S*0.025);
+  ctx.lineTo(noseX + S*0.030, noseY + S*0.030);
+  ctx.closePath();
+  ctx.fill();
+  
+  // Harsh nostril edge highlights
+  ctx.strokeStyle = col(255, 0.40);
+  ctx.lineWidth = 1.5*DPR;
+  ctx.beginPath();
+  ctx.moveTo(noseX - S*0.018, noseY - S*0.005);
+  ctx.lineTo(noseX - S*0.035, noseY + S*0.005);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(noseX + S*0.018, noseY - S*0.005);
+  ctx.lineTo(noseX + S*0.035, noseY + S*0.005);
+  ctx.stroke();
+  
+  // Sharp highlight (angular catchlight)
+  ctx.fillStyle = 'rgba(255,255,255,0.55)';
+  ctx.beginPath();
+  ctx.moveTo(noseX - S*0.025, noseY - S*0.035);
+  ctx.lineTo(noseX - S*0.010, noseY - S*0.045);
+  ctx.lineTo(noseX - S*0.005, noseY - S*0.025);
+  ctx.closePath();
+  ctx.fill();
+  
+  // Severe philtrum (angular ridge)
+  ctx.strokeStyle = col(255, 0.40);
+  ctx.lineWidth = 2.5*DPR;
+  ctx.beginPath();
+  ctx.moveTo(noseX, noseY + S*0.06);
+  ctx.lineTo(noseX, noseY + S*0.14);
+  ctx.stroke();
+  
+  // Philtrum shadow (harsh)
+  ctx.strokeStyle = 'rgba(0,0,0,0.20)';
+  ctx.lineWidth = 4*DPR;
+  ctx.beginPath();
+  ctx.moveTo(noseX, noseY + S*0.06);
+  ctx.lineTo(noseX, noseY + S*0.14);
+  ctx.stroke();
+
+  // === MUZZLE (SEVERE ANGULAR) ===
+  
+  // Angular muzzle pads (harsh cheek planes with shadow)
+  ctx.fillStyle = 'rgba(0,0,0,0.12)';
+  ctx.beginPath();
+  ctx.moveTo(-S*0.35, noseY + S*0.04);
+  ctx.lineTo(-S*0.15, noseY + S*0.06);
+  ctx.lineTo(-S*0.18, noseY + S*0.18);
+  ctx.lineTo(-S*0.32, noseY + S*0.14);
+  ctx.closePath();
+  ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(S*0.35, noseY + S*0.04);
+  ctx.lineTo(S*0.15, noseY + S*0.06);
+  ctx.lineTo(S*0.18, noseY + S*0.18);
+  ctx.lineTo(S*0.32, noseY + S*0.14);
+  ctx.closePath();
+  ctx.fill();
+  
+  ctx.fillStyle = col(255, 0.07);
+  ctx.beginPath();
+  ctx.moveTo(-S*0.33, noseY + S*0.05);
+  ctx.lineTo(-S*0.16, noseY + S*0.07);
+  ctx.lineTo(-S*0.19, noseY + S*0.17);
+  ctx.lineTo(-S*0.30, noseY + S*0.13);
+  ctx.closePath();
+  ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(S*0.33, noseY + S*0.05);
+  ctx.lineTo(S*0.16, noseY + S*0.07);
+  ctx.lineTo(S*0.19, noseY + S*0.17);
+  ctx.lineTo(S*0.30, noseY + S*0.13);
+  ctx.closePath();
+  ctx.fill();
+  
+  // Severe mouth line (angular)
+  ctx.strokeStyle = col(255, 0.45);
+  ctx.lineWidth = 3*DPR;
+  ctx.beginPath();
+  ctx.moveTo(-S*0.36, noseY + S*0.06);
+  ctx.lineTo(-S*0.10, noseY + S*0.14);
+  ctx.lineTo(0, noseY + S*0.15);
+  ctx.lineTo(S*0.10, noseY + S*0.14);
+  ctx.lineTo(S*0.36, noseY + S*0.06);
+  ctx.stroke();
+  
+  // Sharp lip line detail
+  ctx.strokeStyle = col(255, 0.25);
+  ctx.lineWidth = 1.5*DPR;
+  ctx.beginPath();
+  ctx.moveTo(-S*0.32, noseY + S*0.07);
+  ctx.lineTo(-S*0.08, noseY + S*0.13);
+  ctx.lineTo(0, noseY + S*0.14);
+  ctx.lineTo(S*0.08, noseY + S*0.13);
+  ctx.lineTo(S*0.32, noseY + S*0.07);
+  ctx.stroke();
+  
+  // Angular chin highlight
+  ctx.fillStyle = col(255, 0.10);
+  ctx.beginPath();
+  ctx.moveTo(noseX - S*0.10, noseY + S*0.28);
+  ctx.lineTo(noseX + S*0.10, noseY + S*0.28);
+  ctx.lineTo(noseX + S*0.08, noseY + S*0.34);
+  ctx.lineTo(noseX - S*0.08, noseY + S*0.34);
+  ctx.closePath();
+  ctx.fill();
+
+  // === WHISKERS (HYPER-REALISTIC) ===
+  
+  state.whiskerPhase += 0.008;
+  
+  // Whisker follicles (pores)
+  ctx.fillStyle = 'rgba(0,0,0,0.20)';
+  for(let side of [-1,1]){
+    for(let row=-1; row<=1; row++){
+      const wx = side * S*0.28;
+      const wy = noseY + S*0.08 + row*S*0.075;
+      ctx.beginPath();
+      ctx.arc(wx, wy, S*0.015, 0, Math.PI*2);
+      ctx.fill();
+    }
+  }
+  
+  // Whiskers (multi-layer with natural taper)
+  for(let side of [-1,1]){
+    for(let row=-1; row<=1; row++){
+      const baseX = side * S*0.28;
+      const baseY = noseY + S*0.08 + row*S*0.075;
+      const wobble = Math.sin(state.whiskerPhase + row*1.5) * S*0.025;
+      const wobble2 = Math.cos(state.whiskerPhase*0.7 + row*1.2) * S*0.018;
+      
+      // Base whisker (thicker)
+      ctx.strokeStyle = col(255, 0.35 - Math.abs(row)*0.05);
+      ctx.lineWidth = (2.2 - Math.abs(row)*0.3)*DPR;
+      ctx.beginPath();
+      ctx.moveTo(baseX, baseY);
+      ctx.bezierCurveTo(
+        baseX + side*S*0.25, baseY - S*0.04 + wobble2,
+        baseX + side*S*0.65, baseY + wobble - row*S*0.03,
+        baseX + side*S*0.85, baseY + wobble*2.2 - row*S*0.045
+      );
+      ctx.stroke();
+      
+      // Highlight on whisker (top surface)
+      ctx.strokeStyle = col(255, 0.18);
+      ctx.lineWidth = (0.8 - Math.abs(row)*0.1)*DPR;
+      ctx.beginPath();
+      ctx.moveTo(baseX, baseY - DPR);
+      ctx.bezierCurveTo(
+        baseX + side*S*0.25, baseY - S*0.045 + wobble2,
+        baseX + side*S*0.65, baseY + wobble - row*S*0.032,
+        baseX + side*S*0.85, baseY + wobble*2.2 - row*S*0.048
+      );
+      ctx.stroke();
+    }
+  }
+  
+  // Eyebrow whiskers (short tufts)
+  for(let side of [-1,1]){
+    for(let i=0; i<3; i++){
+      const bx = side * S*0.48;
+      const by = -S*0.32;
+      ctx.strokeStyle = col(255, 0.25 - i*0.05);
+      ctx.lineWidth = (1.5 - i*0.3)*DPR;
+      ctx.beginPath();
+      ctx.moveTo(bx, by);
+      ctx.lineTo(
+        bx + side*S*0.12,
+        by - S*0.10 + i*S*0.020
+      );
+      ctx.stroke();
+    }
+  }
+
+  ctx.restore();
+}
+
+function render(t){
+  // Subtle background pulse
+  ctx.fillStyle = `rgba(0,0,0,${0.015 + Math.sin(t*0.0003)*0.005})`;
+  ctx.fillRect(0,0,W,H);
+  
+  // Subtle scanning line
+  ctx.strokeStyle = col(255, 0.008);
+  ctx.lineWidth = 1*DPR;
+  const scanY = ((t*0.1) % H);
+  ctx.beginPath();
+  ctx.moveTo(0, scanY);
+  ctx.lineTo(W, scanY);
+  ctx.stroke();
+  
+  // Blink decay
+  if(state.blink > 0) state.blink = Math.max(0, state.blink - 0.035);
+  
+  // Auto blink (occasional)
+  if(state.blink <= 0 && Math.random() < 0.0012) state.blink = 1.3;
+  
+  const cx = W/2;
+  const cy = H/2;
+  const scale = Math.min(W,H) * 0.45;
+  
+  drawCatFace(cx, cy, scale, t);
+  
+  // Subtle frame
+  ctx.strokeStyle = col(255, 0.03);
+  ctx.lineWidth = 1*DPR;
+  ctx.strokeRect(15*DPR, 15*DPR, W-30*DPR, H-30*DPR);
+  
+  requestAnimationFrame(render);
+}
+
+// Controls
+function toggleInvert(){ 
+  state.invert = !state.invert;
+  document.body.classList.toggle("invert", state.invert);
+}
+function triggerBlink(){ state.blink = 1.3; }
+
+$("btnInvert").addEventListener("click", toggleInvert);
+$("btnBlink").addEventListener("click", triggerBlink);
+$("btnBreath").addEventListener("click", ()=>{ state.breathPhase += Math.PI*0.5; });
+
+window.addEventListener("keydown",(e)=>{
+  if(e.shiftKey && e.key.toLowerCase()==="i"){ e.preventDefault(); toggleInvert(); }
+  if(e.code==="Space"){ e.preventDefault(); triggerBlink(); }
+}, {passive:false});
+
+// Boot
+resize();
+requestAnimationFrame(render);
+</script>
+
+<!--
+FILE_ID: "KETADATA_FACE_HYPER_ANGULAR"
+VERSION: "SEVERE_ANGULAR_GEOMETRIC"
+UPDATED_AT: "2026-01-06"
+FEATURES:
+- FULL-SCREEN CAT FACE PORTRAIT - SEVERE ANGULAR GEOMETRY
+- PUSHED ANGULAR STRUCTURE: Sharp polygonal head (7-sided geometric), harsh jaw line emphasis, bilateral cheek planes (angular facets with shadow), severe brow ridge (angular prominence), forehead plane (sharp geometric ridge), crisp angular outline
+- 3-LAYER FUR: 180 strands total - deep/mid/highlight layers with natural directional flow and random variation
+- SEVERE ANGULAR EARS: Sharp spikes (62% taller), harsh linear gradient, angular inner detail lines, severe edge highlights, sharp fur tufts (geometric spikes)
+- EXTREME ANGULAR EYE DETAIL: Harsh angular socket recess (rectangular), severe almond shape (sharp bezier points), angular iris with 16 radial lines, vertical slit pupil (angular diamond shape with sharp edges), single harsh triangular catchlight + secondary triangle, sharp lower lid line, angular upper lid crease, geometric tear duct, angular eyelashes
+- SEVERE NOSE STRUCTURE: Angular bridge shadow (pentagon), sharp nose mass (hexagonal geometry), severe nostril cavities (angular quadrilaterals), harsh edge highlights (linear), sharp triangular catchlight, angular philtrum ridge with harsh shadow
+- ANGULAR MUZZLE: Sharp cheek plane quadrilaterals with shadow, severe mouth line (5-point polyline), sharp lip detail, angular chin highlight (rectangle)
+- WHISKERS: Harsh linear extensions from follicles
+- SUBTLE ANIMATION: Breathing movement, auto-blink, whisker wobble, slow fur phase rotation
+- MINIMAL UI: Corner markers, clean controls, info bar
+- GEOMETRIC SEVERITY: All curves replaced with angular geometry, sharp faceted planes, harsh linear edges, severe structural emphasis
+-->
+</body>
+</html>
