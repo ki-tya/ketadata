@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>KETADATA_SURFACE_PLAYER_FULL_v2_FIXED.html</title>
+<title>KETADATA_DIVA9_SUR_BASE_v2.html</title>
 
 <style>
 :root{
@@ -597,6 +597,23 @@ input{outline:none}
           <button class="btn" id="playerNewTabNow" style="padding:4px 8px; font-size:11px">NEW TAB</button>
           <button class="btn" id="playerArmNow" style="padding:4px 8px; font-size:11px">ARM</button>
           <button class="btn" id="playerAddArmed" style="padding:4px 8px; font-size:11px">ADD ARMED</button>
+        </div>
+
+        <div style="margin-top:10px; border-top:1px solid var(--line); padding-top:10px">
+          <div style="font-family:var(--mono); font-size:12px; letter-spacing:.10em; text-transform:uppercase; color:var(--muted); margin-bottom:8px">BULK IMPORT</div>
+          <textarea id="playerBulkInput" spellcheck="false" autocomplete="off"
+            style="width:100%; background:#000; color:#fff; border:1px solid rgba(255,255,255,0.22); padding:6px 8px; font-family:var(--mono); font-size:11px; letter-spacing:.06em; min-height:80px; resize:vertical"
+            placeholder="NAME | URL
+OR URL (one per line)"></textarea>
+          <div style="margin-top:8px; display:flex; gap:8px; align-items:center; flex-wrap:wrap">
+            <button class="btn" id="playerImportBulk" style="padding:4px 8px; font-size:11px">IMPORT TO QUEUE</button>
+            <button class="btn" id="playerClearBulk" style="padding:4px 8px; font-size:11px">CLEAR</button>
+          </div>
+        </div>
+
+        <div style="margin-top:10px; border-top:1px solid var(--line); padding-top:10px">
+          <div style="font-family:var(--mono); font-size:12px; letter-spacing:.10em; text-transform:uppercase; color:var(--muted); margin-bottom:8px">LOAD SET</div>
+          <div id="playerSetsList" style="display:flex; flex-direction:column; gap:6px; max-height:120px; overflow:auto"></div>
         </div>
 
         <div style="margin-top:10px; border-top:1px solid var(--line); padding-top:10px">
@@ -1686,6 +1703,55 @@ function playerRender(){
     
     qEl.appendChild(row);
   });
+
+  renderPlayerSetsList();
+}
+
+function renderPlayerSetsList(){
+  const el=$("playerSetsList");
+  if(!el) return;
+  el.innerHTML="";
+  
+  const sets=(STATE.payload.sets||[]).slice().sort((a,b)=>{
+    const ta=Date.parse(a.updatedAt||a.createdAt||0);
+    const tb=Date.parse(b.updatedAt||b.createdAt||0);
+    return tb-ta;
+  });
+
+  if(sets.length===0){
+    const hint=document.createElement("div");
+    hint.style.cssText="color:var(--muted); font-family:var(--mono); font-size:11px; padding:8px";
+    hint.textContent="NO SETS YET";
+    el.appendChild(hint);
+    return;
+  }
+
+  sets.forEach(s=>{
+    const row=document.createElement("div");
+    row.style.cssText="display:flex; gap:8px; align-items:center; justify-content:space-between; border:1px solid rgba(255,255,255,0.16); padding:6px 8px; font-family:var(--mono); font-size:11px; cursor:pointer";
+    
+    const name=document.createElement("div");
+    name.style.cssText="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap";
+    name.textContent=canonName(s.label||"SET");
+    
+    const count=document.createElement("div");
+    count.style.cssText="color:var(--muted); font-size:10px";
+    count.textContent=`${(s.items||[]).length}`;
+    
+    row.appendChild(name);
+    row.appendChild(count);
+    
+    row.addEventListener("click",()=>{
+      const items=(s.items||[]).map(it=>({label:canonName(it.label||"")||deriveNameFromUrl(it.url), url:String(it.url||"").trim()})).filter(x=>x.url);
+      STATE.ui.player.queue=items;
+      STATE.ui.player.index=0;
+      toast(`LOADED: ${s.label}`);
+      persist(true);
+      playerRender();
+    });
+    
+    el.appendChild(row);
+  });
 }
 function playerOpen(){ STATE.ui.playerOpen=true; persist(true); playerRender(); }
 function playerClose(){ STATE.ui.playerOpen=false; persist(true); playerRender(); }
@@ -1763,6 +1829,21 @@ function playerCreateSetFromQueue(){
   STATE.payload.sets.unshift({id,label:name,items,createdAt:nowISO(),updatedAt:nowISO()});
   toast("SET CREATED");
   persist();
+}
+
+function playerImportBulk(){
+  const text=$("playerBulkInput").value||"";
+  const parsed=parseBulkLines(text);
+  if(!parsed.length){ toast("NO ITEMS"); return; }
+  
+  parsed.forEach(p=>{
+    STATE.ui.player.queue.push({label:canonName(p.name||"")||deriveNameFromUrl(p.url), url:p.url});
+  });
+  
+  toast(`IMPORTED ${parsed.length} ITEMS`);
+  $("playerBulkInput").value="";
+  persist(true);
+  playerRender();
 }
 
 /* YT */
@@ -2132,6 +2213,9 @@ function bindUI(){
   $("playerInputClear").addEventListener("click", ()=>{ $("playerInputUrl").value=""; toast("CLEARED"); });
   $("playerInputUrl").addEventListener("keydown",(ev)=>{ if(ev.key==="Enter"){ ev.preventDefault(); playerAddInputUrl(false); } });
 
+  $("playerImportBulk").addEventListener("click", playerImportBulk);
+  $("playerClearBulk").addEventListener("click", ()=>{ $("playerBulkInput").value=""; toast("CLEARED"); });
+
   $("playerOpenYT").addEventListener("click", ()=>{ STATE.ui.ytOpen=!STATE.ui.ytOpen; persist(true); renderYT(); });
 
   $("ytClose").addEventListener("click", ytClose);
@@ -2383,6 +2467,7 @@ VERSION_ID: "V2_FIXED"
 UPDATED_AT: 2026-01-06T00:00:00+00:00
 CHANGELOG:
 - PLAYER: Added delete/reorder/surface from queue, create set from queue, removed tag functionality, fixed play/prev/next
+- PLAYER: Added bulk import (NAME | URL format), set loading list with click-to-load
 - PAD: Restructured with tabs (SURFACES/SPACES/SPECS/SCHEDULE/STORAGE), surface management, spec management
 - SYSTEM DRAWER: Cleaned up, removed KETA_MONO special treatment, added spec_notes system, storage monitor, surface repository
 - Changed blackout hotkey from Shift+N to Shift+0
