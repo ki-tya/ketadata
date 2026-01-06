@@ -1,0 +1,622 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>KETADATA // BUTTERFLY</title>
+  <style>
+    :root{
+      --bg:#0b0c0f;
+      --fg:#e9edf2;
+      --muted:rgba(233,237,242,.55);
+      --hair:rgba(233,237,242,.14);
+      --panel:rgba(0,0,0,.35);
+      --panel2:rgba(0,0,0,.55);
+      --glass:rgba(233,237,242,.06);
+      --ring:rgba(233,237,242,.22);
+      --light:0;
+      --invert:0;
+      --motion:1;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%;margin:0}
+    body{
+      background:var(--bg);
+      color:var(--fg);
+      font:12px/1.25 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace;
+      overflow:hidden;
+      user-select:none;
+    }
+
+    /* INVERT + NULL */
+    body.invert{
+      filter: invert(1) hue-rotate(180deg);
+      background:#fff;
+    }
+    body.nullmode .chrome{display:none}
+    body.nullmode #hud{opacity:.0; pointer-events:none}
+
+    /* FIELD */
+    #field{
+      position:absolute; inset:0;
+      background:
+        radial-gradient(1200px 800px at 50% 38%, rgba(120,160,210,.18), rgba(0,0,0,0) 60%),
+        radial-gradient(900px 700px at 28% 78%, rgba(210,120,210,.10), rgba(0,0,0,0) 55%),
+        radial-gradient(900px 800px at 78% 70%, rgba(140,220,190,.08), rgba(0,0,0,0) 58%),
+        linear-gradient(180deg, rgba(233,237,242,.03), rgba(0,0,0,0) 42%),
+        linear-gradient(180deg, rgba(0,0,0,0), rgba(0,0,0,.30));
+    }
+    canvas{position:absolute; inset:0; width:100%; height:100%}
+
+    /* LIGHTS (1–6) */
+    #lights{
+      position:absolute; inset:0;
+      pointer-events:none;
+      opacity: calc(var(--light) / 6);
+      mix-blend-mode: screen;
+      background:
+        radial-gradient(900px 700px at 22% 30%, rgba(120,200,255,.16), rgba(0,0,0,0) 55%),
+        radial-gradient(700px 600px at 82% 35%, rgba(255,140,200,.10), rgba(0,0,0,0) 55%),
+        radial-gradient(900px 800px at 50% 86%, rgba(140,255,200,.09), rgba(0,0,0,0) 55%);
+    }
+
+    /* CHROME */
+    .chrome{position:absolute; inset:0; pointer-events:none}
+    #hud{
+      position:absolute;
+      top:10px; left:10px;
+      width: 360px;
+      border:1px solid var(--hair);
+      background:var(--panel);
+      backdrop-filter: blur(6px);
+      pointer-events:auto;
+    }
+    #hud .bar{
+      display:flex; align-items:center; justify-content:space-between;
+      padding:8px 8px;
+      border-bottom:1px solid var(--hair);
+      background: linear-gradient(180deg, rgba(233,237,242,.06), rgba(0,0,0,0));
+    }
+    #hud .bar .title{opacity:.9}
+    #hud .bar .meta{opacity:.55}
+    #hud .body{padding:8px; display:grid; gap:8px}
+    .row{display:flex; gap:8px; align-items:center; flex-wrap:wrap}
+    .btn, .pill, input[type="range"]{font:inherit; color:inherit}
+    .btn{
+      border:1px solid var(--hair);
+      background:rgba(233,237,242,.04);
+      padding:6px 8px;
+      cursor:pointer;
+      user-select:none;
+    }
+    .btn:hover{background:rgba(233,237,242,.07)}
+    .btn:active{transform: translateY(1px)}
+    .pill{
+      border:1px solid var(--hair);
+      padding:6px 8px;
+      background:rgba(0,0,0,.18);
+      opacity:.85;
+    }
+    input[type="range"]{width:140px; accent-color: var(--fg)}
+    .label{opacity:.7}
+    .mini{opacity:.55}
+    .sep{height:1px;background:var(--hair);margin:2px 0}
+
+    /* NOTE (ANGULAR) */
+    #note{
+      position:absolute;
+      right:10px; top:10px;
+      width: 360px; height: 220px;
+      border:1px solid var(--hair);
+      background:var(--panel2);
+      pointer-events:auto;
+      display:none;
+    }
+    #note.open{display:block}
+    #note .bar{
+      display:flex; align-items:center; justify-content:space-between;
+      padding:8px 8px;
+      border-bottom:1px solid var(--hair);
+      background: linear-gradient(180deg, rgba(233,237,242,.06), rgba(0,0,0,0));
+      cursor:move;
+      user-select:none;
+    }
+    #note textarea{
+      width:100%; height: calc(100% - 34px);
+      border:0; outline:none; resize:none;
+      background:transparent;
+      color:var(--fg);
+      font:inherit;
+      padding:8px;
+      user-select:text;
+    }
+
+    /* SENSES (CIRCULAR) */
+    #cornerDots{
+      position:absolute; left:10px; bottom:10px;
+      display:flex; gap:6px;
+      pointer-events:none;
+      opacity:.6;
+    }
+    .dot{
+      width:10px; height:10px; border-radius:50%;
+      border:1px solid var(--hair);
+      background:rgba(233,237,242,.06);
+    }
+
+    /* FRAME */
+    #frame{
+      position:absolute; inset:8px;
+      border:1px solid rgba(233,237,242,.08);
+      pointer-events:none;
+    }
+
+    /* STATUS */
+    #statusLine{
+      position:absolute; right:10px; bottom:10px;
+      border:1px solid var(--hair);
+      background:rgba(0,0,0,.25);
+      padding:6px 8px;
+      opacity:.75;
+      pointer-events:none;
+      max-width: 60vw;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+  </style>
+</head>
+<body>
+  <div id="field">
+    <canvas id="c"></canvas>
+    <div id="lights"></div>
+  </div>
+
+  <div class="chrome">
+    <div id="frame"></div>
+
+    <div id="hud">
+      <div class="bar">
+        <div class="title">KETADATA // BUTTERFLY</div>
+        <div class="meta" id="meta">LIGHT 0 · INVERT 0 · NULL 0</div>
+      </div>
+
+      <div class="body">
+        <div class="row">
+          <div class="pill"><span class="label">HOTKEYS</span> <span class="mini">SHIFT+I INVERT · 1–6 LIGHT · SHIFT+N NULL · SHIFT+F FULLSCREEN · SHIFT+K NOTE · SPACE PULSE</span></div>
+        </div>
+
+        <div class="sep"></div>
+
+        <div class="row">
+          <button class="btn" id="btnNote">NOTE</button>
+          <button class="btn" id="btnInvert">INVERT</button>
+          <button class="btn" id="btnNull">NULL</button>
+          <button class="btn" id="btnFull">FULL</button>
+          <span class="label">LIGHT</span>
+          <input type="range" id="rngLight" min="0" max="6" step="1" value="0" />
+          <span class="label">MOTION</span>
+          <button class="btn" id="btnMotion">ON</button>
+        </div>
+
+        <div class="row">
+          <span class="label">DENSITY</span>
+          <input type="range" id="rngDen" min="2500" max="22000" step="500" value="12000" />
+          <span class="label">WING</span>
+          <input type="range" id="rngWing" min="60" max="160" step="1" value="110" />
+          <span class="label">NOISE</span>
+          <input type="range" id="rngNoise" min="0" max="150" step="1" value="88" />
+        </div>
+
+        <div class="row">
+          <span class="label">SHIMMER</span>
+          <input type="range" id="rngShim" min="0" max="100" step="1" value="42" />
+          <span class="label">RESEED</span>
+          <button class="btn" id="btnSeed">GO</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="note">
+      <div class="bar">
+        <div>KETA_NOTE</div>
+        <div class="mini" id="noteHint">SHIFT+K TO TOGGLE</div>
+      </div>
+      <textarea id="noteText" spellcheck="false" placeholder="KETA_NOTE — optional, movable, non-interfering."></textarea>
+    </div>
+
+    <div id="cornerDots" aria-hidden="true">
+      <div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div>
+    </div>
+
+    <div id="statusLine">READY</div>
+  </div>
+
+  <script>
+    // EE: state (local-first, single-file)
+    const FILE_ID = "KETADATA_BUTTERFLY_V1";
+    const LS_KEY = "KETADATA::" + FILE_ID + "::STATE";
+    const $ = (id)=>document.getElementById(id);
+
+    const state = {
+      light: 0,
+      invert: false,
+      nullMode: false,
+      fullscreen: false,
+      motion: true,
+
+      density: 12000,
+      wing: 1.10,      // 0.60..1.60
+      noise: 0.88,     // 0..1.50
+      shimmer: 0.42,   // 0..1
+
+      seed: (Math.random()*1e9)>>>0,
+
+      noteOpen: false,
+      notePos: { x: null, y: null },
+      noteText: ""
+    };
+
+    function loadState(){
+      try{
+        const raw = localStorage.getItem(LS_KEY);
+        if(!raw) return;
+        const s = JSON.parse(raw);
+        if(!s || typeof s !== "object") return;
+        Object.assign(state, s);
+      }catch(_){}
+    }
+    function saveState(){
+      try{ localStorage.setItem(LS_KEY, JSON.stringify(state)); }catch(_){}
+    }
+
+    // WB: apply
+    function applyState(){
+      document.body.classList.toggle("invert", !!state.invert);
+      document.body.classList.toggle("nullmode", !!state.nullMode);
+
+      document.documentElement.style.setProperty("--light", String(state.light));
+      document.documentElement.style.setProperty("--motion", state.motion ? "1" : "0");
+
+      $("rngLight").value = String(state.light);
+      $("rngDen").value = String(state.density);
+      $("rngWing").value = String(Math.round(state.wing * 100));
+      $("rngNoise").value = String(Math.round(state.noise * 100));
+      $("rngShim").value = String(Math.round(state.shimmer * 100));
+      $("btnMotion").textContent = state.motion ? "ON" : "OFF";
+
+      const meta = `LIGHT ${state.light} · INVERT ${state.invert?1:0} · NULL ${state.nullMode?1:0}`;
+      $("meta").textContent = meta;
+
+      $("noteText").value = state.noteText || "";
+      $("note").classList.toggle("open", !!state.noteOpen);
+
+      if(state.notePos && state.notePos.x != null && state.notePos.y != null){
+        $("note").style.left = state.notePos.x + "px";
+        $("note").style.top = state.notePos.y + "px";
+        $("note").style.right = "auto";
+      }
+
+      status(`DENSITY ${state.density} · WING ${Math.round(state.wing*100)} · NOISE ${Math.round(state.noise*100)} · SEED ${state.seed}`);
+    }
+
+    function status(t){ $("statusLine").textContent = t; }
+
+    // AE: canvas butterfly
+    const canvas = $("c");
+    const ctx = canvas.getContext("2d", { alpha:true });
+    let W=0,H=0, DPR=1;
+
+    function resize(){
+      DPR = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+      W = Math.floor(window.innerWidth * DPR);
+      H = Math.floor(window.innerHeight * DPR);
+      canvas.width = W;
+      canvas.height = H;
+    }
+    window.addEventListener("resize", ()=>{ resize(); buildButterfly(); });
+
+    // deterministic rng
+    function mulberry32(a){
+      return function(){
+        let t = a += 0x6D2B79F5;
+        t = Math.imul(t ^ (t >>> 15), t | 1);
+        t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+      };
+    }
+    function n2(x,y){
+      // cheap hash noise
+      const s = Math.sin(x*127.1 + y*311.7 + state.seed*0.000001) * 43758.5453123;
+      return s - Math.floor(s);
+    }
+    const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+    const lerp=(a,b,t)=>a+(b-a)*t;
+
+    let pts = [];
+    let rng = mulberry32(state.seed);
+
+    function buildButterfly(){
+      rng = mulberry32(state.seed);
+      pts.length = 0;
+
+      const cx = W*0.5, cy = H*0.5;
+      const scale = Math.min(W,H) * 0.44;
+      const N = Math.floor(state.density);
+
+      for(let i=0;i<N;i++){
+        const u = rng()*2 - 1;
+        const v = rng()*2 - 1;
+
+        const x = Math.abs(u);
+        const y = v;
+
+        // wing envelope: two lobes + taper; body cut
+        const l1 = Math.exp(-((x-0.24)**2/0.08 + (y+0.16)**2/0.22));
+        const l2 = Math.exp(-((x-0.44)**2/0.10 + (y-0.34)**2/0.10));
+        const tp = Math.exp(-((x-0.76)**2/0.06 + (y+0.00)**2/0.42));
+
+        let env = (0.78*l1 + 0.86*l2 + 0.50*tp) * state.wing;
+
+        const cut = Math.exp(-((x-0.035)**2/0.012 + (y+0.01)**2/0.10));
+        env -= 0.62*cut;
+
+        if(env < 0.28) continue;
+
+        // digital texture
+        const g1 = n2(x*9, y*9);
+        const g2 = n2(x*23, y*23);
+        const grit = (g1*0.55 + g2*0.45);
+        const warp = (grit - 0.5) * state.noise;
+
+        // edge bias (brighter near rim)
+        const r = Math.sqrt((x-0.18)**2 + (y+0.05)**2);
+        const edge = clamp(1.0 - r*1.25, 0, 1);
+
+        const inten = clamp((env + warp) * (0.55 + 0.55*edge), 0, 1);
+        if(inten < 0.24) continue;
+
+        const sx = cx + (u>=0 ? x : -x) * scale;
+        const sy = cy + y * scale;
+
+        // store (pixel points)
+        pts.push({
+          x:sx, y:sy,
+          a: 0.07 + inten*0.78,
+          s: 1 + ((rng()*2)|0),
+          p: rng()*Math.PI*2,
+          w: 0.35 + rng()*0.65,
+          t: rng()*1000,
+          edge: edge
+        });
+      }
+
+      saveState();
+    }
+
+    function drawAxis(){
+      // angular mind: body spine + antennae
+      ctx.save();
+      ctx.strokeStyle = "rgba(233,237,242,.22)";
+      ctx.lineWidth = 2*DPR;
+      const cx=W*0.5, cy=H*0.5;
+      const h = Math.min(W,H)*0.20;
+      ctx.beginPath();
+      ctx.moveTo(cx, cy - h);
+      ctx.lineTo(cx, cy + h);
+      ctx.stroke();
+
+      // antennae
+      ctx.lineWidth = 1*DPR;
+      ctx.strokeStyle = "rgba(233,237,242,.14)";
+      ctx.beginPath();
+      ctx.moveTo(cx, cy - h);
+      ctx.lineTo(cx - 26*DPR, cy - h - 30*DPR);
+      ctx.moveTo(cx, cy - h);
+      ctx.lineTo(cx + 26*DPR, cy - h - 30*DPR);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    function step(t){
+      const motion = state.motion;
+
+      // water-glass persistence (fishtank style)
+      ctx.fillStyle = motion ? "rgba(0,0,0,.16)" : "rgba(0,0,0,1)";
+      ctx.fillRect(0,0,W,H);
+
+      // subtle vertical “scan” drift
+      ctx.strokeStyle = "rgba(233,237,242,.028)";
+      ctx.lineWidth = 1*DPR;
+      const grid = 72*DPR;
+      const ox = ((t*0.01*DPR) % grid);
+      for(let x=ox; x < W; x += grid){
+        ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke();
+      }
+
+      // draw body axis
+      drawAxis();
+
+      // wings: points
+      for(const p of pts){
+        let oxp=0, oyp=0, ap=p.a;
+
+        if(motion){
+          const phase = (p.t + t*0.001) * p.w + p.p;
+          const shim = state.shimmer;
+          oxp = Math.sin(phase*1.7) * (1.6*DPR) * shim;
+          oyp = Math.cos(phase*1.3) * (1.6*DPR) * shim;
+          ap *= (0.62 + 0.38*(Math.sin((t*0.002)+p.p)**2));
+        }
+
+        // rim accent: slightly stronger alpha near edge
+        const rim = lerp(0.90, 1.10, p.edge);
+        const a = clamp(ap*rim, 0, 0.92);
+
+        ctx.fillStyle = `rgba(233,237,242,${a})`;
+        ctx.fillRect(p.x + oxp, p.y + oyp, p.s*DPR, p.s*DPR);
+      }
+
+      // subtle frame glow line (inside the canvas, not chrome)
+      ctx.strokeStyle = "rgba(233,237,242,.06)";
+      ctx.lineWidth = 1*DPR;
+      ctx.strokeRect(10*DPR, 10*DPR, W-20*DPR, H-20*DPR);
+
+      requestAnimationFrame(step);
+    }
+
+    // NOTE drag (same as fishtank)
+    (function noteDrag(){
+      const el = $("note");
+      const bar = el.querySelector(".bar");
+      let dragging=false, ox=0, oy=0;
+
+      bar.addEventListener("mousedown",(e)=>{
+        dragging=true;
+        const r = el.getBoundingClientRect();
+        ox = e.clientX - r.left;
+        oy = e.clientY - r.top;
+        e.preventDefault();
+      });
+      window.addEventListener("mousemove",(e)=>{
+        if(!dragging) return;
+        const x = Math.max(10, Math.min(window.innerWidth - 10 - el.offsetWidth, e.clientX - ox));
+        const y = Math.max(10, Math.min(window.innerHeight - 10 - el.offsetHeight, e.clientY - oy));
+        el.style.left = x + "px";
+        el.style.top = y + "px";
+        el.style.right = "auto";
+        state.notePos = { x, y };
+      });
+      window.addEventListener("mouseup",()=>{
+        if(!dragging) return;
+        dragging=false;
+        saveState();
+      });
+    })();
+
+    // Controls
+    function toggleNote(){ state.noteOpen=!state.noteOpen; saveState(); applyState(); }
+    function toggleInvert(){ state.invert=!state.invert; saveState(); applyState(); }
+    function toggleNull(){ state.nullMode=!state.nullMode; saveState(); applyState(); }
+    async function toggleFullscreen(){
+      try{
+        if(!document.fullscreenElement){
+          await document.documentElement.requestFullscreen();
+          state.fullscreen = true;
+        } else {
+          await document.exitFullscreen();
+          state.fullscreen = false;
+        }
+      }catch(_){}
+      saveState(); applyState();
+    }
+
+    function reseed(){
+      state.seed = (Math.random()*1e9)>>>0;
+      buildButterfly();
+      saveState();
+      applyState();
+    }
+
+    $("btnNote").addEventListener("click", toggleNote);
+    $("btnInvert").addEventListener("click", toggleInvert);
+    $("btnNull").addEventListener("click", toggleNull);
+    $("btnFull").addEventListener("click", toggleFullscreen);
+    $("btnSeed").addEventListener("click", reseed);
+
+    $("rngLight").addEventListener("input",(e)=>{
+      state.light = parseInt(e.target.value,10) || 0;
+      saveState(); applyState();
+    });
+    $("rngDen").addEventListener("input",(e)=>{
+      state.density = parseInt(e.target.value,10) || 12000;
+      buildButterfly();
+      saveState(); applyState();
+    });
+    $("rngWing").addEventListener("input",(e)=>{
+      const v = parseInt(e.target.value,10) || 110;
+      state.wing = clamp(v/100, 0.60, 1.60);
+      buildButterfly();
+      saveState(); applyState();
+    });
+    $("rngNoise").addEventListener("input",(e)=>{
+      const v = parseInt(e.target.value,10) || 88;
+      state.noise = clamp(v/100, 0, 1.50);
+      buildButterfly();
+      saveState(); applyState();
+    });
+    $("rngShim").addEventListener("input",(e)=>{
+      const v = parseInt(e.target.value,10) || 42;
+      state.shimmer = clamp(v/100, 0, 1);
+      saveState(); applyState();
+    });
+
+    $("btnMotion").addEventListener("click",()=>{
+      state.motion = !state.motion;
+      saveState(); applyState();
+    });
+
+    $("noteText").addEventListener("input",(e)=>{
+      state.noteText = e.target.value || "";
+      saveState();
+    });
+
+    // Hotkeys (do not interfere with typing)
+    function isTypingTarget(t){
+      if(!t) return false;
+      const tag = (t.tagName || "").toLowerCase();
+      return tag === "textarea" || tag === "input" || t.isContentEditable;
+    }
+
+    window.addEventListener("keydown",(e)=>{
+      const typing = isTypingTarget(e.target);
+
+      if(e.shiftKey && e.key.toLowerCase()==="i"){ e.preventDefault(); toggleInvert(); return; }
+      if(e.shiftKey && e.key.toLowerCase()==="n"){ e.preventDefault(); toggleNull(); return; }
+      if(e.shiftKey && e.key.toLowerCase()==="f"){ e.preventDefault(); toggleFullscreen(); return; }
+      if(e.shiftKey && e.key.toLowerCase()==="k"){ e.preventDefault(); toggleNote(); return; }
+
+      // lights 1–6
+      if(!e.shiftKey && !e.ctrlKey && !e.metaKey){
+        const k = e.key;
+        if(k>="1" && k<="6"){ state.light = parseInt(k,10); saveState(); applyState(); return; }
+        if(k==="0"){ state.light = 0; saveState(); applyState(); return; }
+      }
+
+      // SPACE pulse (only when not typing): quick shimmer burst
+      if(e.code==="Space" && !typing){
+        e.preventDefault();
+        const old = state.shimmer;
+        state.shimmer = clamp(old + 0.12, 0, 1);
+        saveState(); applyState();
+        // decay back
+        setTimeout(()=>{
+          state.shimmer = old;
+          saveState(); applyState();
+        }, 140);
+        return;
+      }
+    }, { passive:false });
+
+    // Boot
+    loadState();
+    resize();
+    applyState();
+    buildButterfly();
+    requestAnimationFrame(step);
+  </script>
+
+  <!--
+  AE: VISUAL (BUTTERFLY FIELD CANVAS + LIGHTS)
+  EE: ENGINE (LOCAL-FIRST STATE, HOTKEYS, NOTE, PARAM CONTROLS)
+  WB: WIRING BRIDGE (APPLY STATE TO UI/DOM)
+
+  FILE_ID: "KETADATA_BUTTERFLY_V1"
+  ROOM_ID: "K_BUTTERFLY"
+  VERSION: "V1"
+  UPDATED_AT: "2026-01-06T00:00:00.000-05:00"
+  CHANGELOG:
+  - V1: Fishtank-style chrome + butterfly wing field. Lights 1–6, invert, null, fullscreen, motion toggle, angular KETA_NOTE, local-first persistence.
+  -->
+</body>
+</html>
