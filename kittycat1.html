@@ -1,0 +1,770 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>KETADATA // KITTY</title>
+  <style>
+    :root{
+      --bg:#000;
+      --fg:#fff;
+      --muted:rgba(255,255,255,.62);
+      --hair:rgba(255,255,255,.12);
+      --panel:rgba(0,0,0,.38);
+      --panel2:rgba(0,0,0,.58);
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%;margin:0}
+    body{
+      background:var(--bg);
+      color:var(--fg);
+      font:11px/1.3 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace;
+      overflow:hidden;
+      user-select:none;
+      letter-spacing: 0.02em;
+    }
+
+    body.invert{ filter: invert(1) hue-rotate(180deg); background:#fff; }
+    body.nullmode .chrome{display:none}
+    body.nullmode #hud{opacity:0; pointer-events:none}
+
+    #field{
+      position:absolute; inset:0;
+      background:
+        radial-gradient(1400px 1000px at 52% 38%, rgba(255,255,255,.08), rgba(0,0,0,0) 65%),
+        radial-gradient(1000px 900px at 28% 82%, rgba(255,255,255,.04), rgba(0,0,0,0) 60%),
+        radial-gradient(800px 700px at 78% 28%, rgba(255,255,255,.03), rgba(0,0,0,0) 58%),
+        linear-gradient(180deg, rgba(255,255,255,.04), rgba(0,0,0,0) 45%),
+        linear-gradient(180deg, rgba(0,0,0,0), rgba(0,0,0,.45));
+    }
+    canvas{position:absolute; inset:0; width:100%; height:100%}
+
+    .chrome{position:absolute; inset:0; pointer-events:none}
+    #frame{position:absolute; inset:10px; border:1px solid rgba(255,255,255,.06); pointer-events:none; opacity: 0.7;}
+
+    #hud{
+      position:absolute;
+      top:12px; left:12px;
+      width:360px;
+      border:1px solid var(--hair);
+      background:var(--panel);
+      backdrop-filter: blur(8px);
+      pointer-events:auto;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+    }
+    #hud .bar{
+      display:flex; align-items:center; justify-content:space-between;
+      padding:8px 10px;
+      border-bottom:1px solid var(--hair);
+      background: linear-gradient(180deg, rgba(255,255,255,.05), rgba(0,0,0,0));
+    }
+    #hud .bar .title{opacity:.95; font-weight: 400;}
+    #hud .bar .meta{opacity:.58; font-size: 10px;}
+    #hud .body{padding:10px; display:grid; gap:10px}
+    .row{display:flex; gap:8px; align-items:center; flex-wrap:wrap}
+    .btn, .pill, input[type="range"]{font:inherit; color:inherit}
+    .btn{
+      border:1px solid var(--hair);
+      background:rgba(255,255,255,.03);
+      padding:6px 10px;
+      cursor:pointer;
+      user-select:none;
+      transition: all 0.15s ease;
+    }
+    .btn:hover{background:rgba(255,255,255,.08); border-color: rgba(255,255,255,0.2);}
+    .btn:active{transform: translateY(1px)}
+    .pill{
+      border:1px solid var(--hair);
+      padding:6px 10px;
+      background:rgba(0,0,0,.15);
+      opacity:.88;
+    }
+    input[type="range"]{width:130px; accent-color: var(--fg)}
+    .label{opacity:.75; font-size: 10px; text-transform: uppercase;}
+    .mini{opacity:.58; font-size: 10px;}
+    .sep{height:1px;background:var(--hair);margin:4px 0; opacity: 0.5;}
+
+    #note{
+      position:absolute;
+      right:12px; top:12px;
+      width:360px; height:240px;
+      border:1px solid var(--hair);
+      background:var(--panel2);
+      backdrop-filter: blur(8px);
+      pointer-events:auto;
+      display:none;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+    }
+    #note.open{display:block}
+    #note .bar{
+      display:flex; align-items:center; justify-content:space-between;
+      padding:8px 10px;
+      border-bottom:1px solid var(--hair);
+      background: linear-gradient(180deg, rgba(255,255,255,.05), rgba(0,0,0,0));
+      cursor:move;
+      user-select:none;
+    }
+    #note textarea{
+      width:100%; height: calc(100% - 36px);
+      border:0; outline:none; resize:none;
+      background:transparent;
+      color:var(--fg);
+      font:inherit;
+      padding:10px;
+      user-select:text;
+    }
+
+    #cornerDots{position:absolute; left:12px; bottom:12px; display:flex; gap:7px; pointer-events:none; opacity:.5}
+    .dot{width:8px; height:8px; border-radius:50%; border:1px solid var(--hair); background:rgba(255,255,255,.04)}
+
+    #statusLine{
+      position:absolute; right:12px; bottom:12px;
+      border:1px solid var(--hair);
+      background:rgba(0,0,0,.22);
+      backdrop-filter: blur(4px);
+      padding:6px 10px;
+      opacity:.82;
+      pointer-events:none;
+      max-width:60vw;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      font-size: 10px;
+    }
+  </style>
+</head>
+<body>
+  <div id="field"><canvas id="c"></canvas></div>
+
+  <div class="chrome">
+    <div id="frame"></div>
+
+    <div id="hud">
+      <div class="bar">
+        <div class="title">KETADATA // KITTY</div>
+        <div class="meta" id="meta">INVERT 0 · NULL 0</div>
+      </div>
+
+      <div class="body">
+        <div class="row">
+          <div class="pill"><span class="label">HOTKEYS</span> <span class="mini">SHIFT+I INVERT · SHIFT+N NULL · SHIFT+F FULL · SHIFT+K NOTE · SPACE GLIDE</span></div>
+        </div>
+
+        <div class="sep"></div>
+
+        <div class="row">
+          <button class="btn" id="btnNote">NOTE</button>
+          <button class="btn" id="btnInvert">INVERT</button>
+          <button class="btn" id="btnNull">NULL</button>
+          <button class="btn" id="btnFull">FULL</button>
+          <span class="label">MOTION</span>
+          <button class="btn" id="btnMotion">ON</button>
+        </div>
+
+        <div class="row">
+          <span class="label">SIZE</span>
+          <input type="range" id="rngSize" min="80" max="200" step="1" value="140" />
+          <span class="label">PACE</span>
+          <input type="range" id="rngSpeed" min="0" max="100" step="1" value="28" />
+          <span class="label">TAIL</span>
+          <input type="range" id="rngTail" min="0" max="100" step="1" value="88" />
+        </div>
+
+        <div class="row">
+          <span class="label">FORM</span>
+          <input type="range" id="rngForm" min="0" max="100" step="1" value="78" />
+          <span class="label">GAIT</span>
+          <input type="range" id="rngGait" min="0" max="100" step="1" value="48" />
+          <span class="label">TRAIL</span>
+          <input type="range" id="rngTrail" min="0" max="100" step="1" value="86" />
+        </div>
+
+        <div class="row">
+          <span class="label">RESEED</span>
+          <button class="btn" id="btnSeed">GO</button>
+          <span class="label">REST</span>
+          <button class="btn" id="btnRest">IDLE</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="note">
+      <div class="bar">
+        <div>KETA_NOTE</div>
+        <div class="mini">SHIFT+K</div>
+      </div>
+      <textarea id="noteText" spellcheck="false" placeholder="KETA_NOTE"></textarea>
+    </div>
+
+    <div id="cornerDots" aria-hidden="true">
+      <div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div>
+    </div>
+
+    <div id="statusLine">READY</div>
+  </div>
+
+<script>
+const FILE_ID = "KETADATA_KITTY_ELEVATED";
+const LS_KEY = "KETADATA::" + FILE_ID + "::STATE";
+const $ = (id)=>document.getElementById(id);
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const lerp=(a,b,t)=>a+(b-a)*t;
+
+const state = {
+  invert:false, nullMode:false, fullscreen:false, motion:true,
+  size:1.40, pace:0.28, tail:0.88,
+  form:0.78, gait:0.48, trail:0.86,
+  seed:(Math.random()*1e9)>>>0,
+  noteOpen:false, notePos:{x:null,y:null}, noteText:"",
+  rest:false
+};
+
+function loadState(){
+  try{
+    const raw = localStorage.getItem(LS_KEY);
+    if(!raw) return;
+    const s = JSON.parse(raw);
+    if(!s || typeof s!=="object") return;
+    Object.assign(state, s);
+  }catch(_){}
+}
+function saveState(){ try{ localStorage.setItem(LS_KEY, JSON.stringify(state)); }catch(_){ } }
+function status(t){ $("statusLine").textContent = t; }
+
+function applyState(){
+  document.body.classList.toggle("invert", !!state.invert);
+  document.body.classList.toggle("nullmode", !!state.nullMode);
+
+  $("rngSize").value = String(Math.round(state.size*100));
+  $("rngSpeed").value = String(Math.round(state.pace*100));
+  $("rngTail").value = String(Math.round(state.tail*100));
+  $("rngForm").value = String(Math.round(state.form*100));
+  $("rngGait").value = String(Math.round(state.gait*100));
+  $("rngTrail").value = String(Math.round(state.trail*100));
+  $("btnMotion").textContent = state.motion ? "ON" : "OFF";
+  $("btnRest").textContent = state.rest ? "WAKE" : "IDLE";
+
+  $("meta").textContent = `INVERT ${state.invert?1:0} · NULL ${state.nullMode?1:0}`;
+
+  $("noteText").value = state.noteText || "";
+  $("note").classList.toggle("open", !!state.noteOpen);
+  if(state.notePos && state.notePos.x!=null && state.notePos.y!=null){
+    $("note").style.left = state.notePos.x + "px";
+    $("note").style.top = state.notePos.y + "px";
+    $("note").style.right = "auto";
+  }
+
+  status(`SIZE ${Math.round(state.size*100)} · PACE ${Math.round(state.pace*100)} · FORM ${Math.round(state.form*100)} · REST ${state.rest?1:0}`);
+}
+
+/* canvas */
+const canvas = $("c");
+const ctx = canvas.getContext("2d", { alpha:true });
+let W=0,H=0,DPR=1;
+
+function resize(){
+  DPR = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+  W = Math.floor(window.innerWidth * DPR);
+  H = Math.floor(window.innerHeight * DPR);
+  canvas.width = W;
+  canvas.height = H;
+}
+addEventListener("resize", resize);
+
+/* creature */
+const kitty = {
+  x: 0.52, y: 0.68,
+  vx: 0, vy: 0,
+  ang: 0,
+  wp: [],
+  wpT: 0,
+  blink: 0,
+  glide: 0,
+  breath: 0
+};
+
+function strokeCol(){ return document.body.classList.contains("invert") ? "rgba(10,12,15,.88)" : "rgba(255,255,255,.88)"; }
+function hairCol(){   return document.body.classList.contains("invert") ? "rgba(10,12,15,.18)" : "rgba(255,255,255,.18)"; }
+function fillCol(){   return document.body.classList.contains("invert") ? "rgba(10,12,15,.05)" : "rgba(255,255,255,.05)"; }
+function furCol(){    return document.body.classList.contains("invert") ? "rgba(10,12,15,.04)" : "rgba(255,255,255,.04)"; }
+function shadowCol(){ return document.body.classList.contains("invert") ? "rgba(10,12,15,.12)" : "rgba(0,0,0,.12)"; }
+
+function makeWaypoint(){
+  return {
+    x: clamp(0.16 + Math.random()*0.68, 0.10, 0.90),
+    y: clamp(0.32 + Math.random()*0.52, 0.18, 0.88),
+    hold: 1400 + Math.random()*2400
+  };
+}
+
+function ensurePath(){
+  while(kitty.wp.length < 4) kitty.wp.push(makeWaypoint());
+}
+
+function stepPath(t){
+  ensurePath();
+  if(t > kitty.wpT){
+    const w = kitty.wp.shift();
+    kitty.wp.push(makeWaypoint());
+    kitty.wpT = t + w.hold;
+  }
+  const a = kitty.wp[0];
+  const b = kitty.wp[1];
+  const segLen = 2600;
+  const u = clamp(1 - (kitty.wpT - t)/segLen, 0, 1);
+  const s = u*u*(3-2*u);
+  return { x: lerp(a.x, b.x, s), y: lerp(a.y, b.y, s) };
+}
+
+function drawCat(cx,cy,scale,ang,t){
+  const stroke = strokeCol();
+  const hair = hairCol();
+  const fill = fillCol();
+  const fur = furCol();
+  const shadow = shadowCol();
+
+  const speed = Math.hypot(kitty.vx, kitty.vy);
+  const gait = state.gait;
+  const tail = state.tail;
+  const form = state.form;
+  const motion = state.motion;
+
+  // refined animation
+  const baseF = 0.85 + 1.6*speed*150;
+  const stride = motion ? (t*0.001*baseF) : 0;
+  const amp = (0.08 + 0.22*gait) * clamp(speed*240, 0, 1);
+  const bob = motion ? Math.sin(stride) * (0.06 + 0.10*gait) * scale * amp : 0;
+
+  // elegant proportions
+  const torsoL = (1.00 + 0.22*form) * scale;
+  const torsoW = (0.24 + 0.16*form) * scale;
+  const headS  = (0.36 + 0.12*form) * scale;
+  const neckUp = (0.12 + 0.12*form) * scale;
+
+  // refined spine curve
+  const p0 = { x: -0.48*torsoL, y:  0.07*scale + bob*0.22 };
+  const p1 = { x: -0.08*torsoL, y: -0.09*scale + bob*0.12 };
+  const p2 = { x:  0.46*torsoL, y:  0.04*scale + bob*0.06 };
+  const head = { x: p2.x + 0.18*scale, y: p2.y - neckUp };
+
+  const hipL  = { x: p0.x + 0.16*scale, y: p0.y + (0.13+0.05*form)*scale };
+  const hipR  = { x: p0.x + 0.16*scale, y: p0.y + (0.13+0.05*form)*scale };
+  const shL   = { x: p2.x - 0.08*scale, y: p2.y + (0.11+0.05*form)*scale };
+  const shR   = { x: p2.x - 0.08*scale, y: p2.y + (0.11+0.05*form)*scale };
+
+  const groundY = (0.34 + 0.08*form)*scale + bob*0.14;
+  const stepLen = (0.20 + 0.20*gait) * scale * clamp(speed*340, 0, 1);
+
+  const ph = stride;
+  const phFL = ph + 0.0;
+  const phFR = ph + Math.PI;
+  const phHL = ph + Math.PI;
+  const phHR = ph + 0.0;
+
+  function footX(base, ph){
+    const s = Math.sin(ph)*0.92;
+    return base + s * stepLen;
+  }
+  function footY(ph){
+    const lift = Math.max(0, Math.sin(ph));
+    return groundY - lift * (0.07 + 0.08*gait) * scale * amp;
+  }
+
+  const footFL = { x: shL.x + footX( 0.10*scale, phFL), y: footY(phFL) };
+  const footFR = { x: shR.x + footX( 0.20*scale, phFR), y: footY(phFR) };
+  const footHL = { x: hipL.x + footX(-0.14*scale, phHL), y: footY(phHL) };
+  const footHR = { x: hipR.x + footX( 0.06*scale, phHR), y: footY(phHR) };
+
+  const tailBase = { x: p0.x - 0.14*scale, y: p0.y - 0.03*scale };
+  const tailLen = (1.00 + 0.80*tail) * scale;
+  const tailWave = motion ? Math.sin(t*0.0009 + ph*0.20) : 0;
+
+  ctx.save();
+  ctx.translate(cx,cy);
+  ctx.rotate(ang);
+  ctx.lineJoin = "round";
+  ctx.lineCap = "round";
+
+  // shadow beneath creature
+  ctx.fillStyle = shadow;
+  ctx.beginPath();
+  ctx.ellipse(0, groundY + 0.08*scale, scale*0.40, scale*0.12, 0, 0, Math.PI*2);
+  ctx.fill();
+
+  function spinePoint(tt){
+    const a = (1-tt)*(1-tt);
+    const b = 2*(1-tt)*tt;
+    const c = tt*tt;
+    return { x: a*p0.x + b*p1.x + c*p2.x, y: a*p0.y + b*p1.y + c*p2.y };
+  }
+
+  // elegant silhouette
+  const n = 28;
+  const left = [];
+  const right = [];
+  for(let i=0;i<=n;i++){
+    const tt = i/n;
+    const sp = spinePoint(tt);
+    const sp2 = spinePoint(clamp(tt+0.02,0,1));
+    const tx = sp2.x - sp.x, ty = sp2.y - sp.y;
+    const mag = Math.hypot(tx,ty) || 1;
+    const nx = -ty/mag, ny = tx/mag;
+
+    const swell = 0.92 + 0.56*Math.sin(tt*Math.PI);
+    const w = torsoW * swell;
+    left.push({ x: sp.x + nx*w, y: sp.y + ny*w });
+    right.push({ x: sp.x - nx*w, y: sp.y - ny*w });
+  }
+
+  // body with refined stroke
+  ctx.fillStyle = fill;
+  ctx.strokeStyle = stroke;
+  ctx.lineWidth = 2.2*DPR;
+  ctx.beginPath();
+  ctx.moveTo(left[0].x, left[0].y);
+  for(const p of left) ctx.lineTo(p.x,p.y);
+  for(let i=right.length-1;i>=0;i--) ctx.lineTo(right[i].x, right[i].y);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+
+  // subtle fur texture
+  ctx.strokeStyle = fur;
+  ctx.lineWidth = 1*DPR;
+  for(let i=0;i<9;i++){
+    const tt = (i+1)/10;
+    const sp = spinePoint(tt);
+    ctx.beginPath();
+    ctx.moveTo(sp.x - 0.08*scale, sp.y + 0.04*scale);
+    ctx.lineTo(sp.x + 0.06*scale, sp.y - 0.02*scale);
+    ctx.stroke();
+  }
+
+  // refined legs
+  function drawLeg(hip, foot, bend){
+    const sx = hip.x, sy = hip.y;
+    const fx = foot.x, fy = foot.y;
+
+    const mx = lerp(sx, fx, 0.54);
+    const my = lerp(sy, fy, 0.54);
+    const dx = fx - sx, dy = fy - sy;
+    const mag = Math.hypot(dx,dy) || 1;
+    const px = -dy/mag, py = dx/mag;
+
+    const kx = mx + px * bend;
+    const ky = my + py * bend;
+
+    ctx.strokeStyle = stroke;
+    ctx.lineWidth = 2.2*DPR;
+    ctx.beginPath();
+    ctx.moveTo(sx, sy);
+    ctx.lineTo(kx, ky);
+    ctx.lineTo(fx, fy);
+    ctx.stroke();
+
+    // refined paw
+    ctx.strokeStyle = hair;
+    ctx.lineWidth = 2*DPR;
+    ctx.beginPath();
+    ctx.moveTo(fx - 0.032*scale, fy);
+    ctx.lineTo(fx + 0.032*scale, fy);
+    ctx.stroke();
+  }
+
+  const bendA = (0.09 + 0.14*gait) * scale * (0.22 + amp);
+  drawLeg(shL, footFL,  bendA);
+  drawLeg(shR, footFR, -bendA*0.88);
+  drawLeg(hipL, footHL,  bendA*0.88);
+  drawLeg(hipR, footHR, -bendA);
+
+  // refined head
+  const hx = head.x, hy = head.y + bob*0.07;
+  const hr = headS*0.52;
+  const rr = headS*0.24;
+
+  ctx.fillStyle = fill;
+  ctx.strokeStyle = stroke;
+  ctx.lineWidth = 2.2*DPR;
+  ctx.beginPath();
+  ctx.moveTo(hx-hr+rr, hy-hr);
+  ctx.lineTo(hx+hr-rr, hy-hr);
+  ctx.quadraticCurveTo(hx+hr, hy-hr, hx+hr, hy-hr+rr);
+  ctx.lineTo(hx+hr, hy+hr-rr);
+  ctx.quadraticCurveTo(hx+hr, hy+hr, hx+hr-rr, hy+hr);
+  ctx.lineTo(hx-hr+rr, hy+hr);
+  ctx.quadraticCurveTo(hx-hr, hy+hr, hx-hr, hy+hr-rr);
+  ctx.lineTo(hx-hr, hy-hr+rr);
+  ctx.quadraticCurveTo(hx-hr, hy-hr, hx-hr+rr, hy-hr);
+  ctx.closePath();
+  ctx.fill(); ctx.stroke();
+
+  // refined muzzle
+  ctx.strokeStyle = hair;
+  ctx.lineWidth = 1.2*DPR;
+  ctx.beginPath();
+  ctx.moveTo(hx-0.15*scale, hy+0.06*scale);
+  ctx.quadraticCurveTo(hx, hy+0.11*scale, hx+0.15*scale, hy+0.06*scale);
+  ctx.stroke();
+
+  // elegant ears
+  function ear(ex,ey,flip){
+    ctx.fillStyle = fill;
+    ctx.strokeStyle = stroke;
+    ctx.lineWidth = 2.2*DPR;
+    ctx.beginPath();
+    ctx.moveTo(ex, ey);
+    ctx.lineTo(ex + flip*0.13*scale, ey - 0.24*scale);
+    ctx.lineTo(ex + flip*0.04*scale, ey - 0.04*scale);
+    ctx.closePath();
+    ctx.fill(); ctx.stroke();
+    
+    // inner ear detail
+    ctx.strokeStyle = hair;
+    ctx.lineWidth = 1*DPR;
+    ctx.beginPath();
+    ctx.moveTo(ex + flip*0.03*scale, ey - 0.06*scale);
+    ctx.lineTo(ex + flip*0.10*scale, ey - 0.18*scale);
+    ctx.stroke();
+  }
+  ear(hx-0.13*scale, hy-0.17*scale, -1);
+  ear(hx+0.13*scale, hy-0.17*scale,  1);
+
+  // refined eyes
+  const blink = clamp(kitty.blink, 0, 1);
+  const eyeOpen = 1 - blink;
+  ctx.strokeStyle = hair;
+  ctx.lineWidth = 2.2*DPR;
+  function eye(ex){
+    ctx.beginPath();
+    if(eyeOpen > 0.15){
+      ctx.moveTo(ex - 0.045*scale, hy-0.05*scale);
+      ctx.quadraticCurveTo(ex, hy-0.08*scale, ex + 0.045*scale, hy-0.05*scale);
+      ctx.quadraticCurveTo(ex, hy-0.02*scale, ex - 0.045*scale, hy-0.05*scale);
+    }else{
+      ctx.moveTo(ex - 0.048*scale, hy-0.05*scale);
+      ctx.lineTo(ex + 0.048*scale, hy-0.05*scale);
+    }
+    ctx.stroke();
+  }
+  eye(hx - 0.09*scale);
+  eye(hx + 0.09*scale);
+
+  // elegant whiskers
+  ctx.strokeStyle = hair;
+  ctx.lineWidth = 1*DPR;
+  for(let k=-1;k<=1;k++){
+    const yy = hy+0.07*scale + k*0.028*scale;
+    ctx.beginPath();
+    ctx.moveTo(hx-0.03*scale, yy);
+    ctx.lineTo(hx-0.32*scale, yy + Math.sin(t*0.0011 + k)*0.010*scale);
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(hx+0.03*scale, yy);
+    ctx.lineTo(hx+0.32*scale, yy + Math.cos(t*0.0011 + k)*0.010*scale);
+    ctx.stroke();
+  }
+
+  // elegant flowing tail
+  ctx.strokeStyle = stroke;
+  ctx.lineWidth = 2.2*DPR;
+  ctx.beginPath();
+  ctx.moveTo(tailBase.x, tailBase.y);
+  const segs = 36;
+  for(let i=1;i<=segs;i++){
+    const tt = i/segs;
+    const xx = tailBase.x - tt*tailLen;
+    const yy = tailBase.y
+      + Math.sin(tt*2.4*Math.PI + tailWave) * (0.07 + 0.20*tail) * scale * (0.60 + 0.40*amp)
+      + Math.sin(t*0.0007 + tt*5.5) * 0.024*scale;
+    ctx.lineTo(xx, yy);
+  }
+  ctx.stroke();
+
+  // refined body detail
+  ctx.strokeStyle = hair;
+  ctx.lineWidth = 1*DPR;
+  ctx.beginPath();
+  ctx.moveTo(p2.x - 0.03*scale, p2.y + 0.03*scale);
+  ctx.lineTo(p2.x + 0.22*scale, p2.y + 0.11*scale);
+  ctx.stroke();
+
+  ctx.restore();
+}
+
+function step(t){
+  const motion = state.motion;
+
+  // refined trailing
+  const alpha = motion ? (0.20 - 0.16*state.trail) : 1.0;
+  ctx.fillStyle = `rgba(0,0,0,${clamp(alpha, 0.018, 1)})`;
+  ctx.fillRect(0,0,W,H);
+
+  // subtle atmospheric grid
+  ctx.strokeStyle = document.body.classList.contains("invert") ? "rgba(10,12,15,.012)" : "rgba(255,255,255,.012)";
+  ctx.lineWidth = 1*DPR;
+  const grid = 100*DPR;
+  const ox = ((t*0.005*DPR) % grid);
+  for(let x=ox; x < W; x += grid){
+    ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke();
+  }
+
+  // refined blink timing
+  if(kitty.blink <= 0 && Math.random() < 0.0018) kitty.blink = 1.3;
+  kitty.blink = Math.max(0, kitty.blink - 0.040);
+
+  const tgt = state.rest ? {x:0.52, y:0.72} : stepPath(t);
+  const dx = tgt.x - kitty.x;
+  const dy = tgt.y - kitty.y;
+
+  const dist = Math.hypot(dx,dy) + 1e-6;
+
+  const pace = state.pace;
+  const accel = 0.00028 + pace*0.00120 + kitty.glide*0.00120;
+  const maxV  = 0.00090 + pace*0.00520 + kitty.glide*0.00650;
+
+  const w = 0.00016 * (0.22 + pace);
+  kitty.vx += (dx/dist)*accel + Math.sin(t*0.0008)*w;
+  kitty.vy += (dy/dist)*accel + Math.cos(t*0.0006)*w;
+
+  kitty.vx *= 0.993;
+  kitty.vy *= 0.993;
+  kitty.glide *= 0.95;
+
+  const vmag = Math.hypot(kitty.vx, kitty.vy);
+  if(vmag > maxV){
+    kitty.vx = (kitty.vx/vmag)*maxV;
+    kitty.vy = (kitty.vy/vmag)*maxV;
+  }
+
+  kitty.x = clamp(kitty.x + kitty.vx, 0.10, 0.90);
+  kitty.y = clamp(kitty.y + kitty.vy, 0.18, 0.88);
+
+  const ang = Math.atan2(kitty.vy, kitty.vx);
+  if(isFinite(ang)){
+    const da = ((ang - kitty.ang + Math.PI*3)%(Math.PI*2)) - Math.PI;
+    kitty.ang += da * 0.042;
+  }
+
+  const cx = kitty.x * W;
+  const cy = kitty.y * H;
+
+  const base = Math.min(W,H) * 0.24;
+  const scale = base * state.size;
+
+  drawCat(cx, cy, scale, kitty.ang, t);
+
+  // refined frame
+  ctx.strokeStyle = document.body.classList.contains("invert") ? "rgba(10,12,15,.05)" : "rgba(255,255,255,.05)";
+  ctx.lineWidth = 1*DPR;
+  ctx.strokeRect(12*DPR, 12*DPR, W-24*DPR, H-24*DPR);
+
+  requestAnimationFrame(step);
+}
+
+/* NOTE drag */
+(function noteDrag(){
+  const el = $("note");
+  const bar = el.querySelector(".bar");
+  let dragging=false, ox=0, oy=0;
+
+  bar.addEventListener("mousedown",(e)=>{
+    dragging=true;
+    const r = el.getBoundingClientRect();
+    ox = e.clientX - r.left;
+    oy = e.clientY - r.top;
+    e.preventDefault();
+  });
+  window.addEventListener("mousemove",(e)=>{
+    if(!dragging) return;
+    const x = Math.max(12, Math.min(window.innerWidth - 12 - el.offsetWidth, e.clientX - ox));
+    const y = Math.max(12, Math.min(window.innerHeight - 12 - el.offsetHeight, e.clientY - oy));
+    el.style.left = x + "px";
+    el.style.top = y + "px";
+    el.style.right = "auto";
+    state.notePos = { x, y };
+  });
+  window.addEventListener("mouseup",()=>{
+    if(!dragging) return;
+    dragging=false;
+    saveState();
+  });
+})();
+
+/* controls */
+function toggleNote(){ state.noteOpen=!state.noteOpen; saveState(); applyState(); }
+function toggleInvert(){ state.invert=!state.invert; saveState(); applyState(); }
+function toggleNull(){ state.nullMode=!state.nullMode; saveState(); applyState(); }
+async function toggleFullscreen(){
+  try{
+    if(!document.fullscreenElement){ await document.documentElement.requestFullscreen(); state.fullscreen=true; }
+    else { await document.exitFullscreen(); state.fullscreen=false; }
+  }catch(_){}
+  saveState(); applyState();
+}
+function reseed(){
+  state.seed = (Math.random()*1e9)>>>0;
+  kitty.wp.length = 0;
+  kitty.wpT = 0;
+  saveState(); applyState();
+}
+function glide(){
+  kitty.glide = 1.0;
+  state.rest = false;
+  saveState(); applyState();
+}
+
+$("btnNote").addEventListener("click", toggleNote);
+$("btnInvert").addEventListener("click", toggleInvert);
+$("btnNull").addEventListener("click", toggleNull);
+$("btnFull").addEventListener("click", toggleFullscreen);
+$("btnSeed").addEventListener("click", reseed);
+$("btnMotion").addEventListener("click",()=>{ state.motion=!state.motion; saveState(); applyState(); });
+$("btnRest").addEventListener("click",()=>{ state.rest=!state.rest; saveState(); applyState(); });
+
+$("rngSize").addEventListener("input",(e)=>{ state.size = clamp((parseInt(e.target.value,10)||140)/100, 0.80, 2.00); saveState(); applyState(); });
+$("rngSpeed").addEventListener("input",(e)=>{ state.pace = clamp((parseInt(e.target.value,10)||28)/100, 0, 1); saveState(); applyState(); });
+$("rngTail").addEventListener("input",(e)=>{ state.tail = clamp((parseInt(e.target.value,10)||88)/100, 0, 1); saveState(); applyState(); });
+$("rngForm").addEventListener("input",(e)=>{ state.form = clamp((parseInt(e.target.value,10)||78)/100, 0, 1); saveState(); applyState(); });
+$("rngGait").addEventListener("input",(e)=>{ state.gait = clamp((parseInt(e.target.value,10)||48)/100, 0, 1); saveState(); applyState(); });
+$("rngTrail").addEventListener("input",(e)=>{ state.trail = clamp((parseInt(e.target.value,10)||86)/100, 0, 1); saveState(); applyState(); });
+
+$("noteText").addEventListener("input",(e)=>{ state.noteText = e.target.value || ""; saveState(); });
+
+/* hotkeys */
+function isTypingTarget(t){
+  if(!t) return false;
+  const tag = (t.tagName||"").toLowerCase();
+  return tag==="textarea" || tag==="input" || t.isContentEditable;
+}
+window.addEventListener("keydown",(e)=>{
+  const typing = isTypingTarget(e.target);
+
+  if(e.shiftKey && e.key.toLowerCase()==="i"){ e.preventDefault(); toggleInvert(); return; }
+  if(e.shiftKey && e.key.toLowerCase()==="n"){ e.preventDefault(); toggleNull(); return; }
+  if(e.shiftKey && e.key.toLowerCase()==="f"){ e.preventDefault(); toggleFullscreen(); return; }
+  if(e.shiftKey && e.key.toLowerCase()==="k"){ e.preventDefault(); toggleNote(); return; }
+
+  if(e.code==="Space" && !typing){
+    e.preventDefault();
+    glide();
+    return;
+  }
+}, { passive:false });
+
+/* boot */
+loadState();
+resize();
+applyState();
+requestAnimationFrame(step);
+</script>
+
+<!--
+FILE_ID: "KETADATA_KITTY_ELEVATED"
+VERSION: "ELEVATED"
+UPDATED_AT: "2026-01-06"
+CHANGELOG:
+- ELEVATED: Enhanced atmospheric depth (3 radial gradients), refined creature anatomy (elegant proportions), sophisticated stroke weights (2.2px), subtle shadow beneath, refined fur texture (9 lines), elegant ear details, flowing tail (36 segments), refined timing/motion, enhanced UI (box shadows, better spacing, opacity tuning), smoother animations, improved visual hierarchy
+-->
+</body>
+</html>
