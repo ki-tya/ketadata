@@ -1,0 +1,640 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>KETADATA // ASHTRAY</title>
+  <style>
+    :root{
+      --bg:#000;
+      --fg:#fff;
+      --muted:rgba(255,255,255,.58);
+      --hair:rgba(255,255,255,.14);
+      --panel:rgba(0,0,0,.42);
+      --panel2:rgba(0,0,0,.62);
+      --motion:1;
+      --heat:0.55;     /* ember intensity */
+      --smoke:0.72;    /* smoke density */
+      --ash:0.48;      /* ash buildup */
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%;margin:0}
+    body{
+      background:var(--bg);
+      color:var(--fg);
+      font:12px/1.25 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace;
+      overflow:hidden;
+      user-select:none;
+    }
+
+    body.invert{ filter: invert(1) hue-rotate(180deg); background:#fff; }
+    body.nullmode .chrome{display:none}
+    body.nullmode #hud{opacity:0; pointer-events:none}
+
+    #field{
+      position:absolute; inset:0;
+      background:
+        radial-gradient(1100px 800px at 50% 35%, rgba(255,255,255,.06), rgba(0,0,0,0) 62%),
+        radial-gradient(900px 700px at 20% 78%, rgba(255,255,255,.03), rgba(0,0,0,0) 58%),
+        linear-gradient(180deg, rgba(255,255,255,.03), rgba(0,0,0,0) 40%),
+        linear-gradient(180deg, rgba(0,0,0,0), rgba(0,0,0,.38));
+    }
+    canvas{position:absolute; inset:0; width:100%; height:100%}
+
+    .chrome{position:absolute; inset:0; pointer-events:none}
+    #frame{position:absolute; inset:8px; border:1px solid rgba(255,255,255,.08); pointer-events:none}
+
+    #hud{
+      position:absolute;
+      top:10px; left:10px;
+      width:360px;
+      border:1px solid var(--hair);
+      background:var(--panel);
+      backdrop-filter: blur(6px);
+      pointer-events:auto;
+    }
+    #hud .bar{
+      display:flex; align-items:center; justify-content:space-between;
+      padding:8px 8px;
+      border-bottom:1px solid var(--hair);
+      background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(0,0,0,0));
+    }
+    #hud .bar .title{opacity:.92}
+    #hud .bar .meta{opacity:.58}
+    #hud .body{padding:8px; display:grid; gap:8px}
+    .row{display:flex; gap:8px; align-items:center; flex-wrap:wrap}
+    .btn, .pill, input[type="range"]{font:inherit; color:inherit}
+    .btn{
+      border:1px solid var(--hair);
+      background:rgba(255,255,255,.04);
+      padding:6px 8px;
+      cursor:pointer;
+      user-select:none;
+    }
+    .btn:hover{background:rgba(255,255,255,.07)}
+    .btn:active{transform: translateY(1px)}
+    .pill{
+      border:1px solid var(--hair);
+      padding:6px 8px;
+      background:rgba(0,0,0,.18);
+      opacity:.85;
+    }
+    input[type="range"]{width:140px; accent-color: var(--fg)}
+    .label{opacity:.72}
+    .mini{opacity:.58}
+    .sep{height:1px;background:var(--hair);margin:2px 0}
+
+    #note{
+      position:absolute;
+      right:10px; top:10px;
+      width:360px; height:220px;
+      border:1px solid var(--hair);
+      background:var(--panel2);
+      pointer-events:auto;
+      display:none;
+    }
+    #note.open{display:block}
+    #note .bar{
+      display:flex; align-items:center; justify-content:space-between;
+      padding:8px 8px;
+      border-bottom:1px solid var(--hair);
+      background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(0,0,0,0));
+      cursor:move;
+      user-select:none;
+    }
+    #note textarea{
+      width:100%; height: calc(100% - 34px);
+      border:0; outline:none; resize:none;
+      background:transparent;
+      color:var(--fg);
+      font:inherit;
+      padding:8px;
+      user-select:text;
+    }
+
+    #cornerDots{position:absolute; left:10px; bottom:10px; display:flex; gap:6px; pointer-events:none; opacity:.6}
+    .dot{width:10px; height:10px; border-radius:50%; border:1px solid var(--hair); background:rgba(255,255,255,.06)}
+
+    #statusLine{
+      position:absolute; right:10px; bottom:10px;
+      border:1px solid var(--hair);
+      background:rgba(0,0,0,.25);
+      padding:6px 8px;
+      opacity:.78;
+      pointer-events:none;
+      max-width:60vw;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+  </style>
+</head>
+<body>
+  <div id="field"><canvas id="c"></canvas></div>
+
+  <div class="chrome">
+    <div id="frame"></div>
+
+    <div id="hud">
+      <div class="bar">
+        <div class="title">KETADATA // ASHTRAY</div>
+        <div class="meta" id="meta">INVERT 0 · NULL 0</div>
+      </div>
+
+      <div class="body">
+        <div class="row">
+          <div class="pill"><span class="label">HOTKEYS</span> <span class="mini">SHIFT+I INVERT · SHIFT+N NULL · SHIFT+F FULLSCREEN · SHIFT+K NOTE · SPACE TAP ASH</span></div>
+        </div>
+
+        <div class="sep"></div>
+
+        <div class="row">
+          <button class="btn" id="btnNote">NOTE</button>
+          <button class="btn" id="btnInvert">INVERT</button>
+          <button class="btn" id="btnNull">NULL</button>
+          <button class="btn" id="btnFull">FULL</button>
+          <span class="label">MOTION</span>
+          <button class="btn" id="btnMotion">ON</button>
+        </div>
+
+        <div class="row">
+          <span class="label">HEAT</span>
+          <input type="range" id="rngHeat" min="0" max="100" step="1" value="55" />
+          <span class="label">SMOKE</span>
+          <input type="range" id="rngSmoke" min="0" max="100" step="1" value="72" />
+          <span class="label">ASH</span>
+          <input type="range" id="rngAsh" min="0" max="100" step="1" value="48" />
+        </div>
+
+        <div class="row">
+          <span class="label">RESET</span>
+          <button class="btn" id="btnReset">GO</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="note">
+      <div class="bar">
+        <div>KETA_NOTE</div>
+        <div class="mini">SHIFT+K TO TOGGLE</div>
+      </div>
+      <textarea id="noteText" spellcheck="false" placeholder="KETA_NOTE — optional, movable, non-interfering."></textarea>
+    </div>
+
+    <div id="cornerDots" aria-hidden="true">
+      <div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div>
+    </div>
+
+    <div id="statusLine">READY</div>
+  </div>
+
+<script>
+const FILE_ID = "KETADATA_ASHTRAY_MONO_V1";
+const LS_KEY = "KETADATA::" + FILE_ID + "::STATE";
+const $ = (id)=>document.getElementById(id);
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+
+const state = {
+  invert:false, nullMode:false, fullscreen:false, motion:true,
+  heat:0.55, smoke:0.72, ash:0.48,
+  noteOpen:false, notePos:{x:null,y:null}, noteText:"",
+  burn:0.0, ashPile:0.0,
+  seed:(Math.random()*1e9)>>>0
+};
+
+function loadState(){
+  try{
+    const raw = localStorage.getItem(LS_KEY);
+    if(!raw) return;
+    const s = JSON.parse(raw);
+    if(!s || typeof s!=="object") return;
+    Object.assign(state, s);
+  }catch(_){}
+}
+function saveState(){ try{ localStorage.setItem(LS_KEY, JSON.stringify(state)); }catch(_){ } }
+function status(t){ $("statusLine").textContent = t; }
+
+function applyState(){
+  document.body.classList.toggle("invert", !!state.invert);
+  document.body.classList.toggle("nullmode", !!state.nullMode);
+
+  $("rngHeat").value = String(Math.round(state.heat*100));
+  $("rngSmoke").value = String(Math.round(state.smoke*100));
+  $("rngAsh").value = String(Math.round(state.ash*100));
+  $("btnMotion").textContent = state.motion ? "ON" : "OFF";
+  $("meta").textContent = `INVERT ${state.invert?1:0} · NULL ${state.nullMode?1:0}`;
+
+  $("noteText").value = state.noteText || "";
+  $("note").classList.toggle("open", !!state.noteOpen);
+  if(state.notePos && state.notePos.x!=null && state.notePos.y!=null){
+    $("note").style.left = state.notePos.x + "px";
+    $("note").style.top = state.notePos.y + "px";
+    $("note").style.right = "auto";
+  }
+
+  status(`BURN ${Math.round(state.burn*100)} · ASHPILE ${Math.round(state.ashPile*100)} · HEAT ${Math.round(state.heat*100)} · SMOKE ${Math.round(state.smoke*100)}`);
+}
+
+/* canvas */
+const canvas = $("c");
+const ctx = canvas.getContext("2d", { alpha:true });
+let W=0,H=0,DPR=1;
+
+function resize(){
+  DPR = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+  W = Math.floor(window.innerWidth * DPR);
+  H = Math.floor(window.innerHeight * DPR);
+  canvas.width = W;
+  canvas.height = H;
+}
+addEventListener("resize", resize);
+
+function inv(){ return document.body.classList.contains("invert"); }
+function col(a){ return inv() ? `rgba(10,12,15,${a})` : `rgba(255,255,255,${a})`; }
+
+function rand(){
+  state.seed = (state.seed * 1664525 + 1013904223) >>> 0;
+  return (state.seed >>> 8) / 16777216;
+}
+
+/* smoke particles */
+const smoke = [];
+function spawnSmoke(x,y,n){
+  for(let i=0;i<n;i++){
+    smoke.push({
+      x, y,
+      vx: (rand()*2-1) * 0.25*DPR,
+      vy: -(0.40 + rand()*0.70) * DPR,
+      r: (3 + rand()*10) * DPR,
+      a: 0.10 + rand()*0.18,
+      w: 0.002 + rand()*0.006,
+      ph: rand()*Math.PI*2,
+      life: 0,
+      max: 120 + rand()*220
+    });
+  }
+}
+function drawSmoke(p){
+  const fade = 1 - (p.life / p.max);
+  const aa = p.a * fade;
+  ctx.fillStyle = inv() ? `rgba(10,12,15,${aa})` : `rgba(255,255,255,${aa})`;
+  ctx.beginPath();
+  ctx.arc(p.x, p.y, p.r, 0, Math.PI*2);
+  ctx.fill();
+}
+
+/* ash specks */
+const ash = [];
+function dropAsh(x,y,n){
+  for(let i=0;i<n;i++){
+    ash.push({
+      x: x + (rand()*2-1)*10*DPR,
+      y: y + (rand()*2-1)*6*DPR,
+      vx: (rand()*2-1)*0.10*DPR,
+      vy: (0.12 + rand()*0.25)*DPR,
+      r: (0.8 + rand()*1.8)*DPR,
+      a: 0.10 + rand()*0.22,
+      life: 0,
+      max: 90 + rand()*140
+    });
+  }
+}
+
+/* geometry helpers */
+function roundedRect(x,y,w,h,r){
+  const rr = Math.min(r, w/2, h/2);
+  ctx.beginPath();
+  ctx.moveTo(x+rr, y);
+  ctx.lineTo(x+w-rr, y);
+  ctx.quadraticCurveTo(x+w, y, x+w, y+rr);
+  ctx.lineTo(x+w, y+h-rr);
+  ctx.quadraticCurveTo(x+w, y+h, x+w-rr, y+h);
+  ctx.lineTo(x+rr, y+h);
+  ctx.quadraticCurveTo(x, y+h, x, y+h-rr);
+  ctx.lineTo(x, y+rr);
+  ctx.quadraticCurveTo(x, y, x+rr, y);
+  ctx.closePath();
+}
+
+function draw(){
+  const alpha = state.motion ? 0.22 : 1.0;
+  ctx.fillStyle = `rgba(0,0,0,${alpha})`;
+  ctx.fillRect(0,0,W,H);
+
+  ctx.strokeStyle = col(0.016);
+  ctx.lineWidth = 1*DPR;
+  const grid = 96*DPR;
+  const ox = ((performance.now()*0.006*DPR) % grid);
+  for(let x=ox; x < W; x += grid){
+    ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke();
+  }
+
+  const t = performance.now();
+
+  const cx = W*0.55;
+  const cy = H*0.62;
+
+  const R = Math.min(W,H) * 0.18;
+
+  /* ASHTRAY */
+  ctx.fillStyle = "rgba(0,0,0,.35)";
+  ctx.beginPath();
+  ctx.ellipse(cx, cy + R*0.55, R*0.85, R*0.28, 0, 0, Math.PI*2);
+  ctx.fill();
+
+  ctx.fillStyle = "rgba(255,255,255,.03)";
+  ctx.strokeStyle = col(0.14);
+  ctx.lineWidth = 2*DPR;
+  ctx.beginPath();
+  ctx.ellipse(cx, cy, R, R*0.34, 0, 0, Math.PI*2);
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.fillStyle = "rgba(255,255,255,.02)";
+  ctx.strokeStyle = col(0.10);
+  ctx.lineWidth = 1*DPR;
+  ctx.beginPath();
+  ctx.ellipse(cx, cy, R*0.74, R*0.25, 0, 0, Math.PI*2);
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.strokeStyle = col(0.10);
+  ctx.lineWidth = 2*DPR;
+  for(let k=0;k<4;k++){
+    const ang = k*Math.PI/2 + 0.35;
+    const nx = cx + Math.cos(ang)*R*0.85;
+    const ny = cy + Math.sin(ang)*R*0.28;
+    ctx.beginPath();
+    ctx.moveTo(nx - Math.cos(ang)*R*0.10, ny - Math.sin(ang)*R*0.04);
+    ctx.lineTo(nx + Math.cos(ang)*R*0.10, ny + Math.sin(ang)*R*0.04);
+    ctx.stroke();
+  }
+
+  const ashPile = clamp(state.ashPile, 0, 1);
+  ctx.fillStyle = col(0.06 + 0.10*ashPile);
+  ctx.beginPath();
+  ctx.ellipse(cx - R*0.12, cy + R*0.08, R*0.26*(0.6+ashPile), R*0.10*(0.6+ashPile), 0.2, 0, Math.PI*2);
+  ctx.fill();
+
+  /* =========================
+     CIGARETTE (FIXED ORIENTATION)
+     - burning end at local x=0 (in tray)
+     - filter at far end (outside tray)
+  ========================= */
+  const cigLen = R*1.05;
+  const cigW = R*0.10;
+  const cigAng = -0.28;
+
+  // move origin left so ember sits over the bowl
+  const cigX = cx - R*0.28;
+  const cigY = cy - R*0.07;
+
+  const burn = clamp(state.burn, 0, 1);
+  const filtLen = cigLen*0.18;
+  const paperLen = cigLen*(0.86 - 0.62*burn);
+
+  // ember WORLD position is the origin (local x=0)
+  const emberX = cigX;
+  const emberY = cigY;
+
+  ctx.save();
+  ctx.translate(cigX, cigY);
+  ctx.rotate(cigAng);
+
+  // paper tube (starts at ember)
+  ctx.fillStyle = "rgba(255,255,255,.06)";
+  ctx.strokeStyle = col(0.18);
+  ctx.lineWidth = 2*DPR;
+  roundedRect(0, -cigW/2, paperLen, cigW, 4*DPR);
+  ctx.fill(); ctx.stroke();
+
+  // filter at far end (paper end -> filter end)
+  ctx.fillStyle = "rgba(255,255,255,.035)";
+  ctx.strokeStyle = col(0.14);
+  ctx.lineWidth = 2*DPR;
+  roundedRect(paperLen, -cigW/2, filtLen, cigW, 4*DPR);
+  ctx.fill(); ctx.stroke();
+
+  // filter rings
+  ctx.strokeStyle = col(0.10);
+  ctx.lineWidth = 1*DPR;
+  for(let i=1;i<=3;i++){
+    const x = paperLen + (i/4)*filtLen;
+    ctx.beginPath();
+    ctx.moveTo(x, -cigW*0.40);
+    ctx.lineTo(x,  cigW*0.40);
+    ctx.stroke();
+  }
+
+  // char band near ember (inside tray)
+  const charW = cigW*1.06;
+  ctx.fillStyle = col(0.06 + 0.10*burn);
+  ctx.beginPath();
+  ctx.rect(-cigW*0.02, -charW/2, cigW*0.26, charW);
+  ctx.fill();
+
+  // ember glow at x=0
+  const heat = clamp(state.heat, 0, 1);
+  const pulse = 0.55 + 0.45*Math.sin(t*0.004 + burn*4);
+  const glowA = (0.08 + 0.22*heat) * pulse;
+
+  ctx.fillStyle = col(glowA);
+  ctx.beginPath();
+  ctx.arc(0, 0, cigW*0.46, 0, Math.PI*2);
+  ctx.fill();
+
+  ctx.fillStyle = col(glowA*1.1);
+  ctx.beginPath();
+  ctx.arc(0, 0, cigW*0.22, 0, Math.PI*2);
+  ctx.fill();
+
+  // ash tip specks at ember
+  ctx.strokeStyle = col(0.20);
+  ctx.lineWidth = 1*DPR;
+  for(let i=0;i<6;i++){
+    const xx = (rand()*2-1)*cigW*0.10;
+    const yy = (rand()*2-1)*cigW*0.22;
+    ctx.beginPath();
+    ctx.moveTo(xx, yy);
+    ctx.lineTo(xx + (rand()*2-1)*cigW*0.22, yy + (rand()*2-1)*cigW*0.18);
+    ctx.stroke();
+  }
+
+  ctx.restore();
+
+  /* smoke emission (from ember in tray) */
+  const smokeD = clamp(state.smoke, 0, 1);
+  const emit = (state.motion ? 1 : 0) * (0.20 + 1.10*smokeD) * (0.35 + 0.75*heat);
+  if(Math.random() < emit*0.35){
+    spawnSmoke(emberX, emberY - cigW*0.4, 1 + (Math.random()<0.35?1:0));
+  }
+
+  for(let i=smoke.length-1;i>=0;i--){
+    const p = smoke[i];
+    p.life++;
+    p.ph += p.w;
+    p.x += p.vx + Math.sin(p.ph)*0.22*DPR;
+    p.y += p.vy + Math.cos(p.ph*0.7)*0.18*DPR;
+    p.r *= 1.0025;
+    drawSmoke(p);
+    if(p.life > p.max || p.y < -80*DPR) smoke.splice(i,1);
+  }
+
+  for(let i=ash.length-1;i>=0;i--){
+    const a = ash[i];
+    a.life++;
+    a.x += a.vx;
+    a.y += a.vy;
+    a.vy *= 0.996;
+    ctx.fillStyle = col(a.a * (1 - a.life/a.max));
+    ctx.beginPath();
+    ctx.arc(a.x, a.y, a.r, 0, Math.PI*2);
+    ctx.fill();
+    if(a.life > a.max || a.y > H + 50*DPR) ash.splice(i,1);
+  }
+
+  const burnRate = (state.motion ? 1 : 0) * (0.00010 + 0.00026*heat);
+  state.burn = clamp(state.burn + burnRate, 0, 1);
+
+  const ashRate = (state.motion ? 1 : 0) * (0.00008 + 0.00022*state.ash);
+  state.ashPile = clamp(state.ashPile + ashRate*(0.7 + 0.6*burn), 0, 1);
+
+  // occasional ash drop FROM EMBER (now in tray)
+  if(state.motion && Math.random() < (0.010 + 0.025*state.ash) * (0.3 + 0.7*burn)){
+    dropAsh(emberX + (Math.random()*2-1)*10*DPR, emberY + (Math.random()*2-1)*6*DPR, 2 + (Math.random()<0.25?2:0));
+  }
+
+  ctx.strokeStyle = col(0.06);
+  ctx.lineWidth = 1*DPR;
+  ctx.strokeRect(10*DPR, 10*DPR, W-20*DPR, H-20*DPR);
+}
+
+let lastSave = 0;
+function loop(){
+  draw();
+  const now = performance.now();
+  if(now - lastSave > 900){
+    lastSave = now;
+    saveState();
+    status(`BURN ${Math.round(state.burn*100)} · ASHPILE ${Math.round(state.ashPile*100)} · HEAT ${Math.round(state.heat*100)} · SMOKE ${Math.round(state.smoke*100)}`);
+  }
+  requestAnimationFrame(loop);
+}
+
+/* NOTE drag */
+(function noteDrag(){
+  const el = $("note");
+  const bar = el.querySelector(".bar");
+  let dragging=false, ox=0, oy=0;
+
+  bar.addEventListener("mousedown",(e)=>{
+    dragging=true;
+    const r = el.getBoundingClientRect();
+    ox = e.clientX - r.left;
+    oy = e.clientY - r.top;
+    e.preventDefault();
+  });
+  window.addEventListener("mousemove",(e)=>{
+    if(!dragging) return;
+    const x = Math.max(10, Math.min(window.innerWidth - 10 - el.offsetWidth, e.clientX - ox));
+    const y = Math.max(10, Math.min(window.innerHeight - 10 - el.offsetHeight, e.clientY - oy));
+    el.style.left = x + "px";
+    el.style.top = y + "px";
+    el.style.right = "auto";
+    state.notePos = { x, y };
+  });
+  window.addEventListener("mouseup",()=>{
+    if(!dragging) return;
+    dragging=false;
+    saveState();
+  });
+})();
+
+/* controls */
+function toggleNote(){ state.noteOpen=!state.noteOpen; saveState(); applyState(); }
+function toggleInvert(){ state.invert=!state.invert; saveState(); applyState(); }
+function toggleNull(){ state.nullMode=!state.nullMode; saveState(); applyState(); }
+async function toggleFullscreen(){
+  try{
+    if(!document.fullscreenElement){ await document.documentElement.requestFullscreen(); state.fullscreen=true; }
+    else { await document.exitFullscreen(); state.fullscreen=false; }
+  }catch(_){}
+  saveState(); applyState();
+}
+
+function tapAsh(){
+  // recompute same ember position used in draw() (origin)
+  const cx = W*0.55, cy = H*0.62;
+  const R = Math.min(W,H) * 0.18;
+  const cigW = R*0.10;
+
+  const emberX = cx - R*0.28;
+  const emberY = cy - R*0.07;
+
+  dropAsh(emberX, emberY, 10 + (Math.random()<0.4?6:0));
+  state.ashPile = clamp(state.ashPile + 0.02 + 0.05*state.ash, 0, 1);
+  saveState(); applyState();
+}
+
+function resetSim(){
+  state.burn = 0;
+  state.ashPile = 0;
+  smoke.length = 0;
+  ash.length = 0;
+  state.seed = (Math.random()*1e9)>>>0;
+  saveState(); applyState();
+}
+
+$("btnNote").addEventListener("click", toggleNote);
+$("btnInvert").addEventListener("click", toggleInvert);
+$("btnNull").addEventListener("click", toggleNull);
+$("btnFull").addEventListener("click", toggleFullscreen);
+$("btnMotion").addEventListener("click",()=>{ state.motion=!state.motion; saveState(); applyState(); });
+$("btnReset").addEventListener("click", resetSim);
+
+$("rngHeat").addEventListener("input",(e)=>{ state.heat = clamp((parseInt(e.target.value,10)||55)/100, 0, 1); saveState(); applyState(); });
+$("rngSmoke").addEventListener("input",(e)=>{ state.smoke = clamp((parseInt(e.target.value,10)||72)/100, 0, 1); saveState(); applyState(); });
+$("rngAsh").addEventListener("input",(e)=>{ state.ash = clamp((parseInt(e.target.value,10)||48)/100, 0, 1); saveState(); applyState(); });
+
+$("noteText").addEventListener("input",(e)=>{ state.noteText = e.target.value || ""; saveState(); });
+
+function isTypingTarget(t){
+  if(!t) return false;
+  const tag = (t.tagName||"").toLowerCase();
+  return tag==="textarea" || tag==="input" || t.isContentEditable;
+}
+window.addEventListener("keydown",(e)=>{
+  const typing = isTypingTarget(e.target);
+
+  if(e.shiftKey && e.key.toLowerCase()==="i"){ e.preventDefault(); toggleInvert(); return; }
+  if(e.shiftKey && e.key.toLowerCase()==="n"){ e.preventDefault(); toggleNull(); return; }
+  if(e.shiftKey && e.key.toLowerCase()==="f"){ e.preventDefault(); toggleFullscreen(); return; }
+  if(e.shiftKey && e.key.toLowerCase()==="k"){ e.preventDefault(); toggleNote(); return; }
+
+  if(e.code==="Space" && !typing){
+    e.preventDefault();
+    tapAsh();
+    return;
+  }
+}, { passive:false });
+
+loadState();
+resize();
+applyState();
+requestAnimationFrame(loop);
+</script>
+
+<!--
+AE: VISUAL (MONOCHROME ASHTRAY SCENE, CIGARETTE TUBE, EMBER PULSE, SMOKE PARTICLES, ASH FALL + PILE)
+EE: ENGINE (LOCAL-FIRST STATE, BURN/ASH SIM, TAP ASH ACTION, HOTKEYS, NOTE, FULLSCREEN/INVERT/NULL)
+WB: WIRING BRIDGE (APPLY STATE TO DOM, CONTROLS)
+
+FILE_ID: "KETADATA_ASHTRAY_MONO_V1"
+ROOM_ID: "K_ASHTRAY"
+VERSION: "V1"
+UPDATED_AT: "2026-01-06T00:00:00.000-05:00"
+CHANGELOG:
+- V1: FIXED ORIENTATION — ember/burning end sits in ashtray (local x=0), filter moved to far end.
+-->
+</body>
+</html>
