@@ -1,0 +1,617 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>KETADATA // BUTTERFLY</title>
+  <style>
+    :root{
+      --bg:#0b0c0f;
+      --fg:#e9edf2;
+      --muted:rgba(233,237,242,.55);
+      --hair:rgba(233,237,242,.14);
+      --panel:rgba(0,0,0,.35);
+      --panel2:rgba(0,0,0,.55);
+      --light:0;
+      --invert:0;
+      --motion:1;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%;margin:0}
+    body{
+      background:var(--bg);
+      color:var(--fg);
+      font:12px/1.25 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace;
+      overflow:hidden;
+      user-select:none;
+    }
+
+    body.invert{
+      filter: invert(1) hue-rotate(180deg);
+      background:#fff;
+    }
+    body.nullmode .chrome{display:none}
+    body.nullmode #hud{opacity:.0; pointer-events:none}
+
+    #field{
+      position:absolute; inset:0;
+      background:
+        radial-gradient(1200px 800px at 50% 38%, rgba(120,160,210,.18), rgba(0,0,0,0) 60%),
+        radial-gradient(900px 700px at 28% 78%, rgba(210,120,210,.10), rgba(0,0,0,0) 55%),
+        radial-gradient(900px 800px at 78% 70%, rgba(140,220,190,.08), rgba(0,0,0,0) 58%),
+        linear-gradient(180deg, rgba(233,237,242,.03), rgba(0,0,0,0) 42%),
+        linear-gradient(180deg, rgba(0,0,0,0), rgba(0,0,0,.30));
+    }
+    canvas{position:absolute; inset:0; width:100%; height:100%}
+
+    #lights{
+      position:absolute; inset:0;
+      pointer-events:none;
+      opacity: calc(var(--light) / 6);
+      mix-blend-mode: screen;
+      background:
+        radial-gradient(900px 700px at 22% 30%, rgba(120,200,255,.16), rgba(0,0,0,0) 55%),
+        radial-gradient(700px 600px at 82% 35%, rgba(255,140,200,.10), rgba(0,0,0,0) 55%),
+        radial-gradient(900px 800px at 50% 86%, rgba(140,255,200,.09), rgba(0,0,0,0) 55%);
+    }
+
+    .chrome{position:absolute; inset:0; pointer-events:none}
+    #frame{
+      position:absolute; inset:8px;
+      border:1px solid rgba(233,237,242,.08);
+      pointer-events:none;
+    }
+
+    #hud{
+      position:absolute;
+      top:10px; left:10px;
+      width: 360px;
+      border:1px solid var(--hair);
+      background:rgba(0,0,0,.35);
+      backdrop-filter: blur(6px);
+      pointer-events:auto;
+    }
+    #hud .bar{
+      display:flex; align-items:center; justify-content:space-between;
+      padding:8px 8px;
+      border-bottom:1px solid var(--hair);
+      background: linear-gradient(180deg, rgba(233,237,242,.06), rgba(0,0,0,0));
+    }
+    #hud .bar .title{opacity:.9}
+    #hud .bar .meta{opacity:.55}
+    #hud .body{padding:8px; display:grid; gap:8px}
+    .row{display:flex; gap:8px; align-items:center; flex-wrap:wrap}
+    .btn, .pill, input[type="range"]{font:inherit; color:inherit}
+    .btn{
+      border:1px solid var(--hair);
+      background:rgba(233,237,242,.04);
+      padding:6px 8px;
+      cursor:pointer;
+      user-select:none;
+    }
+    .btn:hover{background:rgba(233,237,242,.07)}
+    .btn:active{transform: translateY(1px)}
+    .pill{
+      border:1px solid var(--hair);
+      padding:6px 8px;
+      background:rgba(0,0,0,.18);
+      opacity:.85;
+    }
+    input[type="range"]{width:140px; accent-color: var(--fg)}
+    .label{opacity:.7}
+    .mini{opacity:.55}
+    .sep{height:1px;background:var(--hair);margin:2px 0}
+
+    /* NOTE (ANGULAR) */
+    #note{
+      position:absolute;
+      right:10px; top:10px;
+      width: 360px; height: 220px;
+      border:1px solid var(--hair);
+      background:rgba(0,0,0,.55);
+      pointer-events:auto;
+      display:none;
+    }
+    #note.open{display:block}
+    #note .bar{
+      display:flex; align-items:center; justify-content:space-between;
+      padding:8px 8px;
+      border-bottom:1px solid var(--hair);
+      background: linear-gradient(180deg, rgba(233,237,242,.06), rgba(0,0,0,0));
+      cursor:move;
+      user-select:none;
+    }
+    #note textarea{
+      width:100%; height: calc(100% - 34px);
+      border:0; outline:none; resize:none;
+      background:transparent;
+      color:var(--fg);
+      font:inherit;
+      padding:8px;
+      user-select:text;
+    }
+
+    #cornerDots{
+      position:absolute; left:10px; bottom:10px;
+      display:flex; gap:6px;
+      pointer-events:none;
+      opacity:.6;
+    }
+    .dot{
+      width:10px; height:10px; border-radius:50%;
+      border:1px solid var(--hair);
+      background:rgba(233,237,242,.06);
+    }
+
+    #statusLine{
+      position:absolute; right:10px; bottom:10px;
+      border:1px solid var(--hair);
+      background:rgba(0,0,0,.25);
+      padding:6px 8px;
+      opacity:.75;
+      pointer-events:none;
+      max-width: 60vw;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+  </style>
+</head>
+<body>
+  <div id="field">
+    <canvas id="c"></canvas>
+    <div id="lights"></div>
+  </div>
+
+  <div class="chrome">
+    <div id="frame"></div>
+
+    <div id="hud">
+      <div class="bar">
+        <div class="title">KETADATA // BUTTERFLY</div>
+        <div class="meta" id="meta">LIGHT 0 · INVERT 0 · NULL 0</div>
+      </div>
+
+      <div class="body">
+        <div class="row">
+          <div class="pill"><span class="label">HOTKEYS</span> <span class="mini">SHIFT+I INVERT · 1–6 LIGHT · SHIFT+N NULL · SHIFT+F FULLSCREEN · SHIFT+K NOTE · SPACE PULSE</span></div>
+        </div>
+
+        <div class="sep"></div>
+
+        <div class="row">
+          <button class="btn" id="btnNote">NOTE</button>
+          <button class="btn" id="btnInvert">INVERT</button>
+          <button class="btn" id="btnNull">NULL</button>
+          <button class="btn" id="btnFull">FULL</button>
+          <span class="label">LIGHT</span>
+          <input type="range" id="rngLight" min="0" max="6" step="1" value="0" />
+          <span class="label">MOTION</span>
+          <button class="btn" id="btnMotion">ON</button>
+        </div>
+
+        <div class="row">
+          <span class="label">SIZE</span>
+          <input type="range" id="rngSize" min="50" max="140" step="1" value="92" />
+          <span class="label">SPEED</span>
+          <input type="range" id="rngSpeed" min="0" max="100" step="1" value="38" />
+          <span class="label">FLAP</span>
+          <input type="range" id="rngFlap" min="0" max="100" step="1" value="60" />
+        </div>
+
+        <div class="row">
+          <span class="label">TRAIL</span>
+          <input type="range" id="rngTrail" min="0" max="100" step="1" value="78" />
+          <span class="label">RESEED</span>
+          <button class="btn" id="btnSeed">GO</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="note">
+      <div class="bar">
+        <div>KETA_NOTE</div>
+        <div class="mini">SHIFT+K TO TOGGLE</div>
+      </div>
+      <textarea id="noteText" spellcheck="false" placeholder="KETA_NOTE — optional, movable, non-interfering."></textarea>
+    </div>
+
+    <div id="cornerDots" aria-hidden="true">
+      <div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div>
+    </div>
+
+    <div id="statusLine">READY</div>
+  </div>
+
+<script>
+/* EE: local-first state */
+const FILE_ID = "KETADATA_BUTTERFLY_FLY_V1";
+const LS_KEY = "KETADATA::" + FILE_ID + "::STATE";
+const $ = (id)=>document.getElementById(id);
+
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const lerp=(a,b,t)=>a+(b-a)*t;
+
+const state = {
+  light:0, invert:false, nullMode:false, fullscreen:false, motion:true,
+  // flight params
+  size: 0.92,     // 0.50..1.40
+  speed: 0.38,    // 0..1
+  flap: 0.60,     // 0..1
+  trail: 0.78,    // 0..1 (higher = more persistence)
+  // butterfly texture seed
+  seed:(Math.random()*1e9)>>>0,
+  // note
+  noteOpen:false, notePos:{x:null,y:null}, noteText:""
+};
+
+function loadState(){
+  try{
+    const raw = localStorage.getItem(LS_KEY);
+    if(!raw) return;
+    const s = JSON.parse(raw);
+    if(!s || typeof s!=="object") return;
+    Object.assign(state, s);
+  }catch(_){}
+}
+function saveState(){
+  try{ localStorage.setItem(LS_KEY, JSON.stringify(state)); }catch(_){}
+}
+
+/* apply */
+function applyState(){
+  document.body.classList.toggle("invert", !!state.invert);
+  document.body.classList.toggle("nullmode", !!state.nullMode);
+
+  document.documentElement.style.setProperty("--light", String(state.light));
+  document.documentElement.style.setProperty("--motion", state.motion ? "1" : "0");
+
+  $("rngLight").value = String(state.light);
+  $("rngSize").value = String(Math.round(state.size*100));
+  $("rngSpeed").value = String(Math.round(state.speed*100));
+  $("rngFlap").value = String(Math.round(state.flap*100));
+  $("rngTrail").value = String(Math.round(state.trail*100));
+  $("btnMotion").textContent = state.motion ? "ON" : "OFF";
+
+  $("meta").textContent = `LIGHT ${state.light} · INVERT ${state.invert?1:0} · NULL ${state.nullMode?1:0}`;
+  $("noteText").value = state.noteText || "";
+  $("note").classList.toggle("open", !!state.noteOpen);
+
+  if(state.notePos && state.notePos.x!=null && state.notePos.y!=null){
+    $("note").style.left = state.notePos.x + "px";
+    $("note").style.top = state.notePos.y + "px";
+    $("note").style.right = "auto";
+  }
+  status(`SIZE ${Math.round(state.size*100)} · SPEED ${Math.round(state.speed*100)} · FLAP ${Math.round(state.flap*100)} · SEED ${state.seed}`);
+}
+function status(t){ $("statusLine").textContent = t; }
+
+/* canvas */
+const canvas = $("c");
+const ctx = canvas.getContext("2d", { alpha:true });
+let W=0,H=0,DPR=1;
+
+function resize(){
+  DPR = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+  W = Math.floor(window.innerWidth * DPR);
+  H = Math.floor(window.innerHeight * DPR);
+  canvas.width = W;
+  canvas.height = H;
+}
+addEventListener("resize", resize);
+
+/* deterministic rng + noise */
+function mulberry32(a){
+  return function(){
+    let t = a += 0x6D2B79F5;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function n2(seed,x,y){
+  const s = Math.sin(x*127.1 + y*311.7 + seed*0.000001) * 43758.5453123;
+  return s - Math.floor(s);
+}
+
+/* butterfly sprite: precompute points in local coords, then transform */
+let spritePts = [];
+function buildSprite(){
+  spritePts.length = 0;
+  const rng = mulberry32(state.seed);
+  const N = 9000; // fixed sprite density (fast)
+  for(let i=0;i<N;i++){
+    const u = rng()*2 - 1;
+    const v = rng()*2 - 1;
+    const x = Math.abs(u);
+    const y = v;
+
+    const l1 = Math.exp(-((x-0.24)**2/0.08 + (y+0.16)**2/0.22));
+    const l2 = Math.exp(-((x-0.44)**2/0.10 + (y-0.34)**2/0.10));
+    const tp = Math.exp(-((x-0.76)**2/0.06 + (y+0.00)**2/0.42));
+    let env = (0.78*l1 + 0.86*l2 + 0.50*tp);
+
+    const cut = Math.exp(-((x-0.035)**2/0.012 + (y+0.01)**2/0.10));
+    env -= 0.62*cut;
+
+    if(env < 0.28) continue;
+
+    const g1 = n2(state.seed, x*9, y*9);
+    const g2 = n2(state.seed, x*23, y*23);
+    const grit = (g1*0.55 + g2*0.45);
+    const warp = (grit - 0.5) * 0.95;
+
+    const r = Math.sqrt((x-0.18)**2 + (y+0.05)**2);
+    const edge = clamp(1.0 - r*1.25, 0, 1);
+
+    const inten = clamp((env + warp) * (0.55 + 0.55*edge), 0, 1);
+    if(inten < 0.24) continue;
+
+    spritePts.push({
+      x: (u>=0 ? x : -x),
+      y,
+      a: 0.08 + inten*0.78,
+      s: 1 + ((rng()*2)|0),
+      p: rng()*Math.PI*2,
+      w: 0.35 + rng()*0.65,
+      t: rng()*1000,
+      edge
+    });
+  }
+}
+
+/* flight sim */
+const butterfly = {
+  x: 0.5, y: 0.5, // normalized
+  vx: 0.0, vy: 0.0,
+  ang: 0.0,
+  target: { x: 0.5, y: 0.5 },
+  tNext: 0
+};
+
+function pickTarget(){
+  // bias toward centerTE (center-ish) but roam
+  butterfly.target.x = clamp(0.10 + Math.random()*0.80, 0.05, 0.95);
+  butterfly.target.y = clamp(0.12 + Math.random()*0.76, 0.06, 0.94);
+  butterfly.tNext = performance.now() + (900 + Math.random()*1400);
+}
+
+/* draw body axis (angular mind) */
+function drawAxis(cx,cy,scale,ang){
+  ctx.save();
+  ctx.translate(cx,cy);
+  ctx.rotate(ang);
+  ctx.strokeStyle = "rgba(233,237,242,.20)";
+  ctx.lineWidth = 2*DPR;
+  const h = 0.20 * scale;
+  ctx.beginPath();
+  ctx.moveTo(0, -h);
+  ctx.lineTo(0,  h);
+  ctx.stroke();
+
+  ctx.lineWidth = 1*DPR;
+  ctx.strokeStyle = "rgba(233,237,242,.12)";
+  ctx.beginPath();
+  ctx.moveTo(0, -h);
+  ctx.lineTo(-0.14*scale, -h - 0.16*scale);
+  ctx.moveTo(0, -h);
+  ctx.lineTo( 0.14*scale, -h - 0.16*scale);
+  ctx.stroke();
+  ctx.restore();
+}
+
+/* render */
+function step(t){
+  const motion = state.motion;
+
+  // trail: higher trail => more persistence (less clearing)
+  const alpha = motion ? (0.26 - 0.20*state.trail) : 1.0;
+  ctx.fillStyle = `rgba(0,0,0,${clamp(alpha, 0.02, 1)})`;
+  ctx.fillRect(0,0,W,H);
+
+  // subtle scan drift
+  ctx.strokeStyle = "rgba(233,237,242,.026)";
+  ctx.lineWidth = 1*DPR;
+  const grid = 72*DPR;
+  const ox = ((t*0.01*DPR) % grid);
+  for(let x=ox; x < W; x += grid){
+    ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke();
+  }
+
+  // flight update
+  if(t > butterfly.tNext) pickTarget();
+
+  const tx = butterfly.target.x, ty = butterfly.target.y;
+  const dx = tx - butterfly.x;
+  const dy = ty - butterfly.y;
+  const dist = Math.hypot(dx,dy) + 1e-6;
+
+  const sp = state.speed;
+  const accel = 0.0009 + sp*0.0042;      // normalized per frame scale
+  const maxV  = 0.0025 + sp*0.014;       // normalized speed
+
+  // steer toward target with gentle wander
+  const wob = 0.0009 * (0.25 + sp);
+  butterfly.vx += (dx/dist)*accel + (Math.sin(t*0.0017)*wob);
+  butterfly.vy += (dy/dist)*accel + (Math.cos(t*0.0011)*wob);
+
+  // damping
+  butterfly.vx *= 0.985;
+  butterfly.vy *= 0.985;
+
+  // clamp
+  const vmag = Math.hypot(butterfly.vx, butterfly.vy);
+  if(vmag > maxV){
+    butterfly.vx = (butterfly.vx/vmag)*maxV;
+    butterfly.vy = (butterfly.vy/vmag)*maxV;
+  }
+
+  butterfly.x = clamp(butterfly.x + butterfly.vx, 0.05, 0.95);
+  butterfly.y = clamp(butterfly.y + butterfly.vy, 0.06, 0.94);
+
+  // orientation follows velocity
+  const ang = Math.atan2(butterfly.vy, butterfly.vx);
+  butterfly.ang = isFinite(ang) ? ang : butterfly.ang;
+
+  // draw butterfly at position
+  const cx = butterfly.x * W;
+  const cy = butterfly.y * H;
+  const scale = Math.min(W,H) * 0.28 * state.size;
+
+  // axis
+  drawAxis(cx, cy, scale, butterfly.ang + Math.PI/2);
+
+  // wings (points in local coords -> world)
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(butterfly.ang);
+
+  const flap = state.flap;
+  const flapPhase = t*0.006;
+  const flapAmt = (0.55 + 0.45*Math.sin(flapPhase)) * flap; // 0..1
+  const wingX = 1.0 + 0.18*flapAmt;
+  const wingY = 1.0 - 0.10*flapAmt;
+
+  for(const p of spritePts){
+    let oxp=0, oyp=0, ap=p.a;
+
+    if(motion){
+      const phase = (p.t + t*0.001) * p.w + p.p;
+      oxp = Math.sin(phase*1.7) * (1.2*DPR) * flapAmt;
+      oyp = Math.cos(phase*1.3) * (1.2*DPR) * flapAmt;
+      ap *= (0.64 + 0.36*(Math.sin((t*0.002)+p.p)**2));
+    }
+
+    const a = clamp(ap * (0.92 + 0.18*p.edge), 0, 0.92);
+
+    const x = (p.x * wingX) * scale + oxp;
+    const y = (p.y * wingY) * scale + oyp;
+
+    ctx.fillStyle = `rgba(233,237,242,${a})`;
+    ctx.fillRect(x, y, p.s*DPR, p.s*DPR);
+  }
+
+  ctx.restore();
+
+  // subtle inner frame
+  ctx.strokeStyle = "rgba(233,237,242,.06)";
+  ctx.lineWidth = 1*DPR;
+  ctx.strokeRect(10*DPR, 10*DPR, W-20*DPR, H-20*DPR);
+
+  requestAnimationFrame(step);
+}
+
+/* NOTE drag */
+(function noteDrag(){
+  const el = $("note");
+  const bar = el.querySelector(".bar");
+  let dragging=false, ox=0, oy=0;
+
+  bar.addEventListener("mousedown",(e)=>{
+    dragging=true;
+    const r = el.getBoundingClientRect();
+    ox = e.clientX - r.left;
+    oy = e.clientY - r.top;
+    e.preventDefault();
+  });
+  window.addEventListener("mousemove",(e)=>{
+    if(!dragging) return;
+    const x = Math.max(10, Math.min(window.innerWidth - 10 - el.offsetWidth, e.clientX - ox));
+    const y = Math.max(10, Math.min(window.innerHeight - 10 - el.offsetHeight, e.clientX ? (e.clientY - oy) : 10));
+    el.style.left = x + "px";
+    el.style.top = y + "px";
+    el.style.right = "auto";
+    state.notePos = { x, y };
+  });
+  window.addEventListener("mouseup",()=>{
+    if(!dragging) return;
+    dragging=false;
+    saveState();
+  });
+})();
+
+/* controls */
+function toggleNote(){ state.noteOpen=!state.noteOpen; saveState(); applyState(); }
+function toggleInvert(){ state.invert=!state.invert; saveState(); applyState(); }
+function toggleNull(){ state.nullMode=!state.nullMode; saveState(); applyState(); }
+async function toggleFullscreen(){
+  try{
+    if(!document.fullscreenElement){ await document.documentElement.requestFullscreen(); state.fullscreen=true; }
+    else { await document.exitFullscreen(); state.fullscreen=false; }
+  }catch(_){}
+  saveState(); applyState();
+}
+function reseed(){
+  state.seed = (Math.random()*1e9)>>>0;
+  buildSprite();
+  pickTarget();
+  saveState(); applyState();
+}
+
+$("btnNote").addEventListener("click", toggleNote);
+$("btnInvert").addEventListener("click", toggleInvert);
+$("btnNull").addEventListener("click", toggleNull);
+$("btnFull").addEventListener("click", toggleFullscreen);
+$("btnSeed").addEventListener("click", reseed);
+
+$("rngLight").addEventListener("input",(e)=>{ state.light = parseInt(e.target.value,10)||0; saveState(); applyState(); });
+$("btnMotion").addEventListener("click",()=>{ state.motion=!state.motion; saveState(); applyState(); });
+
+$("rngSize").addEventListener("input",(e)=>{ state.size = clamp((parseInt(e.target.value,10)||92)/100, 0.50, 1.40); saveState(); applyState(); });
+$("rngSpeed").addEventListener("input",(e)=>{ state.speed = clamp((parseInt(e.target.value,10)||38)/100, 0, 1); saveState(); applyState(); });
+$("rngFlap").addEventListener("input",(e)=>{ state.flap = clamp((parseInt(e.target.value,10)||60)/100, 0, 1); saveState(); applyState(); });
+$("rngTrail").addEventListener("input",(e)=>{ state.trail = clamp((parseInt(e.target.value,10)||78)/100, 0, 1); saveState(); applyState(); });
+
+$("noteText").addEventListener("input",(e)=>{ state.noteText = e.target.value || ""; saveState(); });
+
+/* hotkeys */
+function isTypingTarget(t){
+  if(!t) return false;
+  const tag = (t.tagName||"").toLowerCase();
+  return tag==="textarea" || tag==="input" || t.isContentEditable;
+}
+window.addEventListener("keydown",(e)=>{
+  const typing = isTypingTarget(e.target);
+
+  if(e.shiftKey && e.key.toLowerCase()==="i"){ e.preventDefault(); toggleInvert(); return; }
+  if(e.shiftKey && e.key.toLowerCase()==="n"){ e.preventDefault(); toggleNull(); return; }
+  if(e.shiftKey && e.key.toLowerCase()==="f"){ e.preventDefault(); toggleFullscreen(); return; }
+  if(e.shiftKey && e.key.toLowerCase()==="k"){ e.preventDefault(); toggleNote(); return; }
+
+  if(!e.shiftKey && !e.ctrlKey && !e.metaKey){
+    const k = e.key;
+    if(k>="1" && k<="6"){ state.light = parseInt(k,10); saveState(); applyState(); return; }
+    if(k==="0"){ state.light = 0; saveState(); applyState(); return; }
+  }
+
+  // SPACE pulse: jump to new target (only when not typing)
+  if(e.code==="Space" && !typing){
+    e.preventDefault();
+    pickTarget();
+    return;
+  }
+}, { passive:false });
+
+/* boot */
+loadState();
+resize();
+applyState();
+buildSprite();
+pickTarget();
+requestAnimationFrame(step);
+</script>
+
+<!--
+AE: VISUAL (FLYING BUTTERFLY CANVAS + LIGHTS, FISHTANK CHROME STYLE)
+EE: ENGINE (FLIGHT SIM, SPRITE FIELD, LOCAL-FIRST STATE, HOTKEYS, NOTE, FULLSCREEN/INVERT/NULL)
+WB: WIRING BRIDGE (APPLY STATE TO DOM, CONTROLS)
+
+FILE_ID: "KETADATA_BUTTERFLY_FLY_V1"
+ROOM_ID: "K_BUTTERFLY"
+VERSION: "V1"
+UPDATED_AT: "2026-01-06T00:00:00.000-05:00"
+CHANGELOG:
+- V1: Butterfly sprite flies around with target-steering; size/speed/flap/trail controls; SPACE picks new target; fishtank-style chrome; system lights 1–6; invert/null/fullscreen; local-first persistence.
+-->
+</body>
+</html>
