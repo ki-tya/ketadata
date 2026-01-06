@@ -1,0 +1,674 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>KETADATA // EYES</title>
+<style>
+  :root{
+    --bg:#000; --fg:#fff;
+    --muted:rgba(255,255,255,.58);
+    --hair:rgba(255,255,255,.14);
+    --panel:rgba(0,0,0,.42);
+    --panel2:rgba(0,0,0,.62);
+    --motion:1;
+    --intensity:0.68;  /* 0..1 */
+    --blink:0.35;      /* 0..1 (manual override; auto blink still happens) */
+    --scan:0.55;       /* 0..1 */
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%; margin:0}
+  body{
+    background:var(--bg);
+    color:var(--fg);
+    font:12px/1.25 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace;
+    overflow:hidden;
+    user-select:none;
+    letter-spacing:.03em;
+  }
+
+  /* UNIVERSALS */
+  body.invert{ filter: invert(1) hue-rotate(180deg); background:#fff; }
+  body.nullmode .chrome{display:none}
+  body.nullmode #hud{opacity:0; pointer-events:none}
+
+  /* FIELD */
+  #field{
+    position:absolute; inset:0;
+    background:
+      radial-gradient(1800px 1300px at 50% 40%, rgba(255,255,255,.10), rgba(0,0,0,0) 62%),
+      radial-gradient(1200px 900px at 25% 75%, rgba(255,255,255,.05), rgba(0,0,0,0) 60%),
+      linear-gradient(180deg, rgba(255,255,255,.03), rgba(0,0,0,0) 55%),
+      linear-gradient(180deg, rgba(0,0,0,0), rgba(0,0,0,.62));
+  }
+  canvas{position:absolute; inset:0; width:100%; height:100%}
+
+  /* CHROME */
+  .chrome{position:absolute; inset:0; pointer-events:none}
+  #frame{position:absolute; inset:8px; border:1px solid rgba(255,255,255,.08); pointer-events:none}
+
+  #hud{
+    position:absolute;
+    top:10px; left:10px;
+    width:380px;
+    border:1px solid var(--hair);
+    background:var(--panel);
+    backdrop-filter: blur(8px);
+    pointer-events:auto;
+  }
+  #hud .bar{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:8px 8px;
+    border-bottom:1px solid var(--hair);
+    background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(0,0,0,0));
+  }
+  #hud .body{padding:8px; display:grid; gap:8px}
+  .row{display:flex; gap:8px; align-items:center; flex-wrap:wrap}
+  .btn, input[type="range"]{font:inherit; color:inherit}
+  .btn{
+    border:1px solid var(--hair);
+    background:rgba(255,255,255,.03);
+    padding:6px 8px;
+    cursor:pointer;
+    user-select:none;
+  }
+  .btn:hover{background:rgba(255,255,255,.08)}
+  .btn:active{transform: translateY(1px)}
+  .pill{
+    border:1px solid var(--hair);
+    padding:6px 8px;
+    background:rgba(0,0,0,.18);
+    opacity:.86;
+  }
+  input[type="range"]{width:150px; accent-color: var(--fg)}
+  .label{opacity:.72}
+  .mini{opacity:.58}
+  .sep{height:1px;background:var(--hair);margin:2px 0}
+
+  /* NOTE (ANGULAR) */
+  #note{
+    position:absolute;
+    right:10px; top:10px;
+    width:360px; height:220px;
+    border:1px solid var(--hair);
+    background:var(--panel2);
+    pointer-events:auto;
+    display:none;
+  }
+  #note.open{display:block}
+  #note .bar{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:8px 8px;
+    border-bottom:1px solid var(--hair);
+    background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(0,0,0,0));
+    cursor:move;
+    user-select:none;
+  }
+  #note textarea{
+    width:100%; height: calc(100% - 34px);
+    border:0; outline:none; resize:none;
+    background:transparent;
+    color:var(--fg);
+    font:inherit;
+    padding:8px;
+    user-select:text;
+  }
+
+  /* SENSES (CIRCULAR) */
+  #cornerDots{position:absolute; left:10px; bottom:10px; display:flex; gap:6px; pointer-events:none; opacity:.6}
+  .dot{width:10px; height:10px; border-radius:50%; border:1px solid var(--hair); background:rgba(255,255,255,.05)}
+  #statusLine{
+    position:absolute; right:10px; bottom:10px;
+    border:1px solid var(--hair);
+    background:rgba(0,0,0,.25);
+    padding:6px 8px;
+    opacity:.78;
+    pointer-events:none;
+    max-width:60vw;
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+  }
+</style>
+</head>
+<body>
+  <div id="field"><canvas id="c"></canvas></div>
+
+  <div class="chrome">
+    <div id="frame"></div>
+
+    <div id="hud">
+      <div class="bar">
+        <div style="opacity:.92">KETADATA // EYES</div>
+        <div class="mini" id="meta">INVERT 0 · NULL 0</div>
+      </div>
+      <div class="body">
+        <div class="row">
+          <div class="pill"><span class="label">HOTKEYS</span> <span class="mini">SHIFT+I INVERT · SHIFT+N NULL · SHIFT+F FULL · SHIFT+K NOTE · SPACE BLINK · CLICK IRIS PULSE</span></div>
+        </div>
+
+        <div class="sep"></div>
+
+        <div class="row">
+          <button class="btn" id="btnNote">NOTE</button>
+          <button class="btn" id="btnInvert">INVERT</button>
+          <button class="btn" id="btnNull">NULL</button>
+          <button class="btn" id="btnFull">FULL</button>
+          <span class="label">MOTION</span>
+          <button class="btn" id="btnMotion">ON</button>
+        </div>
+
+        <div class="row">
+          <span class="label">INTENSE</span>
+          <input type="range" id="rngInt" min="0" max="100" step="1" value="68" />
+          <span class="label">SCAN</span>
+          <input type="range" id="rngScan" min="0" max="100" step="1" value="55" />
+          <span class="label">BLINK</span>
+          <input type="range" id="rngBlink" min="0" max="100" step="1" value="35" />
+        </div>
+
+        <div class="row">
+          <span class="label">RESET</span>
+          <button class="btn" id="btnReset">GO</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="note">
+      <div class="bar">
+        <div>KETA_NOTE</div>
+        <div class="mini">SHIFT+K TO TOGGLE</div>
+      </div>
+      <textarea id="noteText" spellcheck="false" placeholder="KETA_NOTE — optional, movable, non-interfering."></textarea>
+    </div>
+
+    <div id="cornerDots" aria-hidden="true">
+      <div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div>
+    </div>
+
+    <div id="statusLine">READY</div>
+  </div>
+
+<script>
+/* EE: local-first state */
+const FILE_ID = "KETADATA_EYES_INTENSE_V1";
+const LS_KEY = "KETADATA::" + FILE_ID + "::STATE";
+const $ = (id)=>document.getElementById(id);
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const lerp=(a,b,t)=>a+(b-a)*t;
+
+const state = {
+  invert:false, nullMode:false, fullscreen:false, motion:true,
+  intensity:0.68, scan:0.55, blinkKnob:0.35,
+  noteOpen:false, notePos:{x:null,y:null}, noteText:"",
+  // sim
+  blink:0,            // 0..1.4
+  pupil:0.52,         // 0.35..0.72
+  irisPulse:0,        // 0..1
+  seed:(Math.random()*1e9)>>>0
+};
+
+function loadState(){
+  try{
+    const raw = localStorage.getItem(LS_KEY);
+    if(!raw) return;
+    const s = JSON.parse(raw);
+    if(!s || typeof s!=="object") return;
+    Object.assign(state, s);
+  }catch(_){}
+}
+function saveState(){ try{ localStorage.setItem(LS_KEY, JSON.stringify(state)); }catch(_){ } }
+function status(t){ $("statusLine").textContent = t; }
+
+function applyState(){
+  document.body.classList.toggle("invert", !!state.invert);
+  document.body.classList.toggle("nullmode", !!state.nullMode);
+  $("btnMotion").textContent = state.motion ? "ON" : "OFF";
+  $("meta").textContent = `INVERT ${state.invert?1:0} · NULL ${state.nullMode?1:0}`;
+
+  $("rngInt").value = String(Math.round(state.intensity*100));
+  $("rngScan").value = String(Math.round(state.scan*100));
+  $("rngBlink").value = String(Math.round(state.blinkKnob*100));
+
+  $("noteText").value = state.noteText || "";
+  $("note").classList.toggle("open", !!state.noteOpen);
+  if(state.notePos && state.notePos.x!=null && state.notePos.y!=null){
+    $("note").style.left = state.notePos.x + "px";
+    $("note").style.top = state.notePos.y + "px";
+    $("note").style.right = "auto";
+  }
+
+  status(`INTENSE ${Math.round(state.intensity*100)} · SCAN ${Math.round(state.scan*100)} · PUPIL ${Math.round(state.pupil*100)} · BLINK ${Math.round(clamp(state.blink,0,1)*100)}`);
+}
+
+/* canvas */
+const canvas = $("c");
+const ctx = canvas.getContext("2d", { alpha:true });
+let W=0,H=0,DPR=1;
+
+function resize(){
+  DPR = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+  W = Math.floor(window.innerWidth * DPR);
+  H = Math.floor(window.innerHeight * DPR);
+  canvas.width = W;
+  canvas.height = H;
+}
+addEventListener("resize", resize);
+
+function inv(){ return document.body.classList.contains("invert"); }
+function col(a){ return inv() ? `rgba(10,12,15,${a})` : `rgba(255,255,255,${a})`; }
+
+function rand(){
+  state.seed = (state.seed * 1664525 + 1013904223) >>> 0;
+  return (state.seed >>> 8) / 16777216;
+}
+
+/* small helpers */
+function roundedRect(x,y,w,h,r){
+  const rr = Math.min(r, w/2, h/2);
+  ctx.beginPath();
+  ctx.moveTo(x+rr, y);
+  ctx.lineTo(x+w-rr, y);
+  ctx.quadraticCurveTo(x+w, y, x+w, y+rr);
+  ctx.lineTo(x+w, y+h-rr);
+  ctx.quadraticCurveTo(x+w, y+h, x+w-rr, y+h);
+  ctx.lineTo(x+rr, y+h);
+  ctx.quadraticCurveTo(x, y+h, x, y+h-rr);
+  ctx.lineTo(x, y+rr);
+  ctx.quadraticCurveTo(x, y, x+rr, y);
+  ctx.closePath();
+}
+
+function drawIrisTexture(r0, r1, spokes, a0){
+  ctx.strokeStyle = col(a0);
+  ctx.lineWidth = 1*DPR;
+  for(let i=0;i<spokes;i++){
+    const ang = (i/spokes)*Math.PI*2 + (rand()*0.06 - 0.03);
+    const rr0 = r0*(0.92 + rand()*0.18);
+    const rr1 = r1*(0.92 + rand()*0.18);
+    ctx.beginPath();
+    ctx.moveTo(Math.cos(ang)*rr0, Math.sin(ang)*rr0);
+    ctx.lineTo(Math.cos(ang)*rr1, Math.sin(ang)*rr1);
+    ctx.stroke();
+  }
+}
+
+function drawEye(cx, cy, S, side, t){
+  const intense = clamp(state.intensity, 0, 1);
+  const scan = clamp(state.scan, 0, 1);
+
+  // subtle breathing / micro tremor (not frenetic)
+  const trem = (state.motion ? 1 : 0) * (0.35 + 0.65*intense);
+  const mx = Math.sin(t*0.00055 + side*1.7) * S*0.006 * trem;
+  const my = Math.cos(t*0.00042 + side*1.1) * S*0.004 * trem;
+
+  // blink: combined auto + knob (knob biases "heaviness")
+  const autoBlink = clamp(state.blink, 0, 1);
+  const lid = clamp(autoBlink * (0.65 + 0.75*state.blinkKnob), 0, 1);
+  const eyeOpen = 1 - lid;
+
+  // eye frame
+  ctx.save();
+  ctx.translate(cx + mx, cy + my);
+
+  const w = S*0.72;
+  const h = S*0.34;
+
+  // socket shadow (depth)
+  ctx.fillStyle = "rgba(0,0,0,0.28)";
+  ctx.beginPath();
+  ctx.ellipse(0, S*0.02, w*0.58, h*0.62, 0, 0, Math.PI*2);
+  ctx.fill();
+
+  // sclera (subtle gradient)
+  const scl = ctx.createRadialGradient(-w*0.18, -h*0.12, 0, 0, 0, w*0.62);
+  scl.addColorStop(0, col(0.10 + 0.05*intense));
+  scl.addColorStop(0.55, col(0.06 + 0.03*intense));
+  scl.addColorStop(1, "rgba(0,0,0,0.10)");
+  ctx.fillStyle = scl;
+
+  // almond shape
+  ctx.beginPath();
+  ctx.moveTo(-w*0.70, 0);
+  ctx.quadraticCurveTo(-w*0.20, -h*0.70*eyeOpen, 0, -h*0.55*eyeOpen);
+  ctx.quadraticCurveTo(w*0.20, -h*0.70*eyeOpen, w*0.70, 0);
+  ctx.quadraticCurveTo(w*0.18, h*0.72*eyeOpen, 0, h*0.55*eyeOpen);
+  ctx.quadraticCurveTo(-w*0.18, h*0.72*eyeOpen, -w*0.70, 0);
+  ctx.closePath();
+  ctx.fill();
+
+  // iris + pupil only if open enough
+  if(eyeOpen > 0.10){
+    // eye "look" (subtle)
+    const lookX = Math.sin(t*0.00025 + side*0.9) * w*0.06 * (0.35 + 0.65*intense);
+    const lookY = Math.cos(t*0.00022 + side*0.6) * h*0.05 * (0.25 + 0.75*intense);
+
+    // iris center
+    const ix = lookX;
+    const iy = lookY;
+
+    // iris radius (with click pulse)
+    const pulse = clamp(state.irisPulse, 0, 1);
+    const irisR = S*(0.155 + 0.030*intense) * (1 + 0.18*pulse);
+    const limbusR = irisR * 1.35;
+
+    // iris body gradient (mono)
+    const ig = ctx.createRadialGradient(ix - irisR*0.35, iy - irisR*0.30, 0, ix, iy, limbusR);
+    ig.addColorStop(0, col(0.16 + 0.10*intense));
+    ig.addColorStop(0.45, col(0.10 + 0.07*intense));
+    ig.addColorStop(0.82, col(0.06 + 0.05*intense));
+    ig.addColorStop(1, "rgba(0,0,0,0.22)");
+    ctx.fillStyle = ig;
+    ctx.beginPath();
+    ctx.ellipse(ix, iy, limbusR, limbusR*0.96, 0, 0, Math.PI*2);
+    ctx.fill();
+
+    // limbus ring (edge)
+    ctx.strokeStyle = col(0.26 + 0.30*intense);
+    ctx.lineWidth = (2.0 + 1.6*intense) * DPR;
+    ctx.beginPath();
+    ctx.ellipse(ix, iy, limbusR, limbusR*0.96, 0, 0, Math.PI*2);
+    ctx.stroke();
+
+    // iris texture spokes
+    ctx.save();
+    ctx.translate(ix, iy);
+    ctx.globalCompositeOperation = "source-over";
+    drawIrisTexture(irisR*0.35, limbusR*0.92, Math.floor(70 + 90*intense), 0.05 + 0.08*intense);
+    // subtle "crypt ring"
+    ctx.strokeStyle = col(0.10 + 0.10*intense);
+    ctx.lineWidth = 1*DPR;
+    for(let k=0;k<4;k++){
+      const rr = irisR*(0.55 + k*0.18);
+      ctx.beginPath();
+      ctx.ellipse(0,0, rr, rr*0.96, 0, 0, Math.PI*2);
+      ctx.stroke();
+    }
+    ctx.restore();
+
+    // pupil (vertical slit)
+    const pup = clamp(state.pupil, 0.35, 0.72);
+    const slitH = limbusR*(0.78 + 0.18*intense);
+    const slitW = limbusR*(0.08 + (1-pup)*0.11) * (0.95 + 0.12*pulse);
+
+    // pupil core
+    const pg = ctx.createLinearGradient(ix, iy - slitH, ix, iy + slitH);
+    pg.addColorStop(0, "rgba(0,0,0,1)");
+    pg.addColorStop(0.5, "rgba(0,0,0,0.985)");
+    pg.addColorStop(1, "rgba(0,0,0,1)");
+    ctx.fillStyle = pg;
+    ctx.beginPath();
+    ctx.ellipse(ix, iy, slitW, slitH*0.52, 0, 0, Math.PI*2);
+    ctx.fill();
+
+    // pupil edge spec
+    ctx.strokeStyle = col(0.10 + 0.16*intense);
+    ctx.lineWidth = 1*DPR;
+    ctx.beginPath();
+    ctx.ellipse(ix - slitW*0.22, iy, slitW, slitH*0.52, 0, Math.PI*1.2, Math.PI*1.8);
+    ctx.stroke();
+
+    // catchlights (intense but controlled, mono)
+    const hlA = 0.65 + 0.25*intense;
+    ctx.fillStyle = `rgba(255,255,255,${hlA})`;
+    ctx.beginPath();
+    ctx.ellipse(ix - limbusR*0.42, iy - limbusR*0.38, limbusR*0.20, limbusR*0.13, -0.4, 0, Math.PI*2);
+    ctx.fill();
+
+    ctx.fillStyle = `rgba(255,255,255,${0.32 + 0.20*intense})`;
+    ctx.beginPath();
+    ctx.arc(ix + limbusR*0.32, iy - limbusR*0.22, limbusR*0.08, 0, Math.PI*2);
+    ctx.fill();
+
+    ctx.fillStyle = `rgba(255,255,255,${0.18 + 0.14*intense})`;
+    ctx.beginPath();
+    ctx.arc(ix + limbusR*0.42, iy + limbusR*0.34, limbusR*0.06, 0, Math.PI*2);
+    ctx.fill();
+
+    // lower lid shine
+    ctx.strokeStyle = col(0.12 + 0.16*intense);
+    ctx.lineWidth = 2*DPR;
+    ctx.beginPath();
+    ctx.moveTo(-w*0.56, h*0.14*eyeOpen);
+    ctx.quadraticCurveTo(0, h*0.40*eyeOpen, w*0.56, h*0.14*eyeOpen);
+    ctx.stroke();
+  }
+
+  // lashes + lid line (outline)
+  ctx.strokeStyle = col(0.86);
+  ctx.lineWidth = (3.0 + 1.4*intense) * DPR;
+  ctx.beginPath();
+  ctx.moveTo(-w*0.72, 0);
+  ctx.quadraticCurveTo(-w*0.20, -h*0.74*eyeOpen, 0, -h*0.58*eyeOpen);
+  ctx.quadraticCurveTo(w*0.20, -h*0.74*eyeOpen, w*0.72, 0);
+  ctx.stroke();
+
+  // lower lid (thinner)
+  ctx.strokeStyle = col(0.32);
+  ctx.lineWidth = 2*DPR;
+  ctx.beginPath();
+  ctx.moveTo(-w*0.70, 0);
+  ctx.quadraticCurveTo(0, h*0.72*eyeOpen, w*0.70, 0);
+  ctx.stroke();
+
+  // crease
+  ctx.strokeStyle = col(0.10 + 0.10*intense);
+  ctx.lineWidth = 1*DPR;
+  ctx.beginPath();
+  ctx.moveTo(-w*0.55, -h*0.32);
+  ctx.quadraticCurveTo(0, -h*(0.78 - 0.25*eyeOpen), w*0.55, -h*0.32);
+  ctx.stroke();
+
+  // closed-eye detail (lashes)
+  if(eyeOpen <= 0.10){
+    ctx.strokeStyle = col(0.55);
+    ctx.lineWidth = 1*DPR;
+    for(let i=-6;i<=6;i++){
+      const x = i*(w*0.07);
+      ctx.beginPath();
+      ctx.moveTo(x, -h*0.02);
+      ctx.lineTo(x + side*w*0.015, -h*0.16);
+      ctx.stroke();
+    }
+  }
+
+  ctx.restore();
+}
+
+function drawScanlines(t){
+  const scan = clamp(state.scan, 0, 1);
+  if(scan <= 0.02) return;
+
+  // horizontal scan band
+  const y = ((t*0.09) % H);
+  const band = (18 + 46*scan) * DPR;
+
+  ctx.fillStyle = col(0.010 + 0.020*scan);
+  ctx.fillRect(0, y-band*0.5, W, band);
+
+  // thin scan line
+  ctx.strokeStyle = col(0.012 + 0.030*scan);
+  ctx.lineWidth = 1*DPR;
+  ctx.beginPath();
+  ctx.moveTo(0, y);
+  ctx.lineTo(W, y);
+  ctx.stroke();
+
+  // subtle vertical noise bars (straight, brutal)
+  ctx.strokeStyle = col(0.006 + 0.010*scan);
+  ctx.lineWidth = 1*DPR;
+  const grid = (84 - 30*scan) * DPR;
+  const ox = ((t*0.010*DPR) % grid);
+  for(let x=ox; x < W; x += grid){
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, H);
+    ctx.stroke();
+  }
+}
+
+function render(){
+  const t = performance.now();
+
+  // persistence wash
+  const intense = clamp(state.intensity, 0, 1);
+  const alpha = state.motion ? (0.18 + 0.10*(1-intense)) : 1.0;
+  ctx.fillStyle = `rgba(0,0,0,${alpha})`;
+  ctx.fillRect(0,0,W,H);
+
+  // auto pupil drift (slow, menacing)
+  const life = state.motion ? 1 : 0;
+  const targetP = 0.44 + 0.18*Math.sin(t*0.00025) + 0.06*Math.sin(t*0.00007 + 1.7);
+  state.pupil = lerp(state.pupil, clamp(targetP, 0.35, 0.72), 0.020*life);
+
+  // blink decay + occasional blink
+  if(state.blink > 0) state.blink = Math.max(0, state.blink - (0.040 + 0.040*intense));
+  const blinkChance = (0.00055 + 0.0009*intense) * (state.motion ? 1 : 0);
+  if(state.blink <= 0 && Math.random() < blinkChance) state.blink = 1.25;
+
+  // iris pulse decay
+  if(state.irisPulse > 0) state.irisPulse = Math.max(0, state.irisPulse - 0.030);
+
+  // layout (two eyes close-up)
+  const cx = W/2;
+  const cy = H/2;
+  const S = Math.min(W,H) * 0.62;
+
+  // bridge shadow between eyes
+  ctx.fillStyle = "rgba(0,0,0,0.22)";
+  ctx.beginPath();
+  ctx.ellipse(cx, cy + S*0.06, S*0.26, S*0.22, 0, 0, Math.PI*2);
+  ctx.fill();
+
+  // each eye
+  drawEye(cx - S*0.34, cy, S*0.56, -1, t);
+  drawEye(cx + S*0.34, cy, S*0.56,  1, t);
+
+  // subtle screen grain
+  ctx.fillStyle = col(0.006 + 0.010*intense);
+  for(let i=0;i<70;i++){
+    const x = Math.random()*W;
+    const y = Math.random()*H;
+    ctx.fillRect(x, y, 1*DPR, 1*DPR);
+  }
+
+  drawScanlines(t);
+
+  // border
+  ctx.strokeStyle = col(0.03 + 0.03*intense);
+  ctx.lineWidth = 1*DPR;
+  ctx.strokeRect(10*DPR, 10*DPR, W-20*DPR, H-20*DPR);
+
+  requestAnimationFrame(render);
+}
+
+/* controls */
+function toggleNote(){ state.noteOpen=!state.noteOpen; saveState(); applyState(); }
+function toggleInvert(){ state.invert=!state.invert; saveState(); applyState(); }
+function toggleNull(){ state.nullMode=!state.nullMode; saveState(); applyState(); }
+async function toggleFullscreen(){
+  try{
+    if(!document.fullscreenElement){ await document.documentElement.requestFullscreen(); state.fullscreen=true; }
+    else { await document.exitFullscreen(); state.fullscreen=false; }
+  }catch(_){}
+  saveState(); applyState();
+}
+function toggleMotion(){ state.motion=!state.motion; saveState(); applyState(); }
+function triggerBlink(){ state.blink = 1.25; saveState(); applyState(); }
+function irisPulse(){ state.irisPulse = 1.0; saveState(); applyState(); }
+
+function resetSim(){
+  state.blink = 0;
+  state.irisPulse = 0;
+  state.pupil = 0.52;
+  state.seed = (Math.random()*1e9)>>>0;
+  saveState(); applyState();
+}
+
+$("btnNote").addEventListener("click", toggleNote);
+$("btnInvert").addEventListener("click", toggleInvert);
+$("btnNull").addEventListener("click", toggleNull);
+$("btnFull").addEventListener("click", toggleFullscreen);
+$("btnMotion").addEventListener("click", toggleMotion);
+$("btnReset").addEventListener("click", resetSim);
+
+$("rngInt").addEventListener("input",(e)=>{ state.intensity = clamp((parseInt(e.target.value,10)||68)/100, 0, 1); saveState(); applyState(); });
+$("rngScan").addEventListener("input",(e)=>{ state.scan = clamp((parseInt(e.target.value,10)||55)/100, 0, 1); saveState(); applyState(); });
+$("rngBlink").addEventListener("input",(e)=>{ state.blinkKnob = clamp((parseInt(e.target.value,10)||35)/100, 0, 1); saveState(); applyState(); });
+
+$("noteText").addEventListener("input",(e)=>{ state.noteText = e.target.value || ""; saveState(); });
+
+/* click: iris pulse */
+window.addEventListener("click",(e)=>{
+  // ignore clicks on HUD/note
+  const path = e.composedPath ? e.composedPath() : [];
+  if(path.some(n => n && n.id && (n.id==="hud" || n.id==="note"))) return;
+  irisPulse();
+}, {passive:true});
+
+/* hotkeys */
+function isTypingTarget(t){
+  if(!t) return false;
+  const tag = (t.tagName||"").toLowerCase();
+  return tag==="textarea" || tag==="input" || t.isContentEditable;
+}
+window.addEventListener("keydown",(e)=>{
+  const typing = isTypingTarget(e.target);
+
+  if(e.shiftKey && e.key.toLowerCase()==="i"){ e.preventDefault(); toggleInvert(); return; }
+  if(e.shiftKey && e.key.toLowerCase()==="n"){ e.preventDefault(); toggleNull(); return; }
+  if(e.shiftKey && e.key.toLowerCase()==="f"){ e.preventDefault(); toggleFullscreen(); return; }
+  if(e.shiftKey && e.key.toLowerCase()==="k"){ e.preventDefault(); toggleNote(); return; }
+  if(e.code==="Space" && !typing){ e.preventDefault(); triggerBlink(); return; }
+}, { passive:false });
+
+/* NOTE drag */
+(function noteDrag(){
+  const el = $("note");
+  const bar = el.querySelector(".bar");
+  let dragging=false, ox=0, oy=0;
+
+  bar.addEventListener("mousedown",(e)=>{
+    dragging=true;
+    const r = el.getBoundingClientRect();
+    ox = e.clientX - r.left;
+    oy = e.clientY - r.top;
+    e.preventDefault();
+  });
+  window.addEventListener("mousemove",(e)=>{
+    if(!dragging) return;
+    const x = Math.max(10, Math.min(window.innerWidth - 10 - el.offsetWidth, e.clientX - ox));
+    const y = Math.max(10, Math.min(window.innerHeight - 10 - el.offsetHeight, e.clientY - oy));
+    el.style.left = x + "px";
+    el.style.top = y + "px";
+    el.style.right = "auto";
+    state.notePos = { x, y };
+  });
+  window.addEventListener("mouseup",()=>{
+    if(!dragging) return;
+    dragging=false;
+    saveState();
+  });
+})();
+
+/* boot */
+loadState();
+resize();
+applyState();
+requestAnimationFrame(render);
+</script>
+
+<!--
+AE: VISUAL (MONO EYES CLOSEUP: deep sockets, almond lids, iris limbus ring, radial spokes, slit pupil, controlled catchlights, scan band + straight-line bars, subtle grain)
+EE: ENGINE (LOCAL-FIRST state, blink + pupil drift + iris pulse, hotkeys, sliders, motion toggle, note, fullscreen/invert/null)
+WB: WIRING BRIDGE (applyState to DOM, controls, persistence)
+
+FILE_ID: "KETADATA_EYES_INTENSE_V1"
+ROOM_ID: "K_EYES"
+VERSION: "V1"
+UPDATED_AT: "2026-01-06T00:00:00.000-05:00"
+CHANGELOG:
+- V1: Intense monochrome eyes closeup with scan + blink + iris pulse; local-first persistence.
+-->
+</body>
+</html>
