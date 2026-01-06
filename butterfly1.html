@@ -1,0 +1,418 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>KETADATA // BUTTERFLY</title>
+<style>
+:root{
+  --bg:#000; --fg:#fff;
+  --muted:rgba(255,255,255,0.62);
+  --line:rgba(255,255,255,0.14);
+  --line2:rgba(255,255,255,0.26);
+  --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace;
+  --sans: Arial, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+  --top:44px; --bot:34px;
+  --ctl: rgba(0,0,0,0.86);
+  --radius:0px;
+}
+*{box-sizing:border-box}
+html,body{height:100%; margin:0}
+body{background:var(--bg); color:var(--fg); font-family:var(--sans); overflow:hidden}
+button,input{font:inherit; color:inherit; background:transparent; border:1px solid var(--line2); border-radius:var(--radius); padding:2px 6px}
+button{cursor:pointer}
+button:hover{border-color:var(--fg)}
+::selection{background:#fff;color:#000}
+
+#stage{position:fixed; inset:0; background:#000}
+#c{position:absolute; inset:0; width:100%; height:100%; display:block; image-rendering:pixelated}
+
+#bar{
+  position:fixed; left:0; right:0; top:0; height:var(--top);
+  display:flex; align-items:center; justify-content:space-between;
+  padding:0 10px;
+  background:var(--ctl);
+  border-bottom:1px solid var(--line);
+  z-index:5;
+}
+#bar .left,#bar .right{display:flex; gap:10px; align-items:center}
+.badge{border:1px solid var(--line2); padding:2px 6px; border-radius:var(--radius); white-space:nowrap}
+.k{font-family:var(--mono)}
+.muted{color:var(--muted)}
+.sep{width:1px; height:16px; background:var(--line2)}
+
+#lights{display:flex; gap:6px; align-items:center}
+.light{width:16px; height:16px; border:1px solid var(--line2); background:transparent}
+.light.on{background:#fff}
+
+#hint{
+  position:fixed; left:10px; bottom:10px;
+  border:1px solid var(--line);
+  background:rgba(0,0,0,0.20);
+  padding:6px 8px;
+  border-radius:var(--radius);
+  z-index:5;
+  max-width:70vw;
+  user-select:none;
+}
+#hint .muted{opacity:0.78}
+
+#veil{
+  position:fixed; inset:0;
+  pointer-events:none;
+  z-index:2;
+  opacity:0;
+}
+
+body.null #bar, body.null #hint{display:none !important}
+body.invert{background:#fff; color:#000}
+body.invert #stage{background:#fff}
+body.invert #bar{background:rgba(255,255,255,0.86); border-bottom-color:rgba(0,0,0,0.14)}
+body.invert .badge{border-color:rgba(0,0,0,0.26)}
+body.invert .muted{color:rgba(0,0,0,0.62)}
+body.invert .sep{background:rgba(0,0,0,0.26)}
+body.invert .light{border-color:rgba(0,0,0,0.26)}
+body.invert .light.on{background:#000}
+body.invert #hint{border-color:rgba(0,0,0,0.14); background:rgba(255,255,255,0.20)}
+</style>
+</head>
+<body>
+<div id="stage">
+  <canvas id="c"></canvas>
+  <div id="veil"></div>
+</div>
+
+<div id="bar">
+  <div class="left">
+    <div class="badge k">KETADATA // BUTTERFLY</div>
+    <div class="sep"></div>
+    <div id="lights">
+      <div class="light" data-l="1" title="LIGHT 1"></div>
+      <div class="light" data-l="2" title="LIGHT 2"></div>
+      <div class="light" data-l="3" title="LIGHT 3"></div>
+      <div class="light" data-l="4" title="LIGHT 4"></div>
+      <div class="light" data-l="5" title="LIGHT 5"></div>
+      <div class="light" data-l="6" title="LIGHT 6"></div>
+    </div>
+    <div class="sep"></div>
+    <div class="badge muted">SHIFT+I INVERT · SHIFT+N NULL · SHIFT+F FULLSCREEN · 1–6 LIGHTS · SPACE PULSE · R RESEED</div>
+  </div>
+  <div class="right">
+    <div class="badge k" id="sig">SIG</div>
+  </div>
+</div>
+
+<div id="hint">
+  <div class="k">CLICK = RESEED</div>
+  <div class="muted">This is a surface. No directory. No chrome. Minimal system laws.</div>
+</div>
+
+<script>
+/* KETADATA BUTTERFLY — sleek surface, minimal chrome, local-first persistence */
+
+const FILE_ID = "KETA_BUTTERFLY_SLEEK_V1";
+const ROOM_ID = "K_SURFACE";
+const VERSION_ID = "V1";
+const STORAGE_KEY = "KETADATA::" + FILE_ID + "::STATE";
+
+const clamp = (v,a,b)=>Math.max(a,Math.min(b,v));
+const nowISO = ()=> new Date().toISOString();
+const deepClone = (o)=> JSON.parse(JSON.stringify(o));
+
+const DEFAULT_STATE = {
+  meta:{ fileId:FILE_ID, roomId:ROOM_ID, versionId:VERSION_ID, updatedAt: nowISO() },
+  system:{ invert:false, nullMode:false, fullscreen:false, light:0 },
+  params:{ density: 12000, span: 1.02, noise: 0.88, glow: 0.24 },
+  seed: (Math.random()*1e9)>>>0
+};
+
+let state = deepClone(DEFAULT_STATE);
+
+function deepFill(t,s){
+  if(!s || typeof s!=="object") return t;
+  for(const k of Object.keys(s)){
+    if(s[k] && typeof s[k]==="object" && !Array.isArray(s[k])){
+      if(!t[k] || typeof t[k]!=="object") t[k]={};
+      deepFill(t[k], s[k]);
+    }else t[k]=s[k];
+  }
+  return t;
+}
+function loadState(){
+  try{
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if(!raw) return;
+    state = deepFill(deepClone(DEFAULT_STATE), JSON.parse(raw));
+  }catch(_){}
+}
+function saveState(){
+  try{
+    state.meta.updatedAt = nowISO();
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  }catch(_){}
+  updateSig();
+}
+
+/* canvas */
+const c = document.getElementById("c");
+const ctx = c.getContext("2d", {alpha:false});
+const veil = document.getElementById("veil");
+const sig = document.getElementById("sig");
+let W=0,H=0,DPR=1;
+
+function resize(){
+  DPR = Math.max(1, Math.min(2, devicePixelRatio||1));
+  W = innerWidth; H = innerHeight;
+  c.width = Math.floor(W*DPR);
+  c.height = Math.floor(H*DPR);
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+}
+addEventListener("resize", resize);
+
+/* deterministic RNG */
+function mulberry32(a){
+  return function(){
+    let t = a += 0x6D2B79F5;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+let rng = mulberry32(state.seed);
+
+function n2(x,y){
+  const s = Math.sin(x*127.1 + y*311.7 + state.seed*0.000001) * 43758.5453123;
+  return s - Math.floor(s);
+}
+
+/* build */
+let pts=[];
+function build(){
+  rng = mulberry32(state.seed);
+  pts.length = 0;
+
+  const cx=W*0.5, cy=H*0.5;
+  const scale = Math.min(W,H) * 0.45;
+  const N = Math.floor(state.params.density);
+
+  for(let i=0;i<N;i++){
+    const u = rng()*2 - 1;
+    const v = rng()*2 - 1;
+
+    const x = Math.abs(u);
+    const y = v;
+
+    // wing envelope: two lobes + taper, with body cut
+    const l1 = Math.exp(-((x-0.24)**2/0.08 + (y+0.16)**2/0.22));
+    const l2 = Math.exp(-((x-0.44)**2/0.10 + (y-0.34)**2/0.10));
+    const tp = Math.exp(-((x-0.76)**2/0.06 + (y+0.00)**2/0.40));
+    let env = (0.78*l1 + 0.86*l2 + 0.50*tp) * state.params.span;
+
+    const cut = Math.exp(-((x-0.035)**2/0.012 + (y+0.01)**2/0.10));
+    env -= 0.62*cut;
+
+    if(env < 0.28) continue;
+
+    const g1 = n2(x*9, y*9);
+    const g2 = n2(x*23, y*23);
+    const grit = (g1*0.55 + g2*0.45);
+    const warp = (grit - 0.5) * state.params.noise;
+
+    const r = Math.sqrt((x-0.18)**2 + (y+0.05)**2);
+    const edge = clamp(1.0 - r*1.25, 0, 1);
+
+    const inten = clamp((env + warp) * (0.55 + 0.55*edge), 0, 1);
+    if(inten < 0.25) continue;
+
+    const sx = cx + (u>=0 ? x : -x) * scale;
+    const sy = cy + y * scale;
+
+    pts.push({
+      x:sx, y:sy,
+      a: 0.08 + inten*0.78,
+      s: 1 + ((rng()*2)|0),
+      p: rng()*Math.PI*2,
+      w: 0.4 + rng()*0.6,
+      t: rng()*1000
+    });
+  }
+
+  saveState();
+}
+
+/* draw */
+let last = performance.now();
+function clear(){
+  const inv = document.body.classList.contains("invert");
+  ctx.fillStyle = inv ? "#fff" : "#000";
+  ctx.fillRect(0,0,W,H);
+}
+function draw(t){
+  const inv = document.body.classList.contains("invert");
+  const fg = inv ? 0 : 255;
+
+  clear();
+
+  // body axis: angular mind
+  ctx.save();
+  ctx.strokeStyle = inv ? "rgba(0,0,0,0.78)" : "rgba(255,255,255,0.78)";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  const cx=W*0.5, cy=H*0.5;
+  const h = Math.min(W,H)*0.22;
+  ctx.moveTo(cx, cy-h); ctx.lineTo(cx, cy+h);
+  ctx.stroke();
+  ctx.restore();
+
+  // points (shimmer)
+  const glow = state.params.glow;
+  if(glow > 0.001){
+    ctx.save();
+    ctx.globalAlpha = clamp(glow,0,1);
+    ctx.globalCompositeOperation = inv ? "multiply" : "screen";
+    ctx.fillStyle = inv ? "rgba(0,0,0,0.22)" : "rgba(255,255,255,0.18)";
+    ctx.fillRect(0,0,W,H);
+    ctx.restore();
+  }
+
+  ctx.save();
+  for(const p of pts){
+    const phase = (p.t + t*0.001) * p.w + p.p;
+    const ox = Math.sin(phase*1.7) * 1.8;
+    const oy = Math.cos(phase*1.3) * 1.8;
+
+    const a = p.a * (0.58 + 0.42*(Math.sin((t*0.002)+p.p)**2));
+    ctx.fillStyle = `rgba(${fg},${fg},${fg},${clamp(a,0,1)})`;
+    ctx.fillRect(p.x + ox, p.y + oy, p.s, p.s);
+  }
+  ctx.restore();
+
+  requestAnimationFrame(draw);
+}
+
+/* system */
+function updateSig(){
+  sig.textContent = [
+    "FILE " + state.meta.fileId,
+    "VER " + state.meta.versionId,
+    "L" + state.system.light,
+    state.system.invert ? "INV" : "NORM",
+    state.system.nullMode ? "NULL" : "UI",
+    "SEED " + state.seed
+  ].join(" · ");
+}
+function apply(){
+  document.body.classList.toggle("invert", !!state.system.invert);
+  document.body.classList.toggle("null", !!state.system.nullMode);
+  setLight(state.system.light, false);
+  updateSig();
+}
+function toggleInvert(){ state.system.invert=!state.system.invert; apply(); saveState(); }
+function toggleNull(){ state.system.nullMode=!state.system.nullMode; apply(); saveState(); }
+
+async function toggleFs(){
+  try{
+    if(!document.fullscreenElement) await document.documentElement.requestFullscreen();
+    else await document.exitFullscreen();
+  }catch(_){}
+  state.system.fullscreen = !!document.fullscreenElement;
+  saveState();
+}
+
+/* lights */
+const lights = [...document.querySelectorAll(".light")];
+function setLight(n, persist=true){
+  state.system.light = n;
+  lights.forEach(el=>{
+    const l = Number(el.dataset.l);
+    el.classList.toggle("on", l===n);
+  });
+
+  if(n===0){
+    veil.style.opacity = "0";
+    veil.style.background = "transparent";
+    veil.style.animation = "none";
+  }else{
+    const inv = document.body.classList.contains("invert");
+    const fg = inv ? "0,0,0" : "255,255,255";
+    const base = 0.06 + n*0.045; // subtle but present
+    veil.style.background = `rgba(${fg},${fg},${fg},0.24)`;
+    veil.style.opacity = String(base);
+    const ms = clamp(1400 - n*180, 220, 1400);
+    veil.style.animation = `strobe ${ms}ms steps(2,end) infinite`;
+  }
+  if(persist) saveState();
+}
+function pulse(){
+  if(state.system.light===0) return;
+  const was = veil.style.opacity;
+  veil.style.opacity = "0.55";
+  setTimeout(()=>{ setLight(state.system.light, false); veil.style.opacity = was; }, 90);
+}
+const kf = document.createElement("style");
+kf.textContent = `@keyframes strobe{0%{opacity:0}50%{opacity:1}100%{opacity:0}}`;
+document.head.appendChild(kf);
+
+/* actions */
+function reseed(){
+  state.seed = (Math.random()*1e9)>>>0;
+  build();
+  saveState();
+}
+document.addEventListener("click", (e)=>{
+  // keep it frictionless: anywhere click reseeds (unless clicking system lights)
+  if(e.target && e.target.classList && e.target.classList.contains("light")) return;
+  reseed();
+});
+
+lights.forEach(el=>{
+  el.addEventListener("click", (e)=>{
+    e.stopPropagation();
+    setLight(Number(el.dataset.l));
+  });
+});
+
+document.addEventListener("keydown", (e)=>{
+  // no input fields exist; keep hotkeys global
+  if(e.shiftKey && (e.key==="I"||e.key==="i")){ e.preventDefault(); toggleInvert(); return; }
+  if(e.shiftKey && (e.key==="N"||e.key==="n")){ e.preventDefault(); toggleNull(); return; }
+  if(e.shiftKey && (e.key==="F"||e.key==="f")){ e.preventDefault(); toggleFs(); return; }
+
+  if(!e.shiftKey){
+    if(e.key>="1" && e.key<="6"){ e.preventDefault(); setLight(Number(e.key)); return; }
+    if(e.key==="0"){ e.preventDefault(); setLight(0); return; }
+    if(e.code==="Space"){ e.preventDefault(); pulse(); return; }
+    if(e.key==="r"||e.key==="R"){ e.preventDefault(); reseed(); return; }
+  }
+});
+
+document.addEventListener("fullscreenchange", ()=>{
+  state.system.fullscreen = !!document.fullscreenElement;
+  saveState();
+});
+
+/* init */
+loadState();
+resize();
+apply();
+build();
+requestAnimationFrame(draw);
+
+/* ---------- stamp (required) ----------
+AE/EE/WB + FILE_ID/ROOM_ID/VERSION/UPDATED_AT/CHANGELOG at bottom.
+*/
+</script>
+
+<!--
+AE: BRUTAL_MINIMAL_KETADATA_SLEEK_SURFACE (WHITE/BLACK/GREY) — NO CHROME
+EE: BUTTERFLY_WING_FIELD (SYMMETRIC) + SYSTEM_LIGHTS_1_6 + PULSE + LOCAL_FIRST_STATE + INVERT + NULL + FULLSCREEN
+WB: HOTKEYS_GLOBAL + CLICK_RESEED + LIGHT_CLICK + STATE_DEEPFILL
+FILE_ID: "KETA_BUTTERFLY_SLEEK_V1"
+ROOM_ID: "K_SURFACE"
+VERSION: "V1"
+UPDATED_AT: "2026-01-06T00:00:00.000Z"
+CHANGELOG:
+- V1: Sleek butterfly surface with minimal bar + lights, frictionless reseed, system universals (invert/null/fullscreen), local-first persistence.
+-->
+</body>
+</html>
