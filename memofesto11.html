@@ -537,4 +537,494 @@ function mergeDefault(obj){
   Object.assign(out, obj||{});
   out.ui = Object.assign(structuredClone(DEFAULT.ui), (obj&&obj.ui)||{});
   out.noteRouting = Object.assign(structuredClone(DEFAULT.noteRouting), (obj&&obj.noteRouting)||{});
-  out.payload = Objec
+  out.payload = Object.assign(structuredClone(DEFAULT.payload), (obj&&obj.payload)||{});
+  out.payload.manifesto = Object.assign(structuredClone(DEFAULT.payload.manifesto), (obj&&obj.payload&&obj.payload.manifesto)||{});
+  if(obj && obj.ketaNoteMeta) out.ketaNoteMeta = Object.assign(structuredClone(DEFAULT.ketaNoteMeta), obj.ketaNoteMeta);
+  return out;
+}
+function loadLocal(){
+  try{
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if(!raw) return null;
+    return mergeDefault(JSON.parse(raw));
+  }catch(e){ return null; }
+}
+
+let STATE = mergeDefault(loadLocal() || structuredClone(DEFAULT));
+
+function persist(reason){
+  STATE.updatedAt = nowISO();
+  syncKetaNoteMeta(reason || "persist");
+  try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(STATE)); }catch(e){}
+  render();
+}
+
+/* ---------------------------
+Toast
+---------------------------- */
+function toast(msg){
+  if(STATE.ui.nullMode) return;
+  const t = $("toast");
+  t.textContent = msg;
+  t.style.display = "block";
+  clearTimeout(toast._t);
+  toast._t = setTimeout(()=>{ t.style.display="none"; }, 900);
+}
+
+/* ---------------------------
+Stable signature
+---------------------------- */
+function stableSig(){
+  const m = STATE.payload.manifesto || {};
+  const core = JSON.stringify({
+    v: STATE.version,
+    room: STATE.room,
+    ui: { inv: STATE.ui.invert, mode: STATE.ui.mode, mot: STATE.ui.motionOn },
+    n: { sink: STATE.noteRouting.sink, obj: STATE.noteRouting.objectId },
+    m: {
+      nonneg: (m.nonneg||[]).slice(0,80),
+      ops: (m.ops||[]).slice(0,80),
+      precedent: (m.precedent||[]).map(x=>[x.k,x.t]).slice(0,60),
+      refs: (m.refs||[]).map(x=>x.k).slice(0,80)
+    }
+  });
+  let h=2166136261;
+  for(let i=0;i<core.length;i++){ h^=core.charCodeAt(i); h=Math.imul(h,16777619); }
+  return (h>>>0).toString(16).slice(0,10);
+}
+
+/* ---------------------------
+Directed KETA_NOTE sinks
+---------------------------- */
+function getNoteSinkKey(){
+  const sink = (STATE.noteRouting && STATE.noteRouting.sink) || "STATE";
+  if(sink === "STATE") return `KDT::KETA_NOTE::STATE::${stableSig()}::v1`;
+  if(sink === "ROOM")  return `KDT::KETA_NOTE::ROOM::${ROOM_ID}::v1`;
+  if(sink === "OBJECT"){
+    const oid = String((STATE.noteRouting && STATE.noteRouting.objectId) || "").trim();
+    return `KDT::KETA_NOTE::OBJ::${oid || "UNSET"}::v1`;
+  }
+  return `KDT::KETA_NOTE::STATE::${stableSig()}::v1`;
+}
+function loadNote(){
+  try{ return localStorage.getItem(getNoteSinkKey()) || ""; }catch(e){ return ""; }
+}
+function saveNote(text){
+  try{ localStorage.setItem(getNoteSinkKey(), String(text ?? "")); }catch(e){}
+}
+function syncKetaNoteMeta(reason){
+  const m = STATE.ketaNoteMeta || (STATE.ketaNoteMeta = structuredClone(DEFAULT.ketaNoteMeta));
+  m.roomId = ROOM_ID;
+  m.stateId = stableSig();
+  m.sink = (STATE.noteRouting && STATE.noteRouting.sink) || "STATE";
+  m.sinkKey = getNoteSinkKey();
+  m.objectId = (STATE.noteRouting && STATE.noteRouting.objectId) || null;
+  m.updatedAt = nowISO();
+  if(!m.createdAt) m.createdAt = m.updatedAt;
+  if(reason) m._last = { reason, at: m.updatedAt };
+}
+
+/* ---------------------------
+Import / Export envelope
+---------------------------- */
+function exportEnvelope(){
+  syncKetaNoteMeta("export");
+  return JSON.stringify({ STORAGE_KEY, FILE_ID, ROOM_ID, VERSION_ID, STATE }, null, 2);
+}
+function importEnvelope(text){
+  const parsed = JSON.parse(text);
+  const incoming = parsed && parsed.STATE ? parsed.STATE : parsed;
+  STATE = mergeDefault(incoming);
+  seedIfEmpty();
+  STATE.ketaNote = loadNote();
+  syncKetaNoteMeta("import");
+  persist("import");
+}
+
+/* ---------------------------
+Seed content
+---------------------------- */
+function seedIfEmpty(){
+  const M = STATE.payload.manifesto;
+
+  if(!M.nonneg || !M.nonneg.length){
+    M.nonneg = [
+      "SINGLE-FILE SOVEREIGNTY: MODULES RUN ALONE",
+      "STATE IS PRIMARY ARTIFACT: UI DERIVES FROM STATE",
+      "IMPORT/EXPORT IS MANDATORY: EXIT IS REQUIRED",
+      "NULL MODE IS REQUIRED: SURFACE MUST STAND WITHOUT UI",
+      "NOTES ARE FIRST-CLASS DATA: DIRECTED, NOT CENTRALIZED",
+      "INTEROP BY PROTOCOL: COMPATIBILITY IS ENFORCED",
+      "TOLERANT VERSIONING: mergeDefault() REQUIRED",
+      "SERIALIZATION STAMP: ARTIFACT MUST IDENTIFY ITSELF",
+      "BACKEND OPTIONAL: CORE MUST SURVIVE OFFLINE",
+      "NO PLATFORM CAPTURE: OWNERSHIP BY OPERATOR"
+    ];
+  }
+
+  if(!M.ops || !M.ops.length){
+    M.ops = [
+      "MODULE = HTML FILE + STATE + IO + NOTE + STAMP",
+      "STATE PERSISTENCE = localStorage + EXPORTABLE JSON",
+      "ROUTING = REGISTRY DATA, NOT NAVIGATION CHROME",
+      "DIRECTED NOTE SINKS = STATE / ROOM / OBJECT",
+      "HOTKEY GRAMMAR = SHIFT+I / SHIFT+0 / ESC",
+      "SURFACE VALIDATION = NULL MODE + RE-ENTRY VIA IMPORT",
+      "ARCHIVE LEGIBILITY = STAMP + STATE SIGNATURES"
+    ];
+  }
+
+  if(!M.precedent || !M.precedent.length){
+    M.precedent = [
+      {k:"MEMEX / ASSOCIATIVE TRAILS", t:"VANNEVAR BUSH (1945)", d:"PERSONAL KNOWLEDGE MACHINE; TRAILS OVER HIERARCHY."},
+      {k:"AUGMENTATION OF INTELLECT", t:"DOUGLAS ENGELBART / NLS (1960s)", d:"TOOLS AS COGNITIVE INFRASTRUCTURE."},
+      {k:"CYBERNETICS / REGULATION", t:"NORBER WIENER; STAFFORD BEER", d:"FEEDBACK, CONTROL, AND SYSTEM SURVIVABILITY."},
+      {k:"HYPERTEXT / NETWORKED TEXT", t:"TED NELSON (XANADU)", d:"LINKAGE AS PRIMARY STRUCTURE."},
+      {k:"CONCEPTUAL / SYSTEMS ART", t:"SOL LEWITT; HANS HAACKE", d:"INSTRUCTIONS AND SYSTEM EXHIBITION AS WORK."},
+      {k:"INSTITUTION / KNOWLEDGE FORMATION", t:"MICHEL FOUCAULT", d:"CLASSIFICATION AND STRUCTURE AS POWER."},
+      {k:"ASSEMBLAGE / MACHINIC THINKING", t:"DELEUZE & GUATTARI", d:"MODULES AS MACHINES; INTENSITIES AS PRIMITIVES."},
+      {k:"LOCAL-FIRST / EXIT PRINCIPLE", t:"LOCAL-FIRST SOFTWARE", d:"OWNERSHIP, PORTABILITY, SURVIVABILITY."}
+    ];
+  }
+
+  if(!M.refs || !M.refs.length){
+    M.refs = [
+      {k:"BUSH 1945 — AS WE MAY THINK", meta:"MEMEX; ASSOCIATIVE TRAILS"},
+      {k:"ENGELBART — AUGMENTING HUMAN INTELLECT / NLS", meta:"AUGMENTATION; TOOLING"},
+      {k:"NELSON — XANADU / COMPUTER LIB", meta:"HYPERTEXT; LINKED STRUCTURE"},
+      {k:"WIENER — CYBERNETICS", meta:"CONTROL; FEEDBACK"},
+      {k:"BEER — BRAIN OF THE FIRM", meta:"VIABLE SYSTEMS"},
+      {k:"FOUCAULT — KNOWLEDGE FORMATION", meta:"INSTITUTIONAL FORM"},
+      {k:"DELEUZE/GUATTARI — ASSEMBLAGE", meta:"MACHINIC / INTENSITY"},
+      {k:"LEWITT — CONCEPTUAL ART", meta:"INSTRUCTION AS WORK"},
+      {k:"HAACKE — SYSTEMS WORK", meta:"SYSTEM DISPLAY"},
+      {k:"LOCAL-FIRST SOFTWARE", meta:"EXIT; USER OWNERSHIP"}
+    ];
+  }
+}
+
+/* ---------------------------
+Render lists
+---------------------------- */
+function matches(text,q){ return !q || String(text||"").toUpperCase().includes(q); }
+
+function renderLists(){
+  const q = String($("filter").value||"").trim().toUpperCase();
+  const mode = STATE.ui.mode || "technical";
+  const M = STATE.payload.manifesto;
+
+  $("nonneg").innerHTML = "";
+  (M.nonneg||[]).forEach(line=>{
+    if(!matches(line,q)) return;
+    const d=document.createElement("div");
+    d.className="li";
+    d.textContent=line;
+    $("nonneg").appendChild(d);
+  });
+
+  $("ops").innerHTML = "";
+  (M.ops||[]).forEach(line=>{
+    if(!matches(line,q)) return;
+    const d=document.createElement("div");
+    d.className="li";
+    d.textContent=line;
+    $("ops").appendChild(d);
+  });
+
+  $("precedent").innerHTML = "";
+  (M.precedent||[]).forEach(x=>{
+    const blob = `${x.k} ${x.t} ${x.d}`;
+    if(!matches(blob,q)) return;
+    const d=document.createElement("div");
+    d.className="ref";
+    d.textContent = mode==="compact" ? `${x.k} — ${x.t}` : x.k;
+    const meta=document.createElement("div");
+    meta.className="meta";
+    meta.textContent = mode==="compact" ? (x.d||"") : `${x.t} • ${x.d}`;
+    d.appendChild(meta);
+    $("precedent").appendChild(d);
+  });
+
+  $("refs").innerHTML = "";
+  (M.refs||[]).forEach(r=>{
+    const blob = `${r.k} ${r.meta}`;
+    if(!matches(blob,q)) return;
+    const d=document.createElement("div");
+    d.className="li";
+    d.textContent = String(r.k||"").toUpperCase();
+    const sub=document.createElement("div");
+    sub.className="sub";
+    sub.textContent = r.meta || "";
+    d.appendChild(sub);
+    $("refs").appendChild(d);
+  });
+}
+
+/* ---------------------------
+UI setters
+---------------------------- */
+function setDrawer(open){
+  STATE.ui.drawerOpen = !!open;
+  persist("drawer");
+}
+function setNull(on){
+  STATE.ui.nullMode = !!on;
+  if(STATE.ui.nullMode){
+    STATE.ui.drawerOpen = false;
+    setNoteOpen(false, true);
+  }else{
+    // on exit NULL: reopen drawer so it is never “empty” on return
+    STATE.ui.drawerOpen = true;
+  }
+  persist("null");
+}
+function setInvert(on){
+  STATE.ui.invert = !!on;
+  persist("invert");
+}
+function setMotion(on){
+  STATE.ui.motionOn = !!on;
+  persist("motion");
+}
+function setMode(mode){
+  STATE.ui.mode = (mode==="compact") ? "compact" : "technical";
+  persist("mode");
+}
+function setNoteOpen(open, silent){
+  $("ketaNote").classList.toggle("open", !!open);
+  $("ketaIcon").classList.toggle("open", !!open);
+  if(!silent) toast(open ? "NOTE OPEN" : "NOTE CLOSED");
+}
+
+/* ---------------------------
+Actions
+---------------------------- */
+function applyNoteSink(){
+  const sink = String($("noteSink").value || "STATE").toUpperCase();
+  const oid  = String($("noteObj").value || "").trim();
+  if(sink === "OBJECT" && !oid){ toast("NEED OBJECT_ID"); return; }
+
+  STATE.noteRouting.sink = (sink==="ROOM"||sink==="OBJECT") ? sink : "STATE";
+  STATE.noteRouting.objectId = (STATE.noteRouting.sink==="OBJECT") ? oid : null;
+
+  STATE.ketaNote = loadNote();
+  syncKetaNoteMeta("sink_change");
+  persist("sink_change");
+  toast("SINK APPLIED");
+}
+
+/* ---------------------------
+Render
+---------------------------- */
+function render(){
+  $("root").classList.toggle("invert", !!STATE.ui.invert);
+  $("root").classList.toggle("null", !!STATE.ui.nullMode);
+
+  $("drawer").classList.toggle("open", !!STATE.ui.drawerOpen && !STATE.ui.nullMode);
+
+  $("scan").classList.toggle("run", !!STATE.ui.motionOn);
+  $("scan").style.opacity = STATE.ui.motionOn ? 0.12 : 0;
+
+  $("nullLabel").textContent = STATE.ui.nullMode ? "ON" : "OFF";
+  $("motionLabel").textContent = STATE.ui.motionOn ? "ON" : "OFF";
+  $("modeLabel").textContent = (STATE.ui.mode||"technical").toUpperCase();
+
+  $("sig").textContent = stableSig();
+
+  $("mode").value = (STATE.ui.mode||"technical");
+  $("sinkLabel").textContent = "WRITE→" + ((STATE.noteRouting && STATE.noteRouting.sink) || "STATE");
+  $("noteSink").value = ((STATE.noteRouting && STATE.noteRouting.sink) || "STATE");
+  $("noteObj").value = (STATE.noteRouting && STATE.noteRouting.objectId) ? String(STATE.noteRouting.objectId) : "";
+
+  $("ketaText").value = STATE.ketaNote || "";
+
+  if(!$("exportName").value) $("exportName").value = "KETADATA_manifesto_state.json";
+
+  renderLists();
+}
+
+/* ---------------------------
+WIRE
+---------------------------- */
+$("toggleDrawer").addEventListener("click", ()=>{
+  // allow toggling only when not in NULL (by design)
+  if(STATE.ui.nullMode) return;
+  setDrawer(!STATE.ui.drawerOpen);
+});
+$("btnCloseDrawer").addEventListener("click", ()=> setDrawer(false));
+
+$("btnNull").addEventListener("click", ()=> {
+  setNull(!STATE.ui.nullMode);
+  if(!STATE.ui.nullMode) toast("NULL OFF");
+});
+
+$("btnMotion").addEventListener("click", ()=> {
+  setMotion(!STATE.ui.motionOn);
+  toast(STATE.ui.motionOn ? "MOTION ON" : "MOTION OFF");
+});
+
+$("mode").addEventListener("change", ()=> setMode($("mode").value));
+$("filter").addEventListener("input", renderLists);
+
+$("btnExport").addEventListener("click", ()=>{
+  const name = String($("exportName").value||"KETADATA_manifesto_state.json").trim() || "KETADATA_manifesto_state.json";
+  const blob = new Blob([exportEnvelope()], {type:"application/json"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href), 800);
+  toast("EXPORTED");
+});
+
+$("btnCopy").addEventListener("click", async ()=>{
+  try{ await navigator.clipboard.writeText(exportEnvelope()); toast("COPIED"); }
+  catch(e){ toast("COPY FAILED"); }
+});
+
+$("btnImport").addEventListener("click", ()=> $("file").click());
+$("file").addEventListener("change", async (e)=>{
+  const f = e.target.files && e.target.files[0];
+  if(!f) return;
+  importEnvelope(await f.text());
+  e.target.value = "";
+  toast("IMPORTED");
+});
+
+$("btnApplySink").addEventListener("click", applyNoteSink);
+
+$("ketaIcon").addEventListener("click", ()=>{
+  if(STATE.ui.nullMode) return;
+  setNoteOpen(!$("ketaNote").classList.contains("open"));
+});
+$("btnHideNote").addEventListener("click", ()=> setNoteOpen(false));
+
+$("ketaText").addEventListener("input", ()=>{
+  STATE.ketaNote = $("ketaText").value;
+  saveNote(STATE.ketaNote);
+  persist("note_write");
+});
+
+/* ---------------------------
+HOTKEYS (UNIVERSALS)
+- FIX: Shift+0 uses Digit0 / ) fallback
+---------------------------- */
+document.addEventListener("keydown",(e)=>{
+  const tag = (e.target && e.target.tagName) ? e.target.tagName.toLowerCase() : "";
+  const typing = (tag==="textarea" || tag==="input" || tag==="select");
+
+  if(e.shiftKey && e.key.toLowerCase()==="i"){
+    e.preventDefault();
+    setInvert(!STATE.ui.invert);
+    toast(STATE.ui.invert ? "INVERT ON" : "INVERT OFF");
+    return;
+  }
+
+  // robust NULL toggle
+  if(e.shiftKey && (e.code === "Digit0" || e.key === "0" || e.key === ")")){
+    e.preventDefault();
+    const was = STATE.ui.nullMode;
+    setNull(!STATE.ui.nullMode);
+    if(!was) return; // going into NULL: toast suppressed
+    toast("NULL OFF");
+    return;
+  }
+
+  if(e.key==="Escape"){
+    if(STATE.ui.nullMode) STATE.ui.nullMode = false;
+    STATE.ui.drawerOpen = false;
+    setNoteOpen(false, true);
+    persist("escape");
+    toast("CLOSED");
+    return;
+  }
+
+  // optional SPACE toggles motion when not typing
+  if(!typing && e.key===" "){
+    e.preventDefault();
+    setMotion(!STATE.ui.motionOn);
+    toast(STATE.ui.motionOn ? "MOTION ON" : "MOTION OFF");
+    return;
+  }
+});
+
+/* ---------------------------
+DRAG NOTE
+---------------------------- */
+(function dragNote(){
+  const box = $("ketaNote");
+  const head = $("ketaHead");
+  let dragging=false, ox=0, oy=0;
+
+  head.addEventListener("mousedown",(e)=>{
+    if(e.target.closest("button") || e.target.closest("select")) return;
+    dragging=true;
+    const r = box.getBoundingClientRect();
+    ox = e.clientX - r.left;
+    oy = e.clientY - r.top;
+    box.style.left = r.left + "px";
+    box.style.top  = r.top + "px";
+    box.style.right = "auto";
+  });
+
+  window.addEventListener("mousemove",(e)=>{
+    if(!dragging) return;
+    box.style.left = (e.clientX - ox) + "px";
+    box.style.top  = (e.clientY - oy) + "px";
+  });
+
+  window.addEventListener("mouseup",()=> dragging=false);
+})();
+
+/* ---------------------------
+BOOT
+---------------------------- */
+seedIfEmpty();
+STATE.ketaNote = loadNote();
+syncKetaNoteMeta("boot");
+render();
+// persist after first render so it always displays even if localStorage throws
+try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(STATE)); }catch(e){}
+
+/* Minimal exposure */
+window.KDT = {
+  exportState: exportEnvelope,
+  importState: importEnvelope,
+  getState: ()=>structuredClone(STATE),
+  setNull: (on)=>setNull(!!on)
+};
+</script>
+</body>
+</html>
+
+<!--
+============================================================
+KETADATA HTML SERIALIZATION STAMP
+FILE_ID: KETADATA_MANIFESTO
+ROOM_ID: MANIFESTO
+VERSION: manifesto.v1
+UPDATED_AT: 2026-01-06T00:00:00-05:00
+CHANGELOG:
+- DISPLAY-SAFE BOOT: nullMode=false, drawerOpen=true
+- SHIFT+0 FIX: Digit0 / ) fallback for keyboard layouts
+- REMOVED DUPLICATE FUNCTION COLLISIONS (single definitions only)
+- NULL HINT: visible overlay in NULL so it never looks “blank”
+
+AE:
+- BLACK/WHITE, MONO TEXT, SHARP EDGES, NO ROUNDED KITSCH
+- MOTION AS HARSH SCANFLOW (OPTIONAL)
+
+EE:
+- DEFAULT/STATE/mergeDefault/persist (localStorage)
+- EXPORT/COPY/IMPORT JSON ENVELOPE (real download)
+- NULL MODE (SHIFT+0), INVERT (SHIFT+I), ESC CLOSE, SPACE MOTION (OPTIONAL)
+- DIRECTED NOTE SINKS (STATE/ROOM/OBJECT)
+
+WB:
+- LOCALSTORAGE KEY: KDT::STATE::KETADATA_MANIFESTO::MANIFESTO::manifesto.v1
+- DIRECTED NOTE KEYS:
+  - STATE:  KDT::KETA_NOTE::STATE::<STATE_SIG>::v1
+  - ROOM:   KDT::KETA_NOTE::ROOM::MANIFESTO::v1
+  - OBJECT: KDT::KETA_NOTE::OBJ::<OBJECT_ID>::v1
+============================================================
+-->
