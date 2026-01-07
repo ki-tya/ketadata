@@ -2308,117 +2308,136 @@ function playerImportBulk(){
 }
 
 /* ===== YT ===== */
+/* ===== YT (SIMPLIFIED, SAFE) ===== */
+
 function ytParse(input){
-  const s=String(input||"").trim();
-  if(!s) return {type:"none"};
+  const s = String(input||"").trim();
+  if(!s) return { type:"none" };
+
+  // raw IDs
+  if(/^[a-zA-Z0-9_-]{11}$/.test(s)) return { type:"video", id:s };
+  if(/^PL[a-zA-Z0-9_-]+$/.test(s)) return { type:"playlist", list:s };
+
   try{
-    const u=new URL(s, location.href);
-    const host=(u.hostname||"").toLowerCase();
-    const path=(u.pathname||"");
-    const sp=u.searchParams;
+    const u = new URL(s, location.href);
+    const host = (u.hostname||"").toLowerCase();
+    const path = u.pathname || "";
+    const sp = u.searchParams;
 
     if(host.includes("youtu.be")){
-      const id=path.split("/").filter(Boolean)[0]||"";
-      if(id) return {type:"video", id, raw:s};
+      const id = path.split("/").filter(Boolean)[0] || "";
+      if(/^[a-zA-Z0-9_-]{11}$/.test(id)) return { type:"video", id };
+      return { type:"unknown" };
     }
+
     if(host.includes("youtube.com") || host.includes("youtube-nocookie.com")){
-      const vid=sp.get("v");
-      const list=sp.get("list");
-      if(vid) return {type:"video", id:vid, list:list||"", raw:s};
-      if(path.includes("/playlist") && list) return {type:"playlist", list, raw:s};
+      const v = sp.get("v");
+      const list = sp.get("list");
+
+      // WATCH → VIDEO (ignore list)
+      if(v && /^[a-zA-Z0-9_-]{11}$/.test(v)) return { type:"video", id:v };
+
+      // PLAYLIST
+      if(path.includes("/playlist") && list) return { type:"playlist", list };
+
+      // EMBED
       if(path.includes("/embed/")){
-        const id=path.split("/embed/")[1]?.split(/[?&#]/)[0]||"";
-        if(id) return {type:"video", id, list:list||"", raw:s};
+        const id = path.split("/embed/")[1]?.split(/[?&#]/)[0] || "";
+        if(/^[a-zA-Z0-9_-]{11}$/.test(id)) return { type:"video", id };
       }
     }
   }catch(e){}
 
-  if(/^[a-zA-Z0-9_-]{11}$/.test(s)) return {type:"video", id:s, raw:s};
-  if(/^PL[a-zA-Z0-9_-]+$/.test(s)) return {type:"playlist", list:s, raw:s};
-  return {type:"unknown", raw:s};
+  return { type:"unknown" };
 }
 
 function ytBuildEmbedSrc(){
-  const parsed=ytParse(STATE.ui.yt.input);
-  const ap=STATE.ui.yt.autoplay ? 1 : 0;
-  const mute=STATE.ui.yt.mute ? 1 : 0;
-  const loop=STATE.ui.yt.loop ? 1 : 0;
-  const ctrls=STATE.ui.yt.controls ? 1 : 0;
+  const parsed = ytParse(STATE.ui.yt.input);
+  if(parsed.type==="none" || parsed.type==="unknown") return "";
 
-  const baseParams = new URLSearchParams();
-  baseParams.set("autoplay", String(ap));
-  baseParams.set("mute", String(mute));
-  baseParams.set("controls", String(ctrls));
-  baseParams.set("playsinline", "1");
-  baseParams.set("rel", "0");
-  baseParams.set("modestbranding", "1");
-   // YT JS API breaks on file:// because location.origin === "null"
+  const p = new URLSearchParams();
+  p.set("autoplay", STATE.ui.yt.autoplay ? "1" : "0");
+  p.set("mute",     STATE.ui.yt.mute ? "1" : "0");
+  p.set("controls", STATE.ui.yt.controls ? "1" : "0");
+  p.set("playsinline","1");
+  p.set("rel","0");
+  p.set("modestbranding","1");
+
+  // JS API ONLY when origin is valid (no file:// breakage)
   const ORIGIN = (location.origin && location.origin !== "null") ? location.origin : "";
   if(ORIGIN){
-    baseParams.set("enablejsapi","1");
-    baseParams.set("origin", ORIGIN);
-  }else{
-    // no JS API when origin is null
-    baseParams.delete("enablejsapi");
-    baseParams.delete("origin");
+    p.set("enablejsapi","1");
+    p.set("origin", ORIGIN);
   }
-  const host = STATE.ui.yt.nocookie ? "https://www.youtube-nocookie.com" : "https://www.youtube.com";
+
+  const host = STATE.ui.yt.nocookie
+    ? "https://www.youtube-nocookie.com"
+    : "https://www.youtube.com";
 
   if(parsed.type==="video"){
-    if(parsed.list) baseParams.set("list", parsed.list);
-    if(loop){
-      baseParams.set("loop","1");
-      baseParams.set("playlist", parsed.id);
-      if(parsed.list) baseParams.set("playlist", parsed.list);
+    if(STATE.ui.yt.loop){
+      // REQUIRED for single-video loop
+      p.set("loop","1");
+      p.set("playlist", parsed.id);
     }
-    return `${host}/embed/${encodeURIComponent(parsed.id)}?${baseParams.toString()}`;
+    return `${host}/embed/${encodeURIComponent(parsed.id)}?${p.toString()}`;
   }
 
   if(parsed.type==="playlist"){
-    baseParams.set("list", parsed.list);
-    if(loop) baseParams.set("loop","1");
-    return `${host}/embed/videoseries?${baseParams.toString()}`;
+    p.set("list", parsed.list);
+    if(STATE.ui.yt.loop) p.set("loop","1");
+    return `${host}/embed/videoseries?${p.toString()}`;
   }
 
   return "";
 }
 
 function syncYTUIFromState(){
-  $("ytInput").value = STATE.ui.yt.input || "";
-  $("ytAutoplay").checked = !!STATE.ui.yt.autoplay;
-  $("ytMute").checked = !!STATE.ui.yt.mute;
-  $("ytLoop").checked = !!STATE.ui.yt.loop;
-  $("ytControls").checked = !!STATE.ui.yt.controls;
-  $("ytNoCookie").checked = !!STATE.ui.yt.nocookie;
+  $("ytInput").value      = STATE.ui.yt.input || "";
+  $("ytAutoplay").checked= !!STATE.ui.yt.autoplay;
+  $("ytMute").checked    = !!STATE.ui.yt.mute;
+  $("ytLoop").checked    = !!STATE.ui.yt.loop;
+  $("ytControls").checked= !!STATE.ui.yt.controls;
+  $("ytNoCookie").checked= !!STATE.ui.yt.nocookie;
 }
-function applyYTEmbedFromState(silent=false){
-  const src=ytBuildEmbedSrc();
-  STATE.ui.yt.lastEmbedSrc = src || "";
-  if(!src){
-    ytFrame.removeAttribute("src");
-    if(!silent) toast("YT CLEARED");
-    return;
-  }
-  ytFrame.src = src;
-  if(!silent) toast("YT APPLIED");
-}
+
 function renderYT(){
-  const panel=$("ytPanel");
-  if(!STATE.ui.ytOpen || STATE.ui.blackout || STATE.ui.fullscreen){
+  const panel = $("ytPanel");
+  const openOk = STATE.ui.ytOpen && !STATE.ui.blackout && !STATE.ui.fullscreen;
+
+  if(!openOk){
     panel.classList.remove("open");
-    panel.style.display="none";
+    panel.style.display = "none";
     return;
   }
-  panel.style.display="";
+
+  panel.style.display = "";
   panel.classList.add("open");
 
-  applyPanelRect(panel, STATE.ui.ytRect, {x:(window.innerWidth-390),y:(parseInt(getComputedStyle(document.documentElement).getPropertyValue("--top"))||44)+560,w:360,h:260});
+  applyPanelRect(
+    panel,
+    STATE.ui.ytRect,
+    {
+      x:(window.innerWidth-390),
+      y:(parseInt(getComputedStyle(document.documentElement)
+         .getPropertyValue("--top"))||44)+560,
+      w:360,h:260
+    }
+  );
 
   syncYTUIFromState();
-  if(STATE.ui.yt.lastEmbedSrc){
-    if(ytFrame.src !== STATE.ui.yt.lastEmbedSrc) ytFrame.src = STATE.ui.yt.lastEmbedSrc;
+
+  const src = ytBuildEmbedSrc();
+  if(!src){
+    ytFrame.removeAttribute("src");
+    return;
+  }
+
+  if(ytFrame.getAttribute("src") !== src){
+    ytFrame.setAttribute("src", src);
   }
 }
+
 
 /* ===== pinned + sets ===== */
 function renderPinnedPanel(){
