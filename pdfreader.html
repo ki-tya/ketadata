@@ -1,0 +1,659 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>KETADATA // PDF READER</title>
+
+<style>
+  :root{
+    --bg:#000;
+    --fg:rgba(255,255,255,.86);
+    --muted:rgba(255,255,255,.52);
+    --line:rgba(255,255,255,.14);
+    --line2:rgba(255,255,255,.22);
+
+    --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace;
+    --sans: Arial, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+
+    --t:44px;
+    --gap:8px;
+    --pad:10px;
+
+    --zoom:1;
+    --fit:0; /* 0 free, 1 fit-width */
+    --ui:1;  /* 0 hide chrome */
+  }
+
+  *{box-sizing:border-box}
+  html,body{height:100%; margin:0}
+  body{
+    background:var(--bg);
+    color:var(--fg);
+    font-family:var(--sans);
+    font-size:13px; /* uniform-size rule */
+    overflow:hidden;
+  }
+
+  a{color:inherit}
+  button,input,select,textarea{font:inherit; color:inherit; background:transparent}
+  button{border:1px solid var(--line); padding:6px 8px; cursor:pointer}
+  button:hover{border-color:var(--line2)}
+  button:disabled{opacity:.45; cursor:default}
+
+  .root{position:fixed; inset:0; display:flex; flex-direction:column}
+  .top{
+    height:var(--t);
+    display:flex;
+    align-items:center;
+    gap:var(--gap);
+    padding:0 var(--pad);
+    border-bottom:1px solid var(--line);
+    user-select:none;
+  }
+  .top .left, .top .mid, .top .right{display:flex; align-items:center; gap:var(--gap)}
+  .top .left{min-width:260px}
+  .top .mid{flex:1; justify-content:center}
+  .top .right{min-width:260px; justify-content:flex-end}
+
+  .pill{
+    border:1px solid var(--line);
+    padding:6px 8px;
+    display:inline-flex;
+    align-items:center;
+    gap:8px;
+    white-space:nowrap;
+  }
+
+  .file{
+    position:relative;
+    overflow:hidden;
+    display:inline-flex;
+    align-items:center;
+    gap:8px;
+  }
+  .file input[type="file"]{
+    position:absolute;
+    inset:0;
+    opacity:0;
+    cursor:pointer;
+  }
+
+  .main{
+    flex:1;
+    display:grid;
+    grid-template-columns: 1fr 420px;
+    min-height:0;
+  }
+
+  .viewerWrap{
+    position:relative;
+    border-right:1px solid var(--line);
+    min-height:0;
+    overflow:hidden;
+  }
+
+  .drop{
+    position:absolute;
+    inset:0;
+    display:none;
+    align-items:center;
+    justify-content:center;
+    text-align:center;
+    padding:20px;
+    background:rgba(0,0,0,.85);
+    border:1px dashed var(--line2);
+    margin:12px;
+    pointer-events:none;
+  }
+  .drop.on{display:flex}
+  .drop .box{
+    max-width:520px;
+    border:1px solid var(--line);
+    padding:14px;
+  }
+
+  .viewer{
+    position:absolute;
+    inset:0;
+    overflow:auto;
+    padding:18px;
+  }
+
+  .pageStage{
+    position:relative;
+    margin:0 auto;
+    display:inline-block;
+    border:1px solid var(--line);
+    background:#000;
+  }
+
+  canvas{display:block}
+
+  /* text layer for selection/copy */
+  .textLayer{
+    position:absolute;
+    inset:0;
+    transform-origin:0 0;
+    color:transparent;
+    caret-color:transparent;
+    user-select:text;
+  }
+  .textLayer span{
+    position:absolute;
+    white-space:pre;
+    transform-origin:0 0;
+    line-height:1;
+  }
+  .textLayer ::selection{background:rgba(255,255,255,.22)}
+
+  .side{
+    min-height:0;
+    display:flex;
+    flex-direction:column;
+  }
+
+  .sideTop{
+    padding:10px;
+    border-bottom:1px solid var(--line);
+    display:flex;
+    gap:8px;
+    align-items:center;
+    justify-content:space-between;
+  }
+  .sideTop .btns{display:flex; gap:8px; align-items:center}
+
+  textarea{
+    width:100%;
+    height:100%;
+    resize:none;
+    border:0;
+    outline:none;
+    padding:12px;
+    background:#000;
+    color:var(--fg);
+    border-top:0;
+  }
+
+  .hint{color:var(--muted)}
+  .muted{color:var(--muted)}
+  .hideUI .top{display:none}
+  .hideUI .main{grid-template-columns:1fr 420px}
+
+  .stamp{
+    position:fixed;
+    left:10px;
+    bottom:10px;
+    color:rgba(255,255,255,.38);
+    font-family:var(--mono);
+    font-size:11px;
+    pointer-events:none;
+    user-select:none;
+    white-space:pre;
+  }
+</style>
+
+<!-- PDF.js (CDN) -->
+<script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.min.js"></script>
+<script>
+(() => {
+  const FILE_ID = "KETADATA_PDF_READER__FILE_0101";
+  const ROOM_ID = "BASE";
+  const VERSION = "v1";
+  const UPDATED_AT = "2026-01-07";
+  const LS_KEY = FILE_ID + "__STATE";
+
+  const $ = (id) => document.getElementById(id);
+
+  let PDF = null;
+  let pdfBytes = null;
+  let pageNum = 1;
+  let pageCount = 0;
+
+  let fitWidth = true;
+  let zoom = 1.0;
+  let rotation = 0;
+
+  let rendering = false;
+  let pending = null;
+
+  const STATE = {
+    ui: { page:1, zoom:1.0, fitWidth:true, rotation:0, hideChrome:false },
+    lastFileName: ""
+  };
+
+  function clamp(n,min,max){ return Math.max(min, Math.min(max,n)); }
+
+  function loadState(){
+    try{
+      const raw = localStorage.getItem(LS_KEY);
+      if(!raw) return;
+      const s = JSON.parse(raw);
+      if(s && s.ui){
+        Object.assign(STATE.ui, s.ui);
+        if(typeof s.lastFileName === "string") STATE.lastFileName = s.lastFileName;
+      }
+    }catch(e){}
+  }
+  function saveState(){
+    try{
+      localStorage.setItem(LS_KEY, JSON.stringify(STATE));
+    }catch(e){}
+  }
+
+  function setChromeHidden(on){
+    STATE.ui.hideChrome = !!on;
+    document.body.classList.toggle("hideUI", !!on);
+    $("uiLabel").textContent = on ? "HIDDEN" : "ON";
+    saveState();
+  }
+
+  async function openFile(file){
+    if(!file) return;
+    STATE.lastFileName = file.name || "";
+    saveState();
+
+    $("fileName").textContent = file.name || "(file)";
+    $("status").textContent = "LOADING…";
+
+    pdfBytes = await file.arrayBuffer();
+
+    if(!window.pdfjsLib){
+      $("status").textContent = "PDF.JS FAILED TO LOAD";
+      return;
+    }
+
+    // worker
+    pdfjsLib.GlobalWorkerOptions.workerSrc =
+      "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.worker.min.js";
+
+    PDF = await pdfjsLib.getDocument({ data: pdfBytes }).promise;
+    pageCount = PDF.numPages;
+    $("pageCount").textContent = String(pageCount);
+
+    pageNum = clamp(STATE.ui.page || 1, 1, pageCount);
+    zoom = clamp(STATE.ui.zoom || 1.0, 0.2, 4.0);
+    fitWidth = !!STATE.ui.fitWidth;
+    rotation = (STATE.ui.rotation || 0) % 360;
+
+    $("pageNum").value = String(pageNum);
+    $("zoomLabel").textContent = String(Math.round(zoom*100)) + "%";
+    $("fitLabel").textContent = fitWidth ? "FIT" : "FREE";
+    $("rotLabel").textContent = String(rotation);
+
+    $("status").textContent = "READY";
+    await renderPage(pageNum);
+  }
+
+  function clearTextLayer(){
+    const tl = $("textLayer");
+    tl.innerHTML = "";
+  }
+
+  async function renderTextLayer(page, viewport){
+    const textContent = await page.getTextContent();
+    const tl = $("textLayer");
+    tl.innerHTML = "";
+    tl.style.transform = `scale(${viewport.scale})`;
+
+    // Using PDF.js textLayer algorithm simplified:
+    for(const item of textContent.items){
+      const span = document.createElement("span");
+      span.textContent = item.str;
+
+      // Transform item to viewport coords
+      const tx = pdfjsLib.Util.transform(viewport.transform, item.transform);
+      const x = tx[4];
+      const y = tx[5];
+
+      // Estimate font size and rotation
+      const fontHeight = Math.hypot(tx[2], tx[3]);
+      const angle = Math.atan2(tx[1], tx[0]);
+
+      span.style.left = x + "px";
+      // PDF coords are bottom-left; viewport already maps, but text y needs adjustment
+      span.style.top = (y - fontHeight) + "px";
+      span.style.fontSize = fontHeight + "px";
+      span.style.transform = `rotate(${angle}rad)`;
+      span.style.fontFamily = (item.fontName || "sans-serif");
+
+      tl.appendChild(span);
+    }
+  }
+
+  function computeScaleForFitWidth(page, baseViewport){
+    const viewer = $("viewer");
+    const pad = 36; // viewer padding + margin
+    const available = Math.max(320, viewer.clientWidth - pad);
+    const scale = available / baseViewport.width;
+    return clamp(scale, 0.2, 4.0);
+  }
+
+  async function renderPage(n){
+    if(!PDF) return;
+    if(rendering){ pending = n; return; }
+    rendering = true;
+
+    try{
+      $("status").textContent = "RENDERING…";
+      $("prev").disabled = n<=1;
+      $("next").disabled = n>=pageCount;
+
+      const page = await PDF.getPage(n);
+
+      const baseViewport = page.getViewport({ scale:1, rotation });
+      const scale = fitWidth ? computeScaleForFitWidth(page, baseViewport) : zoom;
+
+      const viewport = page.getViewport({ scale, rotation });
+
+      const canvas = $("canvas");
+      const ctx = canvas.getContext("2d", { alpha:false });
+
+      canvas.width = Math.floor(viewport.width);
+      canvas.height = Math.floor(viewport.height);
+
+      $("pageStage").style.width = canvas.width + "px";
+      $("pageStage").style.height = canvas.height + "px";
+      $("textLayer").style.width = canvas.width + "px";
+      $("textLayer").style.height = canvas.height + "px";
+
+      clearTextLayer();
+
+      await page.render({ canvasContext: ctx, viewport }).promise;
+      await renderTextLayer(page, viewport);
+
+      $("status").textContent = "READY";
+      $("pageNum").value = String(n);
+
+      // persist
+      STATE.ui.page = n;
+      STATE.ui.zoom = zoom;
+      STATE.ui.fitWidth = fitWidth;
+      STATE.ui.rotation = rotation;
+      saveState();
+    }catch(e){
+      $("status").textContent = "ERROR";
+      console.error(e);
+    }finally{
+      rendering = false;
+      if(pending && pending !== n){
+        const go = pending; pending = null;
+        renderPage(go);
+      }else{
+        pending = null;
+      }
+    }
+  }
+
+  function setZoom(newZoom){
+    zoom = clamp(newZoom, 0.2, 4.0);
+    fitWidth = false;
+    $("zoomLabel").textContent = String(Math.round(zoom*100)) + "%";
+    $("fitLabel").textContent = "FREE";
+    STATE.ui.zoom = zoom;
+    STATE.ui.fitWidth = fitWidth;
+    saveState();
+    renderPage(pageNum);
+  }
+
+  function setFit(on){
+    fitWidth = !!on;
+    $("fitLabel").textContent = fitWidth ? "FIT" : "FREE";
+    STATE.ui.fitWidth = fitWidth;
+    saveState();
+    renderPage(pageNum);
+  }
+
+  function setRotation(deg){
+    rotation = ((deg%360)+360)%360;
+    $("rotLabel").textContent = String(rotation);
+    STATE.ui.rotation = rotation;
+    saveState();
+    renderPage(pageNum);
+  }
+
+  async function extractText(mode){
+    if(!PDF) return;
+    $("status").textContent = "EXTRACTING…";
+
+    const out = [];
+    const start = (mode==="page") ? pageNum : 1;
+    const end   = (mode==="page") ? pageNum : pageCount;
+
+    for(let i=start;i<=end;i++){
+      const p = await PDF.getPage(i);
+      const tc = await p.getTextContent();
+      const lines = tc.items.map(it => it.str).filter(Boolean);
+
+      // naive line join; good enough for KETA_NOTE paste
+      out.push(`[[PAGE ${i}/${pageCount}]]`);
+      out.push(lines.join(" "));
+      out.push("");
+    }
+
+    $("note").value = out.join("\n");
+    $("status").textContent = "READY";
+  }
+
+  async function copyNote(){
+    const txt = $("note").value || "";
+    try{
+      await navigator.clipboard.writeText(txt);
+      $("status").textContent = "COPIED";
+      setTimeout(()=>{ if($("status").textContent==="COPIED") $("status").textContent="READY"; }, 800);
+    }catch(e){
+      $("status").textContent = "COPY FAILED";
+    }
+  }
+
+  function hookKetaNoteIfPresent(){
+    // If you paste this tool into your Base and keep an element with id="ketaNote",
+    // this will append extracted text directly into it.
+    const k = document.getElementById("ketaNote");
+    if(!k) return false;
+    const txt = $("note").value || "";
+    if("value" in k){
+      const pre = k.value || "";
+      k.value = (pre ? (pre + "\n\n") : "") + txt;
+      return true;
+    }
+    return false;
+  }
+
+  function sendToKetaNote(){
+    const ok = hookKetaNoteIfPresent();
+    $("status").textContent = ok ? "SENT TO KETA_NOTE" : "NO KETA_NOTE FOUND";
+    setTimeout(()=>{ $("status").textContent="READY"; }, 900);
+  }
+
+  function wire(){
+    loadState();
+    setChromeHidden(!!STATE.ui.hideChrome);
+
+    $("stamp").textContent =
+`AE:KETADATA_PDF_READER
+EE:PDFJS_RENDER_TEXTEXTRACT
+WB:LOCALFIRST_UI
+FILE_ID:${FILE_ID}
+ROOM_ID:${ROOM_ID}
+VERSION:${VERSION}
+UPDATED_AT:${UPDATED_AT}
+CHANGELOG: v1 initial PDF load/render; selectable text layer; extract page/all; copy/send to KETA_NOTE`;
+
+    $("file").addEventListener("change", (e)=>{
+      const f = e.target.files && e.target.files[0];
+      if(f) openFile(f);
+      e.target.value = "";
+    });
+
+    $("prev").addEventListener("click", ()=>{
+      if(!PDF) return;
+      pageNum = clamp(pageNum-1,1,pageCount);
+      renderPage(pageNum);
+    });
+    $("next").addEventListener("click", ()=>{
+      if(!PDF) return;
+      pageNum = clamp(pageNum+1,1,pageCount);
+      renderPage(pageNum);
+    });
+
+    $("pageNum").addEventListener("change", ()=>{
+      if(!PDF) return;
+      const n = clamp(parseInt($("pageNum").value,10)||1,1,pageCount);
+      pageNum = n;
+      renderPage(pageNum);
+    });
+
+    $("zoomOut").addEventListener("click", ()=> setZoom(zoom*0.9));
+    $("zoomIn").addEventListener("click", ()=> setZoom(zoom/0.9));
+    $("fit").addEventListener("click", ()=> setFit(!fitWidth));
+    $("rotL").addEventListener("click", ()=> setRotation(rotation-90));
+    $("rotR").addEventListener("click", ()=> setRotation(rotation+90));
+
+    $("extractPage").addEventListener("click", ()=> extractText("page"));
+    $("extractAll").addEventListener("click", ()=> extractText("all"));
+    $("copy").addEventListener("click", copyNote);
+    $("send").addEventListener("click", sendToKetaNote);
+    $("clear").addEventListener("click", ()=> { $("note").value=""; });
+
+    $("hideUI").addEventListener("click", ()=> setChromeHidden(!STATE.ui.hideChrome));
+
+    // Drag/drop
+    const wrap = $("viewerWrap");
+    const drop = $("drop");
+    let dragDepth = 0;
+
+    function showDrop(on){ drop.classList.toggle("on", !!on); }
+
+    wrap.addEventListener("dragenter", (e)=>{
+      e.preventDefault(); e.stopPropagation();
+      dragDepth++;
+      showDrop(true);
+    });
+    wrap.addEventListener("dragover", (e)=>{
+      e.preventDefault(); e.stopPropagation();
+      showDrop(true);
+    });
+    wrap.addEventListener("dragleave", (e)=>{
+      e.preventDefault(); e.stopPropagation();
+      dragDepth = Math.max(0, dragDepth-1);
+      if(dragDepth===0) showDrop(false);
+    });
+    wrap.addEventListener("drop", (e)=>{
+      e.preventDefault(); e.stopPropagation();
+      dragDepth = 0;
+      showDrop(false);
+      const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+      if(f) openFile(f);
+    });
+
+    // keyboard: minimal, obvious
+    window.addEventListener("keydown", (e)=>{
+      if(e.target && (e.target.tagName==="TEXTAREA" || e.target.tagName==="INPUT")) return;
+      if(e.key==="ArrowLeft"){ $("prev").click(); }
+      if(e.key==="ArrowRight"){ $("next").click(); }
+      if(e.key==="+" || e.key==="="){ $("zoomIn").click(); }
+      if(e.key==="-" ){ $("zoomOut").click(); }
+      if(e.key.toLowerCase()==="f"){ $("fit").click(); }
+      if(e.key.toLowerCase()==="u"){ $("hideUI").click(); }
+    });
+
+    // labels
+    $("fileName").textContent = STATE.lastFileName ? STATE.lastFileName : "NO FILE";
+    $("zoomLabel").textContent = String(Math.round((STATE.ui.zoom||1)*100)) + "%";
+    $("fitLabel").textContent = (STATE.ui.fitWidth!==false) ? "FIT" : "FREE";
+    $("rotLabel").textContent = String(STATE.ui.rotation||0);
+  }
+
+  window.addEventListener("load", wire);
+})();
+</script>
+</head>
+
+<body>
+<div class="root" id="root">
+  <div class="top" id="top">
+    <div class="left">
+      <div class="pill file">
+        <span class="muted">PDF</span>
+        <span id="fileName">NO FILE</span>
+        <input id="file" type="file" accept="application/pdf"/>
+      </div>
+      <div class="pill">
+        <span class="muted">STATUS</span>
+        <span id="status">READY</span>
+      </div>
+    </div>
+
+    <div class="mid">
+      <button id="prev">PREV</button>
+      <div class="pill">
+        <span class="muted">PAGE</span>
+        <input id="pageNum" value="1" style="width:52px; border:1px solid var(--line); padding:6px 8px; outline:none"/>
+        <span class="muted">/</span>
+        <span id="pageCount">0</span>
+      </div>
+      <button id="next">NEXT</button>
+
+      <div class="pill">
+        <button id="zoomOut">-</button>
+        <span class="muted">ZOOM</span>
+        <span id="zoomLabel">100%</span>
+        <button id="zoomIn">+</button>
+      </div>
+
+      <button id="fit">FIT: <span id="fitLabel">FIT</span></button>
+
+      <div class="pill">
+        <button id="rotL">ROT-</button>
+        <span class="muted">ROT</span>
+        <span id="rotLabel">0</span>
+        <button id="rotR">ROT+</button>
+      </div>
+    </div>
+
+    <div class="right">
+      <button id="hideUI">UI: <span id="uiLabel">ON</span></button>
+      <div class="pill">
+        <span class="muted">COPY FLOW</span>
+        <span class="hint">SELECT TEXT ON PAGE OR EXTRACT → PASTE INTO KETA_NOTE</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="main">
+    <div class="viewerWrap" id="viewerWrap">
+      <div class="drop" id="drop">
+        <div class="box">
+          <div>DROP PDF HERE</div>
+          <div class="muted" style="margin-top:6px">OR CLICK “PDF” IN TOP BAR</div>
+        </div>
+      </div>
+
+      <div class="viewer" id="viewer">
+        <div class="pageStage" id="pageStage">
+          <canvas id="canvas"></canvas>
+          <div class="textLayer" id="textLayer" aria-label="Selectable text layer"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="side">
+      <div class="sideTop">
+        <div class="muted">KETA_NOTE BUFFER</div>
+        <div class="btns">
+          <button id="extractPage">EXTRACT PAGE</button>
+          <button id="extractAll">EXTRACT ALL</button>
+          <button id="copy">COPY</button>
+          <button id="send">SEND → KETA_NOTE</button>
+          <button id="clear">CLEAR</button>
+        </div>
+      </div>
+      <textarea id="note" spellcheck="false" placeholder="EXTRACTED TEXT APPEARS HERE. COPY, THEN PASTE INTO YOUR KETA_NOTE.&#10;&#10;TIP: YOU CAN ALSO SELECT TEXT DIRECTLY ON THE RENDERED PAGE (TEXT LAYER ENABLED) AND COPY NORMALLY."></textarea>
+    </div>
+  </div>
+</div>
+
+<div class="stamp" id="stamp"></div>
+</body>
+</html>
