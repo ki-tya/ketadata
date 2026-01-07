@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>KETADATA // PHOTOBOOTH (LIVE)</title>
+
+<style>
+html,body{
+  margin:0; padding:0;
+  width:100%; height:100%;
+  background:#000;
+  overflow:hidden;
+  font-family:ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+#root{position:fixed; inset:0; background:#000}
+
+/* CAMERA */
+#cam{
+  position:absolute;
+  inset:0;
+  width:100%;
+  height:100%;
+  object-fit:cover;
+  background:#000;
+  transform:scaleX(-1); /* mirror */
+}
+
+/* FX OVERLAY */
+#fx{
+  position:absolute;
+  inset:0;
+  pointer-events:none;
+}
+
+/* UI */
+#ui{
+  position:absolute;
+  left:0; right:0; bottom:0;
+  height:40px;
+  display:flex;
+  gap:8px;
+  align-items:center;
+  padding:0 10px;
+  background:linear-gradient(transparent, #000);
+}
+
+.btn{
+  color:#fff;
+  border:1px solid rgba(255,255,255,.25);
+  background:#000;
+  padding:4px 8px;
+  cursor:pointer;
+  font-size:12px;
+}
+
+.btn.on{background:#111}
+.spacer{flex:1}
+</style>
+</head>
+
+<body>
+<div id="root">
+
+  <!-- LIVE CAMERA -->
+  <video id="cam" autoplay playsinline muted></video>
+
+  <!-- EFFECTS -->
+  <canvas id="fx"></canvas>
+
+  <!-- UI -->
+  <div id="ui">
+    <button class="btn" id="inv">INVERT</button>
+    <button class="btn" id="grain">GRAIN</button>
+    <button class="btn" id="edge">EDGE</button>
+    <span class="spacer"></span>
+    <button class="btn" id="cap">CAPTURE</button>
+    <button class="btn" id="save">SAVE</button>
+    <button class="btn" id="fs">FS</button>
+  </div>
+
+</div>
+
+<script>
+const cam = document.getElementById("cam");
+const fx = document.getElementById("fx");
+const ctx = fx.getContext("2d");
+
+const FX = { invert:false, grain:false, edge:false };
+let lastFrame = null;
+
+/* CAMERA */
+async function start(){
+  const stream = await navigator.mediaDevices.getUserMedia({
+    video:{ facingMode:"user" }, audio:false
+  });
+  cam.srcObject = stream;
+  await cam.play();
+  resize();
+  draw();
+}
+start().catch(()=>alert("Camera blocked"));
+
+function resize(){
+  fx.width = window.innerWidth;
+  fx.height = window.innerHeight;
+}
+window.addEventListener("resize", resize);
+
+/* DRAW LOOP (NON-DESTRUCTIVE) */
+function draw(){
+  requestAnimationFrame(draw);
+  ctx.clearRect(0,0,fx.width,fx.height);
+
+  if(!FX.invert && !FX.grain && !FX.edge) return;
+
+  ctx.drawImage(cam,0,0,fx.width,fx.height);
+
+  if(FX.invert){
+    ctx.globalCompositeOperation="difference";
+    ctx.fillStyle="#fff";
+    ctx.fillRect(0,0,fx.width,fx.height);
+    ctx.globalCompositeOperation="source-over";
+  }
+
+  if(FX.edge){
+    const img = ctx.getImageData(0,0,fx.width,fx.height);
+    const d = img.data;
+    for(let i=0;i<d.length;i+=4){
+      const v = (d[i]+d[i+1]+d[i+2])/3;
+      const e = v>128?255:0;
+      d[i]=d[i+1]=d[i+2]=e;
+    }
+    ctx.putImageData(img,0,0);
+  }
+
+  if(FX.grain){
+    ctx.fillStyle="rgba(255,255,255,.06)";
+    for(let i=0;i<4000;i++){
+      ctx.fillRect(
+        Math.random()*fx.width,
+        Math.random()*fx.height,
+        1,1
+      );
+    }
+  }
+}
+
+/* CAPTURE */
+document.getElementById("cap").onclick=()=>{
+  const c=document.createElement("canvas");
+  c.width=fx.width; c.height=fx.height;
+  const cx=c.getContext("2d");
+  cx.drawImage(cam,0,0,c.width,c.height);
+  cx.drawImage(fx,0,0);
+  lastFrame=c;
+};
+
+document.getElementById("save").onclick=()=>{
+  if(!lastFrame) return;
+  const a=document.createElement("a");
+  a.download=`KETADATA_${Date.now()}.png`;
+  a.href=lastFrame.toDataURL("image/png");
+  a.click();
+};
+
+/* TOGGLES */
+function t(id,key){
+  const b=document.getElementById(id);
+  b.onclick=()=>{
+    FX[key]=!FX[key];
+    b.classList.toggle("on",FX[key]);
+  };
+}
+t("inv","invert");
+t("grain","grain");
+t("edge","edge");
+
+document.getElementById("fs").onclick=()=>{
+  if(!document.fullscreenElement) document.body.requestFullscreen();
+  else document.exitFullscreen();
+};
+
+/* KEYS */
+window.addEventListener("keydown",e=>{
+  if(e.key==="c") document.getElementById("cap").click();
+  if(e.key==="s") document.getElementById("save").click();
+  if(e.key==="f") document.getElementById("fs").click();
+});
+</script>
+
+<!-- AE/EE/WB SERIALIZATION STAMP :: AE=KETADATA_PHOTOBOOTH_LIVE :: EE=WEBCAM_VIDEO_SOURCE :: WB=CANVAS_OVERLAY_ONLY :: FILE_ID=KETA_PHOTO_LIVE_001 :: VERSION=v1 -->
+</body>
+</html>
