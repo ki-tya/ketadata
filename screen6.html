@@ -1,0 +1,599 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>KETADATA // KDTV FULLSCREEN PLAYER</title>
+<style>
+  :root{
+    --bg:#000;
+    --fg:rgba(255,255,255,.92);
+    --muted:rgba(255,255,255,.54);
+    --line:rgba(255,255,255,.14);
+    --line2:rgba(255,255,255,.24);
+
+    --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace;
+    --sans: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+
+    --ctlAlpha:.88;
+    --ctlBg: rgba(0,0,0,var(--ctlAlpha));
+    --pad: 10px;
+    --r: 0px;
+    --topH: 44px;
+    --botH: 44px;
+
+    /* EE: intensifiers */
+    --inv: 0;            /* 0/1 */
+    --blur: 0px;         /* px */
+    --sat: 1;            /* 0..3 */
+    --con: 1;            /* 0..3 */
+    --bri: 1;            /* 0..2 */
+    --hue: 0deg;         /* deg */
+    --sep: 0;            /* 0..1 */
+    --grain: 0;          /* 0..1 */
+    --vign: 0;           /* 0..1 */
+    --chroma: 0px;       /* px */
+    --scan: 0;           /* 0..1 */
+    --strobeHz: 0;       /* 0..12 */
+    --freeze: 0;         /* 0/1 */
+  }
+
+  *{box-sizing:border-box}
+  html,body{height:100%; margin:0; background:var(--bg); color:var(--fg); overflow:hidden}
+  body{font-family:var(--sans); user-select:none}
+
+  /* Stage */
+  #root{position:fixed; inset:0; background:#000}
+  #stage{position:absolute; inset:0; background:#000; overflow:hidden}
+  #video{
+    position:absolute; inset:0;
+    width:100%; height:100%;
+    object-fit:contain;
+    background:#000;
+    filter:
+      blur(var(--blur))
+      saturate(var(--sat))
+      contrast(var(--con))
+      brightness(var(--bri))
+      sepia(var(--sep))
+      hue-rotate(var(--hue));
+    transform: scaleX(calc(1 - (2 * var(--inv))));
+    transform-origin:center;
+  }
+
+  /* overlays never intercept pointer events */
+  #fx, #hud, #scanlines, #grain, #vignette, #strobe {
+    position:absolute; inset:0; pointer-events:none;
+  }
+
+  /* chroma (simple RGB split) */
+  #fx{
+    mix-blend-mode:screen;
+    opacity: .65;
+    filter: blur(0px);
+  }
+  #fx::before, #fx::after{
+    content:"";
+    position:absolute; inset:0;
+    background: #fff;
+    opacity:0;
+  }
+  /* We don't clone video (single-file, no canvas); we simulate chroma with gradients + offset via drop-shadow */
+  #stage.chroma #video{
+    filter:
+      blur(var(--blur))
+      saturate(var(--sat))
+      contrast(var(--con))
+      brightness(var(--bri))
+      sepia(var(--sep))
+      hue-rotate(var(--hue))
+      drop-shadow(calc(var(--chroma)* 1) 0 0 rgba(255,0,0,.35))
+      drop-shadow(calc(var(--chroma)*-1) 0 0 rgba(0,255,255,.28));
+  }
+
+  /* scanlines */
+  #scanlines{
+    opacity: var(--scan);
+    background:
+      repeating-linear-gradient(
+        to bottom,
+        rgba(255,255,255,.06) 0px,
+        rgba(255,255,255,.06) 1px,
+        rgba(0,0,0,0) 2px,
+        rgba(0,0,0,0) 4px
+      );
+    mix-blend-mode: overlay;
+  }
+
+  /* grain */
+  #grain{
+    opacity: var(--grain);
+    background-image:
+      radial-gradient(rgba(255,255,255,.12) 1px, rgba(0,0,0,0) 1px);
+    background-size: 3px 3px;
+    mix-blend-mode: overlay;
+    filter: blur(.2px);
+  }
+
+  /* vignette */
+  #vignette{
+    opacity: var(--vign);
+    background: radial-gradient(ellipse at center, rgba(0,0,0,0) 50%, rgba(0,0,0,.62) 100%);
+  }
+
+  /* strobe */
+  #strobe{
+    background:#fff;
+    opacity:0;
+    mix-blend-mode: difference;
+  }
+
+  /* HUD */
+  .bar{
+    position:absolute; left:0; right:0;
+    height: var(--topH);
+    display:flex; align-items:center;
+    padding: 0 var(--pad);
+    gap: 10px;
+    background: var(--ctlBg);
+    border-bottom:1px solid var(--line);
+    font-family:var(--mono);
+    font-size:12px;
+    letter-spacing:.02em;
+  }
+  #topbar{top:0}
+  #botbar{
+    bottom:0;
+    height: var(--botH);
+    border-top:1px solid var(--line);
+    border-bottom:none;
+    justify-content:space-between;
+  }
+  .left, .right{display:flex; align-items:center; gap:10px}
+  .pill{
+    border:1px solid var(--line2);
+    padding:6px 8px;
+    border-radius:var(--r);
+    color:var(--fg);
+    background:rgba(0,0,0,.22);
+    display:inline-flex;
+    align-items:center;
+    gap:8px;
+    white-space:nowrap;
+  }
+  .muted{color:var(--muted)}
+  button, .btn{
+    border:1px solid var(--line2);
+    background: rgba(0,0,0,.16);
+    color:var(--fg);
+    padding:6px 10px;
+    border-radius:var(--r);
+    font-family:var(--mono);
+    font-size:12px;
+    cursor:pointer;
+  }
+  button:active{transform: translateY(1px)}
+  input[type="range"]{width:140px}
+  input[type="file"]{display:none}
+
+  #hud{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+  }
+  #centerNote{
+    position:absolute;
+    inset:auto;
+    max-width:min(900px, 88vw);
+    padding: 14px 16px;
+    border:1px solid var(--line2);
+    background: rgba(0,0,0,.55);
+    font-family:var(--mono);
+    font-size:12px;
+    line-height:1.35;
+    color:rgba(255,255,255,.86);
+    opacity:.92;
+  }
+  #centerNote b{color:#fff; font-weight:700}
+  #centerNote .row{display:flex; gap:12px; flex-wrap:wrap; margin-top:10px}
+  #centerNote kbd{
+    border:1px solid var(--line2);
+    padding:2px 6px;
+    font-family:var(--mono);
+    font-size:12px;
+    background:rgba(0,0,0,.2);
+  }
+
+  /* slider group in topbar */
+  .grp{display:flex; align-items:center; gap:8px}
+  .lab{color:var(--muted); font-size:11px}
+  .val{min-width:56px; text-align:right; color:rgba(255,255,255,.86)}
+
+  /* hide chrome (NULL-like) */
+  body.null #topbar, body.null #botbar, body.null #centerNote{display:none}
+  body.null #stage{inset:0}
+  body:not(.null) #stage{inset: var(--topH) 0 var(--botH) 0}
+
+  /* ensure stage fills between bars */
+  #stage{top:var(--topH); bottom:var(--botH)}
+</style>
+</head>
+<body>
+<div id="root">
+  <div id="topbar" class="bar">
+    <div class="left">
+      <span class="pill"><span class="muted">KDTV</span><span id="fileName">NO FILE</span></span>
+      <label class="btn" for="filePick">LOAD VIDEO</label>
+      <input id="filePick" type="file" accept="video/*" />
+      <button id="btnPlay">PLAY</button>
+      <button id="btnPause">PAUSE</button>
+      <button id="btnMute">MUTE</button>
+      <button id="btnLoop">LOOP:OFF</button>
+      <button id="btnFit">FIT:CONTAIN</button>
+      <button id="btnFull">FULL</button>
+      <button id="btnNull">NULL</button>
+      <button id="btnReset">RESET FX</button>
+    </div>
+
+    <div class="right">
+      <span class="pill"><span class="muted">TIME</span><span id="timeRead">00:00 / 00:00</span></span>
+      <span class="pill"><span class="muted">VOL</span><span id="volRead">100%</span></span>
+    </div>
+  </div>
+
+  <div id="stage">
+    <video id="video" playsinline></video>
+
+    <div id="fx"></div>
+    <div id="scanlines"></div>
+    <div id="grain"></div>
+    <div id="vignette"></div>
+    <div id="strobe"></div>
+
+    <div id="hud">
+      <div id="centerNote">
+        <div><b>LOAD A VIDEO</b> then use KDTV controls + effect intensifiers.</div>
+        <div class="row">
+          <div><kbd>SPACE</kbd> play/pause</div>
+          <div><kbd>SHIFT</kbd>+<kbd>F</kbd> fullscreen</div>
+          <div><kbd>SHIFT</kbd>+<kbd>N</kbd> NULL (chrome off)</div>
+          <div><kbd>SHIFT</kbd>+<kbd>I</kbd> invert</div>
+          <div><kbd>1..6</kbd> strobe presets</div>
+          <div><kbd>[</kbd>/<kbd>]</kbd> seek</div>
+          <div><kbd>-</kbd>/<kbd>=</kbd> volume</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="botbar" class="bar">
+    <div class="left">
+      <div class="grp">
+        <span class="lab">SEEK</span>
+        <input id="seek" type="range" min="0" max="1000" value="0" step="1"/>
+        <span class="val" id="seekVal">0%</span>
+      </div>
+
+      <div class="grp">
+        <span class="lab">VOL</span>
+        <input id="vol" type="range" min="0" max="100" value="100" step="1"/>
+        <span class="val" id="volVal">100%</span>
+      </div>
+    </div>
+
+    <div class="right">
+      <div class="grp"><span class="lab">BLUR</span><input id="blur" type="range" min="0" max="12" value="0" step="0.1"/><span class="val" id="blurV">0</span></div>
+      <div class="grp"><span class="lab">SAT</span><input id="sat" type="range" min="0" max="3" value="1" step="0.01"/><span class="val" id="satV">1.00</span></div>
+      <div class="grp"><span class="lab">CON</span><input id="con" type="range" min="0" max="3" value="1" step="0.01"/><span class="val" id="conV">1.00</span></div>
+      <div class="grp"><span class="lab">BRI</span><input id="bri" type="range" min="0" max="2" value="1" step="0.01"/><span class="val" id="briV">1.00</span></div>
+      <div class="grp"><span class="lab">HUE</span><input id="hue" type="range" min="-180" max="180" value="0" step="1"/><span class="val" id="hueV">0°</span></div>
+      <div class="grp"><span class="lab">SEP</span><input id="sep" type="range" min="0" max="1" value="0" step="0.01"/><span class="val" id="sepV">0.00</span></div>
+      <div class="grp"><span class="lab">GRAIN</span><input id="grainR" type="range" min="0" max="1" value="0" step="0.01"/><span class="val" id="grainV">0.00</span></div>
+      <div class="grp"><span class="lab">VIGN</span><input id="vignR" type="range" min="0" max="1" value="0" step="0.01"/><span class="val" id="vignV">0.00</span></div>
+      <div class="grp"><span class="lab">CHROMA</span><input id="chroma" type="range" min="0" max="10" value="0" step="0.1"/><span class="val" id="chromaV">0</span></div>
+      <div class="grp"><span class="lab">SCAN</span><input id="scanR" type="range" min="0" max="1" value="0" step="0.01"/><span class="val" id="scanV">0.00</span></div>
+      <div class="grp"><span class="lab">STROBE</span><input id="strobeR" type="range" min="0" max="12" value="0" step="0.1"/><span class="val" id="strobeV">0.0</span></div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* =========================
+   KETADATA KDTV FULLSCREEN
+   EE: local-first, no deps
+   ========================= */
+
+const $ = (id)=>document.getElementById(id);
+const video = $("video");
+const filePick = $("filePick");
+
+const timeRead = $("timeRead");
+const fileName = $("fileName");
+
+const seek = $("seek");
+const seekVal = $("seekVal");
+const vol = $("vol");
+const volVal = $("volVal");
+const volRead = $("volRead");
+
+const btnPlay = $("btnPlay");
+const btnPause = $("btnPause");
+const btnMute = $("btnMute");
+const btnLoop = $("btnLoop");
+const btnFit = $("btnFit");
+const btnFull = $("btnFull");
+const btnNull = $("btnNull");
+const btnReset = $("btnReset");
+
+/* FX ranges */
+const blurR = $("blur"), satR=$("sat"), conR=$("con"), briR=$("bri"), hueR=$("hue"), sepR=$("sep");
+const grainR=$("grainR"), vignR=$("vignR"), chromaR=$("chroma"), scanR=$("scanR"), strobeR=$("strobeR");
+
+const blurV=$("blurV"), satV=$("satV"), conV=$("conV"), briV=$("briV"), hueV=$("hueV"), sepV=$("sepV");
+const grainV=$("grainV"), vignV=$("vignV"), chromaV=$("chromaV"), scanV=$("scanV"), strobeV=$("strobeV");
+
+let objectURL = null;
+let draggingSeek = false;
+let fitMode = "contain"; // contain|cover
+
+function fmtTime(s){
+  if(!isFinite(s) || s<0) s=0;
+  const m = Math.floor(s/60);
+  const r = Math.floor(s%60);
+  return `${String(m).padStart(2,"0")}:${String(r).padStart(2,"0")}`;
+}
+
+function setCSSVar(name, val){
+  document.documentElement.style.setProperty(name, val);
+}
+
+function applyFX(){
+  setCSSVar("--blur", `${parseFloat(blurR.value).toFixed(1)}px`);
+  setCSSVar("--sat", `${parseFloat(satR.value).toFixed(2)}`);
+  setCSSVar("--con", `${parseFloat(conR.value).toFixed(2)}`);
+  setCSSVar("--bri", `${parseFloat(briR.value).toFixed(2)}`);
+  setCSSVar("--hue", `${parseInt(hueR.value,10)}deg`);
+  setCSSVar("--sep", `${parseFloat(sepR.value).toFixed(2)}`);
+  setCSSVar("--grain", `${parseFloat(grainR.value).toFixed(2)}`);
+  setCSSVar("--vign", `${parseFloat(vignR.value).toFixed(2)}`);
+  setCSSVar("--scan", `${parseFloat(scanR.value).toFixed(2)}`);
+  setCSSVar("--chroma", `${parseFloat(chromaR.value).toFixed(1)}px`);
+  setCSSVar("--strobeHz", `${parseFloat(strobeR.value).toFixed(1)}`);
+
+  blurV.textContent = `${parseFloat(blurR.value).toFixed(1)}`;
+  satV.textContent = `${parseFloat(satR.value).toFixed(2)}`;
+  conV.textContent = `${parseFloat(conR.value).toFixed(2)}`;
+  briV.textContent = `${parseFloat(briR.value).toFixed(2)}`;
+  hueV.textContent = `${parseInt(hueR.value,10)}°`;
+  sepV.textContent = `${parseFloat(sepR.value).toFixed(2)}`;
+  grainV.textContent = `${parseFloat(grainR.value).toFixed(2)}`;
+  vignV.textContent = `${parseFloat(vignR.value).toFixed(2)}`;
+  chromaV.textContent = `${parseFloat(chromaR.value).toFixed(1)}`;
+  scanV.textContent = `${parseFloat(scanR.value).toFixed(2)}`;
+  strobeV.textContent = `${parseFloat(strobeR.value).toFixed(1)}`;
+
+  const stage = $("stage");
+  if(parseFloat(chromaR.value) > 0) stage.classList.add("chroma");
+  else stage.classList.remove("chroma");
+}
+
+function resetFX(){
+  blurR.value=0; satR.value=1; conR.value=1; briR.value=1; hueR.value=0; sepR.value=0;
+  grainR.value=0; vignR.value=0; chromaR.value=0; scanR.value=0; strobeR.value=0;
+  setCSSVar("--inv", 0);
+  applyFX();
+}
+
+function setNull(on){
+  document.body.classList.toggle("null", !!on);
+}
+
+function toggleFullscreen(){
+  const el = document.documentElement;
+  if(!document.fullscreenElement) el.requestFullscreen?.();
+  else document.exitFullscreen?.();
+}
+
+function setFit(mode){
+  fitMode = mode;
+  video.style.objectFit = mode;
+  btnFit.textContent = `FIT:${mode.toUpperCase()}`;
+}
+
+/* ===== File load ===== */
+filePick.addEventListener("change", ()=>{
+  const f = filePick.files && filePick.files[0];
+  if(!f) return;
+  if(objectURL) URL.revokeObjectURL(objectURL);
+  objectURL = URL.createObjectURL(f);
+  video.src = objectURL;
+  fileName.textContent = f.name;
+  $("centerNote").style.display = "none";
+  video.load();
+  video.play().catch(()=>{});
+});
+
+/* ===== Playback controls ===== */
+btnPlay.onclick = ()=> video.play().catch(()=>{});
+btnPause.onclick = ()=> video.pause();
+btnMute.onclick = ()=>{
+  video.muted = !video.muted;
+  btnMute.textContent = video.muted ? "UNMUTE" : "MUTE";
+};
+btnLoop.onclick = ()=>{
+  video.loop = !video.loop;
+  btnLoop.textContent = video.loop ? "LOOP:ON" : "LOOP:OFF";
+};
+btnFit.onclick = ()=> setFit(fitMode==="contain" ? "cover" : "contain");
+btnFull.onclick = ()=> toggleFullscreen();
+btnNull.onclick = ()=> setNull(!document.body.classList.contains("null"));
+btnReset.onclick = ()=> resetFX();
+
+/* ===== Seek / volume ===== */
+vol.addEventListener("input", ()=>{
+  const v = parseInt(vol.value,10)/100;
+  video.volume = v;
+  volVal.textContent = `${parseInt(vol.value,10)}%`;
+  volRead.textContent = `${parseInt(vol.value,10)}%`;
+});
+
+seek.addEventListener("input", ()=>{
+  draggingSeek = true;
+  seekVal.textContent = `${Math.round((seek.value/1000)*100)}%`;
+});
+seek.addEventListener("change", ()=>{
+  const d = video.duration || 0;
+  if(d>0){
+    video.currentTime = (seek.value/1000)*d;
+  }
+  draggingSeek = false;
+});
+
+video.addEventListener("timeupdate", ()=>{
+  const d = video.duration || 0;
+  const t = video.currentTime || 0;
+  timeRead.textContent = `${fmtTime(t)} / ${fmtTime(d)}`;
+  if(!draggingSeek && d>0){
+    seek.value = Math.max(0, Math.min(1000, Math.round((t/d)*1000)));
+    seekVal.textContent = `${Math.round((seek.value/1000)*100)}%`;
+  }
+});
+
+/* ===== FX binding ===== */
+[
+  blurR,satR,conR,briR,hueR,sepR,grainR,vignR,chromaR,scanR,strobeR
+].forEach(r => r.addEventListener("input", applyFX));
+
+/* ===== Invert + strobe engine ===== */
+let strobeTimer = null;
+function startStrobe(hz){
+  stopStrobe();
+  if(!hz || hz<=0) return;
+  const ms = Math.max(20, 1000/ hz);
+  const st = $("strobe");
+  let on = false;
+  strobeTimer = setInterval(()=>{
+    on = !on;
+    st.style.opacity = on ? "1" : "0";
+  }, ms);
+}
+function stopStrobe(){
+  if(strobeTimer){ clearInterval(strobeTimer); strobeTimer=null; }
+  $("strobe").style.opacity = "0";
+}
+
+strobeR.addEventListener("input", ()=>{
+  const hz = parseFloat(strobeR.value);
+  startStrobe(hz);
+});
+
+function toggleInvert(){
+  const cur = getComputedStyle(document.documentElement).getPropertyValue("--inv").trim();
+  const next = (cur==="1") ? 0 : 1;
+  setCSSVar("--inv", next);
+}
+
+/* ===== Hotkeys (KD universals) ===== */
+window.addEventListener("keydown", (e)=>{
+  const tag = (e.target && e.target.tagName) ? e.target.tagName.toLowerCase() : "";
+  const typing = (tag==="input" || tag==="textarea" || e.target?.isContentEditable);
+  if(typing && e.key !== "Escape") return;
+
+  // SPACE play/pause
+  if(e.code==="Space"){
+    e.preventDefault();
+    if(video.paused) video.play().catch(()=>{});
+    else video.pause();
+    return;
+  }
+
+  // SHIFT+F fullscreen
+  if(e.shiftKey && (e.key==="F" || e.key==="f")){
+    e.preventDefault();
+    toggleFullscreen();
+    return;
+  }
+
+  // SHIFT+N NULL
+  if(e.shiftKey && (e.key==="N" || e.key==="n")){
+    e.preventDefault();
+    setNull(!document.body.classList.contains("null"));
+    return;
+  }
+
+  // SHIFT+I invert
+  if(e.shiftKey && (e.key==="I" || e.key==="i")){
+    e.preventDefault();
+    toggleInvert();
+    return;
+  }
+
+  // seek [ ]
+  if(e.key==="["){
+    e.preventDefault();
+    video.currentTime = Math.max(0, (video.currentTime||0) - 5);
+    return;
+  }
+  if(e.key==="]"){
+    e.preventDefault();
+    const d = video.duration || 0;
+    video.currentTime = Math.min(d, (video.currentTime||0) + 5);
+    return;
+  }
+
+  // volume - =
+  if(e.key==="-" || e.key==="_"){
+    e.preventDefault();
+    const nv = Math.max(0, Math.round(video.volume*100) - 5);
+    video.volume = nv/100;
+    vol.value = nv;
+    vol.dispatchEvent(new Event("input"));
+    return;
+  }
+  if(e.key==="=" || e.key==="+"){
+    e.preventDefault();
+    const nv = Math.min(100, Math.round(video.volume*100) + 5);
+    video.volume = nv/100;
+    vol.value = nv;
+    vol.dispatchEvent(new Event("input"));
+    return;
+  }
+
+  // strobe presets 1..6
+  if(/^[1-6]$/.test(e.key)){
+    e.preventDefault();
+    const k = parseInt(e.key,10);
+    const preset = [0, 1.5, 3, 6, 9, 12][k-1]; // 1..6
+    strobeR.value = preset;
+    applyFX();
+    startStrobe(preset);
+    return;
+  }
+
+  // Escape exits null (chrome return)
+  if(e.key==="Escape"){
+    setNull(false);
+  }
+});
+
+/* init */
+resetFX();
+setFit("contain");
+video.volume = 1;
+vol.value = 100;
+vol.dispatchEvent(new Event("input"));
+</script>
+
+<!--
+AE: KETADATA KDTV Fullscreen Player (no color on open; intensity-driven)
+EE: local video upload + viewport FX (invert, blur, sat, con, bri, hue, sepia, grain, vignette, chroma, scanlines, strobe)
+WB: single-file; no external deps; overlays pointer-events:none
+FILE_ID: KDTV_FULLSCREEN_PLAYER_V1
+ROOM_ID: BASE
+VERSION: 1.0.0
+UPDATED_AT: 2026-01-07
+CHANGELOG:
+- v1: Fullscreen local upload player with KDTV-style intensifiers + hotkeys + NULL chrome toggle.
+-->
+</body>
+</html>
