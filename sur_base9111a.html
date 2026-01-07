@@ -2306,10 +2306,6 @@ function playerImportBulk(){
   persist(true);
   playerRender();
 }
-
-/* ===== YT ===== */
-/* ===== YT (SIMPLIFIED, SAFE) ===== */
-
 /* ===== YT (MINIMAL, NO SHORTS, SAFE) ===== */
 
 function ytParse(input){
@@ -2318,10 +2314,7 @@ function ytParse(input){
 
   // raw IDs
   if(/^[a-zA-Z0-9_-]{11}$/.test(s)) return { type:"video", id:s };
-
-  // playlist IDs are NOT only PL... (also UU, LL, OL, RD, etc.)
-  // keep it simple: two uppercase letters + payload
-  if(/^[A-Z]{2}[a-zA-Z0-9_-]+$/.test(s)) return { type:"playlist", list:s };
+  if(/^PL[a-zA-Z0-9_-]+$/.test(s)) return { type:"playlist", list:s };
 
   try{
     const u = new URL(s, location.href);
@@ -2332,36 +2325,56 @@ function ytParse(input){
     // HARD BLOCK SHORTS
     if(path.includes("/shorts/")) return { type:"unknown" };
 
-    // youtu.be/<id> or youtu.be/<id>?list=<playlist>
+    // youtu.be/<id>
     if(host.includes("youtu.be")){
       const id = path.split("/").filter(Boolean)[0] || "";
       if(/^[a-zA-Z0-9_-]{11}$/.test(id)) return { type:"video", id };
-
-      const list = sp.get("list");
-      if(list) return { type:"playlist", list };
     }
 
-    if(host.includes("youtube.com") || host.includes("youtube-nocookie.com")){
+    // youtube domains (+ some common variants)
+    const isYT =
+      host.includes("youtube.com") ||
+      host.includes("youtube-nocookie.com") ||
+      host.includes("m.youtube.com") ||
+      host.includes("music.youtube.com");
+
+    if(isYT){
       const v = sp.get("v");
       const list = sp.get("list");
 
-      // video wins if present + valid
-      if(v && /^[a-zA-Z0-9_-]{11}$/.test(v))
-        return { type:"video", id:v };
+      // watch?v=<id>
+      if(v && /^[a-zA-Z0-9_-]{11}$/.test(v)) return { type:"video", id:v };
 
-      // playlist can appear on /watch, /playlist, etc.
-      if(list)
+      // /playlist?list=<id>
+      if((path.includes("/playlist") || path.includes("/watch")) && list && /^PL[a-zA-Z0-9_-]+$/.test(list))
         return { type:"playlist", list };
 
+      // /embed/<id> or /embed/videoseries?list=...
       if(path.includes("/embed/")){
-        const id = path.split("/embed/")[1]?.split(/[?&#]/)[0] || "";
-        if(/^[a-zA-Z0-9_-]{11}$/.test(id))
-          return { type:"video", id };
+        if(path.includes("/embed/videoseries")){
+          if(list && /^PL[a-zA-Z0-9_-]+$/.test(list)) return { type:"playlist", list };
+        }else{
+          const id = path.split("/embed/")[1]?.split(/[?&#]/)[0] || "";
+          if(/^[a-zA-Z0-9_-]{11}$/.test(id)) return { type:"video", id };
+        }
       }
     }
   }catch(e){}
 
   return { type:"unknown" };
+}
+
+function ytEnsureFrameAttrs(){
+  if(!ytFrame) return;
+
+  // These two lines are the key mitigation for Error 153 in many environments.
+  ytFrame.referrerPolicy = "strict-origin-when-cross-origin";
+  ytFrame.setAttribute("referrerpolicy", "strict-origin-when-cross-origin");
+
+  // Make sure embeds can actually play.
+  ytFrame.setAttribute("allow", "autoplay; encrypted-media; picture-in-picture; fullscreen");
+  ytFrame.setAttribute("allowfullscreen", "");
+  ytFrame.setAttribute("loading", "lazy");
 }
 
 function ytBuildEmbedSrc(){
@@ -2376,6 +2389,7 @@ function ytBuildEmbedSrc(){
   p.set("rel","0");
   p.set("modestbranding","1");
 
+  // If we're not on file://, include origin/jsapi (safe).
   const ORIGIN = (location.origin && location.origin !== "null") ? location.origin : "";
   if(ORIGIN){
     p.set("enablejsapi","1");
@@ -2389,7 +2403,7 @@ function ytBuildEmbedSrc(){
   if(parsed.type==="video"){
     if(STATE.ui.yt.loop){
       p.set("loop","1");
-      p.set("playlist", parsed.id); // required for loop on single video
+      p.set("playlist", parsed.id); // YT requires playlist=<id> to loop a single video
     }
     return `${host}/embed/${parsed.id}?${p.toString()}`;
   }
@@ -2404,6 +2418,8 @@ function ytBuildEmbedSrc(){
 }
 
 function applyYTEmbedFromState(silent=false){
+  ytEnsureFrameAttrs();
+
   const src = ytBuildEmbedSrc();
   STATE.ui.yt.lastEmbedSrc = src || "";
 
