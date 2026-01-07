@@ -2310,13 +2310,18 @@ function playerImportBulk(){
 /* ===== YT ===== */
 /* ===== YT (SIMPLIFIED, SAFE) ===== */
 
+/* ===== YT (MINIMAL, NO SHORTS, SAFE) ===== */
+
 function ytParse(input){
   const s = String(input||"").trim();
   if(!s) return { type:"none" };
 
   // raw IDs
   if(/^[a-zA-Z0-9_-]{11}$/.test(s)) return { type:"video", id:s };
-  if(/^PL[a-zA-Z0-9_-]+$/.test(s)) return { type:"playlist", list:s };
+
+  // playlist IDs are NOT only PL... (also UU, LL, OL, RD, etc.)
+  // keep it simple: two uppercase letters + payload
+  if(/^[A-Z]{2}[a-zA-Z0-9_-]+$/.test(s)) return { type:"playlist", list:s };
 
   try{
     const u = new URL(s, location.href);
@@ -2324,26 +2329,34 @@ function ytParse(input){
     const path = u.pathname || "";
     const sp = u.searchParams;
 
+    // HARD BLOCK SHORTS
+    if(path.includes("/shorts/")) return { type:"unknown" };
+
+    // youtu.be/<id> or youtu.be/<id>?list=<playlist>
     if(host.includes("youtu.be")){
       const id = path.split("/").filter(Boolean)[0] || "";
       if(/^[a-zA-Z0-9_-]{11}$/.test(id)) return { type:"video", id };
-      return { type:"unknown" };
+
+      const list = sp.get("list");
+      if(list) return { type:"playlist", list };
     }
 
     if(host.includes("youtube.com") || host.includes("youtube-nocookie.com")){
       const v = sp.get("v");
       const list = sp.get("list");
 
-      // WATCH → VIDEO (ignore list)
-      if(v && /^[a-zA-Z0-9_-]{11}$/.test(v)) return { type:"video", id:v };
+      // video wins if present + valid
+      if(v && /^[a-zA-Z0-9_-]{11}$/.test(v))
+        return { type:"video", id:v };
 
-      // PLAYLIST
-      if(path.includes("/playlist") && list) return { type:"playlist", list };
+      // playlist can appear on /watch, /playlist, etc.
+      if(list)
+        return { type:"playlist", list };
 
-      // EMBED
       if(path.includes("/embed/")){
         const id = path.split("/embed/")[1]?.split(/[?&#]/)[0] || "";
-        if(/^[a-zA-Z0-9_-]{11}$/.test(id)) return { type:"video", id };
+        if(/^[a-zA-Z0-9_-]{11}$/.test(id))
+          return { type:"video", id };
       }
     }
   }catch(e){}
@@ -2363,7 +2376,6 @@ function ytBuildEmbedSrc(){
   p.set("rel","0");
   p.set("modestbranding","1");
 
-  // JS API ONLY when origin is valid (no file:// breakage)
   const ORIGIN = (location.origin && location.origin !== "null") ? location.origin : "";
   if(ORIGIN){
     p.set("enablejsapi","1");
@@ -2376,11 +2388,10 @@ function ytBuildEmbedSrc(){
 
   if(parsed.type==="video"){
     if(STATE.ui.yt.loop){
-      // REQUIRED for single-video loop
       p.set("loop","1");
-      p.set("playlist", parsed.id);
+      p.set("playlist", parsed.id); // required for loop on single video
     }
-    return `${host}/embed/${encodeURIComponent(parsed.id)}?${p.toString()}`;
+    return `${host}/embed/${parsed.id}?${p.toString()}`;
   }
 
   if(parsed.type==="playlist"){
@@ -2392,13 +2403,30 @@ function ytBuildEmbedSrc(){
   return "";
 }
 
+function applyYTEmbedFromState(silent=false){
+  const src = ytBuildEmbedSrc();
+  STATE.ui.yt.lastEmbedSrc = src || "";
+
+  if(!src){
+    ytFrame.removeAttribute("src");
+    if(!silent) toast("YT CLEARED");
+    return;
+  }
+
+  if(ytFrame.getAttribute("src") !== src){
+    ytFrame.setAttribute("src", src);
+  }
+
+  if(!silent) toast("YT APPLIED");
+}
+
 function syncYTUIFromState(){
-  $("ytInput").value      = STATE.ui.yt.input || "";
-  $("ytAutoplay").checked= !!STATE.ui.yt.autoplay;
-  $("ytMute").checked    = !!STATE.ui.yt.mute;
-  $("ytLoop").checked    = !!STATE.ui.yt.loop;
-  $("ytControls").checked= !!STATE.ui.yt.controls;
-  $("ytNoCookie").checked= !!STATE.ui.yt.nocookie;
+  $("ytInput").value       = STATE.ui.yt.input || "";
+  $("ytAutoplay").checked = !!STATE.ui.yt.autoplay;
+  $("ytMute").checked     = !!STATE.ui.yt.mute;
+  $("ytLoop").checked     = !!STATE.ui.yt.loop;
+  $("ytControls").checked = !!STATE.ui.yt.controls;
+  $("ytNoCookie").checked = !!STATE.ui.yt.nocookie;
 }
 
 function renderYT(){
@@ -2407,35 +2435,21 @@ function renderYT(){
 
   if(!openOk){
     panel.classList.remove("open");
-    panel.style.display = "none";
+    panel.style.display="none";
     return;
   }
 
-  panel.style.display = "";
+  panel.style.display="";
   panel.classList.add("open");
 
   applyPanelRect(
     panel,
     STATE.ui.ytRect,
-    {
-      x:(window.innerWidth-390),
-      y:(parseInt(getComputedStyle(document.documentElement)
-         .getPropertyValue("--top"))||44)+560,
-      w:360,h:260
-    }
+    { x: window.innerWidth-390, y: 600, w:360, h:260 }
   );
 
   syncYTUIFromState();
-
-  const src = ytBuildEmbedSrc();
-  if(!src){
-    ytFrame.removeAttribute("src");
-    return;
-  }
-
-  if(ytFrame.getAttribute("src") !== src){
-    ytFrame.setAttribute("src", src);
-  }
+  applyYTEmbedFromState(true);
 }
 
 
