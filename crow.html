@@ -1,0 +1,472 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>KETADATA // CROW</title>
+<style>
+  :root{
+    --bg:#000;
+    --fg:rgba(255,255,255,0.88);
+    --muted:rgba(255,255,255,0.52);
+    --line:rgba(255,255,255,0.14);
+    --line2:rgba(255,255,255,0.24);
+    --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace;
+    --fs:12px;
+
+    --ctlH:34px;
+    --topH:34px;
+
+    --int:0.55;        /* 0..1 */
+    --light:3;         /* 1..6 */
+    --motion:1;
+    --invert:0;
+    --null:0;
+
+    --ctlBG:rgba(0,0,0,0.72);
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%; margin:0}
+  body{
+    background:var(--bg);
+    color:var(--fg);
+    font-family:var(--mono);
+    font-size:var(--fs);
+    overflow:hidden;
+  }
+  #root{position:fixed; inset:0}
+  canvas{position:absolute; inset:0; width:100%; height:100%; display:block}
+
+  /* chrome */
+  .topbar, .botbar{
+    position:absolute; left:0; right:0;
+    display:flex; align-items:center; gap:10px;
+    padding:0 10px;
+    border-bottom:1px solid var(--line);
+    background:var(--ctlBG);
+    backdrop-filter: blur(6px);
+    z-index:5;
+  }
+  .topbar{top:0; height:var(--topH)}
+  .botbar{
+    bottom:0; height:var(--ctlH);
+    border-top:1px solid var(--line);
+    border-bottom:none;
+  }
+  .topbar .spacer, .botbar .spacer{flex:1}
+  .tag{opacity:0.82}
+  .muted{opacity:0.58}
+  .btn{
+    appearance:none; border:1px solid var(--line2);
+    background:transparent; color:var(--fg);
+    font:inherit; font-size:var(--fs);
+    padding:4px 8px; border-radius:0;
+    cursor:pointer;
+  }
+  .btn:active{transform:translateY(1px)}
+  input[type="range"]{
+    width:200px; accent-color:#fff;
+  }
+  .pill{
+    border:1px solid var(--line2);
+    padding:2px 8px;
+    opacity:0.85;
+  }
+
+  /* NULL */
+  body.null .topbar,
+  body.null .botbar{display:none}
+
+  /* invert */
+  body.invert{filter:invert(1)}
+
+  /* hint line */
+  #hint{
+    position:absolute; left:10px; bottom:calc(var(--ctlH) + 10px);
+    z-index:5; opacity:0.45;
+    user-select:none; pointer-events:none;
+  }
+  body.null #hint{bottom:10px}
+
+  /* keep all text same size */
+  .topbar *, .botbar *, #hint{font-size:var(--fs)}
+</style>
+</head>
+<body>
+<div id="root">
+  <canvas id="cv"></canvas>
+
+  <div class="topbar" id="topbar">
+    <span class="tag">KETADATA</span>
+    <span class="muted">///</span>
+    <span class="tag">CROW</span>
+    <span class="muted" id="sig"></span>
+    <span class="spacer"></span>
+    <span class="pill">INT <span id="intLabel"></span></span>
+    <span class="pill">LIGHT <span id="lightLabel"></span></span>
+    <span class="pill">MOTION <span id="motionLabel"></span></span>
+  </div>
+
+  <div id="hint">SHIFT+I invert • SHIFT+N NULL • 1–6 lights • SPACE motion • drag = wind</div>
+
+  <div class="botbar" id="botbar">
+    <button class="btn" id="invertBtn">INVERT</button>
+    <button class="btn" id="nullBtn">NULL</button>
+    <button class="btn" id="motionBtn">MOTION</button>
+    <span class="muted">|</span>
+    <span class="muted">INT</span>
+    <input id="intRange" type="range" min="0" max="1000" value="550"/>
+    <span class="spacer"></span>
+    <span class="muted">CROW ENGINE / local-first</span>
+  </div>
+</div>
+
+<script>
+(() => {
+  const FILE_ID = "KETA_CROW_" + "2026-01-07" + "_" + (Math.random().toString(16).slice(2,10)).toUpperCase();
+  const LS_KEY = "KETADATA::CROW::" + FILE_ID;
+
+  const $ = (id)=>document.getElementById(id);
+  const cv = $("cv");
+  const ctx = cv.getContext("2d", { alpha:false });
+
+  const STATE = {
+    fileId: FILE_ID,
+    ui: {
+      int: 0.55,
+      light: 3,
+      motion: true,
+      invert: false,
+      null: false
+    },
+    wind: { x: 0, y: 0 },
+    t: 0
+  };
+
+  function clamp01(x){ return Math.max(0, Math.min(1, x)); }
+
+  function load(){
+    try{
+      const raw = localStorage.getItem(LS_KEY);
+      if(!raw) return;
+      const s = JSON.parse(raw);
+      if(s && s.ui){
+        STATE.ui.int = clamp01(+s.ui.int ?? STATE.ui.int);
+        STATE.ui.light = Math.max(1, Math.min(6, +s.ui.light ?? STATE.ui.light));
+        STATE.ui.motion = !!s.ui.motion;
+        STATE.ui.invert = !!s.ui.invert;
+        STATE.ui.null = !!s.ui.null;
+      }
+    }catch(e){}
+  }
+  function save(){
+    try{
+      localStorage.setItem(LS_KEY, JSON.stringify({
+        fileId: STATE.fileId,
+        ui: STATE.ui
+      }));
+    }catch(e){}
+  }
+
+  function resize(){
+    const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+    const w = Math.floor(window.innerWidth * dpr);
+    const h = Math.floor(window.innerHeight * dpr);
+    cv.width = w; cv.height = h;
+    ctx.setTransform(1,0,0,1,0,0);
+    ctx.scale(1,1);
+  }
+
+  function sig(){
+    const i = Math.round(STATE.ui.int * 1000).toString().padStart(4,"0");
+    return `FILE ${STATE.fileId} / INT ${i} / L${STATE.ui.light} / ${STATE.ui.motion?"M1":"M0"} / ${STATE.ui.null?"NULL":"BASE"}`;
+  }
+
+  function renderUI(){
+    document.body.classList.toggle("invert", !!STATE.ui.invert);
+    document.body.classList.toggle("null", !!STATE.ui.null);
+    document.documentElement.style.setProperty("--int", String(STATE.ui.int));
+    document.documentElement.style.setProperty("--light", String(STATE.ui.light));
+    document.documentElement.style.setProperty("--motion", STATE.ui.motion ? "1":"0");
+    document.documentElement.style.setProperty("--invert", STATE.ui.invert ? "1":"0");
+    document.documentElement.style.setProperty("--null", STATE.ui.null ? "1":"0");
+
+    $("sig").textContent = sig();
+    $("intLabel").textContent = String(Math.round(STATE.ui.int*1000)).padStart(4,"0");
+    $("lightLabel").textContent = String(STATE.ui.light);
+    $("motionLabel").textContent = STATE.ui.motion ? "ON":"OFF";
+
+    $("intRange").value = String(Math.round(STATE.ui.int*1000));
+  }
+
+  // --- drawing ---
+  function rndHash(n){
+    // deterministic pseudo-random 0..1
+    const x = Math.sin(n*999.123 + 0.12345) * 43758.5453;
+    return x - Math.floor(x);
+  }
+
+  function featherNoise(x,y,t){
+    // light-weight procedural noise (not Perlin; good enough)
+    const a = Math.sin((x*0.010 + y*0.006) + t*0.9);
+    const b = Math.cos((x*0.004 - y*0.008) - t*0.7);
+    const c = Math.sin((x*0.018 + y*0.014) - t*0.3);
+    return (a + b + c) / 3;
+  }
+
+  function drawCrow(w,h,t){
+    const int = STATE.ui.int;
+    const light = STATE.ui.light;
+
+    // mapping: light increases "signal" and edge bite
+    const edge = 0.22 + (light-1) * 0.08;      // 0.22..0.62
+    const glow = 0.00 + (light-1) * 0.10;      // 0..0.50
+    const grit = 0.08 + (1-int) * 0.25;        // more grit when low intensity
+    const bite = 0.35 + int * 0.65;            // high intensity = sharper
+
+    // background
+    ctx.fillStyle = "#000";
+    ctx.fillRect(0,0,w,h);
+
+    // center
+    const cx = w*0.52;
+    const cy = h*0.56;
+
+    // crow scale
+    const s = Math.min(w,h) * (0.52 + int*0.18);
+
+    // wind from pointer drag
+    const wx = STATE.wind.x * 0.9;
+    const wy = STATE.wind.y * 0.9;
+
+    // wing pulse
+    const wing = (STATE.ui.motion ? (Math.sin(t*1.2)*0.5+0.5) : 0.35);
+    const wingLift = (wing*2-1) * 0.10;
+
+    // draw silhouette with a path
+    ctx.save();
+    ctx.translate(cx + wx*s*0.08, cy + wy*s*0.06);
+    ctx.scale(s, s);
+    ctx.rotate(wx*0.15);
+
+    // soft field behind crow
+    if(glow>0){
+      const g = ctx.createRadialGradient(0,0,0.05, 0,0,1.2);
+      g.addColorStop(0, `rgba(255,255,255,${0.08*glow})`);
+      g.addColorStop(1, "rgba(255,255,255,0)");
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(0,0,1.2,0,Math.PI*2);
+      ctx.fill();
+    }
+
+    // main body path
+    ctx.beginPath();
+    // tail
+    ctx.moveTo(-0.25, 0.25);
+    ctx.quadraticCurveTo(-0.55, 0.30, -0.70, 0.10);
+    ctx.quadraticCurveTo(-0.52, 0.18, -0.40, 0.05);
+    // belly
+    ctx.quadraticCurveTo(-0.25, -0.12, 0.00, -0.10);
+    // chest
+    ctx.quadraticCurveTo(0.18, -0.08, 0.26, -0.02);
+    // neck/head
+    ctx.quadraticCurveTo(0.32, -0.22, 0.15, -0.35);
+    ctx.quadraticCurveTo(0.32, -0.42, 0.44, -0.30);
+    // beak
+    ctx.quadraticCurveTo(0.62, -0.26, 0.74, -0.28);
+    ctx.quadraticCurveTo(0.62, -0.20, 0.48, -0.18);
+    // head back
+    ctx.quadraticCurveTo(0.42, -0.08, 0.32, -0.02);
+    // back/wing root
+    ctx.quadraticCurveTo(0.10, -0.08, -0.05, 0.00);
+    // wing top
+    const wTop = -0.10 - wingLift;
+    ctx.quadraticCurveTo(-0.05, wTop, -0.25, -0.25 - wingLift*0.8);
+    ctx.quadraticCurveTo(-0.45, -0.55 - wingLift, -0.20, -0.62 - wingLift*0.7);
+    ctx.quadraticCurveTo(0.05, -0.70 - wingLift*0.4, 0.10, -0.45 - wingLift*0.5);
+    // return to body
+    ctx.quadraticCurveTo(0.02, -0.25, 0.00, -0.10);
+    ctx.quadraticCurveTo(-0.10, 0.05, -0.25, 0.25);
+    ctx.closePath();
+
+    ctx.fillStyle = "#000";
+    ctx.fill();
+
+    // edge bite (white outline)
+    ctx.lineWidth = 0.006 * (0.8 + bite*0.8);
+    ctx.strokeStyle = `rgba(255,255,255,${edge * (0.35 + int*0.65)})`;
+    ctx.stroke();
+
+    // eye (negative space + glint)
+    ctx.save();
+    ctx.translate(0.44, -0.28);
+    ctx.rotate(-0.1);
+    ctx.beginPath();
+    ctx.ellipse(0,0,0.055,0.040,0,0,Math.PI*2);
+    ctx.fillStyle = "rgba(255,255,255,0.0)";
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.ellipse(0.015,-0.005,0.020,0.016,0,0,Math.PI*2);
+    ctx.strokeStyle = `rgba(255,255,255,${0.25 + int*0.55})`;
+    ctx.lineWidth = 0.004;
+    ctx.stroke();
+    ctx.restore();
+
+    // feather field inside silhouette (cheap hatch)
+    const hatchN = Math.floor(120 + int*240);
+    ctx.save();
+    ctx.clip();
+    for(let i=0;i<hatchN;i++){
+      const px = (rndHash(i*3.1)-0.5)*1.6;
+      const py = (rndHash(i*7.7)-0.5)*1.6;
+      const n = featherNoise(px*900, py*900, t*0.6);
+      const a = (0.08 + 0.18*int) * (0.5 + 0.5*n);
+      const len = 0.08 + rndHash(i*11.3)*0.18;
+      const ang = (rndHash(i*5.9)-0.5)*1.4 + wx*0.35;
+
+      ctx.beginPath();
+      ctx.moveTo(px, py);
+      ctx.lineTo(px + Math.cos(ang)*len, py + Math.sin(ang)*len);
+      ctx.strokeStyle = `rgba(255,255,255,${a})`;
+      ctx.lineWidth = 0.0022;
+      ctx.stroke();
+    }
+
+    // wing shimmer lines
+    const shimmerN = Math.floor(28 + light*10);
+    for(let i=0;i<shimmerN;i++){
+      const u = i/(shimmerN-1);
+      const y = -0.58 + u*0.55;
+      const x0 = -0.28 + u*0.22;
+      const x1 = 0.10 + u*0.12;
+      const wob = (STATE.ui.motion ? Math.sin(t*2.2 + u*6.0)*0.02 : 0);
+      const a = (0.06 + int*0.18) * (0.3 + u) * (0.5 + 0.5*Math.sin(t*1.1 + u*4.0));
+
+      ctx.beginPath();
+      ctx.moveTo(x0, y + wob);
+      ctx.quadraticCurveTo(-0.10, y - 0.05 + wob*0.8, x1, y + 0.02 + wob*0.4);
+      ctx.strokeStyle = `rgba(255,255,255,${a})`;
+      ctx.lineWidth = 0.0025;
+      ctx.stroke();
+    }
+
+    // grit / film noise overlay
+    const grain = Math.floor((w*h) / 70000);
+    ctx.restore(); // clip restore
+
+    ctx.restore(); // crow transform restore
+
+    // small orbiting motes (outside silhouette)
+    const motes = Math.floor(30 + light*12 + int*25);
+    for(let i=0;i<motes;i++){
+      const r = (0.08 + rndHash(i*2.2))*Math.min(w,h)*0.55;
+      const ang = (rndHash(i*9.1)*Math.PI*2) + (STATE.ui.motion ? t*0.10 : 0);
+      const px = cx + Math.cos(ang)*r + wx*s*0.04;
+      const py = cy + Math.sin(ang)*r*0.72 + wy*s*0.03;
+
+      const n = featherNoise(px,py,t*0.5);
+      const a = (0.02 + 0.10*int) * (0.5 + 0.5*n) * (0.45 + light*0.12);
+      const rr = 1 + rndHash(i*6.6)*2.2;
+
+      ctx.beginPath();
+      ctx.arc(px,py, rr, 0, Math.PI*2);
+      ctx.fillStyle = `rgba(255,255,255,${a})`;
+      ctx.fill();
+    }
+
+    // grit
+    for(let i=0;i<grain;i++){
+      const px = rndHash(i*12.2)*w;
+      const py = rndHash(i*31.7)*h;
+      const a = grit * (0.08 + rndHash(i*44.1)*0.22);
+      ctx.fillStyle = `rgba(255,255,255,${a})`;
+      ctx.fillRect(px,py,1,1);
+    }
+  }
+
+  function tick(ts){
+    const w = cv.width, h = cv.height;
+    const dt = Math.min(0.05, (ts - (STATE._lastTs||ts)) / 1000);
+    STATE._lastTs = ts;
+
+    if(STATE.ui.motion) STATE.t += dt;
+
+    drawCrow(w,h,STATE.t);
+    requestAnimationFrame(tick);
+  }
+
+  // --- controls ---
+  function setLight(n){
+    STATE.ui.light = Math.max(1, Math.min(6, n|0));
+    // map light to a gentle intensity suggestion without forcing it
+    // (keeps operator sovereignty)
+    save(); renderUI();
+  }
+
+  function toggleInvert(){ STATE.ui.invert = !STATE.ui.invert; save(); renderUI(); }
+  function toggleNull(){ STATE.ui.null = !STATE.ui.null; save(); renderUI(); }
+  function toggleMotion(){ STATE.ui.motion = !STATE.ui.motion; save(); renderUI(); }
+
+  $("invertBtn").onclick = toggleInvert;
+  $("nullBtn").onclick = toggleNull;
+  $("motionBtn").onclick = toggleMotion;
+
+  $("intRange").addEventListener("input", (e)=>{
+    STATE.ui.int = clamp01((+e.target.value)/1000);
+    save(); renderUI();
+  });
+
+  // wind: drag sets transient wind (not saved)
+  let dragging=false, lastX=0, lastY=0;
+  window.addEventListener("pointerdown",(e)=>{ dragging=true; lastX=e.clientX; lastY=e.clientY; });
+  window.addEventListener("pointerup",()=>{ dragging=false; STATE.wind.x*=0.2; STATE.wind.y*=0.2; });
+  window.addEventListener("pointermove",(e)=>{
+    if(!dragging) return;
+    const dx = e.clientX - lastX;
+    const dy = e.clientY - lastY;
+    lastX = e.clientX; lastY = e.clientY;
+    STATE.wind.x = Math.max(-1, Math.min(1, STATE.wind.x + dx/220));
+    STATE.wind.y = Math.max(-1, Math.min(1, STATE.wind.y + dy/220));
+  });
+
+  window.addEventListener("keydown",(e)=>{
+    if(e.key === " "){
+      e.preventDefault();
+      toggleMotion();
+      return;
+    }
+    if(e.shiftKey && (e.key === "I" || e.key === "i")){ e.preventDefault(); toggleInvert(); return; }
+    if(e.shiftKey && (e.key === "N" || e.key === "n")){ e.preventDefault(); toggleNull(); return; }
+
+    // lights 1-6
+    const k = e.key;
+    if(k>="1" && k<="6"){ setLight(parseInt(k,10)); return; }
+  });
+
+  window.addEventListener("resize", ()=>{ resize(); });
+
+  // boot
+  resize();
+  load();
+  renderUI();
+  requestAnimationFrame(tick);
+
+})();
+</script>
+
+<!--
+AE: brutal-minimal crow silhouette + perception field (monochrome)
+EE: local-first state (int/light/motion/invert/null) + hotkeys (SHIFT+I, SHIFT+N, 1–6, SPACE) + drag wind (transient)
+WB: single-canvas render loop + minimal chrome bindings
+
+FILE_ID: (runtime) KETA_CROW_2026-01-07_[RANDOM]
+ROOM_ID: WORLD
+VERSION: 1
+UPDATED_AT: 2026-01-07
+CHANGELOG:
+- v1: crow surface with intensity + lights + NULL + invert + motion, local-first state key isolated per file
+-->
+</body>
+</html>
