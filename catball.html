@@ -1,0 +1,351 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>KETA_MONO // GLASS TENNIS BALL (CATFACE)</title>
+<style>
+:root{
+  --bg:#000;
+
+  /* glass */
+  --glassA:.22;
+  --rimA:.36;
+  --specA:.92;
+
+  /* seam + etch */
+  --seamA:.98;
+  --seamW:64;     /* main seam band */
+  --seamW2:46;    /* secondary seam band */
+  --etchA:.70;    /* cat etching */
+  --etchW:2.8;
+
+  /* motion */
+  --bounceT:1100;  /* ms */
+  --farScale:.10;  /* smallest */
+}
+
+*{box-sizing:border-box}
+html,body{height:100%; margin:0}
+body{
+  background:var(--bg);
+  overflow:hidden;
+  user-select:none;
+  font:10px/1.3 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace;
+  color: rgba(255,255,255,.45);
+}
+
+#c{position:fixed; inset:0; width:100%; height:100%}
+#hud{
+  position:fixed; left:12px; top:12px;
+  padding:6px 8px;
+  border:1px solid rgba(255,255,255,.10);
+  background:rgba(0,0,0,.25);
+  backdrop-filter: blur(8px);
+  opacity:.80;
+  pointer-events:none;
+}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="hud">KETA_MONO // GLASS TENNIS BALL (CATFACE) · CLICK/SPACE BOUNCE · MOUSE ORBIT</div>
+
+<script>
+const canvas = document.getElementById("c");
+const ctx = canvas.getContext("2d", {alpha:true});
+let DPR=1, W=0, H=0;
+
+function resize(){
+  DPR = Math.max(1, Math.min(2, window.devicePixelRatio||1));
+  W = Math.floor(innerWidth*DPR);
+  H = Math.floor(innerHeight*DPR);
+  canvas.width=W; canvas.height=H;
+}
+addEventListener("resize", resize); resize();
+
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const lerp=(a,b,t)=>a+(b-a)*t;
+const easeInOut=(t)=>t<.5 ? 4*t*t*t : 1 - Math.pow(-2*t+2,3)/2;
+const pingpong=(t)=>1 - Math.abs(1 - 2*t);
+
+const S = {
+  mx:0, my:0,
+  ox:0, oy:0,
+  bouncing:false,
+  bStart:0,
+  bProg:0
+};
+
+addEventListener("mousemove",(e)=>{
+  S.mx = (e.clientX/innerWidth)*2-1;
+  S.my = (e.clientY/innerHeight)*2-1;
+});
+
+function fire(){
+  if(S.bouncing) return;
+  S.bouncing=true;
+  S.bStart=performance.now();
+  S.bProg=0;
+}
+addEventListener("click", fire);
+addEventListener("keydown",(e)=>{
+  if(e.code==="Space"){ e.preventDefault(); fire(); }
+},{passive:false});
+
+/* rotation helpers */
+function rotY(p,a){ const ca=Math.cos(a), sa=Math.sin(a); return {x:p.x*ca + p.z*sa, y:p.y, z:-p.x*sa + p.z*ca}; }
+function rotX(p,a){ const ca=Math.cos(a), sa=Math.sin(a); return {x:p.x, y:p.y*ca - p.z*sa, z:p.y*sa + p.z*ca}; }
+function project(p,R){
+  const k = 1/(1 - p.z*0.55);
+  return { x:p.x*R*k, y:p.y*R*k, k, z:p.z };
+}
+
+function strokeOnSphere(f, t0, t1, steps, cx, cy, R, ox, oy, w, a, gateZ=-0.10){
+  ctx.beginPath();
+  let live=false;
+  for(let i=0;i<=steps;i++){
+    const t = lerp(t0,t1,i/steps);
+    const q = f(t);
+    const x=q.x, y=q.y;
+    const z = (q.z!==undefined) ? q.z : Math.sqrt(Math.max(0, 1 - x*x - y*y)); // front hemi
+    let p={x,y,z};
+
+    p=rotY(p,ox);
+    p=rotX(p,oy);
+
+    if(p.z < gateZ){ live=false; continue; }
+
+    const pr=project(p,R);
+    const sx=cx+pr.x, sy=cy+pr.y;
+
+    if(!live){ ctx.moveTo(sx,sy); live=true; }
+    else ctx.lineTo(sx,sy);
+  }
+  ctx.strokeStyle = `rgba(255,255,255,${a})`;
+  ctx.lineWidth = w;
+  ctx.lineCap="round";
+  ctx.lineJoin="round";
+  ctx.stroke();
+}
+
+function bounceParams(u){
+  // u 0..1 (out and back). Depth is scale-only (eye axis).
+  const z = easeInOut(pingpong(u)); // 0 near, 1 far, 0 near
+  const impact = Math.exp(-Math.pow((u-0.52)/0.055,2)); // at far point
+  const squash = 1 + 0.20*impact;
+  const stretch = 1 - 0.15*impact;
+  return {z, impact, squash, stretch};
+}
+
+function drawTennisBall(cx, cy, R, ox, oy){
+  const glassA = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--glassA")) || 0.22;
+  const rimA   = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--rimA")) || 0.36;
+  const specA  = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--specA")) || 0.92;
+
+  const seamA  = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--seamA")) || 0.98;
+  const seamW  = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--seamW")) || 64;
+  const seamW2 = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--seamW2")) || 46;
+
+  const etchA  = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--etchA")) || 0.70;
+  const etchW  = (parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--etchW")) || 2.8) * DPR;
+
+  // ball clip
+  ctx.save();
+  ctx.beginPath(); ctx.arc(cx,cy,R,0,Math.PI*2); ctx.clip();
+
+  // black core
+  ctx.fillStyle = "rgba(0,0,0,1)";
+  ctx.beginPath(); ctx.arc(cx,cy,R,0,Math.PI*2); ctx.fill();
+
+  // glass volume: geometric gradients (no texture)
+  const hx = cx + R*(0.26 + ox*0.22);
+  const hy = cy - R*(0.32 + oy*0.18);
+  const g1 = ctx.createRadialGradient(hx,hy,R*0.06, cx,cy,R*1.15);
+  g1.addColorStop(0, `rgba(255,255,255,${glassA})`);
+  g1.addColorStop(0.36, `rgba(255,255,255,${glassA*0.55})`);
+  g1.addColorStop(0.78, `rgba(255,255,255,${glassA*0.16})`);
+  g1.addColorStop(1, "rgba(0,0,0,0)");
+  ctx.fillStyle=g1;
+  ctx.beginPath(); ctx.arc(cx,cy,R,0,Math.PI*2); ctx.fill();
+
+  const g2 = ctx.createRadialGradient(cx-R*0.22, cy+R*0.20, 0, cx, cy, R*1.1);
+  g2.addColorStop(0, "rgba(0,0,0,0.22)");
+  g2.addColorStop(0.55, "rgba(0,0,0,0.10)");
+  g2.addColorStop(1, "rgba(0,0,0,0)");
+  ctx.fillStyle=g2;
+  ctx.beginPath(); ctx.arc(cx,cy,R,0,Math.PI*2); ctx.fill();
+
+  // ===== TENNIS SEAMS (PRIMARY IDENTITY) =====
+  // Two asymmetrical "S" bands — width + curvature imply 3D.
+  const seamL = (t)=>{
+    const u=t;
+    const y = lerp(-0.98, 0.98, u);
+    const x = -0.34 + 0.22*Math.sin(u*Math.PI*2.0) + 0.05*Math.sin(u*Math.PI*5.0);
+    return {x,y};
+  };
+  const seamR = (t)=>{
+    const u=t;
+    const y = lerp(-0.98, 0.98, u);
+    const x =  0.34 - 0.22*Math.sin(u*Math.PI*2.0 + 0.62) + 0.05*Math.sin(u*Math.PI*5.0 + 0.90);
+    return {x,y};
+  };
+
+  // draw seam bands first (opaque, decisive)
+  ctx.globalCompositeOperation="source-over";
+  strokeOnSphere(seamL, 0, 1, 240, cx,cy,R, ox,oy, seamW*DPR,  seamA, -0.14);
+  strokeOnSphere(seamR, 0, 1, 240, cx,cy,R, ox,oy, seamW2*DPR, seamA, -0.14);
+
+  // inner seam edge lines (makes it "intricate" without turning noisy)
+  ctx.globalCompositeOperation="source-over";
+  strokeOnSphere(seamL, 0, 1, 240, cx,cy,R, ox,oy, 3.0*DPR, 0.30, -0.10);
+  strokeOnSphere(seamR, 0, 1, 240, cx,cy,R, ox,oy, 3.0*DPR, 0.30, -0.10);
+
+  // ===== CATFACE ETCHING (SUBORDINATE, INSIDE THE BALL) =====
+  // etched lines live "under" the glass: lighter alpha, thinner, and more depth-gated.
+  ctx.globalCompositeOperation="screen";
+
+  const eye = (side)=>(t)=>{
+    const a=t*Math.PI*2;
+    const ex=side*0.22, ey=-0.10;
+    const rx=0.12, ry=0.085;
+    const pinch = (1 - 0.28*Math.cos(a*2)); // almond pinched ends
+    return { x: ex + Math.cos(a)*rx*pinch, y: ey + Math.sin(a)*ry };
+  };
+  const pupil = (side)=>(t)=>{
+    const a=t*Math.PI*2;
+    const ex=side*0.22, ey=-0.10;
+    const rx=0.022, ry=0.070;
+    return { x: ex + Math.cos(a)*rx, y: ey + Math.sin(a)*ry };
+  };
+  const nose = (t)=>{
+    // small inverted triangle loop
+    const pts=[{x:-0.026,y:0.14},{x:0.026,y:0.14},{x:0,y:0.19},{x:-0.026,y:0.14}];
+    const s = t*(pts.length-1);
+    const i = Math.floor(s);
+    const u = s-i;
+    const a=pts[i], b=pts[i+1];
+    return { x: lerp(a.x,b.x,u), y: lerp(a.y,b.y,u) };
+  };
+  const mouth = (t)=>{
+    const u=t;
+    const x = lerp(-0.16, 0.16, u);
+    const y = 0.205 + 0.050*Math.sin(u*Math.PI*2) * Math.exp(-Math.pow((u-0.5)/0.38,2));
+    return {x,y};
+  };
+  const whisk = (side, row)=>(t)=>{
+    const u=t;
+    const bx=side*0.16, by=0.16 + row*0.05;
+    const x = bx + side*u*0.52;
+    const y = by - 0.018*Math.sin(u*Math.PI*1.1 + row*0.7);
+    return {x,y};
+  };
+
+  strokeOnSphere(eye(-1), 0,1, 160, cx,cy,R, ox*0.90,oy*0.90, etchW*1.00, etchA*0.90, -0.02);
+  strokeOnSphere(eye( 1), 0,1, 160, cx,cy,R, ox*0.90,oy*0.90, etchW*1.00, etchA*0.90, -0.02);
+  strokeOnSphere(pupil(-1),0,1, 140, cx,cy,R, ox*0.90,oy*0.90, etchW*0.90, etchA*0.45, 0.02);
+  strokeOnSphere(pupil( 1),0,1, 140, cx,cy,R, ox*0.90,oy*0.90, etchW*0.90, etchA*0.45, 0.02);
+  strokeOnSphere(nose, 0,1, 120, cx,cy,R, ox,oy, etchW*1.10, etchA*0.80, 0.00);
+  strokeOnSphere(mouth,0,1, 180, cx,cy,R, ox,oy, etchW*0.95, etchA*0.55, -0.02);
+
+  for(let r=-1;r<=1;r++){
+    strokeOnSphere(whisk(-1,r),0,1, 120, cx,cy,R, ox,oy, etchW*0.70, etchA*0.40, 0.06);
+    strokeOnSphere(whisk( 1,r),0,1, 120, cx,cy,R, ox,oy, etchW*0.70, etchA*0.40, 0.06);
+  }
+
+  ctx.globalCompositeOperation="source-over";
+
+  // rim cue
+  ctx.strokeStyle = `rgba(255,255,255,${rimA})`;
+  ctx.lineWidth = 2.4*DPR;
+  ctx.beginPath(); ctx.arc(cx,cy,R-1.0*DPR,0,Math.PI*2); ctx.stroke();
+
+  // specular streaks (glassy, geometry-only)
+  ctx.globalCompositeOperation="screen";
+  ctx.strokeStyle = `rgba(255,255,255,${specA})`;
+  ctx.lineWidth = 2.0*DPR;
+  ctx.beginPath();
+  ctx.ellipse(cx + R*(0.18 + ox*0.18), cy - R*(0.24 + oy*0.10), R*0.22, R*0.52, -0.55, -1.05, 1.05);
+  ctx.stroke();
+
+  ctx.strokeStyle = `rgba(255,255,255,${specA*0.38})`;
+  ctx.lineWidth = 1.4*DPR;
+  ctx.beginPath();
+  ctx.ellipse(cx - R*(0.28 - ox*0.10), cy - R*(0.04 + oy*0.06), R*0.10, R*0.24, 0.25, -1.10, 1.10);
+  ctx.stroke();
+
+  ctx.restore();
+  ctx.globalCompositeOperation="source-over";
+}
+
+function frame(now){
+  // orbit is slow + strict (geometry-first)
+  const tox = S.mx*0.55;
+  const toy = S.my*0.38;
+  S.ox = lerp(S.ox, tox, 0.08);
+  S.oy = lerp(S.oy, toy, 0.08);
+
+  // bounce
+  if(S.bouncing){
+    const T = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--bounceT")) || 1100;
+    S.bProg = clamp((now - S.bStart)/T, 0, 1);
+    if(S.bProg>=1){ S.bouncing=false; S.bProg=0; }
+  }
+  const { z, squash, stretch } = bounceParams(S.bouncing ? S.bProg : 0);
+
+  // Z-axis only: scale to distance
+  const farScale = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--farScale")) || 0.10;
+  const s = lerp(1.0, farScale, z);
+
+  const sx = s * squash;
+  const sy = s * stretch;
+
+  // clear
+  ctx.clearRect(0,0,W,H);
+
+  // subtle field (no texture)
+  ctx.fillStyle = "rgba(0,0,0,0.18)";
+  ctx.fillRect(0,0,W,H);
+
+  // center
+  const cx = W/2, cy = H/2;
+  const R0 = Math.min(W,H)*0.24;
+
+  // apply centered scaling (eye axis)
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.scale(sx, sy);
+  ctx.translate(-cx, -cy);
+
+  drawTennisBall(cx, cy, R0, S.ox, S.oy);
+
+  ctx.restore();
+
+  // frame tick
+  ctx.strokeStyle = "rgba(255,255,255,0.06)";
+  ctx.lineWidth = 1*DPR;
+  ctx.strokeRect(10*DPR,10*DPR, W-20*DPR, H-20*DPR);
+
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+
+<!--
+AE: KETA_MONO_GLASS_TENNIS_CATFACE
+EE: glass-tennisball + seam-band-topology + catface-etch + z-axis-bounce
+WB: single-file_html
+
+FILE_ID: KETA-GLASS-TENNIS-CATFACE-001
+ROOM_ID: BASE
+VERSION: v1.0
+UPDATED_AT: 2026-01-08
+CHANGELOG:
+- Tennis ball identity is the seam bands (primary)
+- Glass volume cues (rim + specular geometry) without texture noise
+- Catface etching is subordinate (thin, depth-gated) so it reads as “inside”
+- Bounce is pure Z-axis (scale only) with impact squash/stretch
+- Mouse orbit modulates projection for 3D read
+-->
+</body>
+</html>
