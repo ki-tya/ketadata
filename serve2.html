@@ -1,0 +1,487 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>KETA_MONO // DESIRE SERVE (AIM MODE)</title>
+<style>
+:root{
+  --bg:#000;
+  --fg:rgba(255,255,255,.92);
+  --muted:rgba(255,255,255,.46);
+  --line:rgba(255,255,255,.12);
+  --line2:rgba(255,255,255,.22);
+  --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace;
+
+  /* object */
+  --S: 420px;
+  --stroke: 2.25px;
+  --stroke2: 1.35px;
+  --glow: 14px;
+  --gA: .10;
+  --shine: .08;
+  --grain: .045;
+
+  /* centered trajectory controls (set by aim) */
+  --apexY: -56vh;     /* how high it arcs away (negative = up) */
+  --farScale: .15;    /* how small when far away */
+  --groundY: 18vh;    /* where the "ground" is in the back (positive = down) */
+  --groundScale: .13; /* scale at the far-ground contact point */
+  --bounceY: -10vh;   /* bounce peak (still in distance-ish) */
+  --bounceScale: .24; /* scale at bounce peak */
+  --nearY: 0px;       /* settled position (near) */
+  --t: 1280ms;        /* duration */
+}
+
+*{box-sizing:border-box}
+html,body{height:100%; margin:0; background:var(--bg); color:var(--fg); overflow:hidden; font-family:var(--mono)}
+#root{position:fixed; inset:0; user-select:none; -webkit-user-select:none}
+
+/* subtle mono field */
+#field{
+  position:absolute; inset:0;
+  background:
+    linear-gradient(var(--line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--line) 1px, transparent 1px),
+    radial-gradient(circle at 50% 55%, rgba(255,255,255,.07), rgba(0,0,0,0) 60%),
+    radial-gradient(circle at 50% 84%, rgba(255,255,255,.04), rgba(0,0,0,0) 70%);
+  background-size: 96px 96px, 96px 96px, cover, cover;
+  opacity:.40;
+  pointer-events:none;
+}
+
+/* film grain */
+#grain{
+  position:absolute; inset:-10%;
+  background:
+    repeating-linear-gradient(0deg,
+      rgba(255,255,255,var(--grain)) 0px,
+      rgba(255,255,255,0) 1px,
+      rgba(255,255,255,0) 2px);
+  mix-blend-mode: soft-light;
+  opacity:.22;
+  pointer-events:none;
+  transform: rotate(2deg);
+  animation: grain 1.2s steps(6,end) infinite;
+}
+@keyframes grain{
+  0%{ transform:translate3d(0,0,0) rotate(2deg) }
+  100%{ transform:translate3d(-14px,9px,0) rotate(2deg) }
+}
+
+/* HUD */
+#hud{
+  position:absolute; left:14px; top:14px;
+  font-size:12px; letter-spacing:.06em;
+  color:var(--muted);
+  pointer-events:none;
+}
+#hud b{color:var(--fg); font-weight:600}
+
+#ctl{
+  position:absolute; left:14px; bottom:14px;
+  display:flex; gap:10px; align-items:center;
+  font-size:12px; color:var(--muted);
+}
+.btn{
+  padding:6px 10px;
+  border:1px solid var(--line);
+  cursor:pointer;
+}
+.btn.on{ color:var(--fg); border-color:var(--line2); }
+.readout{
+  padding:6px 10px;
+  border:1px solid var(--line);
+  color:var(--muted);
+}
+
+/* stage center */
+#stage{
+  position:absolute; inset:0;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+
+/* rig for motion (always centered) */
+#rig{
+  width:var(--S);
+  height:var(--S);
+  position:relative;
+  transform: translate3d(0, var(--nearY), 0) scale(1);
+  will-change: transform, opacity, filter;
+}
+
+/* centered serve animation:
+   away -> down to far-ground -> bounce -> return near -> settle
+*/
+#root.fire #rig{
+  animation: serve var(--t) cubic-bezier(.18,.88,.18,1) forwards;
+}
+@keyframes serve{
+  0%{
+    transform: translate3d(0,var(--nearY),0) scale(1);
+    opacity:1;
+    filter: brightness(1) contrast(1);
+  }
+
+  /* arc away into distance (centered) */
+  42%{
+    transform: translate3d(0,var(--apexY),0) scale(var(--farScale));
+    opacity:.78;
+    filter: brightness(1.05) contrast(1.06);
+  }
+
+  /* fall to far-ground (still small, back in the black) */
+  62%{
+    transform: translate3d(0,var(--groundY),0) scale(var(--groundScale));
+    opacity:.92;
+    filter: brightness(1.00) contrast(1.02);
+  }
+
+  /* bounce peak (comes up, slightly larger but still "back") */
+  76%{
+    transform: translate3d(0,var(--bounceY),0) scale(var(--bounceScale));
+    opacity:1;
+    filter: brightness(1.08) contrast(1.08);
+  }
+
+  /* return near */
+  100%{
+    transform: translate3d(0,var(--nearY),0) scale(1);
+    opacity:1;
+    filter: brightness(1) contrast(1);
+  }
+}
+
+/* idle breathing (desire object) */
+@keyframes breathe{
+  0%,100%{ transform: translate3d(0,var(--nearY),0) scale(1); filter: brightness(1) contrast(1); }
+  50%{ transform: translate3d(0,var(--nearY),0) scale(1.007); filter: brightness(1.04) contrast(1.06); }
+}
+#root:not(.fire) #rig{ animation: breathe 2.8s ease-in-out infinite; }
+
+/* ===== THE OBJECT: intricate monochrome tennis ball ===== */
+#ball{
+  position:absolute; inset:0;
+  border-radius:50%;
+  border: var(--stroke) solid rgba(255,255,255,.90);
+  box-shadow:
+    0 0 calc(var(--glow) + 6px) rgba(255,255,255,var(--gA)),
+    0 0 0 1px rgba(255,255,255,.08) inset;
+  background:
+    radial-gradient(circle at 34% 28%,
+      rgba(255,255,255,var(--shine)),
+      rgba(255,255,255,0) 54%),
+    radial-gradient(circle at 50% 52%,
+      rgba(255,255,255,.06),
+      rgba(0,0,0,0) 70%);
+}
+
+/* felt suggestion */
+#fuzz{
+  position:absolute; inset:0;
+  border-radius:50%;
+  background:
+    radial-gradient(circle at 50% 50%,
+      rgba(255,255,255,.05) 0%,
+      rgba(255,255,255,.03) 36%,
+      rgba(255,255,255,.015) 52%,
+      rgba(255,255,255,0) 72%);
+  filter: contrast(1.05);
+  opacity:.95;
+  pointer-events:none;
+}
+
+/* seam arcs */
+.seam{ position:absolute; inset:10%; border-radius:50%; pointer-events:none; }
+#seamL{ clip-path: inset(0 50% 0 0); transform: rotate(12deg); }
+#seamR{ clip-path: inset(0 0 0 50%); transform: rotate(-12deg); }
+#seamL::before, #seamR::before{
+  content:""; position:absolute; inset:0; border-radius:50%;
+  border: var(--stroke2) solid rgba(255,255,255,.30);
+  box-shadow: 0 0 10px rgba(255,255,255,.06);
+}
+
+/* stitches as tick bands masked near seam */
+#stitches{ position:absolute; inset:0; border-radius:50%; pointer-events:none; opacity:.86; mix-blend-mode: screen; }
+.tickBand{ position:absolute; inset:10%; border-radius:50%; }
+.tickBand.left{ clip-path: inset(0 50% 0 0); transform: rotate(12deg); }
+.tickBand.right{ clip-path: inset(0 0 0 50%); transform: rotate(-12deg); }
+.tickBand::before{
+  content:""; position:absolute; inset:0; border-radius:50%;
+  background:
+    repeating-conic-gradient(
+      from 0deg,
+      rgba(255,255,255,0) 0deg,
+      rgba(255,255,255,0) 5deg,
+      rgba(255,255,255,.34) 5.7deg,
+      rgba(255,255,255,.34) 6.1deg,
+      rgba(255,255,255,0) 6.8deg,
+      rgba(255,255,255,0) 12deg
+    );
+  -webkit-mask:
+    radial-gradient(circle at 50% 50%,
+      rgba(0,0,0,0) 0%,
+      rgba(0,0,0,0) 57%,
+      rgba(0,0,0,1) 58%,
+      rgba(0,0,0,1) 63%,
+      rgba(0,0,0,0) 64%);
+          mask:
+    radial-gradient(circle at 50% 50%,
+      rgba(0,0,0,0) 0%,
+      rgba(0,0,0,0) 57%,
+      rgba(0,0,0,1) 58%,
+      rgba(0,0,0,1) 63%,
+      rgba(0,0,0,0) 64%);
+}
+
+/* desire precision rings */
+.ring{ position:absolute; border-radius:50%; border:1px solid rgba(255,255,255,.08); pointer-events:none; }
+.r1{ inset:5.5%; }
+.r2{ inset:8.5%; border-color:rgba(255,255,255,.06); }
+.r3{ inset:12.5%; border-color:rgba(255,255,255,.05); }
+.r4{ inset:16.5%; border-color:rgba(255,255,255,.04); }
+
+/* ===== AIM MODE ===== */
+#aim{
+  position:absolute; inset:0;
+  pointer-events:none;
+  opacity:0;
+  transition: opacity 140ms linear;
+}
+#root.aim #aim{ opacity:1; }
+
+/* crosshair + trajectory readout (mono) */
+#cross{
+  position:absolute; left:50%; top:50%;
+  width:64px; height:64px;
+  transform: translate(-50%,-50%);
+  border:1px solid rgba(255,255,255,.18);
+}
+#cross:before, #cross:after{
+  content:""; position:absolute; left:50%; top:50%;
+  background: rgba(255,255,255,.22);
+}
+#cross:before{ width:1px; height:84px; transform: translate(-50%,-50%); }
+#cross:after{ width:84px; height:1px; transform: translate(-50%,-50%); }
+
+#tick{
+  position:absolute; left:50%; top:50%;
+  transform: translate(-50%,-50%);
+  width: 220px; height:220px;
+  border-radius:50%;
+  border:1px dashed rgba(255,255,255,.12);
+  opacity:.85;
+}
+
+#aimRead{
+  position:absolute;
+  left:50%;
+  top:calc(50% + 52px);
+  transform:translateX(-50%);
+  font-size:12px;
+  color:var(--muted);
+  letter-spacing:.02em;
+  white-space:nowrap;
+}
+
+/* cursor hint */
+#root.clickable{ cursor:pointer; }
+#root.aim.clickable{ cursor: crosshair; }
+
+@media (max-width:520px){
+  :root{ --S: 320px; }
+  #aimRead{ display:none; }
+}
+</style>
+</head>
+<body>
+<div id="root" class="clickable" aria-label="Click to launch; A toggles Aim Mode">
+  <div id="field"></div>
+  <div id="grain"></div>
+
+  <div id="hud">
+    KETA_MONO // DESIRE SERVE<br>
+    <b>CLICK/SPACE</b> LAUNCH • <b>A</b> AIM MODE
+  </div>
+
+  <div id="stage">
+    <div id="rig">
+      <div id="ball"></div>
+      <div id="fuzz"></div>
+
+      <div class="ring r1"></div>
+      <div class="ring r2"></div>
+      <div class="ring r3"></div>
+      <div class="ring r4"></div>
+
+      <div class="seam" id="seamL"></div>
+      <div class="seam" id="seamR"></div>
+
+      <div id="stitches">
+        <div class="tickBand left"></div>
+        <div class="tickBand right"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="aim">
+    <div id="tick"></div>
+    <div id="cross"></div>
+    <div id="aimRead">AIM: depth / bounce tuned by mouse • centered trajectory</div>
+  </div>
+
+  <div id="ctl">
+    <div class="btn" id="aimBtn">AIM: OFF</div>
+    <div class="btn" id="resetBtn">RESET</div>
+    <div class="readout" id="readout">APEX -56vh • FAR .15 • GROUND 18vh</div>
+  </div>
+</div>
+
+<script>
+const root = document.getElementById("root");
+const aimBtn = document.getElementById("aimBtn");
+const resetBtn = document.getElementById("resetBtn");
+const readout = document.getElementById("readout");
+
+let firing=false;
+let AIM=false;
+
+/* defaults */
+const DEF = {
+  apexY: -0.56,      // as fraction of vh (negative)
+  farScale: 0.15,
+  groundY: 0.18,     // as fraction of vh (positive)
+  groundScale: 0.13,
+  bounceY: -0.10,    // fraction of vh (negative)
+  bounceScale: 0.24,
+  tMin: 1160,
+  tMax: 1420
+};
+
+let params = { ...DEF };
+
+function clamp(v,a,b){ return Math.max(a, Math.min(b, v)); }
+function setVar(name, val){ document.documentElement.style.setProperty(name, val); }
+
+function applyParams(){
+  const vh = window.innerHeight;
+  setVar("--apexY", Math.round(params.apexY * vh) + "px");
+  setVar("--farScale", String(params.farScale.toFixed(3)));
+  setVar("--groundY", Math.round(params.groundY * vh) + "px");
+  setVar("--groundScale", String(params.groundScale.toFixed(3)));
+  setVar("--bounceY", Math.round(params.bounceY * vh) + "px");
+  setVar("--bounceScale", String(params.bounceScale.toFixed(3)));
+  // duration set on fire
+  readout.textContent =
+    `APEX ${Math.round(params.apexY*100)}vh • FAR ${params.farScale.toFixed(2)} • GROUND ${Math.round(params.groundY*100)}vh`;
+}
+applyParams();
+
+function toggleAim(on){
+  AIM = (on===undefined) ? !AIM : !!on;
+  root.classList.toggle("aim", AIM);
+  aimBtn.classList.toggle("on", AIM);
+  aimBtn.textContent = "AIM: " + (AIM ? "ON" : "OFF");
+}
+aimBtn.onclick = ()=> toggleAim();
+resetBtn.onclick = ()=>{
+  params = { ...DEF };
+  applyParams();
+};
+
+function rand(min,max){ return min + Math.random()*(max-min); }
+
+function fire(){
+  if(firing) return;
+  firing = true;
+
+  // duration: longer if deeper (smaller farScale)
+  const depthFactor = clamp((0.22 - params.farScale) / 0.16, 0, 1); // 0..1
+  const t = Math.round(rand(DEF.tMin, DEF.tMax) + depthFactor*180);
+
+  setVar("--t", t + "ms");
+
+  // restart animation cleanly
+  root.classList.remove("fire");
+  void root.offsetWidth;
+  root.classList.add("fire");
+
+  setTimeout(()=>{
+    root.classList.remove("fire");
+    firing = false;
+  }, t + 30);
+}
+
+/* Aim tuning:
+   - mouseY controls depth (apex + farScale + groundScale)
+   - mouseX controls bounce character (bounceY + bounceScale)
+   Always centered.
+*/
+function onAimMove(ev){
+  if(!AIM) return;
+
+  const w = window.innerWidth;
+  const h = window.innerHeight;
+
+  const x = clamp(ev.clientX / w, 0, 1);
+  const y = clamp(ev.clientY / h, 0, 1);
+
+  // depth: higher mouse = shallower; lower mouse = deeper
+  // map y -> depth 0..1 (0 shallow, 1 deep)
+  const d = clamp((1 - y), 0, 1);
+
+  // apexY: from -0.40vh (shallow) to -0.78vh (deep)
+  params.apexY = - (0.40 + d*0.38);
+
+  // farScale: from 0.22 (shallow) to 0.10 (deep)
+  params.farScale = 0.22 - d*0.12;
+
+  // groundY: from 0.12vh to 0.26vh
+  params.groundY = 0.12 + d*0.14;
+
+  // groundScale tracks farScale but slightly smaller on impact
+  params.groundScale = clamp(params.farScale - 0.02, 0.08, 0.20);
+
+  // bounce character: x controls how "snappy" the bounce feels
+  // bounceY: from -0.06vh to -0.18vh
+  const b = x;
+  params.bounceY = - (0.06 + b*0.12);
+
+  // bounceScale: from 0.20 to 0.34
+  params.bounceScale = 0.20 + b*0.14;
+
+  applyParams();
+}
+
+root.addEventListener("mousemove", onAimMove);
+root.addEventListener("click", ()=> fire());
+
+window.addEventListener("keydown", (e)=>{
+  if(e.code === "Space"){
+    e.preventDefault();
+    fire();
+  }
+  if(e.key === "a" || e.key === "A"){
+    toggleAim();
+  }
+});
+</script>
+
+<!--
+AE: KETA_MONO_DESIRE_SERVE_AIM
+EE: centered-depth-serve-with-aim-mode
+WB: single-file_html
+
+FILE_ID: KETA-MONO-DESIRE-SERVE-002
+ROOM_ID: BASE
+VERSION: v1.2
+UPDATED_AT: 2026-01-07
+CHANGELOG:
+- Centered trajectory only: ball goes “back into the black,” hits far-ground, bounces, returns centered
+- Aim Mode (A): mouse tunes depth + bounce while remaining centered
+- Reset + live readout
+-->
+</body>
+</html>
