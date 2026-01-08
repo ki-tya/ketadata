@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>KETA_MONO // BIG TENNIS SERVE</title>
+<style>
+:root{
+  --bg:#000;
+  --fg:rgba(255,255,255,.92);
+  --muted:rgba(255,255,255,.46);
+  --line:rgba(255,255,255,.14);
+  --line2:rgba(255,255,255,.22);
+  --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace;
+
+  --ballSize: 340px;
+  --stroke: 3px;
+  --blur: 0px;
+
+  --x: 0px;             /* horizontal drift */
+  --apex: -58vh;        /* distance up */
+  --nearY: 0px;         /* near-ground offset */
+  --t: 1150ms;
+}
+
+*{box-sizing:border-box}
+html,body{height:100%; margin:0; background:var(--bg); color:var(--fg); overflow:hidden; font-family:var(--mono)}
+#root{position:fixed; inset:0; user-select:none; -webkit-user-select:none; cursor:pointer}
+
+/* subtle field */
+#field{
+  position:absolute; inset:0;
+  background:
+    linear-gradient(var(--line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--line) 1px, transparent 1px),
+    radial-gradient(circle at 50% 76%, rgba(255,255,255,.06), rgba(0,0,0,0) 62%),
+    radial-gradient(circle at 52% 78%, rgba(255,255,255,.04), rgba(0,0,0,0) 68%);
+  background-size: 92px 92px, 92px 92px, cover, cover;
+  opacity:.42;
+  pointer-events:none;
+  transform: translate3d(0,0,0);
+}
+
+/* HUD */
+#hud{
+  position:absolute; left:14px; top:14px;
+  font-size:12px; letter-spacing:.06em;
+  color:var(--muted);
+  pointer-events:none;
+}
+#hud b{color:var(--fg); font-weight:600}
+#hint{
+  position:absolute; right:14px; bottom:14px;
+  font-size:12px; letter-spacing:.02em;
+  color:var(--muted);
+  text-align:right;
+  pointer-events:none;
+}
+
+/* stage */
+#stage{
+  position:absolute; inset:0;
+  display:flex;
+  align-items:flex-end;
+  justify-content:center;
+  padding-bottom: clamp(26px, 5.5vh, 64px);
+}
+
+/* moving rig */
+#rig{
+  position:relative;
+  width:var(--ballSize);
+  height:var(--ballSize);
+  transform: translate3d(0, var(--nearY), 0);
+  will-change: transform;
+}
+
+/* BIG OUTLINED MONO BALL */
+#ball{
+  position:absolute; inset:0;
+  border-radius:50%;
+  border: var(--stroke) solid rgba(255,255,255,.88);
+  background: radial-gradient(circle at 35% 30%,
+      rgba(255,255,255,.10),
+      rgba(255,255,255,.04) 40%,
+      rgba(0,0,0,0) 68%);
+  filter: blur(var(--blur));
+  box-shadow:
+    0 0 0 1px rgba(255,255,255,.10) inset,
+    0 0 26px rgba(255,255,255,.08);
+}
+
+/* seam lines (tennis-ish, but monochrome) */
+#ball:before, #ball:after{
+  content:"";
+  position:absolute; inset:8%;
+  border-radius:50%;
+  border: 2px solid rgba(255,255,255,.18);
+  filter: blur(.2px);
+}
+#ball:before{
+  inset:10% 18%;
+  transform: rotate(18deg);
+}
+#ball:after{
+  inset:18% 10%;
+  transform: rotate(-18deg);
+}
+
+/* serve animation:
+   - goes off into distance (up + scale down + fade slightly)
+   - then bounces back up near-ground like pre-serve bounce (down -> up -> settle)
+*/
+.fire #rig{
+  animation: serve var(--t) cubic-bezier(.2,.85,.2,1) forwards;
+}
+@keyframes serve{
+  0%{
+    transform: translate3d(0, var(--nearY), 0) scale(1);
+    opacity: 1;
+  }
+
+  /* travel away: off into distance */
+  46%{
+    transform: translate3d(var(--x), var(--apex), 0) scale(.18);
+    opacity: .70;
+  }
+
+  /* drop fast to "ground" (bounce impact) */
+  68%{
+    transform: translate3d(calc(var(--x) * .28), 10px, 0) scale(1.03);
+    opacity: 1;
+  }
+
+  /* bounce up */
+  80%{
+    transform: translate3d(calc(var(--x) * .12), -92px, 0) scale(.94);
+    opacity: 1;
+  }
+
+  /* settle */
+  100%{
+    transform: translate3d(0, var(--nearY), 0) scale(1);
+    opacity: 1;
+  }
+}
+
+/* tiny pulse while idle */
+@keyframes idlePulse{
+  0%,100%{ transform: translate3d(0, var(--nearY), 0) scale(1); }
+  50%{ transform: translate3d(0, var(--nearY), 0) scale(1.01); }
+}
+#idle{
+  position:absolute; inset:0;
+  pointer-events:none;
+}
+.idle #rig{ animation: idlePulse 2.2s ease-in-out infinite; }
+
+</style>
+</head>
+<body>
+<div id="root" class="idle" aria-label="Click to fire the serve">
+  <div id="field"></div>
+
+  <div id="hud">
+    KETA_MONO // BIG TENNIS SERVE<br>
+    <b>CLICK</b> = OFF INTO DISTANCE → BOUNCE BACK UP
+  </div>
+
+  <div id="hint">
+    outline only • monochrome<br>
+    no scoring • no verdict
+  </div>
+
+  <div id="stage">
+    <div id="rigWrap">
+      <div id="rig">
+        <div id="ball"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* big outlined mono tennis ball: click -> launch away -> bounce back up */
+const root = document.getElementById("root");
+
+let firing = false;
+
+function rand(min,max){ return min + Math.random()*(max-min); }
+
+function fire(){
+  if(firing) return;
+  firing = true;
+
+  // horizontal drift (left/right) + distance apex variance + duration variance
+  const x = Math.round(rand(-window.innerWidth*0.28, window.innerWidth*0.28));
+  const apex = Math.round(rand(-0.70*window.innerHeight, -0.44*window.innerHeight));
+  const t = Math.round(rand(980, 1320));
+
+  document.documentElement.style.setProperty("--x", x + "px");
+  document.documentElement.style.setProperty("--apex", apex + "px");
+  document.documentElement.style.setProperty("--t", t + "ms");
+
+  root.classList.remove("idle");
+
+  // restart animation cleanly
+  root.classList.remove("fire");
+  // force reflow
+  void root.offsetWidth;
+  root.classList.add("fire");
+
+  setTimeout(() => {
+    root.classList.remove("fire");
+    root.classList.add("idle");
+    firing = false;
+  }, t + 30);
+}
+
+root.addEventListener("click", fire);
+
+window.addEventListener("keydown", (e)=>{
+  if(e.code === "Space"){
+    e.preventDefault();
+    fire();
+  }
+});
+</script>
+
+<!--
+AE: KETA_MONO_BIG_TENNIS_SERVE
+EE: single-click-distance-bounce-loop
+WB: single-file_html
+
+FILE_ID: KETA-MONO-TENNIS-CLICK-001
+ROOM_ID: BASE
+VERSION: v1.0
+UPDATED_AT: 2026-01-07
+CHANGELOG:
+- Big outlined monochrome tennis ball
+- Click/SPACE launches off into distance, returns, bounces up, settles
+-->
+</body>
+</html>
