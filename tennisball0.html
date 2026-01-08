@@ -1,0 +1,434 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>KETA_MONO // GLASS TENNIS BALL</title>
+<style>
+:root{
+  --bg:#000;
+  --ink:rgba(255,255,255,.92);
+  --muted:rgba(255,255,255,.42);
+
+  --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace;
+
+  /* glass + geometry */
+  --glassA:.20;
+  --rimA:.36;
+  --specA:.90;
+
+  /* seam */
+  --seamA:.92;
+  --seamW:3.2;     /* seam stroke width (outer) */
+  --seamGap:10.0;  /* inner channel gap (larger = more space) */
+
+  /* motion */
+  --bounceT:1050; /* ms */
+}
+
+*{box-sizing:border-box}
+html,body{height:100%; margin:0}
+body{
+  background:var(--bg);
+  overflow:hidden;
+  font:10px/1.3 var(--mono);
+  color:var(--muted);
+  user-select:none;
+}
+#c{position:fixed; inset:0; width:100%; height:100%}
+#hud{
+  position:fixed; left:12px; top:12px;
+  padding:6px 8px;
+  border:1px solid rgba(255,255,255,.10);
+  background:rgba(0,0,0,.25);
+  backdrop-filter: blur(8px);
+  opacity:.78;
+}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="hud">KETA_MONO // GLASS TENNIS BALL · CLICK/SPACE BOUNCE · MOUSE = ORBIT</div>
+
+<script>
+const canvas = document.getElementById("c");
+const ctx = canvas.getContext("2d", {alpha:true});
+
+let DPR=1, W=0, H=0;
+function resize(){
+  DPR = Math.max(1, Math.min(2, window.devicePixelRatio||1));
+  W = Math.floor(innerWidth*DPR);
+  H = Math.floor(innerHeight*DPR);
+  canvas.width=W; canvas.height=H;
+}
+addEventListener("resize", resize);
+resize();
+
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const lerp=(a,b,t)=>a+(b-a)*t;
+
+const STATE = {
+  t0: performance.now(),
+  mx: 0.0, my: 0.0,
+  orbitX: 0.0, orbitY: 0.0,
+  bouncing: false,
+  bStart: 0,
+  bProg: 0,
+  spin: 0,
+};
+
+addEventListener("mousemove",(e)=>{
+  const nx = (e.clientX/innerWidth)*2-1;
+  const ny = (e.clientY/innerHeight)*2-1;
+  STATE.mx = nx; STATE.my = ny;
+});
+
+function easeInOutCubic(t){ return t<.5 ? 4*t*t*t : 1 - Math.pow(-2*t+2,3)/2; }
+function pingpong(t){ return 1 - Math.abs(1 - 2*t); }
+
+/* Z-only bounce + squash at impact */
+function bounceCurve(u){
+  const z = easeInOutCubic(pingpong(u));                   // far at mid
+  const impact = Math.exp(-Math.pow((u-0.52)/0.055,2));    // gaussian around impact
+  const squash = 1 + 0.22*impact;
+  const stretch = 1 - 0.16*impact;
+  return { z, squash, stretch, impact };
+}
+
+function fireBounce(){
+  if(STATE.bouncing) return;
+  STATE.bouncing = true;
+  STATE.bStart = performance.now();
+  STATE.bProg = 0;
+}
+addEventListener("click", fireBounce);
+addEventListener("keydown",(e)=>{
+  if(e.code==="Space"){ e.preventDefault(); fireBounce(); }
+},{passive:false});
+
+/* ===== faux 3D sphere projection ===== */
+function rotY(p, a){
+  const ca=Math.cos(a), sa=Math.sin(a);
+  return { x:p.x*ca + p.z*sa, y:p.y, z:-p.x*sa + p.z*ca };
+}
+function rotX(p, a){
+  const ca=Math.cos(a), sa=Math.sin(a);
+  return { x:p.x, y:p.y*ca - p.z*sa, z:p.y*sa + p.z*ca };
+}
+function project(p, R){
+  const k = 1 / (1 - p.z*0.55);
+  return { x: p.x*R*k, y: p.y*R*k, k, z:p.z };
+}
+
+/* stroke a curve on the sphere surface.
+   important: we only draw front hemisphere; and we fade near silhouette (wrap). */
+function strokeOnSphere(f, t0, t1, steps, cx, cy, R, orbitX, orbitY, baseW, baseA, fadeEdge=true){
+  ctx.beginPath();
+  let started=false;
+
+  for(let i=0;i<=steps;i++){
+    const t = lerp(t0,t1,i/steps);
+    const q = f(t); // expects {x,y} on unit disk
+    const x=q.x, y=q.y;
+
+    const zz = Math.sqrt(Math.max(0, 1 - x*x - y*y)); // front hemisphere
+    let p = {x, y, z: zz};
+
+    p = rotY(p, orbitX);
+    p = rotX(p, orbitY);
+
+    if(p.z < -0.08){ started=false; continue; } // backface reject
+
+    const pr = project(p, R);
+    const sx = cx + pr.x;
+    const sy = cy + pr.y;
+
+    // fade near silhouette so it wraps (no disc read)
+    let a = baseA;
+    if(fadeEdge){
+      const edge = clamp((p.z - 0.05)/0.35, 0, 1); // 0 near edge, 1 front
+      a *= (0.25 + 0.75*edge);
+    }
+
+    // per-vertex alpha: use segmented strokes (cheap + clean)
+    if(!started){
+      ctx.moveTo(sx, sy);
+      started=true;
+    } else {
+      // draw small segment with alpha a
+      ctx.strokeStyle = `rgba(255,255,255,${a})`;
+      ctx.lineWidth = baseW;
+      ctx.lineTo(sx, sy);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(sx, sy);
+    }
+  }
+}
+
+/* ===== tennis seams (simple, correct topology, no intersections)
+   we draw TWO separated “C” arcs (top and bottom), like a real ball photo. */
+function drawTennisSeams(cx, cy, R, orbitX, orbitY){
+  const seamW = (parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--seamW"))||3.2) * DPR;
+  const seamGap = (parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--seamGap"))||10.0) * DPR;
+  const seamA = (parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--seamA"))||0.92);
+
+  // helper: draw an arc curve on sphere
+  function arcCurve(y0, bulge, phase){
+    return (t)=>{
+      // t in [0,1] across the arc
+      // x runs left->right; y stays near y0 with subtle bow
+      const u=t;
+      const x = lerp(-0.78, 0.78, u);
+      // bow the arc so it feels like a seam around a sphere
+      const y = y0 + bulge*Math.sin(u*Math.PI + phase);
+      // keep inside unit disk
+      return {x, y};
+    };
+  }
+
+  // Top seam band (outer white)
+  // Bottom seam band (outer white)
+  // Then “cut” with black inner channel to create spacing inside the seam.
+  // This yields the “two lines with a gap” effect you want.
+
+  ctx.globalCompositeOperation="screen";
+  ctx.lineCap="round"; ctx.lineJoin="round";
+
+  const top = arcCurve(-0.36, 0.10, 0.20);
+  const bot = arcCurve( 0.36,-0.10, 0.20);
+
+  // outer band
+  strokeOnSphere(top, 0, 1, 220, cx, cy, R, orbitX, orbitY, seamW, seamA, true);
+  strokeOnSphere(bot, 0, 1, 220, cx, cy, R, orbitX, orbitY, seamW, seamA, true);
+
+  // inner channel (black) to create spacing in the seam
+  ctx.globalCompositeOperation="source-over";
+  ctx.strokeStyle="rgba(0,0,0,1)";
+  ctx.lineCap="round"; ctx.lineJoin="round";
+
+  // draw channel by re-stroking same curves with thicker black (subtract look)
+  // We approximate per-vertex fade by using same segmented routine but with black.
+  function strokeChannel(f){
+    ctx.beginPath();
+    let started=false;
+    for(let i=0;i<=220;i++){
+      const t=i/220;
+      const q=f(t);
+      const x=q.x, y=q.y;
+      const zz = Math.sqrt(Math.max(0, 1 - x*x - y*y));
+      let p={x,y,z:zz};
+      p=rotY(p, orbitX); p=rotX(p, orbitY);
+      if(p.z < -0.08){ started=false; continue; }
+      const pr=project(p,R);
+      const sx=cx+pr.x, sy=cy+pr.y;
+
+      const edge = clamp((p.z - 0.05)/0.35, 0, 1);
+      const a = (0.25 + 0.75*edge);
+      const w = Math.max(1, (seamW - seamGap)) * (0.9 + 0.1*edge);
+
+      if(!started){ ctx.moveTo(sx,sy); started=true; }
+      else{
+        ctx.strokeStyle = `rgba(0,0,0,${a})`;
+        ctx.lineWidth = w;
+        ctx.lineTo(sx,sy);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(sx,sy);
+      }
+    }
+  }
+  strokeChannel(top);
+  strokeChannel(bot);
+
+  // optional: tiny white “stitch” hint (very subtle)
+  ctx.globalCompositeOperation="screen";
+  ctx.strokeStyle="rgba(255,255,255,0.22)";
+  ctx.lineWidth=1.1*DPR;
+  const stitchTop = arcCurve(-0.36, 0.10, 0.20);
+  const stitchBot = arcCurve( 0.36,-0.10, 0.20);
+
+  function dashed(f){
+    let on=true, seg=0;
+    const N=240;
+    for(let i=0;i<N;i++){
+      if(i%10===0){ on = !on; }
+      if(!on) continue;
+      const t0=i/N, t1=(i+1)/N;
+      strokeOnSphere(f, t0, t1, 4, cx, cy, R, orbitX, orbitY, 1.0*DPR, 0.22, true);
+      seg++;
+      if(seg>80) break;
+    }
+  }
+  dashed(stitchTop);
+  dashed(stitchBot);
+
+  ctx.globalCompositeOperation="source-over";
+}
+
+/* ===== glass sphere ===== */
+function drawGlassBall(cx, cy, R, orbitX, orbitY, glassA, rimA, specA){
+  // subtle background wash
+  ctx.fillStyle="rgba(0,0,0,0.16)";
+  ctx.fillRect(0,0,W,H);
+
+  // sphere clip
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(cx, cy, R, 0, Math.PI*2);
+  ctx.clip();
+
+  // refractive interior gradients (orbit shifts)
+  const hx = cx + R*(0.28 + orbitX*0.20);
+  const hy = cy - R*(0.30 + orbitY*0.16);
+
+  const g1 = ctx.createRadialGradient(hx, hy, R*0.06, cx, cy, R*1.18);
+  g1.addColorStop(0, `rgba(255,255,255,${glassA})`);
+  g1.addColorStop(0.35, `rgba(255,255,255,${glassA*0.55})`);
+  g1.addColorStop(0.80, `rgba(255,255,255,${glassA*0.12})`);
+  g1.addColorStop(1, "rgba(0,0,0,0)");
+  ctx.fillStyle=g1;
+  ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI*2); ctx.fill();
+
+  // limb darkening (depth cue, removes "disc" feeling)
+  const g2 = ctx.createRadialGradient(cx, cy, R*0.18, cx, cy, R*1.02);
+  g2.addColorStop(0, "rgba(0,0,0,0)");
+  g2.addColorStop(0.62, "rgba(0,0,0,0.10)");
+  g2.addColorStop(0.86, "rgba(0,0,0,0.46)");
+  g2.addColorStop(1, "rgba(0,0,0,0.70)");
+  ctx.fillStyle=g2;
+  ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI*2); ctx.fill();
+
+  // caustic arcs (geometry)
+  ctx.strokeStyle="rgba(255,255,255,0.10)";
+  ctx.lineWidth=1.2*DPR;
+  for(let k=0;k<8;k++){
+    const a = (k/8)*Math.PI*2 + orbitX*0.35;
+    const rr = R*(0.16 + 0.07*Math.sin(k*1.7 + orbitY*0.9));
+    const px = cx + Math.cos(a)*R*0.18;
+    const py = cy + Math.sin(a)*R*0.10;
+    ctx.beginPath();
+    ctx.ellipse(px, py, rr*1.5, rr, a*0.33, 0, Math.PI*2);
+    ctx.stroke();
+  }
+
+  // seams
+  drawTennisSeams(cx, cy, R, orbitX, orbitY);
+
+  // specular streaks (glassy)
+  ctx.globalCompositeOperation="screen";
+  ctx.strokeStyle=`rgba(255,255,255,${specA})`;
+  ctx.lineWidth=2.2*DPR;
+  ctx.beginPath();
+  ctx.ellipse(
+    cx + R*(0.18 + orbitX*0.18),
+    cy - R*(0.22 + orbitY*0.10),
+    R*0.22, R*0.52,
+    -0.55, -1.05, 1.05
+  );
+  ctx.stroke();
+
+  ctx.strokeStyle=`rgba(255,255,255,${specA*0.38})`;
+  ctx.lineWidth=1.4*DPR;
+  ctx.beginPath();
+  ctx.ellipse(
+    cx - R*(0.26 - orbitX*0.10),
+    cy - R*(0.06 + orbitY*0.06),
+    R*0.10, R*0.22,
+    0.25, -1.10, 1.10
+  );
+  ctx.stroke();
+  ctx.globalCompositeOperation="source-over";
+
+  ctx.restore();
+
+  // rim
+  ctx.strokeStyle=`rgba(255,255,255,${rimA})`;
+  ctx.lineWidth=2.2*DPR;
+  ctx.beginPath();
+  ctx.arc(cx, cy, R-1.2*DPR, 0, Math.PI*2);
+  ctx.stroke();
+}
+
+function render(now){
+  // orbit smoothing
+  const targetOX = STATE.mx*0.60;
+  const targetOY = STATE.my*0.42;
+  STATE.orbitX = lerp(STATE.orbitX, targetOX, 0.08);
+  STATE.orbitY = lerp(STATE.orbitY, targetOY, 0.08);
+
+  // gentle internal spin that also affects orbit a bit (so seams "turn")
+  STATE.spin += 0.010;
+  const ox = STATE.orbitX + Math.sin(STATE.spin)*0.08;
+  const oy = STATE.orbitY + Math.cos(STATE.spin*0.8)*0.06;
+
+  // bounce progression
+  if(STATE.bouncing){
+    const T = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--bounceT")) || 1050;
+    STATE.bProg = clamp((now - STATE.bStart)/T, 0, 1);
+    if(STATE.bProg >= 1){
+      STATE.bouncing = false;
+      STATE.bProg = 0;
+    }
+  }
+
+  const { z, squash, stretch } = bounceCurve(STATE.bouncing ? STATE.bProg : 0);
+
+  // Z-only: scale to "distance"
+  const baseR = Math.min(W,H) * 0.24;
+  const farScale = 0.12;
+  const s = lerp(1.0, farScale, z);
+
+  const sx = s * squash;
+  const sy = s * stretch;
+
+  ctx.clearRect(0,0,W,H);
+
+  const cx = W/2;
+  const cy = H/2;
+
+  // centered eye-axis transform
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.scale(sx, sy);
+  ctx.translate(-cx, -cy);
+
+  drawGlassBall(
+    cx, cy, baseR,
+    ox, oy,
+    parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--glassA")) || 0.20,
+    parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--rimA")) || 0.36,
+    parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--specA")) || 0.90
+  );
+
+  ctx.restore();
+
+  // minimal frame tick
+  ctx.strokeStyle="rgba(255,255,255,0.06)";
+  ctx.lineWidth=1*DPR;
+  ctx.strokeRect(10*DPR,10*DPR, W-20*DPR, H-20*DPR);
+
+  requestAnimationFrame(render);
+}
+requestAnimationFrame(render);
+</script>
+
+<!--
+AE: KETA_MONO_GLASS_TENNIS
+EE: glass-sphere + correct tennis seams (non-intersect) + z-bounce + orbit
+WB: single-file_html
+
+FILE_ID: KETA-GLASS-TENNIS-001
+ROOM_ID: BASE
+VERSION: v1.0
+UPDATED_AT: 2026-01-08
+CHANGELOG:
+- Removed catface; simple tennis ball only
+- Glassy sphere with rim/spec/caustics (mono)
+- Two separated tennis seams (no intersection)
+- Seam has inner channel gap (space inside)
+- Z-axis bounce with impact squash/stretch
+- Mouse orbit + gentle auto spin
+-->
+</body>
+</html>
