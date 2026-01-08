@@ -1,0 +1,422 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>KETA_MONO // GLASS CATBALL</title>
+<style>
+:root{
+  --bg:#000;
+  --ink:rgba(255,255,255,.92);
+  --muted:rgba(255,255,255,.42);
+  --line:rgba(255,255,255,.14);
+
+  --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace;
+
+  /* glass + geometry */
+  --glassA:.22;
+  --rimA:.32;
+  --specA:.85;
+  --etchA:.92;
+  --etchW:3.2;
+
+  /* motion */
+  --bounceT:1050; /* ms */
+}
+
+*{box-sizing:border-box}
+html,body{height:100%; margin:0}
+body{
+  background:var(--bg);
+  overflow:hidden;
+  font:10px/1.3 var(--mono);
+  color:var(--muted);
+  user-select:none;
+}
+#c{position:fixed; inset:0; width:100%; height:100%}
+#hud{
+  position:fixed; left:12px; top:12px;
+  padding:6px 8px;
+  border:1px solid rgba(255,255,255,.10);
+  background:rgba(0,0,0,.25);
+  backdrop-filter: blur(8px);
+  opacity:.78;
+}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="hud">KETA_MONO // GLASS CATBALL · CLICK/SPACE BOUNCE · MOUSE = ORBIT</div>
+
+<script>
+const canvas = document.getElementById("c");
+const ctx = canvas.getContext("2d", {alpha:true});
+
+let DPR=1, W=0, H=0;
+function resize(){
+  DPR = Math.max(1, Math.min(2, window.devicePixelRatio||1));
+  W = Math.floor(innerWidth*DPR);
+  H = Math.floor(innerHeight*DPR);
+  canvas.width=W; canvas.height=H;
+}
+addEventListener("resize", resize);
+resize();
+
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const lerp=(a,b,t)=>a+(b-a)*t;
+
+const STATE = {
+  t0: performance.now(),
+  mx: 0.0, my: 0.0,
+  orbitX: 0.0, orbitY: 0.0,
+  // bounce state
+  bouncing: false,
+  bStart: 0,
+  bProg: 0,
+  // internal rotation
+  spin: 0,
+};
+
+addEventListener("mousemove",(e)=>{
+  const nx = (e.clientX/innerWidth)*2-1;
+  const ny = (e.clientY/innerHeight)*2-1;
+  STATE.mx = nx; STATE.my = ny;
+});
+
+function easeOutCubic(t){ return 1 - Math.pow(1-t,3); }
+function easeInOutCubic(t){ return t<.5 ? 4*t*t*t : 1 - Math.pow(-2*t+2,3)/2; }
+function pingpong(t){ return 1 - Math.abs(1 - 2*t); }
+
+/* physically-believable squash on impact (still centered on eye axis) */
+function bounceCurve(u){
+  // u in [0,1] : out (away) then return
+  // zDepth (0 near -> 1 far)
+  const z = easeInOutCubic(pingpong(u));          // goes far mid-flight
+  // impact window near the far point
+  const impact = Math.exp(-Math.pow((u-0.52)/0.055,2)); // gaussian around impact
+  // squash factor (x wider, y shorter) at impact
+  const squash = 1 + 0.22*impact;
+  const stretch = 1 - 0.16*impact;
+  return { z, squash, stretch, impact };
+}
+
+function fireBounce(){
+  if(STATE.bouncing) return;
+  STATE.bouncing = true;
+  STATE.bStart = performance.now();
+  STATE.bProg = 0;
+}
+
+addEventListener("click", fireBounce);
+addEventListener("keydown",(e)=>{
+  if(e.code==="Space"){ e.preventDefault(); fireBounce(); }
+},{passive:false});
+
+/* ===== geometry: catface etched onto a glass sphere =====
+   We draw in "sphere space" (unit circle), then project with a simple faux-3D orbit:
+   - rotate point around Y (orbitX) and X (orbitY)
+   - use z to attenuate alpha + thickness
+   - clip to circle and add rim/specular/refraction hints
+*/
+function rotY(p, a){
+  const ca=Math.cos(a), sa=Math.sin(a);
+  return { x:p.x*ca + p.z*sa, y:p.y, z:-p.x*sa + p.z*ca };
+}
+function rotX(p, a){
+  const ca=Math.cos(a), sa=Math.sin(a);
+  return { x:p.x, y:p.y*ca - p.z*sa, z:p.y*sa + p.z*ca };
+}
+
+/* map unit-sphere point to screen (centered), with depth-based scale */
+function project(p, R){
+  // perspective-ish: closer when z>0
+  const k = 1 / (1 - p.z*0.55);
+  return { x: p.x*R*k, y: p.y*R*k, k, z:p.z };
+}
+
+/* draw a stroked polyline on sphere from param function f(t)->(x,y,z) on sphere surface */
+function strokeOnSphere(f, t0, t1, steps, cx, cy, R, orbitX, orbitY, baseW, baseA){
+  ctx.beginPath();
+  let started=false;
+  for(let i=0;i<=steps;i++){
+    const t = lerp(t0,t1,i/steps);
+    const q = f(t); // expects normalized sphere-ish coords (x,y) with z from sphere
+    const x=q.x, y=q.y;
+    const zz = Math.sqrt(Math.max(0, 1 - x*x - y*y)); // front hemisphere by default
+    let p = {x, y, z: zz};
+
+    // orbit
+    p = rotY(p, orbitX);
+    p = rotX(p, orbitY);
+
+    // hide back-facing segments (z< -0.12)
+    if(p.z < -0.10){
+      started=false;
+      continue;
+    }
+
+    const pr = project(p, R);
+    const sx = cx + pr.x;
+    const sy = cy + pr.y;
+
+    if(!started){
+      ctx.moveTo(sx, sy);
+      started=true;
+    } else {
+      ctx.lineTo(sx, sy);
+    }
+  }
+  ctx.strokeStyle = `rgba(255,255,255,${baseA})`;
+  ctx.lineWidth = baseW;
+  ctx.stroke();
+}
+
+/* sphere clip + glass */
+function drawGlassBall(cx, cy, R, orbitX, orbitY, glassA, rimA, specA, etchA){
+  // subtle background depth field
+  ctx.fillStyle = "rgba(0,0,0,0.14)";
+  ctx.fillRect(0,0,W,H);
+
+  // sphere clip
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(cx, cy, R, 0, Math.PI*2);
+  ctx.clip();
+
+  // refractive interior: stacked gradients that move with orbit
+  const hx = cx + R*(0.28 + orbitX*0.22);
+  const hy = cy - R*(0.32 + orbitY*0.18);
+
+  const g1 = ctx.createRadialGradient(hx, hy, R*0.05, cx, cy, R*1.18);
+  g1.addColorStop(0, `rgba(255,255,255,${glassA})`);
+  g1.addColorStop(0.35, `rgba(255,255,255,${glassA*0.55})`);
+  g1.addColorStop(0.75, `rgba(255,255,255,${glassA*0.18})`);
+  g1.addColorStop(1, "rgba(0,0,0,0)");
+  ctx.fillStyle = g1;
+  ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI*2); ctx.fill();
+
+  const g2 = ctx.createRadialGradient(cx - R*0.18, cy + R*0.22, 0, cx, cy, R*1.1);
+  g2.addColorStop(0, "rgba(0,0,0,0.22)");
+  g2.addColorStop(0.55, "rgba(0,0,0,0.10)");
+  g2.addColorStop(1, "rgba(0,0,0,0)");
+  ctx.fillStyle = g2;
+  ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI*2); ctx.fill();
+
+  // internal caustic arcs (pure geometry)
+  ctx.strokeStyle = "rgba(255,255,255,0.10)";
+  ctx.lineWidth = 1.2*DPR;
+  for(let k=0;k<10;k++){
+    const a = (k/10)*Math.PI*2 + orbitX*0.35;
+    const rr = R*(0.18 + 0.07*Math.sin(k*1.7 + orbitY*0.9));
+    const px = cx + Math.cos(a)*R*0.18;
+    const py = cy + Math.sin(a)*R*0.10;
+    ctx.beginPath();
+    ctx.ellipse(px, py, rr*1.4, rr, a*0.33, 0, Math.PI*2);
+    ctx.stroke();
+  }
+
+  // etched seams + catface geometry (white in glass)
+  ctx.globalCompositeOperation = "screen";
+  ctx.lineCap="round";
+  ctx.lineJoin="round";
+
+  // tennis seam pair (topology, not decoration)
+  const seamL = (t)=>{
+    // S-curve silhouette across sphere
+    const u = t;
+    const y = lerp(-0.92, 0.92, u);
+    const x = -0.42 + 0.18*Math.sin(u*Math.PI*2.0) + 0.06*Math.sin(u*Math.PI*5.0);
+    return {x, y};
+  };
+  const seamR = (t)=>{
+    const u=t;
+    const y = lerp(-0.92, 0.92, u);
+    const x =  0.42 - 0.18*Math.sin(u*Math.PI*2.0 + 0.6) + 0.06*Math.sin(u*Math.PI*5.0 + 0.9);
+    return {x, y};
+  };
+
+  const etchW = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--etchW")) || 3.2;
+  strokeOnSphere(seamL, 0, 1, 220, cx, cy, R, orbitX, orbitY, etchW*DPR, etchA);
+  strokeOnSphere(seamR, 0, 1, 220, cx, cy, R, orbitX, orbitY, etchW*0.92*DPR, etchA);
+
+  // CATFACE etched: eyes + nose + mouth (geometric, inside the sphere)
+  const eye = (side)=>(t)=>{
+    // almond loop in sphere coords
+    const a = t*Math.PI*2;
+    const ex = side*0.26;
+    const ey = -0.12;
+    const rx = 0.13, ry = 0.095;
+    // almond: ellipse with pinched ends
+    const x = ex + Math.cos(a)*rx*(1 - 0.22*Math.cos(a*2));
+    const y = ey + Math.sin(a)*ry;
+    return {x, y};
+  };
+  const pupil = (side)=>(t)=>{
+    const a=t*Math.PI*2;
+    const ex=side*0.26, ey=-0.12;
+    const rx=0.030, ry=0.080;
+    const x=ex + Math.cos(a)*rx;
+    const y=ey + Math.sin(a)*ry;
+    return {x,y};
+  };
+
+  strokeOnSphere(eye(-1), 0, 1, 160, cx, cy, R, orbitX*0.92, orbitY*0.92, 2.4*DPR, etchA*0.95);
+  strokeOnSphere(eye( 1), 0, 1, 160, cx, cy, R, orbitX*0.92, orbitY*0.92, 2.4*DPR, etchA*0.95);
+
+  strokeOnSphere(pupil(-1), 0, 1, 140, cx, cy, R, orbitX*0.92, orbitY*0.92, 2.0*DPR, etchA*0.55);
+  strokeOnSphere(pupil( 1), 0, 1, 140, cx, cy, R, orbitX*0.92, orbitY*0.92, 2.0*DPR, etchA*0.55);
+
+  // nose: inverted triangle + tiny highlight
+  const noseTri = (t)=>{
+    // 3 segments param
+    const pts = [{x:-0.03,y:0.18},{x:0.03,y:0.18},{x:0,y:0.235}];
+    const seg = Math.floor(t*3);
+    const u = (t*3) - seg;
+    const a=pts[seg%3], b=pts[(seg+1)%3];
+    return {x: lerp(a.x,b.x,u), y: lerp(a.y,b.y,u)};
+  };
+  strokeOnSphere(noseTri, 0, 1, 120, cx, cy, R, orbitX, orbitY, 2.6*DPR, etchA*0.92);
+
+  // mouth: symmetric "W" curve (cat)
+  const mouth = (t)=>{
+    const u=t;
+    const x = lerp(-0.20, 0.20, u);
+    const y = 0.27 + 0.07*Math.exp(-Math.pow((u-0.5)/0.32,2)) * Math.sin(u*Math.PI*2);
+    return {x,y};
+  };
+  strokeOnSphere(mouth, 0, 1, 180, cx, cy, R, orbitX, orbitY, 2.2*DPR, etchA*0.65);
+
+  // whisker rays (strict geometry)
+  function whisk(side){
+    return (t)=>{
+      const u=t;
+      const baseX=side*0.20, baseY=0.22;
+      const ang = (side>0?1:-1) * (0.10 + u*0.55);
+      const len = 0.55;
+      const x = baseX + side*(u*len);
+      const y = baseY - Math.sin(ang)*0.08 + Math.sin(u*Math.PI)*0.01;
+      return {x,y};
+    };
+  }
+  // 3 whiskers each side, offset by phase
+  for(let i=0;i<3;i++){
+    const off = i*0.06;
+    const wL = (t)=>{ const p=whisk(-1)(t); return {x:p.x, y:p.y + (i-1)*off}; };
+    const wR = (t)=>{ const p=whisk( 1)(t); return {x:p.x, y:p.y + (i-1)*off}; };
+    strokeOnSphere(wL, 0, 1, 120, cx, cy, R, orbitX, orbitY, 1.6*DPR, etchA*0.45);
+    strokeOnSphere(wR, 0, 1, 120, cx, cy, R, orbitX, orbitY, 1.6*DPR, etchA*0.45);
+  }
+
+  ctx.globalCompositeOperation = "source-over";
+
+  // rim (edge thickness cue)
+  ctx.strokeStyle = `rgba(255,255,255,${rimA})`;
+  ctx.lineWidth = 2.2*DPR;
+  ctx.beginPath();
+  ctx.arc(cx, cy, R-1.2*DPR, 0, Math.PI*2);
+  ctx.stroke();
+
+  // primary specular streak (glassy)
+  ctx.globalCompositeOperation = "screen";
+  ctx.strokeStyle = `rgba(255,255,255,${specA})`;
+  ctx.lineWidth = 2.0*DPR;
+  ctx.beginPath();
+  ctx.ellipse(cx + R*(0.18 + orbitX*0.18), cy - R*(0.22 + orbitY*0.10), R*0.22, R*0.48, -0.55, -1.0, 1.0);
+  ctx.stroke();
+
+  // secondary glint
+  ctx.strokeStyle = `rgba(255,255,255,${specA*0.38})`;
+  ctx.lineWidth = 1.4*DPR;
+  ctx.beginPath();
+  ctx.ellipse(cx - R*(0.26 - orbitX*0.10), cy - R*(0.06 + orbitY*0.06), R*0.10, R*0.22, 0.25, -1.1, 1.1);
+  ctx.stroke();
+
+  ctx.restore();
+  ctx.globalCompositeOperation = "source-over";
+}
+
+function render(now){
+  const dt = now - STATE.t0;
+  STATE.t0 = now;
+
+  // orbit smoothing (geometry-first; no chaotic camera)
+  const targetOX = STATE.mx*0.55;
+  const targetOY = STATE.my*0.38;
+  STATE.orbitX = lerp(STATE.orbitX, targetOX, 0.08);
+  STATE.orbitY = lerp(STATE.orbitY, targetOY, 0.08);
+
+  // bounce progression
+  if(STATE.bouncing){
+    const T = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--bounceT")) || 1050;
+    STATE.bProg = clamp((now - STATE.bStart)/T, 0, 1);
+    if(STATE.bProg >= 1){
+      STATE.bouncing = false;
+      STATE.bProg = 0;
+    }
+  }
+
+  const { z, squash, stretch } = bounceCurve(STATE.bouncing ? STATE.bProg : 0);
+
+  // Z-axis depth = scale only (centered on your eye)
+  const baseR = Math.min(W,H) * 0.24;
+  const farScale = 0.12; // distance min
+  const s = lerp(1.0, farScale, z);
+
+  // apply impact squash/stretch as purely geometric scale (no translation)
+  const sx = s * squash;
+  const sy = s * stretch;
+
+  // clear
+  ctx.clearRect(0,0,W,H);
+
+  // center
+  const cx = W/2;
+  const cy = H/2;
+
+  // set transform for ball draw (centered)
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.scale(sx, sy);
+  ctx.translate(-cx, -cy);
+
+  drawGlassBall(
+    cx, cy,
+    baseR,
+    STATE.orbitX,
+    STATE.orbitY,
+    parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--glassA")) || 0.22,
+    parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--rimA")) || 0.32,
+    parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--specA")) || 0.85,
+    parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--etchA")) || 0.92
+  );
+
+  ctx.restore();
+
+  // minimal frame tick (geometry anchor)
+  ctx.strokeStyle = "rgba(255,255,255,0.06)";
+  ctx.lineWidth = 1*DPR;
+  ctx.strokeRect(10*DPR,10*DPR, W-20*DPR, H-20*DPR);
+
+  requestAnimationFrame(render);
+}
+requestAnimationFrame(render);
+</script>
+
+<!--
+AE: KETA_MONO_GLASS_CATBALL
+EE: glass-sphere + etched-tennis-seams + catface-geometry + z-bounce
+WB: single-file_html
+
+FILE_ID: KETA-GLASS-CATBALL-001
+ROOM_ID: BASE
+VERSION: v1.0
+UPDATED_AT: 2026-01-08
+CHANGELOG:
+- Glass sphere (no textures) with rim + specular geometry
+- Tennis seam topology etched into glass (mirrored S-curves)
+- Catface etching (eyes/pupils/nose/mouth/whiskers) fused as geometry
+- Bounce is Z-axis only (scale-to-distance) with impact squash/stretch
+- Mouse orbit adjusts projection (geometry-first)
+-->
+</body>
+</html>
