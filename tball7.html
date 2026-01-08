@@ -1,0 +1,272 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>KETA_MONO // BLACK TENNIS (Z-AXIS)</title>
+<style>
+:root{
+  --bg:#000;
+  --ink:#fff;
+  --size: 440px;
+
+  /* z-axis */
+  --farScale: .08;
+  --bounceScale: .20;
+  --t: 1160ms;
+
+  /* seam + depth */
+  --seamW: 7.5;
+  --frontA: .96;
+  --backA: .22;
+  --channelW: 3.0;         /* black groove down the seam */
+
+  /* wrap */
+  --clipInset: 0px;
+  --seamPad: 3px;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);overflow:hidden}
+#root{
+  position:fixed; inset:0;
+  display:flex; align-items:center; justify-content:center;
+  cursor:pointer; user-select:none;
+}
+#rig{
+  width:var(--size);
+  height:var(--size);
+  transform: scale(1);
+  will-change: transform;
+}
+#root.fire #rig{
+  animation: zdepth var(--t) cubic-bezier(.20,.88,.18,1) forwards;
+}
+@keyframes zdepth{
+  0%{transform:scale(1)}
+  46%{transform:scale(var(--farScale))}
+  60%{transform:scale(calc(var(--farScale)*.88))}
+  76%{transform:scale(var(--bounceScale))}
+  100%{transform:scale(1)}
+}
+
+/* BALL — close to your reference, slightly more dimensional */
+#ball{
+  position:absolute;
+  inset:0;
+  border-radius:50%;
+  background:
+    radial-gradient(circle at 35% 35%,
+      rgba(92,92,92,1) 0%,
+      rgba(52,52,52,1) 22%,
+      rgba(18,18,18,1) 52%,
+      rgba(0,0,0,1) 100%);
+  box-shadow:
+    inset -26px -26px 64px rgba(0,0,0,.92),
+    inset  16px  16px 44px rgba(255,255,255,.10),
+    0 30px 80px rgba(0,0,0,.84);
+}
+/* slight rim darkening only (keeps ref look) */
+#ball::after{
+  content:"";
+  position:absolute; inset:0; border-radius:50%;
+  background:
+    radial-gradient(circle at 50% 50%,
+      rgba(0,0,0,0) 58%,
+      rgba(0,0,0,.22) 84%,
+      rgba(0,0,0,.52) 100%);
+  pointer-events:none;
+}
+
+/* SEAMS — hard clip to circle so they wrap */
+#seams{
+  position:absolute;
+  inset: var(--clipInset);
+  border-radius:50%;
+  pointer-events:none;
+  overflow:hidden;
+  filter: drop-shadow(0 2px 3px rgba(0,0,0,.6));
+}
+#seams svg{
+  width:calc(100% + var(--seamPad)*2);
+  height:calc(100% + var(--seamPad)*2);
+  margin:calc(var(--seamPad) * -1);
+  display:block;
+}
+.curve, .curve-back, .channel, .channel-back{
+  fill:none;
+  stroke-linecap:round;
+  stroke-linejoin:round;
+}
+
+/* white seam */
+.curve{
+  stroke:rgba(255,255,255,var(--frontA));
+  stroke-width:var(--seamW);
+}
+.curve-back{
+  stroke:rgba(255,255,255,var(--backA));
+  stroke-width:var(--seamW);
+}
+
+/* black groove centered in the seam (dimension, but still reference-clean) */
+.channel{
+  stroke:rgba(0,0,0,.82);
+  stroke-width:calc(var(--seamW) - var(--channelW));
+}
+.channel-back{
+  stroke:rgba(0,0,0,.55);
+  stroke-width:calc(var(--seamW) - var(--channelW));
+}
+
+/* HUD */
+#label{
+  position:absolute;
+  top:18px;
+  left:18px;
+  font-family: ui-monospace, monospace;
+  font-size:11px;
+  color:rgba(255,255,255,.42);
+  letter-spacing:.04em;
+  line-height:1.7;
+}
+#label b{ color:rgba(255,255,255,.88); font-weight:600; }
+#meta{
+  position:absolute;
+  top:18px;
+  right:18px;
+  font-family: ui-monospace, monospace;
+  font-size:10px;
+  color:rgba(255,255,255,.32);
+  text-align:right;
+  line-height:1.8;
+  letter-spacing:.05em;
+}
+#meta dt{ text-transform:uppercase; margin-bottom:1px; }
+#meta dd{ margin:0 0 10px 0; color:rgba(255,255,255,.78); }
+@media (max-width:520px){
+  :root{ --size: 320px; }
+  #meta{ display:none; }
+}
+</style>
+</head>
+
+<body>
+<div id="root">
+  <div id="label">
+    KETA_MONO // BLACK TENNIS<br>
+    <b>CLICK/SPACE</b> Z-AXIS BOUNCE
+  </div>
+
+  <dl id="meta">
+    <dt>TYPE</dt><dd>TENNIS BALL</dd>
+    <dt>COLOR</dt><dd>BLACK</dd>
+    <dt>DIA</dt><dd>67MM</dd>
+    <dt>MASS</dt><dd>58G</dd>
+  </dl>
+
+  <div id="rig">
+    <div id="ball"></div>
+    <div id="seams">
+      <svg viewBox="-220 -220 440 440" xmlns="http://www.w3.org/2000/svg">
+        <g id="seamGroup"></g>
+      </svg>
+    </div>
+  </div>
+</div>
+
+<script>
+/* Remake like reference:
+   - NO weird tiering / no auto-spin / no extra “internal” effects
+   - Keep the param seam you liked
+   - Make it wrap by:
+     (1) overscanning radius a bit
+     (2) hard clipping to the circle
+   - Add dimension with ONLY a central black groove inside the seam
+*/
+
+const seamGroup = document.getElementById('seamGroup');
+
+const A = 0.44;
+const steps = 520;
+const R = 214;                 // overscan so the seam reaches rim (wrap)
+const VIS = -0.04;             // front/back threshold tuned to feel like sphere wrap
+
+const points = [];
+for (let i = 0; i <= steps; i++) {
+  const T = (i / steps) * 4 * Math.PI;
+
+  const x = Math.sin(Math.PI/2 - (Math.PI/2 - A) * Math.cos(T)) * Math.cos(T/2 + A * Math.sin(2*T));
+  const y = Math.sin(Math.PI/2 - (Math.PI/2 - A) * Math.cos(T)) * Math.sin(T/2 + A * Math.sin(2*T));
+  const z = Math.cos(Math.PI/2 - (Math.PI/2 - A) * Math.cos(T));
+
+  points.push({ x: x * R, y: y * R, z });
+}
+
+function mkPath(cls, p){
+  const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  path.setAttribute('class', cls);
+  path.setAttribute('d', `M ${p.x.toFixed(2)} ${p.y.toFixed(2)}`);
+  seamGroup.appendChild(path);
+  return path;
+}
+
+function build(clsFront, clsBack){
+  let cur=null;
+  let curFront=null;
+
+  for (let i=0;i<points.length;i++){
+    const p=points[i];
+    const isFront = p.z > VIS;
+    const cls = isFront ? clsFront : clsBack;
+
+    if(!cur || cls!==curFront){
+      cur = mkPath(cls, p);
+      curFront = cls;
+    }else{
+      cur.setAttribute('d', cur.getAttribute('d') + ` L ${p.x.toFixed(2)} ${p.y.toFixed(2)}`);
+    }
+  }
+}
+
+// Pass 1: white seam
+build('curve','curve-back');
+// Pass 2: black groove
+build('channel','channel-back');
+
+/* Bounce */
+const root = document.getElementById("root");
+let firing=false;
+function fire(){
+  if(firing) return;
+  firing=true;
+  root.classList.remove("fire");
+  void root.offsetWidth;
+  root.classList.add("fire");
+  setTimeout(()=>{
+    root.classList.remove("fire");
+    firing=false;
+  }, 1180);
+}
+root.addEventListener("click", fire);
+window.addEventListener("keydown", e=>{
+  if(e.code==="Space"){ e.preventDefault(); fire(); }
+},{passive:false});
+</script>
+
+<!--
+AE: KETA_MONO_BLACK_TENNIS_Z
+EE: ref-style ball + wrapped seam (overscan+circle clip) + seam groove for dimension
+WB: single-file_html
+
+FILE_ID: KETA-MONO-TENNIS-Z-027
+ROOM_ID: BASE
+VERSION: v3.5
+UPDATED_AT: 2026-01-08
+CHANGELOG:
+- Remade to match reference: clean, static, no extra effects
+- Seam wraps to rim via overscan radius + hard circle clip
+- Added only a central black groove inside seam for depth
+- Kept Z-axis bounce behavior unchanged
+-->
+</body>
+</html>
