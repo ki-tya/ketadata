@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>KETA_MONO // BLACK TENNIS (Z-AXIS)</title>
+<style>
+:root{
+  --bg:#000;
+  --ink:#fff;
+  --size: 440px;
+
+  /* z-axis */
+  --farScale: .08;
+  --bounceScale: .20;
+  --t: 1160ms;
+
+  /* seam */
+  --seamW: 7.5;
+  --backA: .30;
+
+  /* lighting */
+  --glowA: .10;
+}
+*{box-sizing:border-box}
+html,body{
+  margin:0;
+  height:100%;
+  background:var(--bg);
+  overflow:hidden;
+}
+#root{
+  position:fixed;
+  inset:0;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  cursor:pointer;
+  user-select:none;
+}
+#rig{
+  width:var(--size);
+  height:var(--size);
+  transform: scale(1);
+  will-change: transform;
+}
+#root.fire #rig{
+  animation: zdepth var(--t) cubic-bezier(.20,.88,.18,1) forwards;
+}
+@keyframes zdepth{
+  0%{ transform: scale(1); }
+  46%{ transform: scale(var(--farScale)); }
+  60%{ transform: scale(calc(var(--farScale) * .88)); }
+  76%{ transform: scale(var(--bounceScale)); }
+  100%{ transform: scale(1); }
+}
+
+/* BALL */
+#ball{
+  position:absolute;
+  inset:0;
+  border-radius:50%;
+  background:
+    radial-gradient(circle at 35% 35%,
+      rgba(85,85,85,1) 0%,
+      rgba(45,45,45,1) 20%,
+      rgba(18,18,18,1) 50%,
+      rgba(0,0,0,1) 100%);
+  box-shadow:
+    inset -25px -25px 60px rgba(0,0,0,.92),
+    inset  18px  18px 46px rgba(255,255,255,.10),
+    0 30px 80px rgba(0,0,0,.82);
+}
+
+/* subtle rim so it reads as sphere, not disc */
+#ball::after{
+  content:"";
+  position:absolute;
+  inset:0;
+  border-radius:50%;
+  background:
+    radial-gradient(circle at 50% 50%,
+      rgba(0,0,0,0) 58%,
+      rgba(0,0,0,.35) 82%,
+      rgba(0,0,0,.65) 100%);
+  pointer-events:none;
+}
+
+/* SEAMS */
+#seams{
+  position:absolute;
+  inset:0;
+  border-radius:50%;
+  pointer-events:none;
+  filter: drop-shadow(0 2px 3px rgba(0,0,0,.6));
+}
+.curve{
+  stroke:var(--ink);
+  stroke-width:var(--seamW);
+  fill:none;
+  stroke-linecap:round;
+  stroke-linejoin:round;
+}
+.curve-back{
+  stroke:rgba(255,255,255,var(--backA));
+  stroke-width:var(--seamW);
+  fill:none;
+  stroke-linecap:round;
+  stroke-linejoin:round;
+}
+
+/* HUD */
+#label{
+  position:absolute;
+  top:18px;
+  left:18px;
+  font-family: ui-monospace, monospace;
+  font-size:11px;
+  color:rgba(255,255,255,.42);
+  letter-spacing:.04em;
+  line-height:1.7;
+}
+#label b{
+  color:rgba(255,255,255,.88);
+  font-weight:600;
+}
+#meta{
+  position:absolute;
+  top:18px;
+  right:18px;
+  font-family: ui-monospace, monospace;
+  font-size:10px;
+  color:rgba(255,255,255,.32);
+  text-align:right;
+  line-height:1.8;
+  letter-spacing:.05em;
+}
+#meta dt{
+  text-transform:uppercase;
+  margin-bottom:1px;
+}
+#meta dd{
+  margin:0 0 10px 0;
+  color:rgba(255,255,255,.78);
+}
+@media (max-width:520px){
+  :root{ --size: 320px; }
+  #meta{ display:none; }
+}
+</style>
+</head>
+
+<body>
+<div id="root">
+  <div id="label">
+    KETA_MONO // BLACK TENNIS<br>
+    <b>CLICK/SPACE</b> Z-AXIS BOUNCE
+  </div>
+
+  <dl id="meta">
+    <dt>TYPE</dt><dd>TENNIS BALL</dd>
+    <dt>COLOR</dt><dd>BLACK</dd>
+    <dt>DIA</dt><dd>67MM</dd>
+    <dt>MASS</dt><dd>58G</dd>
+  </dl>
+
+  <div id="rig">
+    <div id="ball"></div>
+    <div id="seams">
+      <svg width="100%" height="100%" viewBox="-220 -220 440 440" xmlns="http://www.w3.org/2000/svg">
+        <g id="seamGroup"></g>
+      </svg>
+    </div>
+  </div>
+</div>
+
+<script>
+/* Tennis seam curve (parametric), rendered as front/back segments by z.
+   Kept simple: no highlights, no internal arcs, just the ball + seams + bounce. */
+const A = 0.44;
+const steps = 520;      // higher = smoother
+const R = 200;
+
+const points = [];
+for (let i = 0; i <= steps; i++) {
+  const T = (i / steps) * 4 * Math.PI;
+
+  // seam curve on sphere (stylized but reads correctly)
+  const x = Math.sin(Math.PI/2 - (Math.PI/2 - A) * Math.cos(T)) * Math.cos(T/2 + A * Math.sin(2*T));
+  const y = Math.sin(Math.PI/2 - (Math.PI/2 - A) * Math.cos(T)) * Math.sin(T/2 + A * Math.sin(2*T));
+  const z = Math.cos(Math.PI/2 - (Math.PI/2 - A) * Math.cos(T));
+
+  points.push({ x: x * R, y: y * R, z });
+}
+
+// segment into paths by visibility
+const seamGroup = document.getElementById('seamGroup');
+let currentPath = null;
+let currentClass = null;
+
+function newPath(cls, p){
+  const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  path.setAttribute('class', cls);
+  path.setAttribute('d', `M ${p.x.toFixed(2)} ${p.y.toFixed(2)}`);
+  seamGroup.appendChild(path);
+  return path;
+}
+
+for (let i = 0; i < points.length; i++) {
+  const p = points[i];
+
+  // front/back threshold; slightly stricter than before for cleaner wrap
+  const isVisible = p.z > -0.04;
+  const cls = isVisible ? 'curve' : 'curve-back';
+
+  if (!currentPath || cls !== currentClass) {
+    currentPath = newPath(cls, p);
+    currentClass = cls;
+  } else {
+    const d = currentPath.getAttribute('d');
+    currentPath.setAttribute('d', d + ` L ${p.x.toFixed(2)} ${p.y.toFixed(2)}`);
+  }
+}
+
+// Bounce
+const root = document.getElementById("root");
+let firing=false;
+
+function fire(){
+  if(firing) return;
+  firing=true;
+  root.classList.remove("fire");
+  void root.offsetWidth;
+  root.classList.add("fire");
+  setTimeout(()=>{
+    root.classList.remove("fire");
+    firing=false;
+  }, 1180);
+}
+
+root.addEventListener("click", fire);
+window.addEventListener("keydown", e=>{
+  if(e.code==="Space"){
+    e.preventDefault();
+    fire();
+  }
+}, {passive:false});
+</script>
+
+<!--
+AE: KETA_MONO_BLACK_TENNIS_Z
+EE: z-axis-bounce + sphere-shading + parametric seam front/back
+WB: single-file_html
+
+FILE_ID: KETA-MONO-TENNIS-Z-024
+ROOM_ID: BASE
+VERSION: v3.2
+UPDATED_AT: 2026-01-08
+CHANGELOG:
+- Matches the simple black-tennis reference style
+- Removed highlight streaks + internal arcs entirely
+- Keeps parametric seam with front/back segmentation
+- Keeps Z-axis bounce (click/space)
+- Adds subtle rim darkening to avoid “disc” read
+-->
+</body>
+</html>
