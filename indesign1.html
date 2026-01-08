@@ -1,0 +1,1217 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>KETADATA // BLACK VINYL MANUAL MAKER (LOCAL-FIRST)</title>
+<style>
+  :root{
+    --bg:#000;
+    --ink:rgba(255,255,255,.86);
+    --muted:rgba(255,255,255,.52);
+    --faint:rgba(255,255,255,.28);
+    --line:rgba(255,255,255,.14);
+    --line2:rgba(255,255,255,.22);
+
+    --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace;
+    --sans: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+
+    --top:44px;
+    --bot:34px;
+
+    --ui:12px; /* uniform text size */
+    --pad:10px;
+
+    --pageW:816px;
+    --pageH:1056px;
+    --zoom:1;
+
+    --grid:24px;
+    --bleed:24px;
+    --margin:48px;
+
+    --shadow: 0 0 0 1px rgba(255,255,255,.10), 0 10px 40px rgba(0,0,0,.65);
+  }
+
+  *{box-sizing:border-box}
+  html,body{height:100%; margin:0}
+  body{
+    background:var(--bg);
+    color:var(--ink);
+    font-family:var(--sans);
+    font-size:var(--ui);
+    overflow:hidden;
+  }
+
+  /* ===== bars ===== */
+  #topbar, #botbar{
+    position:fixed; left:0; right:0;
+    display:flex; align-items:center; gap:10px;
+    padding:0 var(--pad);
+    background:rgba(0,0,0,.88);
+    z-index:100;
+  }
+  #topbar{top:0; height:var(--top); border-bottom:1px solid var(--line)}
+  #botbar{bottom:0; height:var(--bot); border-top:1px solid var(--line)}
+  .brand{font-family:var(--mono); color:var(--muted); white-space:nowrap}
+  .pill{
+    font-family:var(--mono);
+    color:var(--muted);
+    border:1px solid var(--line);
+    padding:4px 8px;
+    line-height:1;
+    user-select:none;
+    background:rgba(0,0,0,.55);
+    white-space:nowrap;
+  }
+  .btn{
+    font-family:var(--mono);
+    font-size:var(--ui);
+    color:var(--ink);
+    background:rgba(0,0,0,.55);
+    border:1px solid var(--line);
+    padding:6px 10px;
+    cursor:pointer;
+    user-select:none;
+  }
+  .btn:hover{border-color:var(--line2)}
+  .btn:active{transform:translateY(1px)}
+  .btn.dim{color:var(--muted)}
+  .btn.danger{border-color:rgba(255,255,255,.28)}
+  .sep{flex:1}
+  .readout{font-family:var(--mono); color:var(--muted); white-space:nowrap}
+
+  /* ===== layout ===== */
+  #main{
+    position:fixed;
+    top:var(--top);
+    bottom:var(--bot);
+    left:0; right:0;
+    display:grid;
+    grid-template-columns: 320px 1fr 360px;
+  }
+
+  .panel{
+    background:rgba(0,0,0,.72);
+    overflow:hidden;
+    display:flex;
+    flex-direction:column;
+    min-width:240px;
+    z-index:10;
+  }
+  .panel.left{border-right:1px solid var(--line)}
+  .panel.right{border-left:1px solid var(--line)}
+  .ph{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    padding:8px 10px;
+    border-bottom:1px solid var(--line);
+    background:rgba(0,0,0,.82);
+    font-family:var(--mono);
+    color:var(--muted);
+    user-select:none;
+  }
+  .pc{
+    padding:10px;
+    overflow:auto;
+    flex:1;
+  }
+
+  .field{
+    display:flex;
+    gap:8px;
+    align-items:center;
+    margin-bottom:8px;
+  }
+  .field label{
+    width:96px;
+    font-family:var(--mono);
+    color:var(--muted);
+  }
+  input[type="text"], input[type="number"], select, textarea{
+    width:100%;
+    background:rgba(0,0,0,.55);
+    color:var(--ink);
+    border:1px solid var(--line);
+    padding:6px 8px;
+    font-family:var(--mono);
+    font-size:var(--ui);
+    outline:none;
+  }
+  textarea{min-height:120px; resize:vertical}
+  .row{display:flex; gap:8px}
+  .row > *{flex:1}
+
+  /* ===== stage ===== */
+  #stageWrap{
+    position:relative;
+    overflow:auto;
+    background:#000;
+  }
+  #stage{
+    position:relative;
+    width:100%;
+    min-height:100%;
+    display:flex;
+    align-items:flex-start;
+    justify-content:center;
+    padding:30px 40px;
+  }
+  #page{
+    position:relative;
+    width:var(--pageW);
+    height:var(--pageH);
+    background:#000;
+    box-shadow:var(--shadow);
+    border:1px solid rgba(255,255,255,.10);
+    transform: scale(var(--zoom));
+    transform-origin: top center;
+  }
+
+  /* overlays must not block clicks */
+  .overlay{position:absolute; inset:0; pointer-events:none}
+
+  #gridOverlay{opacity:0}
+  #gridOverlay.on{opacity:.22}
+  #gridOverlay::before{
+    content:"";
+    position:absolute; inset:0;
+    background:
+      linear-gradient(to right, rgba(255,255,255,.10) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(255,255,255,.10) 1px, transparent 1px);
+    background-size: var(--grid) var(--grid);
+    mix-blend-mode:screen;
+  }
+
+  #bleedOverlay{opacity:0}
+  #bleedOverlay.on{opacity:1}
+  #bleedOverlay .r{position:absolute; border:1px dashed rgba(255,255,255,.18)}
+  #bleedOverlay .b{inset:calc(var(--bleed) * -1)}
+  #bleedOverlay .m{inset:var(--margin); border-color:rgba(255,255,255,.16)}
+
+  /* frames */
+  .frame{
+    position:absolute;
+    border:1px solid rgba(255,255,255,.18);
+    background:rgba(0,0,0,.55);
+  }
+  .frame.sel{border-color:rgba(255,255,255,.48)}
+  .frame .cap{
+    position:absolute;
+    left:0; right:0; top:-22px;
+    height:20px;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:8px;
+    padding:0 6px;
+    background:rgba(0,0,0,.78);
+    border:1px solid rgba(255,255,255,.12);
+    font-family:var(--mono);
+    color:var(--muted);
+    cursor:move;
+    user-select:none;
+    pointer-events:auto;
+  }
+  .cap .name{white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:70%}
+  .cap .mini{display:flex; gap:6px}
+  .cap button{
+    font-family:var(--mono);
+    font-size:var(--ui);
+    color:var(--muted);
+    background:transparent;
+    border:1px solid rgba(255,255,255,.12);
+    padding:2px 6px;
+    cursor:pointer;
+  }
+  .cap button:hover{border-color:rgba(255,255,255,.22); color:var(--ink)}
+
+  .frame .body{position:absolute; inset:0; padding:10px; overflow:hidden}
+
+  .text{
+    width:100%;
+    height:100%;
+    overflow:auto;
+    outline:none;
+    font-family:var(--mono);
+    font-size:var(--ui);
+    line-height:1.35;
+    color:var(--ink);
+    white-space:pre-wrap;
+  }
+  .text[data-style="muted"]{color:var(--muted)}
+  .text[data-style="faint"]{color:var(--faint)}
+  .text[data-style="ink"]{color:var(--ink)}
+  .text[data-align="left"]{text-align:left}
+  .text[data-align="center"]{text-align:center}
+  .text[data-align="right"]{text-align:right}
+  .text[data-track="1"]{letter-spacing:.02em}
+  .text[data-track="2"]{letter-spacing:.06em}
+  .text[data-track="3"]{letter-spacing:.10em}
+
+  /* resize handles */
+  .h{
+    position:absolute; width:10px; height:10px;
+    background:rgba(255,255,255,.22);
+    border:1px solid rgba(0,0,0,.9);
+    z-index:5;
+    pointer-events:auto;
+  }
+  .h.nw{left:-5px; top:-5px; cursor:nwse-resize}
+  .h.ne{right:-5px; top:-5px; cursor:nesw-resize}
+  .h.sw{left:-5px; bottom:-5px; cursor:nesw-resize}
+  .h.se{right:-5px; bottom:-5px; cursor:nwse-resize}
+
+  /* page list */
+  .list{display:flex; flex-direction:column; gap:6px}
+  .item{
+    border:1px solid var(--line);
+    padding:8px;
+    background:rgba(0,0,0,.55);
+    cursor:pointer;
+    user-select:none;
+    display:flex;
+    justify-content:space-between;
+    gap:10px;
+  }
+  .item:hover{border-color:var(--line2)}
+  .item.on{border-color:rgba(255,255,255,.48)}
+  .item .meta{font-family:var(--mono); color:var(--muted); overflow:hidden}
+  .item .tag{font-family:var(--mono); color:var(--faint); white-space:nowrap}
+  .small{font-family:var(--mono); color:var(--muted); margin:10px 0 6px}
+
+  .noteBox{
+    border:1px solid var(--line);
+    padding:10px;
+    background:rgba(0,0,0,.55);
+    font-family:var(--mono);
+    color:var(--muted);
+    line-height:1.35;
+    white-space:pre-wrap;
+  }
+
+  /* error trap */
+  #err{
+    display:none;
+    position:fixed;
+    left:10px; right:10px;
+    top:calc(var(--top) + 10px);
+    padding:10px;
+    border:1px solid rgba(255,255,255,.22);
+    background:rgba(0,0,0,.92);
+    color:rgba(255,255,255,.86);
+    font-family:var(--mono);
+    z-index:9999;
+    white-space:pre-wrap;
+  }
+
+  @media print{
+    #topbar,#botbar,#leftPanel,#rightPanel,#err{display:none !important}
+    #main{display:block}
+    #stageWrap{position:static; overflow:visible}
+    #stage{padding:0; justify-content:flex-start}
+    #page{transform:none !important; box-shadow:none; border:none}
+    .frame .cap, .h{display:none !important}
+    .frame{border:none !important; background:transparent !important}
+    .frame .body{padding:0}
+    .text{overflow:visible}
+  }
+</style>
+</head>
+
+<body>
+  <div id="err"></div>
+
+  <div id="topbar">
+    <div class="brand">KETADATA // BLACK VINYL MANUAL MAKER</div>
+    <div class="pill" id="filePill">FILE_ID: —</div>
+    <div class="pill" id="pagePill">PAGE: —</div>
+    <div class="sep"></div>
+
+    <button class="btn" id="btnNewPage" type="button">NEW PAGE</button>
+    <button class="btn" id="btnDupPage" type="button">DUP</button>
+    <button class="btn" id="btnDelPage" type="button">DEL</button>
+
+    <button class="btn" id="btnAddText" type="button">ADD TEXT FRAME</button>
+    <button class="btn dim" id="btnGrid" type="button">GRID: OFF</button>
+    <button class="btn dim" id="btnBleed" type="button">BLEED/MARGIN: OFF</button>
+
+    <button class="btn" id="btnPrint" type="button">PRINT</button>
+    <button class="btn" id="btnExportJSON" type="button">EXPORT JSON</button>
+    <button class="btn" id="btnExportHTML" type="button">EXPORT HTML</button>
+    <button class="btn" id="btnImport" type="button">IMPORT</button>
+    <input id="importFile" type="file" accept=".json" style="display:none"/>
+  </div>
+
+  <div id="main">
+    <div class="panel left" id="leftPanel">
+      <div class="ph">
+        <div>PAGES</div>
+        <div class="readout" id="countReadout">—</div>
+      </div>
+      <div class="pc">
+        <div class="field">
+          <label>DOC</label>
+          <input id="docTitle" type="text" placeholder="BLACK VINYL MANUAL"/>
+        </div>
+        <div class="row">
+          <button class="btn" id="btnPrev" type="button">PREV</button>
+          <button class="btn" id="btnNext" type="button">NEXT</button>
+        </div>
+
+        <div class="small">PAGE LIST</div>
+        <div class="list" id="pageList"></div>
+
+        <div class="small">PAGE META</div>
+        <div class="field">
+          <label>LABEL</label>
+          <input id="pageLabel" type="text" placeholder="SIDE A / TRACK 01"/>
+        </div>
+        <div class="field">
+          <label>TAG</label>
+          <input id="pageTag" type="text" placeholder="A / B / C"/>
+        </div>
+        <div class="row">
+          <button class="btn" id="btnReorderUp" type="button">MOVE UP</button>
+          <button class="btn" id="btnReorderDown" type="button">MOVE DOWN</button>
+        </div>
+
+        <div class="small">PAGE SIZE</div>
+        <div class="field">
+          <label>PRESET</label>
+          <select id="pagePreset">
+            <option value="letter">US LETTER (8.5x11)</option>
+            <option value="a4">A4</option>
+            <option value="square">SQUARE (12x12)</option>
+            <option value="vinyl">VINYL JACKET (12.375x12.375)</option>
+            <option value="custom">CUSTOM</option>
+          </select>
+        </div>
+        <div class="row">
+          <div class="field">
+            <label>W</label>
+            <input id="pageW" type="number" min="100" step="1"/>
+          </div>
+          <div class="field">
+            <label>H</label>
+            <input id="pageH" type="number" min="100" step="1"/>
+          </div>
+        </div>
+
+        <div class="small">ZOOM</div>
+        <div class="row">
+          <button class="btn" id="btnZoomOut" type="button">-</button>
+          <button class="btn" id="btnZoomIn" type="button">+</button>
+          <button class="btn" id="btnZoom100" type="button">100%</button>
+        </div>
+
+        <div class="small">SAVE</div>
+        <div class="row">
+          <button class="btn" id="btnSave" type="button">SAVE NOW</button>
+          <button class="btn dim" id="btnResetView" type="button">CENTER</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="stageWrap">
+      <div id="stage">
+        <div id="page">
+          <div class="overlay" id="gridOverlay"></div>
+          <div class="overlay" id="bleedOverlay">
+            <div class="r b"></div>
+            <div class="r m"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel right" id="rightPanel">
+      <div class="ph">
+        <div>FRAME / NOTES</div>
+        <div class="readout" id="selReadout">SEL: —</div>
+      </div>
+      <div class="pc">
+        <div class="small">SELECTED FRAME</div>
+        <div class="field">
+          <label>NAME</label>
+          <input id="fName" type="text" placeholder="TRACK BLOCK"/>
+        </div>
+        <div class="row">
+          <div class="field">
+            <label>X</label>
+            <input id="fX" type="number" step="1"/>
+          </div>
+          <div class="field">
+            <label>Y</label>
+            <input id="fY" type="number" step="1"/>
+          </div>
+        </div>
+        <div class="row">
+          <div class="field">
+            <label>W</label>
+            <input id="fW" type="number" step="1"/>
+          </div>
+          <div class="field">
+            <label>H</label>
+            <input id="fH" type="number" step="1"/>
+          </div>
+        </div>
+
+        <div class="small">TEXT STYLE</div>
+        <div class="field">
+          <label>INK</label>
+          <select id="tInk">
+            <option value="ink">INK</option>
+            <option value="muted">MUTED</option>
+            <option value="faint">FAINT</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>ALIGN</label>
+          <select id="tAlign">
+            <option value="left">LEFT</option>
+            <option value="center">CENTER</option>
+            <option value="right">RIGHT</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>TRACK</label>
+          <select id="tTrack">
+            <option value="1">TIGHT</option>
+            <option value="2">MID</option>
+            <option value="3">WIDE</option>
+          </select>
+        </div>
+
+        <div class="row">
+          <button class="btn" id="btnBringFront" type="button">FRONT</button>
+          <button class="btn" id="btnSendBack" type="button">BACK</button>
+        </div>
+        <div class="row">
+          <button class="btn danger" id="btnDelFrame" type="button">DELETE</button>
+          <button class="btn" id="btnDeselect" type="button">DESELECT</button>
+        </div>
+
+        <div class="small">NOTES PANEL (REFERENCE)</div>
+        <div class="noteBox" id="notesBox"></div>
+
+        <div class="small">DOC NOTES (LOCAL)</div>
+        <textarea id="docNotes" placeholder="free notes; stored in your file state"></textarea>
+      </div>
+    </div>
+  </div>
+
+  <div id="botbar">
+    <div class="readout" id="sig">—</div>
+    <div class="sep"></div>
+    <div class="readout" id="status">LOCAL-FIRST • AUTO-SAVE</div>
+  </div>
+
+<script>
+/* =========================
+   HARDENED RUNTIME
+   - DOMContentLoaded boot
+   - structuredClone fallback
+   - visible error panel if anything crashes
+   ========================= */
+
+(function(){
+  const errBox = document.getElementById("err");
+  function showErr(msg){
+    errBox.style.display="block";
+    errBox.textContent = String(msg||"ERROR");
+  }
+  window.addEventListener("error", (e)=>{
+    showErr("RUNTIME ERROR:\n" + (e && (e.message||e.error||e)) );
+  });
+  window.addEventListener("unhandledrejection", (e)=>{
+    showErr("UNHANDLED PROMISE:\n" + (e && (e.reason && (e.reason.message||e.reason) || e)) );
+  });
+
+  // structuredClone fallback
+  if(typeof window.structuredClone !== "function"){
+    window.structuredClone = (obj)=>JSON.parse(JSON.stringify(obj));
+  }
+
+  document.addEventListener("DOMContentLoaded", boot);
+
+  function boot(){
+    const $ = (id)=>document.getElementById(id);
+    const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+    const uid=()=>Math.random().toString(16).slice(2)+Date.now().toString(16);
+    const nowISO=()=>new Date().toISOString();
+    const STORAGE_NS="KETADATA_BV_MANUAL_MAKER::";
+
+    const DEFAULT_NOTES =
+`BLACK VINYL MANUAL INTENT
+- object, not documentation
+- laws/primitives/contracts/warnings/gloss fragments
+- sides/tracks, non-linear
+
+FORMAT
+- black / white / grey only
+- uniform text size, hierarchy via opacity/weight only
+- tactile, minimal, surgical
+
+REJECTED
+- onboarding/tutorial voice
+- screenshots/diagrams
+- persuasion`;
+
+    let FILE_ID = localStorage.getItem(STORAGE_NS+"FILE_ID");
+    if(!FILE_ID){
+      FILE_ID = "BV_"+uid().slice(0,10).toUpperCase();
+      localStorage.setItem(STORAGE_NS+"FILE_ID", FILE_ID);
+    }
+
+    function escapeHTML(s){
+      return String(s||"").replace(/[&<>"']/g, c=>({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+    }
+
+    function makeTextFrame(x,y,w,h,name,ink,align,track,text){
+      return {
+        id: uid(),
+        type:"text",
+        name: name||"TEXT",
+        x: Math.round(x), y: Math.round(y),
+        w: Math.round(w), h: Math.round(h),
+        z: Date.now(),
+        text: text||"",
+        style:{ ink: ink||"ink", align: align||"left", track: track||"1" }
+      };
+    }
+
+    function defaultState(){
+      return {
+        meta:{
+          fileId: FILE_ID,
+          title:"BLACK VINYL MANUAL",
+          createdAt: nowISO(),
+          updatedAt: nowISO(),
+          version:"v1",
+          pagePreset:"letter",
+          pageW:816, pageH:1056,
+          gridOn:false, bleedOn:false,
+          zoom:1,
+          grid:24, bleed:24, margin:48
+        },
+        pages:[{
+          id: uid(),
+          label:"SIDE A / TRACK 01",
+          tag:"A",
+          frames:[
+            makeTextFrame(80,80,656,240,"TRACK_01","ink","left","1",
+`LAW:
+KETADATA IS A ZERO-FRICTION MIND MACHINE.
+KETA_NOTE IS OPTIONAL, MOVABLE, NON-INTERFERING.`),
+            makeTextFrame(80,360,656,320,"TRACK_01B","muted","left","1",
+`CONTRACT:
+CLICK ARMS, GO COMMITS.
+STATE IS LITERAL UI SUBSTANCE.`)
+          ]
+        }],
+        ui:{ pageIndex:0, selectedFrameId:null },
+        notes:{ reference: DEFAULT_NOTES, doc:"" }
+      };
+    }
+
+    function deepFill(obj, tmpl){
+      if(obj===null || obj===undefined) return structuredClone(tmpl);
+      if(typeof tmpl!=="object" || tmpl===null) return obj;
+      const out = Array.isArray(tmpl)
+        ? (Array.isArray(obj) ? obj : [])
+        : (typeof obj==="object" && obj ? obj : {});
+      if(Array.isArray(tmpl)) return out;
+      for(const k of Object.keys(tmpl)) out[k] = deepFill(out[k], tmpl[k]);
+      for(const k of Object.keys(obj||{})) if(!(k in out)) out[k]=obj[k];
+      return out;
+    }
+
+    function key(){ return STORAGE_NS + FILE_ID; }
+
+    let STATE;
+    try{
+      const raw = localStorage.getItem(key());
+      STATE = raw ? deepFill(JSON.parse(raw), defaultState()) : defaultState();
+      localStorage.setItem(key(), JSON.stringify(STATE));
+    }catch(e){
+      showErr("STATE LOAD FAILED:\n"+(e.message||e));
+      STATE = defaultState();
+    }
+
+    let autosaveT=null;
+    function saveState(){
+      try{
+        STATE.meta.updatedAt = nowISO();
+        localStorage.setItem(key(), JSON.stringify(STATE));
+        renderSig();
+      }catch(e){
+        showErr("SAVE FAILED:\n"+(e.message||e));
+      }
+    }
+    function scheduleSave(){
+      clearTimeout(autosaveT);
+      autosaveT=setTimeout(saveState, 250);
+    }
+
+    const PRESETS = {
+      letter:{w:816,h:1056},
+      a4:{w:794,h:1123},
+      square:{w:1152,h:1152},
+      vinyl:{w:1188,h:1188}
+    };
+
+    function applyPageVars(){
+      document.documentElement.style.setProperty("--pageW", STATE.meta.pageW+"px");
+      document.documentElement.style.setProperty("--pageH", STATE.meta.pageH+"px");
+      document.documentElement.style.setProperty("--zoom", String(STATE.meta.zoom));
+      document.documentElement.style.setProperty("--grid", STATE.meta.grid+"px");
+      document.documentElement.style.setProperty("--bleed", STATE.meta.bleed+"px");
+      document.documentElement.style.setProperty("--margin", STATE.meta.margin+"px");
+
+      $("gridOverlay").classList.toggle("on", !!STATE.meta.gridOn);
+      $("bleedOverlay").classList.toggle("on", !!STATE.meta.bleedOn);
+
+      $("pageW").value = STATE.meta.pageW;
+      $("pageH").value = STATE.meta.pageH;
+      $("pagePreset").value = STATE.meta.pagePreset || "letter";
+      $("btnGrid").textContent = "GRID: " + (STATE.meta.gridOn ? "ON":"OFF");
+      $("btnBleed").textContent = "BLEED/MARGIN: " + (STATE.meta.bleedOn ? "ON":"OFF");
+    }
+
+    function applyPreset(p){
+      if(p==="custom") return;
+      const s=PRESETS[p]||PRESETS.letter;
+      STATE.meta.pagePreset=p;
+      STATE.meta.pageW=s.w; STATE.meta.pageH=s.h;
+      applyPageVars();
+      scheduleSave();
+      render();
+    }
+
+    const pageEl=$("page");
+    function curPage(){ return STATE.pages[STATE.ui.pageIndex]; }
+    function findFrame(id){
+      const p=curPage();
+      return (p.frames||[]).find(f=>f.id===id) || null;
+    }
+
+    function renderFrame(fr){
+      const el=document.createElement("div");
+      el.className="frame"+(fr.id===STATE.ui.selectedFrameId?" sel":"");
+      el.style.left=fr.x+"px";
+      el.style.top=fr.y+"px";
+      el.style.width=fr.w+"px";
+      el.style.height=fr.h+"px";
+      el.dataset.id=fr.id;
+
+      const cap=document.createElement("div");
+      cap.className="cap";
+      cap.innerHTML = `<div class="name">${escapeHTML(fr.name||fr.type)}</div>
+                       <div class="mini">
+                         <button type="button" data-act="dup">DUP</button>
+                         <button type="button" data-act="del">DEL</button>
+                       </div>`;
+      cap.addEventListener("pointerdown",(ev)=>startDragFrame(ev, fr.id));
+      cap.addEventListener("click",(ev)=>{
+        const b=ev.target.closest("button"); if(!b) return;
+        const act=b.getAttribute("data-act");
+        if(act==="del") deleteFrame(fr.id);
+        if(act==="dup") duplicateFrame(fr.id);
+        ev.stopPropagation();
+      });
+
+      const body=document.createElement("div");
+      body.className="body";
+
+      const text=document.createElement("div");
+      text.className="text";
+      text.contentEditable="true";
+      text.spellcheck=false;
+      text.dataset.style=fr.style?.ink||"ink";
+      text.dataset.align=fr.style?.align||"left";
+      text.dataset.track=fr.style?.track||"1";
+      text.textContent=fr.text||"";
+      text.addEventListener("focus",()=>selectFrame(fr.id));
+      text.addEventListener("input",()=>{
+        const f=findFrame(fr.id); if(!f) return;
+        f.text=text.textContent;
+        scheduleSave();
+      });
+      body.appendChild(text);
+
+      function mkHandle(pos){
+        const h=document.createElement("div");
+        h.className="h "+pos;
+        h.addEventListener("pointerdown",(ev)=>startResizeFrame(ev, fr.id, pos));
+        return h;
+      }
+      ["nw","ne","sw","se"].forEach(p=>el.appendChild(mkHandle(p)));
+
+      el.appendChild(cap);
+      el.appendChild(body);
+
+      el.addEventListener("pointerdown",(ev)=>{
+        if(ev.target.classList.contains("text")) return;
+        selectFrame(fr.id);
+      });
+
+      return el;
+    }
+
+    function updateSelectionUI(){
+      const id=STATE.ui.selectedFrameId;
+      const f=id?findFrame(id):null;
+
+      $("selReadout").textContent = "SEL: " + (f ? (f.name||f.type) : "—");
+
+      if(!f){
+        $("fName").value=""; $("fX").value=""; $("fY").value=""; $("fW").value=""; $("fH").value="";
+        return;
+      }
+      $("fName").value=f.name||"";
+      $("fX").value=f.x; $("fY").value=f.y; $("fW").value=f.w; $("fH").value=f.h;
+      $("tInk").value=f.style?.ink||"ink";
+      $("tAlign").value=f.style?.align||"left";
+      $("tTrack").value=f.style?.track||"1";
+
+      [...pageEl.querySelectorAll(".frame")].forEach(el=>{
+        el.classList.toggle("sel", el.dataset.id===id);
+      });
+    }
+
+    function render(){
+      try{
+        $("docTitle").value = STATE.meta.title||"";
+        $("notesBox").textContent = STATE.notes.reference||"";
+        $("docNotes").value = STATE.notes.doc||"";
+
+        applyPageVars();
+
+        $("filePill").textContent="FILE_ID: "+(STATE.meta.fileId||FILE_ID);
+        $("pagePill").textContent="PAGE: "+(STATE.ui.pageIndex+1)+"/"+STATE.pages.length;
+
+        // list
+        const list=$("pageList");
+        list.innerHTML="";
+        STATE.pages.forEach((p,idx)=>{
+          const it=document.createElement("div");
+          it.className="item"+(idx===STATE.ui.pageIndex?" on":"");
+          it.innerHTML=`<div class="meta">${escapeHTML(p.label||("PAGE "+(idx+1)))}</div>
+                        <div class="tag">${escapeHTML(p.tag||"")}</div>`;
+          it.addEventListener("click",()=>selectPage(idx));
+          list.appendChild(it);
+        });
+        $("countReadout").textContent=STATE.pages.length+" PAGES";
+
+        // page fields
+        const p=curPage();
+        $("pageLabel").value=p.label||"";
+        $("pageTag").value=p.tag||"";
+
+        // clear frames
+        [...pageEl.querySelectorAll(".frame")].forEach(n=>n.remove());
+
+        // draw frames
+        (p.frames||[]).slice().sort((a,b)=>(a.z||0)-(b.z||0)).forEach(fr=>{
+          pageEl.appendChild(renderFrame(fr));
+        });
+
+        updateSelectionUI();
+        renderSig();
+      }catch(e){
+        showErr("RENDER FAILED:\n"+(e.message||e));
+      }
+    }
+
+    function renderSig(){
+      const m=STATE.meta;
+      $("sig").textContent = `FILE ${m.fileId} • ${m.title||"—"} • ${m.version||"—"} • UPDATED ${m.updatedAt||"—"}`;
+    }
+
+    function toast(msg){
+      $("status").textContent=msg;
+      setTimeout(()=>{$("status").textContent="LOCAL-FIRST • AUTO-SAVE";}, 900);
+    }
+
+    // selection
+    function selectPage(idx){
+      STATE.ui.pageIndex = clamp(idx,0,STATE.pages.length-1);
+      STATE.ui.selectedFrameId=null;
+      scheduleSave();
+      render();
+    }
+    function selectFrame(id){
+      STATE.ui.selectedFrameId=id;
+      const f=findFrame(id);
+      if(f){ f.z=Date.now(); scheduleSave(); }
+      updateSelectionUI();
+    }
+
+    // drag/resize
+    let DRAG=null;
+    function pointerCapture(ev, el){ try{ el.setPointerCapture(ev.pointerId); }catch(e){} }
+    function snap(v){
+      const g = STATE.meta.gridOn ? (STATE.meta.grid||24) : 1;
+      return Math.round(v/g)*g;
+    }
+    function startDragFrame(ev,id){
+      ev.preventDefault();
+      selectFrame(id);
+      const f=findFrame(id); if(!f) return;
+      DRAG={kind:"move", id, sx:ev.clientX, sy:ev.clientY, fx:f.x, fy:f.y};
+      pointerCapture(ev, ev.currentTarget);
+      window.addEventListener("pointermove", onDragMove, {passive:false});
+      window.addEventListener("pointerup", onDragEnd, {passive:false});
+    }
+    function startResizeFrame(ev,id,corner){
+      ev.preventDefault();
+      selectFrame(id);
+      const f=findFrame(id); if(!f) return;
+      DRAG={kind:"resize", id, corner, sx:ev.clientX, sy:ev.clientY, fx:f.x, fy:f.y, fw:f.w, fh:f.h};
+      pointerCapture(ev, ev.currentTarget);
+      window.addEventListener("pointermove", onDragMove, {passive:false});
+      window.addEventListener("pointerup", onDragEnd, {passive:false});
+    }
+    function onDragMove(ev){
+      if(!DRAG) return;
+      ev.preventDefault();
+      const f=findFrame(DRAG.id); if(!f) return;
+
+      const dx=ev.clientX-DRAG.sx;
+      const dy=ev.clientY-DRAG.sy;
+
+      if(DRAG.kind==="move"){
+        f.x=snap(DRAG.fx+dx);
+        f.y=snap(DRAG.fy+dy);
+      }else{
+        let x=DRAG.fx, y=DRAG.fy, w=DRAG.fw, h=DRAG.fh;
+        const min=24;
+
+        if(DRAG.corner.includes("e")) w = DRAG.fw + dx;
+        if(DRAG.corner.includes("s")) h = DRAG.fh + dy;
+        if(DRAG.corner.includes("w")) { x = DRAG.fx + dx; w = DRAG.fw - dx; }
+        if(DRAG.corner.includes("n")) { y = DRAG.fy + dy; h = DRAG.fh - dy; }
+
+        w=Math.max(min,w); h=Math.max(min,h);
+        f.x=snap(x); f.y=snap(y); f.w=snap(w); f.h=snap(h);
+      }
+
+      const slack = STATE.meta.bleedOn ? (STATE.meta.bleed||0) : 0;
+      f.x=clamp(f.x, -slack, STATE.meta.pageW-10);
+      f.y=clamp(f.y, -slack, STATE.meta.pageH-10);
+
+      const el=pageEl.querySelector(`.frame[data-id="${DRAG.id}"]`);
+      if(el){
+        el.style.left=f.x+"px";
+        el.style.top=f.y+"px";
+        el.style.width=f.w+"px";
+        el.style.height=f.h+"px";
+      }
+      updateSelectionUI();
+      scheduleSave();
+    }
+    function onDragEnd(){
+      DRAG=null;
+      window.removeEventListener("pointermove", onDragMove);
+      window.removeEventListener("pointerup", onDragEnd);
+    }
+
+    // frame ops
+    function addTextFrame(){
+      const p=curPage();
+      const f=makeTextFrame(80,80, Math.max(240, STATE.meta.pageW-160), 240, "TRACK", "ink", "left", "1", "");
+      p.frames.push(f);
+      STATE.ui.selectedFrameId=f.id;
+      scheduleSave();
+      render();
+      setTimeout(()=>{ pageEl.querySelector(`.frame[data-id="${f.id}"] .text`)?.focus(); }, 0);
+    }
+    function deleteFrame(id){
+      const p=curPage();
+      p.frames=(p.frames||[]).filter(x=>x.id!==id);
+      if(STATE.ui.selectedFrameId===id) STATE.ui.selectedFrameId=null;
+      scheduleSave(); render();
+    }
+    function duplicateFrame(id){
+      const p=curPage();
+      const f=findFrame(id); if(!f) return;
+      const nf=structuredClone(f);
+      nf.id=uid(); nf.x+=24; nf.y+=24; nf.z=Date.now();
+      p.frames.push(nf);
+      STATE.ui.selectedFrameId=nf.id;
+      scheduleSave(); render();
+    }
+    function bringFront(){ const f=findFrame(STATE.ui.selectedFrameId); if(!f) return; f.z=Date.now(); scheduleSave(); render(); }
+    function sendBack(){ const f=findFrame(STATE.ui.selectedFrameId); if(!f) return; f.z=0; scheduleSave(); render(); }
+
+    // pages ops
+    function newPage(){
+      STATE.pages.push({ id:uid(), label:"SIDE ? / TRACK ?", tag:"", frames:[] });
+      STATE.ui.pageIndex=STATE.pages.length-1;
+      STATE.ui.selectedFrameId=null;
+      scheduleSave(); render();
+    }
+    function dupPage(){
+      const p=curPage();
+      const np=structuredClone(p);
+      np.id=uid();
+      np.label=(p.label||"PAGE")+" (COPY)";
+      np.frames=(np.frames||[]).map(fr=>{ fr.id=uid(); return fr; });
+      STATE.pages.splice(STATE.ui.pageIndex+1,0,np);
+      STATE.ui.pageIndex++;
+      STATE.ui.selectedFrameId=null;
+      scheduleSave(); render();
+    }
+    function delPage(){
+      if(STATE.pages.length<=1) return;
+      STATE.pages.splice(STATE.ui.pageIndex,1);
+      STATE.ui.pageIndex=clamp(STATE.ui.pageIndex,0,STATE.pages.length-1);
+      STATE.ui.selectedFrameId=null;
+      scheduleSave(); render();
+    }
+    function movePage(dir){
+      const i=STATE.ui.pageIndex, j=i+dir;
+      if(j<0||j>=STATE.pages.length) return;
+      const a=STATE.pages[i]; STATE.pages[i]=STATE.pages[j]; STATE.pages[j]=a;
+      STATE.ui.pageIndex=j;
+      scheduleSave(); render();
+    }
+
+    // export/import
+    function downloadFile(filename, mime, content){
+      const blob=new Blob([content], {type:mime});
+      const a=document.createElement("a");
+      a.href=URL.createObjectURL(blob);
+      a.download=filename;
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); }, 300);
+    }
+    function exportJSON(){
+      const out=structuredClone(STATE);
+      out.meta.exportedAt=nowISO();
+      const name=(STATE.meta.title||"BLACK_VINYL_MANUAL").replace(/[^\w\-]+/g,"_").slice(0,64);
+      downloadFile(`${name}__${STATE.meta.fileId}__STATE.json`, "application/json", JSON.stringify(out,null,2));
+    }
+    function buildPrintHTML(){
+      const meta=STATE.meta;
+      const pages=STATE.pages;
+      const css = `
+:root{
+  --bg:#000;
+  --ink:rgba(255,255,255,.86);
+  --muted:rgba(255,255,255,.52);
+  --faint:rgba(255,255,255,.28);
+  --ui:12px;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace;
+  --pageW:${meta.pageW}px;
+  --pageH:${meta.pageH}px;
+}
+*{box-sizing:border-box}
+html,body{margin:0; padding:0; background:var(--bg); color:var(--ink); font-size:var(--ui); font-family:var(--mono)}
+.sheet{
+  width:var(--pageW);
+  height:var(--pageH);
+  margin:0 auto;
+  position:relative;
+  background:#000;
+  page-break-after:always;
+  overflow:hidden;
+}
+.frame{position:absolute; border:none; background:transparent}
+.text{
+  width:100%; height:100%;
+  white-space:pre-wrap;
+  overflow:visible;
+  font-family:var(--mono);
+  font-size:var(--ui);
+  line-height:1.35;
+}
+.ink{color:var(--ink)} .muted{color:var(--muted)} .faint{color:var(--faint)}
+.left{text-align:left} .center{text-align:center} .right{text-align:right}
+.track1{letter-spacing:.02em} .track2{letter-spacing:.06em} .track3{letter-spacing:.10em}
+@media print{ body{background:#fff} .sheet{page-break-after:always} }`;
+
+      const body = pages.map((p,idx)=>{
+        const frames=(p.frames||[]).slice().sort((a,b)=>(a.z||0)-(b.z||0)).map(fr=>{
+          const ink=fr.style?.ink||"ink";
+          const align=fr.style?.align||"left";
+          const track="track"+(fr.style?.track||"1");
+          return `<div class="frame" style="left:${fr.x}px; top:${fr.y}px; width:${fr.w}px; height:${fr.h}px;">
+  <div class="text ${ink} ${align} ${track}">${escapeHTML(fr.text||"")}</div>
+</div>`;
+        }).join("\n");
+        return `<div class="sheet" data-page="${idx+1}" data-label="${escapeHTML(p.label||"")}" data-tag="${escapeHTML(p.tag||"")}">
+${frames}
+</div>`;
+      }).join("\n");
+
+      const stamp = `
+<!--
+AE: KETADATA BLACK VINYL MANUAL MAKER (PRINT EXPORT)
+EE: LOCAL-FIRST STATE → PRINT HTML
+WB: PAGES/FRAMES SERIALIZATION
+FILE_ID: ${escapeHTML(meta.fileId||FILE_ID)}
+ROOM_ID: BV_MANUAL_MAKER
+VERSION: ${escapeHTML(meta.version||"v1")}
+UPDATED_AT: ${escapeHTML(meta.updatedAt||"")}
+EXPORT_AT: ${escapeHTML(nowISO())}
+CHANGELOG:
+- PRINT EXPORT GENERATED FROM LOCAL STATE
+-->`;
+
+      return `<!doctype html>
+<html lang="en"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>${escapeHTML(meta.title||"BLACK VINYL MANUAL")} // PRINT</title>
+<style>${css}</style></head><body>
+${body}
+${stamp}
+</body></html>`;
+    }
+    function exportHTML(){
+      const name=(STATE.meta.title||"BLACK_VINYL_MANUAL").replace(/[^\w\-]+/g,"_").slice(0,64);
+      downloadFile(`${name}__${STATE.meta.fileId}__PRINT.html`, "text/html", buildPrintHTML());
+    }
+    function importJSON(file){
+      const reader=new FileReader();
+      reader.onload=()=>{
+        try{
+          const obj=JSON.parse(reader.result);
+          if(obj?.meta?.fileId && obj.meta.fileId!==FILE_ID){
+            FILE_ID=obj.meta.fileId;
+            localStorage.setItem(STORAGE_NS+"FILE_ID", FILE_ID);
+          }
+          STATE=deepFill(obj, defaultState());
+          saveState();
+          render();
+          toast("IMPORTED");
+        }catch(e){ toast("IMPORT FAILED"); showErr("IMPORT FAILED:\n"+(e.message||e)); }
+      };
+      reader.readAsText(file);
+    }
+
+    // bind UI (explicit)
+    function bind(){
+      $("btnNewPage").addEventListener("click",()=>{ newPage(); toast("NEW PAGE"); });
+      $("btnDupPage").addEventListener("click",()=>{ dupPage(); toast("DUP PAGE"); });
+      $("btnDelPage").addEventListener("click",()=>{ delPage(); toast("DEL PAGE"); });
+
+      $("btnAddText").addEventListener("click",()=>{ addTextFrame(); toast("ADD TEXT"); });
+      $("btnGrid").addEventListener("click",()=>{ STATE.meta.gridOn=!STATE.meta.gridOn; scheduleSave(); render(); });
+      $("btnBleed").addEventListener("click",()=>{ STATE.meta.bleedOn=!STATE.meta.bleedOn; scheduleSave(); render(); });
+
+      $("btnPrint").addEventListener("click",()=>window.print());
+      $("btnExportJSON").addEventListener("click",()=>exportJSON());
+      $("btnExportHTML").addEventListener("click",()=>exportHTML());
+      $("btnImport").addEventListener("click",()=>$("importFile").click());
+      $("importFile").addEventListener("change",(ev)=>{
+        const f=ev.target.files && ev.target.files[0];
+        if(f) importJSON(f);
+        ev.target.value="";
+      });
+
+      $("btnPrev").addEventListener("click",()=>selectPage(STATE.ui.pageIndex-1));
+      $("btnNext").addEventListener("click",()=>selectPage(STATE.ui.pageIndex+1));
+
+      $("btnReorderUp").addEventListener("click",()=>movePage(-1));
+      $("btnReorderDown").addEventListener("click",()=>movePage(+1));
+
+      $("btnZoomOut").addEventListener("click",()=>{ STATE.meta.zoom=clamp((STATE.meta.zoom||1)-0.1,0.2,3); scheduleSave(); render(); });
+      $("btnZoomIn").addEventListener("click",()=>{ STATE.meta.zoom=clamp((STATE.meta.zoom||1)+0.1,0.2,3); scheduleSave(); render(); });
+      $("btnZoom100").addEventListener("click",()=>{ STATE.meta.zoom=1; scheduleSave(); render(); });
+      $("btnResetView").addEventListener("click",()=>{
+        const sw=$("stageWrap");
+        sw.scrollTop=0;
+        sw.scrollLeft=(sw.scrollWidth-sw.clientWidth)/2;
+      });
+
+      $("btnSave").addEventListener("click",()=>{ saveState(); toast("SAVED"); });
+
+      $("docTitle").addEventListener("input",()=>{ STATE.meta.title=$("docTitle").value; scheduleSave(); renderSig(); });
+      $("pageLabel").addEventListener("input",()=>{ curPage().label=$("pageLabel").value; scheduleSave(); render(); });
+      $("pageTag").addEventListener("input",()=>{ curPage().tag=$("pageTag").value; scheduleSave(); render(); });
+
+      $("pagePreset").addEventListener("change",()=>applyPreset($("pagePreset").value));
+      $("pageW").addEventListener("input",()=>{ const v=parseInt($("pageW").value||"0",10); if(v>0){ STATE.meta.pageW=v; STATE.meta.pagePreset="custom"; scheduleSave(); render(); }});
+      $("pageH").addEventListener("input",()=>{ const v=parseInt($("pageH").value||"0",10); if(v>0){ STATE.meta.pageH=v; STATE.meta.pagePreset="custom"; scheduleSave(); render(); }});
+
+      $("btnDelFrame").addEventListener("click",()=>{ if(STATE.ui.selectedFrameId) deleteFrame(STATE.ui.selectedFrameId); });
+      $("btnDeselect").addEventListener("click",()=>{ STATE.ui.selectedFrameId=null; scheduleSave(); updateSelectionUI(); });
+      $("btnBringFront").addEventListener("click",()=>bringFront());
+      $("btnSendBack").addEventListener("click",()=>sendBack());
+
+      ["fName","fX","fY","fW","fH"].forEach(id=>{
+        $(id).addEventListener("input",()=>{
+          const f=findFrame(STATE.ui.selectedFrameId); if(!f) return;
+          if(id==="fName") f.name=$(id).value;
+          if(id==="fX") f.x=snap(parseInt($(id).value||"0",10));
+          if(id==="fY") f.y=snap(parseInt($(id).value||"0",10));
+          if(id==="fW") f.w=Math.max(24, snap(parseInt($(id).value||"0",10)));
+          if(id==="fH") f.h=Math.max(24, snap(parseInt($(id).value||"0",10)));
+          scheduleSave(); render();
+        });
+      });
+
+      ["tInk","tAlign","tTrack"].forEach(id=>{
+        $(id).addEventListener("change",()=>{
+          const f=findFrame(STATE.ui.selectedFrameId); if(!f) return;
+          f.style=f.style||{};
+          if(id==="tInk") f.style.ink=$(id).value;
+          if(id==="tAlign") f.style.align=$(id).value;
+          if(id==="tTrack") f.style.track=$(id).value;
+          scheduleSave(); render();
+        });
+      });
+
+      $("docNotes").addEventListener("input",()=>{ STATE.notes.doc=$("docNotes").value; scheduleSave(); });
+
+      // click blank page to deselect
+      pageEl.addEventListener("pointerdown",(ev)=>{
+        if(ev.target.id==="page" || ev.target.classList.contains("overlay")){
+          STATE.ui.selectedFrameId=null;
+          scheduleSave();
+          updateSelectionUI();
+        }
+      });
+
+      // minimal hotkeys
+      window.addEventListener("keydown",(ev)=>{
+        if(ev.target && (ev.target.tagName==="INPUT" || ev.target.tagName==="TEXTAREA" || ev.target.isContentEditable)) return;
+        if(ev.key==="n"||ev.key==="N"){ newPage(); ev.preventDefault(); }
+        if(ev.key==="t"||ev.key==="T"){ addTextFrame(); ev.preventDefault(); }
+        if(ev.key==="g"||ev.key==="G"){ STATE.meta.gridOn=!STATE.meta.gridOn; scheduleSave(); render(); ev.preventDefault(); }
+        if(ev.key==="[" ){ selectPage(STATE.ui.pageIndex-1); ev.preventDefault(); }
+        if(ev.key==="]" ){ selectPage(STATE.ui.pageIndex+1); ev.preventDefault(); }
+        if(ev.key==="Escape"){ STATE.ui.selectedFrameId=null; scheduleSave(); updateSelectionUI(); }
+      });
+    }
+
+    // boot order: bind → render
+    bind();
+    render();
+    toast("READY");
+
+    // initial center
+    setTimeout(()=>{
+      const sw=$("stageWrap");
+      sw.scrollLeft=(sw.scrollWidth-sw.clientWidth)/2;
+    }, 25);
+  }
+})();
+
+/* =========================================================
+AE: KETADATA BLACK VINYL MANUAL MAKER (INDESIGN-ISH LAYOUT TOOL)
+EE: HARDENED LOCAL-FIRST STATE ENGINE • DOMContentLoaded BOOT • ERROR PANEL
+WB: UI BINDINGS • DRAG/RESIZE • STYLE CONTROLS • EXPORT/IMPORT (DOWNLOAD)
+FILE_ID: BV_* (GENERATED)
+ROOM_ID: BV_MANUAL_MAKER
+VERSION: v1
+UPDATED_AT: STATE-DRIVEN
+CHANGELOG:
+- v1b hardened boot + visible error panel + explicit button types + bindings
+========================================================= */
+</script>
+</body>
+</html>
