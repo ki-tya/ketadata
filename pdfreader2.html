@@ -1,0 +1,1188 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>KETADATA // PDF READER + LIBRARY (RESTORED)</title>
+
+<style>
+  :root{
+    --bg:#000;
+    --fg:rgba(255,255,255,.86);
+    --muted:rgba(255,255,255,.52);
+    --line:rgba(255,255,255,.14);
+    --line2:rgba(255,255,255,.22);
+
+    --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace;
+    --sans: Arial, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+
+    --t:44px;
+    --gap:8px;
+    --pad:10px;
+  }
+
+  *{box-sizing:border-box}
+  html,body{height:100%; margin:0}
+  body{
+    background:var(--bg);
+    color:var(--fg);
+    font-family:var(--sans);
+    font-size:13px; /* uniform-size rule */
+    overflow:hidden;
+  }
+
+  a{color:inherit}
+  button,input,select,textarea{font:inherit; color:inherit; background:transparent}
+  button{border:1px solid var(--line); padding:6px 8px; cursor:pointer}
+  button:hover{border-color:var(--line2)}
+  button:disabled{opacity:.45; cursor:default}
+
+  .root{position:fixed; inset:0; display:flex; flex-direction:column}
+
+  .top{
+    height:var(--t);
+    display:flex;
+    align-items:center;
+    gap:var(--gap);
+    padding:0 var(--pad);
+    border-bottom:1px solid var(--line);
+    user-select:none;
+    flex:0 0 auto;
+  }
+  .top .left, .top .mid, .top .right{display:flex; align-items:center; gap:var(--gap)}
+  .top .left{min-width:360px}
+  .top .mid{flex:1; justify-content:center}
+  .top .right{min-width:360px; justify-content:flex-end}
+
+  .pill{
+    border:1px solid var(--line);
+    padding:6px 8px;
+    display:inline-flex;
+    align-items:center;
+    gap:8px;
+    white-space:nowrap;
+    min-height:30px;
+  }
+
+  .file{
+    position:relative;
+    overflow:hidden;
+    display:inline-flex;
+    align-items:center;
+    gap:8px;
+  }
+  .file input[type="file"]{
+    position:absolute;
+    inset:0;
+    opacity:0;
+    cursor:pointer;
+  }
+
+  .main{
+    flex:1 1 auto;
+    display:grid;
+    grid-template-columns: 1fr 440px;
+    min-height:0;
+  }
+
+  .viewerWrap{
+    position:relative;
+    border-right:1px solid var(--line);
+    min-height:0;
+    overflow:hidden;
+  }
+
+  .drop{
+    position:absolute;
+    inset:0;
+    display:none;
+    align-items:center;
+    justify-content:center;
+    text-align:center;
+    padding:20px;
+    background:rgba(0,0,0,.85);
+    border:1px dashed var(--line2);
+    margin:12px;
+    pointer-events:none;
+  }
+  .drop.on{display:flex}
+  .drop .box{
+    max-width:520px;
+    border:1px solid var(--line);
+    padding:14px;
+  }
+
+  .viewer{
+    position:absolute;
+    inset:0;
+    overflow:auto;
+    padding:18px;
+  }
+
+  .pageStage{
+    position:relative;
+    margin:0 auto;
+    display:inline-block;
+    border:1px solid var(--line);
+    background:#000;
+  }
+
+  canvas{display:block}
+
+  /* text layer for selection/copy */
+  .textLayer{
+    position:absolute;
+    inset:0;
+    transform-origin:0 0;
+    color:transparent;
+    caret-color:transparent;
+    user-select:text;
+    pointer-events:auto;
+  }
+  .textLayer span{
+    position:absolute;
+    white-space:pre;
+    transform-origin:0 0;
+    line-height:1;
+    pointer-events:auto;
+  }
+  .textLayer ::selection{background:rgba(255,255,255,.22)}
+
+  .side{
+    min-height:0;
+    display:flex;
+    flex-direction:column;
+  }
+
+  .sideTop{
+    padding:10px;
+    border-bottom:1px solid var(--line);
+    display:flex;
+    gap:8px;
+    align-items:center;
+    justify-content:space-between;
+  }
+  .sideTop .btns{display:flex; gap:8px; align-items:center; flex-wrap:wrap; justify-content:flex-end}
+
+  .tabs{
+    display:flex;
+    gap:8px;
+    align-items:center;
+  }
+  .tabBtn{
+    border:1px solid var(--line);
+    padding:6px 8px;
+    cursor:pointer;
+    user-select:none;
+  }
+  .tabBtn.on{border-color:var(--line2)}
+  .panel{
+    flex:1;
+    min-height:0;
+    display:none;
+  }
+  .panel.on{display:flex; flex-direction:column; min-height:0}
+
+  textarea{
+    width:100%;
+    height:100%;
+    resize:none;
+    border:0;
+    outline:none;
+    padding:12px;
+    background:#000;
+    color:var(--fg);
+  }
+
+  .hint{color:var(--muted)}
+  .muted{color:var(--muted)}
+
+  /* HIDE CHROME: keep a rescue toggle always visible */
+  .hideUI .top{display:none}
+  .hideUI .main{grid-template-columns:1fr 440px}
+
+  #rescue{
+    position:fixed;
+    top:8px;
+    left:8px;
+    z-index:9999;
+    border:1px solid var(--line);
+    padding:6px 8px;
+    background:rgba(0,0,0,.65);
+    backdrop-filter: blur(2px);
+    color:var(--fg);
+    opacity:.75;
+    cursor:pointer;
+    user-select:none;
+  }
+  #rescue:hover{opacity:1; border-color:var(--line2)}
+  #rescue span{color:var(--muted)}
+  .hideUI #rescue{opacity:1}
+
+  .list{
+    flex:1;
+    min-height:0;
+    overflow:auto;
+    padding:10px;
+  }
+  .row{
+    border:1px solid var(--line);
+    padding:10px;
+    margin-bottom:8px;
+  }
+  .rowTop{
+    display:flex;
+    gap:8px;
+    align-items:center;
+    justify-content:space-between;
+  }
+  .rowTitle{
+    display:flex;
+    gap:8px;
+    align-items:center;
+    min-width:0;
+    flex:1;
+  }
+  .rowTitle .name{
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+    max-width:220px;
+  }
+  .rowTitle .sub{
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+    max-width:220px;
+    color:var(--muted);
+  }
+  .rowBtns{display:flex; gap:8px; align-items:center; flex-wrap:wrap; justify-content:flex-end}
+
+  .inlineInput{
+    width:100%;
+    border:1px solid var(--line);
+    padding:6px 8px;
+    outline:none;
+    background:#000;
+    color:var(--fg);
+  }
+
+  .mini{padding:4px 6px}
+
+  .stamp{
+    position:fixed;
+    left:10px;
+    bottom:10px;
+    color:rgba(255,255,255,.38);
+    font-family:var(--mono);
+    font-size:11px;
+    pointer-events:none;
+    user-select:none;
+    white-space:pre;
+  }
+</style>
+
+<script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.min.js"></script>
+<script>
+(() => {
+  const FILE_ID = "KETADATA_PDF_READER__FILE_0101";
+  const ROOM_ID = "BASE";
+  const VERSION = "v3";
+  const UPDATED_AT = "2026-01-08";
+  const LS_KEY = FILE_ID + "__STATE";
+
+  const DB_NAME = "KETADATA_PDF_LIBRARY";
+  const DB_VER  = 1;
+  const STORE   = "pdfs";
+
+  const $ = (id) => document.getElementById(id);
+
+  let PDF = null;
+  let pdfBytes = null;
+  let pageNum = 1;
+  let pageCount = 0;
+
+  let fitWidth = true;
+  let zoom = 1.0;
+  let rotation = 0;
+
+  let rendering = false;
+  let pending = null;
+
+  // current open context (so you can retitle + save to library after preview)
+  const CURRENT = {
+    source: "",     // "file" | "library"
+    id: "",         // library id if opened from library
+    originalName: "",
+    title: ""
+  };
+
+  const STATE = {
+    ui: { page:1, zoom:1.0, fitWidth:true, rotation:0, hideChrome:false, tab:"LIB" },
+    lastOpenId: "",
+    lastFileName: "",
+    promptList: ""
+  };
+
+  function clamp(n,min,max){ return Math.max(min, Math.min(max,n)); }
+  function safeBaseName(name){
+    const n = String(name||"").replace(/\s+/g," ").trim();
+    if(!n) return "UNTITLED";
+    return n;
+  }
+
+  function loadState(){
+    try{
+      const raw = localStorage.getItem(LS_KEY);
+      if(!raw) return;
+      const s = JSON.parse(raw);
+      if(s && s.ui) Object.assign(STATE.ui, s.ui);
+      if(typeof s.lastOpenId === "string") STATE.lastOpenId = s.lastOpenId;
+      if(typeof s.lastFileName === "string") STATE.lastFileName = s.lastFileName;
+      if(typeof s.promptList === "string") STATE.promptList = s.promptList;
+    }catch(e){}
+  }
+  function saveState(){
+    try{ localStorage.setItem(LS_KEY, JSON.stringify(STATE)); }catch(e){}
+  }
+
+  function setStatus(t){
+    const el = $("status");
+    if(el) el.textContent = String(t||"");
+  }
+
+  function setChromeHidden(on){
+    STATE.ui.hideChrome = !!on;
+    document.body.classList.toggle("hideUI", !!on);
+    $("uiLabel").textContent = on ? "HIDDEN" : "ON";
+    $("rescueState").textContent = on ? "SHOW UI" : "HIDE UI";
+    saveState();
+  }
+
+  function setTab(name){
+    STATE.ui.tab = name;
+    saveState();
+    document.querySelectorAll(".tabBtn").forEach(b=>b.classList.toggle("on", b.dataset.tab===name));
+    document.querySelectorAll(".panel").forEach(p=>p.classList.toggle("on", p.dataset.panel===name));
+  }
+
+  function ensurePdfjs(){
+    if(!window.pdfjsLib) throw new Error("PDF.JS FAILED TO LOAD");
+    pdfjsLib.GlobalWorkerOptions.workerSrc =
+      "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.worker.min.js";
+  }
+
+  async function openBytes(bytes, displayName){
+    pdfBytes = bytes;
+
+    $("fileName").textContent = displayName || "(file)";
+    STATE.lastFileName = displayName || "";
+    saveState();
+
+    // derive title suggestion
+    const suggested = safeBaseName(String(displayName||"PDF").replace(/\.pdf$/i,""));
+    if(!CURRENT.title) CURRENT.title = suggested;
+    $("titleInput").value = CURRENT.title;
+
+    try{
+      ensurePdfjs();
+    }catch(e){
+      setStatus("PDF.JS FAILED TO LOAD");
+      console.error(e);
+      return;
+    }
+
+    setStatus("LOADING…");
+
+    let doc;
+    try{
+      doc = await pdfjsLib.getDocument({ data: pdfBytes }).promise;
+    }catch(err1){
+      try{
+        pdfjsLib.disableWorker = true;
+        doc = await pdfjsLib.getDocument({ data: pdfBytes, disableWorker:true }).promise;
+      }catch(err2){
+        setStatus("OPEN FAILED");
+        console.error(err1, err2);
+        return;
+      }
+    }
+
+    PDF = doc;
+    pageCount = PDF.numPages || 0;
+    $("pageCount").textContent = String(pageCount);
+
+    pageNum = clamp(STATE.ui.page || 1, 1, Math.max(1,pageCount));
+    zoom = clamp(STATE.ui.zoom || 1.0, 0.2, 4.0);
+    fitWidth = (STATE.ui.fitWidth !== false);
+    rotation = ((STATE.ui.rotation || 0) % 360 + 360) % 360;
+
+    $("pageNum").value = String(pageNum);
+    $("zoomLabel").textContent = String(Math.round(zoom*100)) + "%";
+    $("fitLabel").textContent = fitWidth ? "FIT" : "FREE";
+    $("rotLabel").textContent = String(rotation);
+
+    setStatus("READY");
+    await renderPage(pageNum);
+  }
+
+  async function openFile(file){
+    if(!file) return;
+    try{
+      CURRENT.source = "file";
+      CURRENT.id = "";
+      CURRENT.originalName = file.name || "PDF";
+      CURRENT.title = safeBaseName(String(file.name||"PDF").replace(/\.pdf$/i,""));
+      const bytes = await file.arrayBuffer();
+      await openBytes(bytes, file.name || "(file)");
+    }catch(e){
+      setStatus("READ FAILED");
+      console.error(e);
+    }
+  }
+
+  function clearTextLayer(){ $("textLayer").innerHTML = ""; }
+
+  // Restored, sturdier text mapping (no extra layer scaling; use viewport transform directly)
+  async function renderTextLayer(page, viewport){
+    const tl = $("textLayer");
+    tl.innerHTML = "";
+    tl.style.transform = ""; // critical: do NOT double-scale
+
+    const textContent = await page.getTextContent();
+    for(const item of textContent.items){
+      const span = document.createElement("span");
+      span.textContent = item.str;
+
+      const tx = pdfjsLib.Util.transform(viewport.transform, item.transform);
+      const x = tx[4];
+      const y = tx[5];
+
+      const fontHeight = Math.hypot(tx[2], tx[3]);
+      const angle = Math.atan2(tx[1], tx[0]);
+
+      span.style.left = x + "px";
+      span.style.top = (y - fontHeight) + "px";
+      span.style.fontSize = fontHeight + "px";
+      span.style.transform = `rotate(${angle}rad)`;
+      span.style.fontFamily = "sans-serif";
+
+      tl.appendChild(span);
+    }
+  }
+
+  function computeScaleForFitWidth(baseViewport){
+    const viewer = $("viewer");
+    const pad = 36;
+    const available = Math.max(320, viewer.clientWidth - pad);
+    return clamp(available / baseViewport.width, 0.2, 4.0);
+  }
+
+  async function renderPage(n){
+    if(!PDF) return;
+    if(rendering){ pending = n; return; }
+    rendering = true;
+
+    try{
+      setStatus("RENDERING…");
+      $("prev").disabled = n<=1;
+      $("next").disabled = n>=pageCount;
+
+      const page = await PDF.getPage(n);
+
+      const baseViewport = page.getViewport({ scale:1, rotation });
+      const scale = fitWidth ? computeScaleForFitWidth(baseViewport) : zoom;
+      const viewport = page.getViewport({ scale, rotation });
+
+      const canvas = $("canvas");
+      const ctx = canvas.getContext("2d", { alpha:false });
+
+      canvas.width = Math.floor(viewport.width);
+      canvas.height = Math.floor(viewport.height);
+
+      $("pageStage").style.width = canvas.width + "px";
+      $("pageStage").style.height = canvas.height + "px";
+      $("textLayer").style.width = canvas.width + "px";
+      $("textLayer").style.height = canvas.height + "px";
+
+      clearTextLayer();
+
+      await page.render({ canvasContext: ctx, viewport }).promise;
+      await renderTextLayer(page, viewport);
+
+      setStatus("READY");
+      $("pageNum").value = String(n);
+
+      STATE.ui.page = n;
+      STATE.ui.zoom = zoom;
+      STATE.ui.fitWidth = fitWidth;
+      STATE.ui.rotation = rotation;
+      saveState();
+    }catch(e){
+      setStatus("RENDER ERROR");
+      console.error(e);
+    }finally{
+      rendering = false;
+      if(pending && pending !== n){
+        const go = pending; pending = null;
+        renderPage(go);
+      }else{
+        pending = null;
+      }
+    }
+  }
+
+  function setZoom(newZoom){
+    zoom = clamp(newZoom, 0.2, 4.0);
+    fitWidth = false;
+    $("zoomLabel").textContent = String(Math.round(zoom*100)) + "%";
+    $("fitLabel").textContent = "FREE";
+    STATE.ui.zoom = zoom;
+    STATE.ui.fitWidth = fitWidth;
+    saveState();
+    renderPage(pageNum);
+  }
+
+  function setFit(on){
+    fitWidth = !!on;
+    $("fitLabel").textContent = fitWidth ? "FIT" : "FREE";
+    STATE.ui.fitWidth = fitWidth;
+    saveState();
+    renderPage(pageNum);
+  }
+
+  function setRotation(deg){
+    rotation = ((deg%360)+360)%360;
+    $("rotLabel").textContent = String(rotation);
+    STATE.ui.rotation = rotation;
+    saveState();
+    renderPage(pageNum);
+  }
+
+  async function extractText(mode){
+    if(!PDF) return;
+    setStatus("EXTRACTING…");
+
+    const out = [];
+    const start = (mode==="page") ? pageNum : 1;
+    const end   = (mode==="page") ? pageNum : pageCount;
+
+    for(let i=start;i<=end;i++){
+      const p = await PDF.getPage(i);
+      const tc = await p.getTextContent();
+      const lines = tc.items.map(it => it.str).filter(Boolean);
+      out.push(`[[PAGE ${i}/${pageCount}]]`);
+      out.push(lines.join(" "));
+      out.push("");
+    }
+
+    $("note").value = out.join("\n");
+    setStatus("READY");
+  }
+
+  async function copyTextFrom(el){
+    const txt = (el && el.value) ? el.value : "";
+    try{
+      await navigator.clipboard.writeText(txt);
+      setStatus("COPIED");
+      setTimeout(()=>{ if($("status").textContent==="COPIED") setStatus("READY"); }, 800);
+    }catch(e){
+      setStatus("COPY FAILED");
+    }
+  }
+
+  function hookKetaNoteIfPresent(){
+    const k = document.getElementById("ketaNote");
+    if(!k) return false;
+    const txt = $("note").value || "";
+    if("value" in k){
+      const pre = k.value || "";
+      k.value = (pre ? (pre + "\n\n") : "") + txt;
+      return true;
+    }
+    return false;
+  }
+
+  function sendToKetaNote(){
+    const ok = hookKetaNoteIfPresent();
+    setStatus(ok ? "SENT TO KETA_NOTE" : "NO KETA_NOTE FOUND");
+    setTimeout(()=>{ setStatus("READY"); }, 900);
+  }
+
+  /* ===== IndexedDB Library ===== */
+  function idbOpen(){
+    return new Promise((resolve,reject)=>{
+      const req = indexedDB.open(DB_NAME, DB_VER);
+      req.onupgradeneeded = ()=>{
+        const db = req.result;
+        if(!db.objectStoreNames.contains(STORE)){
+          const st = db.createObjectStore(STORE, { keyPath:"id" });
+          st.createIndex("by_addedAt","addedAt",{ unique:false });
+        }
+      };
+      req.onsuccess = ()=> resolve(req.result);
+      req.onerror = ()=> reject(req.error);
+    });
+  }
+
+  function uid(){ return "pdf_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2,8); }
+
+  async function idbPut(rec){
+    const db = await idbOpen();
+    return new Promise((resolve,reject)=>{
+      const tx = db.transaction(STORE, "readwrite");
+      tx.oncomplete = ()=>{ db.close(); resolve(true); };
+      tx.onerror = ()=>{ const err=tx.error; db.close(); reject(err); };
+      tx.objectStore(STORE).put(rec);
+    });
+  }
+
+  async function idbGet(id){
+    const db = await idbOpen();
+    return new Promise((resolve,reject)=>{
+      const tx = db.transaction(STORE, "readonly");
+      const req = tx.objectStore(STORE).get(id);
+      req.onsuccess = ()=>{ const v=req.result; db.close(); resolve(v||null); };
+      req.onerror = ()=>{ const err=req.error; db.close(); reject(err); };
+    });
+  }
+
+  async function idbDel(id){
+    const db = await idbOpen();
+    return new Promise((resolve,reject)=>{
+      const tx = db.transaction(STORE, "readwrite");
+      tx.oncomplete = ()=>{ db.close(); resolve(true); };
+      tx.onerror = ()=>{ const err=tx.error; db.close(); reject(err); };
+      tx.objectStore(STORE).delete(id);
+    });
+  }
+
+  async function idbList(){
+    const db = await idbOpen();
+    return new Promise((resolve,reject)=>{
+      const tx = db.transaction(STORE, "readonly");
+      const st = tx.objectStore(STORE);
+      const out = [];
+      st.openCursor().onsuccess = (e)=>{
+        const cur = e.target.result;
+        if(cur){ out.push(cur.value); cur.continue(); }
+        else{
+          db.close();
+          out.sort((a,b)=>(b.addedAt||0)-(a.addedAt||0));
+          resolve(out);
+        }
+      };
+      tx.onerror = ()=>{ const err=tx.error; db.close(); reject(err); };
+    });
+  }
+
+  async function importToLibrary(files){
+    if(!files || !files.length) return;
+    setStatus("IMPORTING…");
+
+    for(const f of files){
+      try{
+        const bytes = await f.arrayBuffer();
+        const id = uid();
+        const originalName = f.name || "PDF";
+        const title = safeBaseName(originalName.replace(/\.pdf$/i,""));
+        await idbPut({ id, title, originalName, addedAt: Date.now(), bytes });
+        STATE.lastOpenId = id;
+        STATE.lastFileName = originalName;
+        saveState();
+      }catch(e){
+        console.error(e);
+      }
+    }
+
+    await refreshLibrary();
+    setStatus("READY");
+  }
+
+  async function saveCurrentToLibrary(){
+    if(!pdfBytes){
+      setStatus("NO PDF LOADED");
+      return;
+    }
+    const title = safeBaseName($("titleInput").value);
+    CURRENT.title = title;
+
+    // if opened from library: update title in-place
+    if(CURRENT.source === "library" && CURRENT.id){
+      const r = await idbGet(CURRENT.id);
+      if(!r){ setStatus("MISSING"); return; }
+      r.title = title;
+      await idbPut(r);
+      await refreshLibrary();
+      setStatus("SAVED");
+      setTimeout(()=>{ if($("status").textContent==="SAVED") setStatus("READY"); }, 700);
+      return;
+    }
+
+    // else: create new library record
+    const id = uid();
+    const originalName = CURRENT.originalName || STATE.lastFileName || (title + ".pdf");
+    await idbPut({ id, title, originalName, addedAt: Date.now(), bytes: pdfBytes });
+
+    CURRENT.source = "library";
+    CURRENT.id = id;
+
+    STATE.lastOpenId = id;
+    saveState();
+
+    await refreshLibrary();
+    setStatus("SAVED");
+    setTimeout(()=>{ if($("status").textContent==="SAVED") setStatus("READY"); }, 700);
+  }
+
+  async function refreshLibrary(){
+    const list = $("libList");
+    list.innerHTML = "";
+    const items = await idbList();
+    $("libCount").textContent = String(items.length);
+
+    if(items.length===0){
+      const empty = document.createElement("div");
+      empty.className = "muted";
+      empty.style.padding = "10px";
+      empty.textContent = "NO PDFs IN LIBRARY. USE OPEN/IMPORT IN TOP BAR OR ALT+DROP INTO VIEWER.";
+      list.appendChild(empty);
+      return;
+    }
+
+    for(const rec of items){
+      const row = document.createElement("div");
+      row.className = "row";
+
+      const top = document.createElement("div");
+      top.className = "rowTop";
+
+      const title = document.createElement("div");
+      title.className = "rowTitle";
+
+      const name = document.createElement("div");
+      name.className = "name";
+      name.textContent = rec.title || "UNTITLED";
+
+      const sub = document.createElement("div");
+      sub.className = "sub";
+      sub.textContent = rec.originalName || "";
+
+      title.appendChild(name);
+      title.appendChild(sub);
+
+      const btns = document.createElement("div");
+      btns.className = "rowBtns";
+
+      const openBtn = document.createElement("button");
+      openBtn.className = "mini";
+      openBtn.textContent = "OPEN";
+      openBtn.onclick = async ()=>{
+        const r = await idbGet(rec.id);
+        if(!r){ setStatus("MISSING"); return; }
+
+        CURRENT.source = "library";
+        CURRENT.id = r.id;
+        CURRENT.originalName = r.originalName || "PDF";
+        CURRENT.title = r.title || "UNTITLED";
+
+        STATE.lastOpenId = r.id;
+        STATE.lastFileName = r.originalName || r.title || "PDF";
+        saveState();
+
+        setTab("NOTE");
+        await openBytes(r.bytes, (r.title||"PDF") + ".pdf");
+      };
+
+      const renameBtn = document.createElement("button");
+      renameBtn.className = "mini";
+      renameBtn.textContent = "RENAME";
+      renameBtn.onclick = ()=>{
+        const box = document.createElement("div");
+        box.style.marginTop = "8px";
+
+        const inp = document.createElement("input");
+        inp.className = "inlineInput";
+        inp.value = rec.title || "";
+        inp.placeholder = "NEW TITLE";
+
+        const bar = document.createElement("div");
+        bar.style.display = "flex";
+        bar.style.gap = "8px";
+        bar.style.marginTop = "8px";
+
+        const saveBtn = document.createElement("button");
+        saveBtn.textContent = "SAVE";
+
+        const cancelBtn = document.createElement("button");
+        cancelBtn.textContent = "CANCEL";
+
+        saveBtn.onclick = async ()=>{
+          const t = safeBaseName(inp.value);
+          const r2 = await idbGet(rec.id);
+          if(!r2) return;
+          r2.title = t;
+          await idbPut(r2);
+
+          // if currently open, mirror UI title
+          if(CURRENT.id === rec.id){
+            CURRENT.title = t;
+            $("titleInput").value = t;
+            $("fileName").textContent = t + ".pdf";
+          }
+
+          await refreshLibrary();
+          setStatus("RENAMED");
+          setTimeout(()=>{ if($("status").textContent==="RENAMED") setStatus("READY"); }, 700);
+        };
+        cancelBtn.onclick = ()=> box.remove();
+
+        bar.appendChild(saveBtn);
+        bar.appendChild(cancelBtn);
+        box.appendChild(inp);
+        box.appendChild(bar);
+
+        row.appendChild(box);
+        inp.focus(); inp.select();
+      };
+
+      const addPromptBtn = document.createElement("button");
+      addPromptBtn.className = "mini";
+      addPromptBtn.textContent = "ADD → PROMPT";
+      addPromptBtn.onclick = ()=>{
+        const line = `- ${safeBaseName(rec.title)} (SOURCE: ${rec.originalName||"PDF"})`;
+        const cur = $("prompt").value || "";
+        $("prompt").value = cur ? (cur.replace(/\s+$/,"") + "\n" + line + "\n") : (line + "\n");
+        STATE.promptList = $("prompt").value;
+        saveState();
+        setTab("PROMPT");
+        setStatus("ADDED");
+        setTimeout(()=>{ if($("status").textContent==="ADDED") setStatus("READY"); }, 650);
+      };
+
+      const delBtn = document.createElement("button");
+      delBtn.className = "mini";
+      delBtn.textContent = "DEL";
+      delBtn.onclick = async ()=>{
+        await idbDel(rec.id);
+        if(STATE.lastOpenId === rec.id) STATE.lastOpenId = "";
+        if(CURRENT.id === rec.id){
+          CURRENT.source = ""; CURRENT.id=""; CURRENT.originalName=""; CURRENT.title="";
+          $("titleInput").value = "";
+        }
+        saveState();
+        await refreshLibrary();
+        setStatus("DELETED");
+        setTimeout(()=>{ if($("status").textContent==="DELETED") setStatus("READY"); }, 650);
+      };
+
+      btns.appendChild(openBtn);
+      btns.appendChild(renameBtn);
+      btns.appendChild(addPromptBtn);
+      btns.appendChild(delBtn);
+
+      top.appendChild(title);
+      top.appendChild(btns);
+
+      row.appendChild(top);
+      list.appendChild(row);
+    }
+  }
+
+  async function reopenLastIfPossible(){
+    if(!STATE.lastOpenId) return;
+    try{
+      const r = await idbGet(STATE.lastOpenId);
+      if(!r) return;
+
+      CURRENT.source = "library";
+      CURRENT.id = r.id;
+      CURRENT.originalName = r.originalName || "PDF";
+      CURRENT.title = r.title || "UNTITLED";
+
+      await openBytes(r.bytes, (r.title||"PDF") + ".pdf");
+    }catch(e){
+      console.error(e);
+    }
+  }
+
+  function wire(){
+    loadState();
+
+    // Safety: never strand you without UI.
+    // If a previous run saved hideChrome=true and you thought the app was “missing the top bar”,
+    // the rescue button still exists. But we also default to showing UI on first paint if something fails.
+    setChromeHidden(!!STATE.ui.hideChrome);
+
+    $("stamp").textContent =
+`AE:KETADATA_PDF_READER
+EE:PDFJS_RENDER_TEXT_SELECT + EXTRACT + IDB_LIBRARY + RETITLE + PROMPTLIST
+WB:LOCALFIRST_UI
+FILE_ID:${FILE_ID}
+ROOM_ID:${ROOM_ID}
+VERSION:${VERSION}
+UPDATED_AT:${UPDATED_AT}
+CHANGELOG:
+- v3 restore: top bar always reachable + rescue toggle
+- v3 restore: text selection mapping (no double-scale)
+- v3 add: TITLE + SAVE→LIB from the viewer (preview front page, retitle, save)
+- v3 keep: extract page/all + copy/send to KETA_NOTE`;
+
+    // Tabs
+    document.querySelectorAll(".tabBtn").forEach(b=> b.addEventListener("click", ()=> setTab(b.dataset.tab)));
+    setTab(STATE.ui.tab || "LIB");
+
+    // Rescue UI toggle (always visible)
+    $("rescue").addEventListener("click", ()=> setChromeHidden(!STATE.ui.hideChrome));
+
+    // OPEN (viewer only)
+    $("file").addEventListener("change", async (e)=>{
+      const f = e.target.files && e.target.files[0];
+      if(f) await openFile(f);
+      e.target.value = "";
+    });
+
+    // IMPORT → LIB
+    $("import").addEventListener("change", async (e)=>{
+      const fs = Array.from(e.target.files || []);
+      if(fs.length) await importToLibrary(fs);
+      e.target.value = "";
+    });
+
+    // TITLE field (current doc)
+    $("titleInput").addEventListener("input", ()=>{
+      CURRENT.title = safeBaseName($("titleInput").value);
+    });
+
+    $("saveToLib").addEventListener("click", saveCurrentToLibrary);
+
+    $("prev").addEventListener("click", ()=>{
+      if(!PDF) return;
+      pageNum = clamp(pageNum-1,1,pageCount);
+      renderPage(pageNum);
+    });
+    $("next").addEventListener("click", ()=>{
+      if(!PDF) return;
+      pageNum = clamp(pageNum+1,1,pageCount);
+      renderPage(pageNum);
+    });
+
+    $("pageNum").addEventListener("change", ()=>{
+      if(!PDF) return;
+      const n = clamp(parseInt($("pageNum").value,10)||1,1,pageCount);
+      pageNum = n;
+      renderPage(pageNum);
+    });
+
+    $("zoomOut").addEventListener("click", ()=> setZoom(zoom*0.9));
+    $("zoomIn").addEventListener("click", ()=> setZoom(zoom/0.9));
+    $("fit").addEventListener("click", ()=> setFit(!fitWidth));
+    $("rotL").addEventListener("click", ()=> setRotation(rotation-90));
+    $("rotR").addEventListener("click", ()=> setRotation(rotation+90));
+
+    $("extractPage").addEventListener("click", ()=> extractText("page"));
+    $("extractAll").addEventListener("click", ()=> extractText("all"));
+    $("copyNote").addEventListener("click", ()=> copyTextFrom($("note")));
+    $("send").addEventListener("click", sendToKetaNote);
+    $("clear").addEventListener("click", ()=> { $("note").value=""; });
+
+    $("hideUI").addEventListener("click", ()=> setChromeHidden(!STATE.ui.hideChrome));
+
+    // Prompt panel
+    $("prompt").value = STATE.promptList || "";
+    $("copyPrompt").addEventListener("click", ()=> copyTextFrom($("prompt")));
+    $("clearPrompt").addEventListener("click", ()=>{
+      $("prompt").value = "";
+      STATE.promptList = "";
+      saveState();
+    });
+    $("prompt").addEventListener("input", ()=>{
+      STATE.promptList = $("prompt").value || "";
+      saveState();
+    });
+
+    // Drag/drop: PDF into viewer; ALT+DROP imports to library
+    const wrap = $("viewerWrap");
+    const drop = $("drop");
+    let dragDepth = 0;
+    const showDrop = (on)=> drop.classList.toggle("on", !!on);
+
+    wrap.addEventListener("dragenter", (e)=>{ e.preventDefault(); e.stopPropagation(); dragDepth++; showDrop(true); });
+    wrap.addEventListener("dragover",  (e)=>{ e.preventDefault(); e.stopPropagation(); showDrop(true); });
+    wrap.addEventListener("dragleave", (e)=>{ e.preventDefault(); e.stopPropagation(); dragDepth=Math.max(0,dragDepth-1); if(dragDepth===0) showDrop(false); });
+    wrap.addEventListener("drop", async (e)=>{
+      e.preventDefault(); e.stopPropagation();
+      dragDepth=0; showDrop(false);
+      const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+      if(!f) return;
+
+      if(e.altKey){
+        await importToLibrary([f]);
+        setTab("LIB");
+        return;
+      }
+      await openFile(f);
+      setTab("NOTE");
+    });
+
+    // keyboard
+    window.addEventListener("keydown", (e)=>{
+      if(e.target && (e.target.tagName==="TEXTAREA" || e.target.tagName==="INPUT")) return;
+      if(e.key==="ArrowLeft"){ $("prev").click(); }
+      if(e.key==="ArrowRight"){ $("next").click(); }
+      if(e.key==="+" || e.key==="="){ $("zoomIn").click(); }
+      if(e.key==="-" ){ $("zoomOut").click(); }
+      if(e.key.toLowerCase()==="f"){ $("fit").click(); }
+      if(e.key.toLowerCase()==="u"){ $("hideUI").click(); }
+      if(e.key.toLowerCase()==="l"){ setTab("LIB"); }
+      if(e.key.toLowerCase()==="p"){ setTab("PROMPT"); }
+      if(e.key.toLowerCase()==="n"){ setTab("NOTE"); }
+    });
+
+    // labels
+    $("fileName").textContent = STATE.lastFileName ? STATE.lastFileName : "NO FILE";
+    $("zoomLabel").textContent = String(Math.round((STATE.ui.zoom||1)*100)) + "%";
+    $("fitLabel").textContent = (STATE.ui.fitWidth!==false) ? "FIT" : "FREE";
+    $("rotLabel").textContent = String(STATE.ui.rotation||0);
+
+    // boot library
+    refreshLibrary().then(reopenLastIfPossible).catch(console.error);
+  }
+
+  window.addEventListener("load", wire);
+})();
+</script>
+</head>
+
+<body>
+
+<div id="rescue">UI: <span id="rescueState">HIDE UI</span></div>
+
+<div class="root" id="root">
+  <div class="top" id="top">
+    <div class="left">
+      <div class="pill file">
+        <span class="muted">OPEN</span>
+        <span id="fileName">NO FILE</span>
+        <input id="file" type="file" accept="application/pdf"/>
+      </div>
+
+      <div class="pill file">
+        <span class="muted">IMPORT → LIB</span>
+        <span class="muted">MULTI</span>
+        <input id="import" type="file" accept="application/pdf" multiple/>
+      </div>
+
+      <div class="pill">
+        <span class="muted">STATUS</span>
+        <span id="status">READY</span>
+      </div>
+    </div>
+
+    <div class="mid">
+      <div class="pill" style="gap:6px;">
+        <span class="muted">TITLE</span>
+        <input id="titleInput" value="" placeholder="RETITLE THIS PDF"
+               style="width:220px; border:1px solid var(--line); padding:6px 8px; outline:none; background:#000; color:var(--fg)"/>
+        <button id="saveToLib">SAVE → LIB</button>
+      </div>
+
+      <button id="prev">PREV</button>
+      <div class="pill">
+        <span class="muted">PAGE</span>
+        <input id="pageNum" value="1" style="width:52px; border:1px solid var(--line); padding:6px 8px; outline:none; background:#000; color:var(--fg)"/>
+        <span class="muted">/</span>
+        <span id="pageCount">0</span>
+      </div>
+      <button id="next">NEXT</button>
+
+      <div class="pill">
+        <button id="zoomOut">-</button>
+        <span class="muted">ZOOM</span>
+        <span id="zoomLabel">100%</span>
+        <button id="zoomIn">+</button>
+      </div>
+
+      <button id="fit">FIT: <span id="fitLabel">FIT</span></button>
+
+      <div class="pill">
+        <button id="rotL">ROT-</button>
+        <span class="muted">ROT</span>
+        <span id="rotLabel">0</span>
+        <button id="rotR">ROT+</button>
+      </div>
+    </div>
+
+    <div class="right">
+      <button id="hideUI">UI: <span id="uiLabel">ON</span></button>
+      <div class="pill">
+        <span class="muted">HINT</span>
+        <span class="hint">DROP PDF TO OPEN. ALT+DROP TO IMPORT. SELECT TEXT ON PAGE OR EXTRACT.</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="main">
+    <div class="viewerWrap" id="viewerWrap">
+      <div class="drop" id="drop">
+        <div class="box">
+          <div>DROP PDF HERE</div>
+          <div class="muted" style="margin-top:6px">ALT+DROP = IMPORT TO LIBRARY</div>
+        </div>
+      </div>
+
+      <div class="viewer" id="viewer">
+        <div class="pageStage" id="pageStage">
+          <canvas id="canvas"></canvas>
+          <div class="textLayer" id="textLayer" aria-label="Selectable text layer"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="side">
+      <div class="sideTop">
+        <div class="tabs">
+          <div class="tabBtn" data-tab="LIB">LIB (<span id="libCount">0</span>)</div>
+          <div class="tabBtn" data-tab="NOTE">NOTE</div>
+          <div class="tabBtn" data-tab="PROMPT">PROMPT</div>
+        </div>
+        <div class="btns">
+          <span class="muted">LIB: RENAME + ADD→PROMPT</span>
+        </div>
+      </div>
+
+      <div class="panel" data-panel="LIB">
+        <div class="list" id="libList"></div>
+      </div>
+
+      <div class="panel" data-panel="NOTE">
+        <div class="sideTop" style="border-bottom:1px solid var(--line);">
+          <div class="muted">KETA_NOTE BUFFER</div>
+          <div class="btns">
+            <button id="extractPage">EXTRACT PAGE</button>
+            <button id="extractAll">EXTRACT ALL</button>
+            <button id="copyNote">COPY</button>
+            <button id="send">SEND → KETA_NOTE</button>
+            <button id="clear">CLEAR</button>
+          </div>
+        </div>
+        <textarea id="note" spellcheck="false" placeholder="EXTRACTED TEXT APPEARS HERE. COPY, THEN PASTE INTO YOUR KETA_NOTE.&#10;&#10;TIP: YOU CAN ALSO SELECT TEXT DIRECTLY ON THE RENDERED PAGE (TEXT LAYER ENABLED) AND COPY NORMALLY."></textarea>
+      </div>
+
+      <div class="panel" data-panel="PROMPT">
+        <div class="sideTop" style="border-bottom:1px solid var(--line);">
+          <div class="muted">PROMPT LIST</div>
+          <div class="btns">
+            <button id="copyPrompt">COPY</button>
+            <button id="clearPrompt">CLEAR</button>
+          </div>
+        </div>
+        <textarea id="prompt" spellcheck="false" placeholder="THIS IS YOUR PROMPT LIST.&#10;&#10;FROM LIBRARY: CLICK “ADD → PROMPT” TO APPEND A LINE.&#10;EDIT FREELY."></textarea>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="stamp" id="stamp"></div>
+</body>
+</html>
