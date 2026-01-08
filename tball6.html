@@ -1,0 +1,351 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>KETA_MONO // BLACK TENNIS (Z-AXIS)</title>
+<style>
+:root{
+  --bg:#000;
+  --ink:#fff;
+  --size: 440px;
+
+  /* z-axis */
+  --farScale: .08;
+  --bounceScale: .20;
+  --t: 1160ms;
+
+  /* seam */
+  --seamW: 7.4;
+  --backA: .16;          /* further dim back */
+  --midA: .44;           /* near-horizon */
+  --frontA: .96;         /* facing camera */
+  --chanW: 3.2;          /* black channel cut into seam */
+  --clipInset: 0px;
+  --seamPad: 3px;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);overflow:hidden}
+#root{
+  position:fixed; inset:0;
+  display:flex; align-items:center; justify-content:center;
+  cursor:pointer; user-select:none;
+}
+#rig{
+  width:var(--size); height:var(--size);
+  transform: scale(1);
+  will-change: transform;
+}
+#root.fire #rig{ animation: zdepth var(--t) cubic-bezier(.20,.88,.18,1) forwards; }
+@keyframes zdepth{
+  0%{transform:scale(1)}
+  46%{transform:scale(var(--farScale))}
+  60%{transform:scale(calc(var(--farScale)*.88))}
+  76%{transform:scale(var(--bounceScale))}
+  100%{transform:scale(1)}
+}
+
+/* BALL (more dimension, still mono) */
+#ball{
+  position:absolute; inset:0; border-radius:50%;
+  background:
+    radial-gradient(circle at 32% 30%,
+      rgba(120,120,120,1) 0%,
+      rgba(70,70,70,1) 18%,
+      rgba(28,28,28,1) 46%,
+      rgba(8,8,8,1) 72%,
+      rgba(0,0,0,1) 100%);
+  box-shadow:
+    inset -38px -38px 90px rgba(0,0,0,.95),
+    inset  26px  26px 66px rgba(255,255,255,.10),
+    inset   0px   0px 34px rgba(0,0,0,.65),
+    0 34px 92px rgba(0,0,0,.88);
+}
+/* strong limb darkening for spherical read */
+#ball::after{
+  content:"";
+  position:absolute; inset:0; border-radius:50%;
+  background:
+    radial-gradient(circle at 50% 50%,
+      rgba(0,0,0,0) 52%,
+      rgba(0,0,0,.10) 65%,
+      rgba(0,0,0,.38) 80%,
+      rgba(0,0,0,.72) 100%);
+  pointer-events:none;
+}
+/* subtle rim edge */
+#ball::before{
+  content:"";
+  position:absolute; inset:0; border-radius:50%;
+  box-shadow:
+    inset 0 0 0 1px rgba(255,255,255,.05);
+  pointer-events:none;
+}
+
+/* SEAMS — clipped to circle so they actually wrap */
+#seams{
+  position:absolute;
+  inset: var(--clipInset);
+  border-radius:50%;
+  pointer-events:none;
+  overflow:hidden;
+  filter: drop-shadow(0 2px 3px rgba(0,0,0,.65));
+}
+#seams svg{
+  width:calc(100% + var(--seamPad)*2);
+  height:calc(100% + var(--seamPad)*2);
+  margin:calc(var(--seamPad) * -1);
+  display:block;
+}
+.seamSeg{ fill:none; stroke-linecap:round; stroke-linejoin:round; }
+
+/* HUD */
+#label{
+  position:absolute; top:18px; left:18px;
+  font-family: ui-monospace, monospace;
+  font-size:11px;
+  color:rgba(255,255,255,.42);
+  letter-spacing:.04em;
+  line-height:1.7;
+}
+#label b{ color:rgba(255,255,255,.88); font-weight:600; }
+#meta{
+  position:absolute; top:18px; right:18px;
+  font-family: ui-monospace, monospace;
+  font-size:10px;
+  color:rgba(255,255,255,.32);
+  text-align:right;
+  line-height:1.8;
+  letter-spacing:.05em;
+}
+#meta dt{ text-transform:uppercase; margin-bottom:1px; }
+#meta dd{ margin:0 0 10px 0; color:rgba(255,255,255,.78); }
+@media (max-width:520px){
+  :root{ --size: 320px; }
+  #meta{ display:none; }
+}
+</style>
+</head>
+
+<body>
+<div id="root">
+  <div id="label">
+    KETA_MONO // BLACK TENNIS<br>
+    <b>CLICK/SPACE</b> Z-AXIS BOUNCE
+  </div>
+
+  <dl id="meta">
+    <dt>TYPE</dt><dd>TENNIS BALL</dd>
+    <dt>COLOR</dt><dd>BLACK</dd>
+    <dt>DIA</dt><dd>67MM</dd>
+    <dt>MASS</dt><dd>58G</dd>
+  </dl>
+
+  <div id="rig">
+    <div id="ball"></div>
+    <div id="seams">
+      <svg viewBox="-220 -220 440 440" xmlns="http://www.w3.org/2000/svg">
+        <g id="seamGroup"></g>
+      </svg>
+    </div>
+  </div>
+</div>
+
+<script>
+/* Make it REALLY wrap:
+   - treat seam as a 3D curve on a unit sphere
+   - rotate sphere slightly (static, plus a whisper of auto-spin)
+   - project to 2D
+   - segment by depth with 3 tiers (front / mid / back) for differentiation
+   - carve a black channel down the seam for dimensionality
+*/
+const seamGroup = document.getElementById("seamGroup");
+
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const lerp=(a,b,t)=>a+(b-a)*t;
+
+const A = 0.44;
+const STEPS = 760;
+const VIEW_R = 220;
+const R = 214;            // overscan: pushes seam to perimeter for rim wrap
+
+// base sphere rotation (sets the “wrap” attitude)
+let rotY0 = 0.62;         // yaw
+let rotX0 = -0.18;        // pitch
+let auto = 0;
+
+function rotY(p,a){
+  const ca=Math.cos(a), sa=Math.sin(a);
+  return {x:p.x*ca + p.z*sa, y:p.y, z:-p.x*sa + p.z*ca};
+}
+function rotX(p,a){
+  const ca=Math.cos(a), sa=Math.sin(a);
+  return {x:p.x, y:p.y*ca - p.z*sa, z:p.y*sa + p.z*ca};
+}
+function project(p){
+  // mild perspective
+  const k = 1/(1 - p.z*0.55);
+  return {x:p.x*k, y:p.y*k, z:p.z, k};
+}
+function rgba(a){ return `rgba(255,255,255,${a})`; }
+
+/* build the 3D seam points on unit sphere */
+const P3 = [];
+for(let i=0;i<=STEPS;i++){
+  const T = (i/STEPS)*4*Math.PI;
+
+  // seam curve on sphere
+  const x = Math.sin(Math.PI/2 - (Math.PI/2 - A) * Math.cos(T)) * Math.cos(T/2 + A * Math.sin(2*T));
+  const y = Math.sin(Math.PI/2 - (Math.PI/2 - A) * Math.cos(T)) * Math.sin(T/2 + A * Math.sin(2*T));
+  const z = Math.cos(Math.PI/2 - (Math.PI/2 - A) * Math.cos(T));
+
+  P3.push({x,y,z});
+}
+
+function clearGroup(){
+  while(seamGroup.firstChild) seamGroup.removeChild(seamGroup.firstChild);
+}
+function addPath(stroke, w){
+  const path=document.createElementNS("http://www.w3.org/2000/svg","path");
+  path.setAttribute("class","seamSeg");
+  path.setAttribute("stroke", stroke);
+  path.setAttribute("stroke-width", String(w));
+  path.setAttribute("d","");
+  seamGroup.appendChild(path);
+  return path;
+}
+
+function buildSeams(){
+  clearGroup();
+
+  const css = getComputedStyle(document.documentElement);
+  const seamW = parseFloat(css.getPropertyValue("--seamW")) || 7.4;
+  const chanW = parseFloat(css.getPropertyValue("--chanW")) || 3.2;
+
+  const backA = parseFloat(css.getPropertyValue("--backA")) || 0.16;
+  const midA  = parseFloat(css.getPropertyValue("--midA"))  || 0.44;
+  const frontA= parseFloat(css.getPropertyValue("--frontA"))|| 0.96;
+
+  // rotation includes a whisper of auto spin (keeps the wrap legible)
+  const ry = rotY0 + Math.sin(auto)*0.08;
+  const rx = rotX0 + Math.cos(auto*0.8)*0.06;
+
+  // render in TWO passes:
+  // pass1: white seam (tiered alpha)
+  // pass2: black channel carved in (tiered alpha, a bit thinner)
+
+  function pass(strokeFront, strokeMid, strokeBack, width, isChannel){
+    let path=null;
+    let mode=null; // 0 back, 1 mid, 2 front
+
+    function pickMode(z){
+      // three depth bands for differentiation
+      if(z > 0.22) return 2;
+      if(z > -0.06) return 1;
+      return 0;
+    }
+
+    function strokeFor(m){
+      if(m===2) return strokeFront;
+      if(m===1) return strokeMid;
+      return strokeBack;
+    }
+
+    for(let i=0;i<P3.length;i++){
+      let p = P3[i];
+
+      // rotate sphere
+      p = rotY(p, ry);
+      p = rotX(p, rx);
+
+      // project
+      const pr = project(p);
+
+      // hard hide deep back to avoid edge glitches
+      if(pr.z < -0.58){
+        path=null; mode=null;
+        continue;
+      }
+
+      const m = pickMode(pr.z);
+
+      // 2D coords scaled to rim
+      const x2 = (pr.x * R);
+      const y2 = (pr.y * R);
+
+      // if mode changes, start new segment (clean tier boundaries)
+      if(!path || m!==mode){
+        path = addPath(strokeFor(m), width);
+        path.setAttribute("d", `M ${x2.toFixed(2)} ${y2.toFixed(2)}`);
+        mode = m;
+      } else {
+        path.setAttribute("d", path.getAttribute("d") + ` L ${x2.toFixed(2)} ${y2.toFixed(2)}`);
+      }
+    }
+  }
+
+  // white seam
+  pass(
+    rgba(frontA),
+    rgba(midA),
+    rgba(backA),
+    seamW,
+    false
+  );
+
+  // black channel (dim carve; makes seam feel embedded, not sticker)
+  pass(
+    "rgba(0,0,0,0.80)",
+    "rgba(0,0,0,0.70)",
+    "rgba(0,0,0,0.55)",
+    Math.max(1.2, seamW - chanW),
+    true
+  );
+}
+
+/* animate only the seam rotation whisper (ball stays Z-axis bounce only) */
+function tick(){
+  auto += 0.010;
+  buildSeams();
+  requestAnimationFrame(tick);
+}
+tick();
+
+/* Bounce */
+const root = document.getElementById("root");
+let firing=false;
+function fire(){
+  if(firing) return;
+  firing=true;
+  root.classList.remove("fire");
+  void root.offsetWidth;
+  root.classList.add("fire");
+  setTimeout(()=>{
+    root.classList.remove("fire");
+    firing=false;
+  }, 1180);
+}
+root.addEventListener("click", fire);
+window.addEventListener("keydown", (e)=>{
+  if(e.code==="Space"){ e.preventDefault(); fire(); }
+},{passive:false});
+</script>
+
+<!--
+AE: KETA_MONO_BLACK_TENNIS_Z
+EE: z-axis-bounce + true-sphere seam projection + 3-tier depth differentiation + seam channel carve
+WB: single-file_html
+
+FILE_ID: KETA-MONO-TENNIS-Z-026
+ROOM_ID: BASE
+VERSION: v3.4
+UPDATED_AT: 2026-01-08
+CHANGELOG:
+- Stronger spherical read (lighting + limb darkening)
+- Seam is projected from a 3D curve on a rotated sphere (wraps to rim)
+- 3 depth tiers (front/mid/back) for differentiation
+- Black channel carved into seam for dimensionality
+- Whisper auto-spin of seam only (keeps wrap legible) + Z-axis bounce unchanged
+-->
+</body>
+</html>
