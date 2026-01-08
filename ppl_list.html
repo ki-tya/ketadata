@@ -1,0 +1,773 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>KETADATA // PEOPLE LIST (LOCAL-FIRST)</title>
+<style>
+  :root{
+    --bg:#000;
+    --ink:rgba(255,255,255,.88);
+    --muted:rgba(255,255,255,.52);
+    --line:rgba(255,255,255,.12);
+    --line2:rgba(255,255,255,.20);
+
+    --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace;
+    --sans: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+
+    --top:44px;
+    --bot:34px;
+
+    --chip:#141414;
+    --chip2:#0b0b0b;
+
+    --danger: rgba(255,255,255,.16);
+    --focus: rgba(255,255,255,.26);
+
+    --rowH: 34px;
+    --pad: 10px;
+  }
+
+  *{box-sizing:border-box}
+  html,body{height:100%; margin:0}
+  body{
+    background:var(--bg);
+    color:var(--ink);
+    overflow:hidden;
+    font-family:var(--sans);
+  }
+
+  /* ===== top/bottom bars ===== */
+  #topbar, #botbar{
+    position:fixed; left:0; right:0;
+    display:flex; align-items:center; gap:10px;
+    padding:0 10px;
+    background:rgba(0,0,0,.86);
+    border-bottom:1px solid var(--line);
+    z-index:50;
+  }
+  #topbar{ top:0; height:var(--top); }
+  #botbar{
+    bottom:0; height:var(--bot);
+    border-bottom:none; border-top:1px solid var(--line);
+    justify-content:space-between;
+  }
+  .title{
+    font-family:var(--mono);
+    letter-spacing:.02em;
+    font-size:12px;
+    opacity:.95;
+    white-space:nowrap;
+  }
+  .pill{
+    font-family:var(--mono);
+    font-size:12px;
+    border:1px solid var(--line2);
+    background:transparent;
+    color:var(--ink);
+    padding:6px 8px;
+    border-radius:0;
+    cursor:pointer;
+    user-select:none;
+  }
+  .pill:active{ transform: translateY(1px); }
+  .pill.on{ background:rgba(255,255,255,.06); }
+  .spacer{ flex:1; }
+
+  .meta{
+    font-family:var(--mono);
+    font-size:12px;
+    opacity:.62;
+    white-space:nowrap;
+  }
+
+  /* ===== layout ===== */
+  #wrap{
+    position:fixed;
+    inset: var(--top) 0 var(--bot) 0;
+    display:grid;
+    grid-template-columns: 360px 1fr;
+    gap:0;
+  }
+  #left{
+    border-right:1px solid var(--line);
+    padding:10px;
+    overflow:hidden;
+    display:flex;
+    flex-direction:column;
+    gap:10px;
+  }
+  #right{
+    overflow:hidden;
+    display:flex;
+    flex-direction:column;
+  }
+
+  /* ===== controls ===== */
+  .panel{
+    border:1px solid var(--line);
+    padding:10px;
+    background:rgba(0,0,0,.35);
+  }
+  .row{
+    display:flex; align-items:center; gap:8px;
+    margin-top:8px;
+  }
+  .row:first-child{ margin-top:0; }
+  label{
+    font-family:var(--mono);
+    font-size:12px;
+    opacity:.7;
+    min-width:64px;
+  }
+  input[type="text"], textarea, input[type="color"]{
+    width:100%;
+    border:1px solid var(--line2);
+    background:transparent;
+    color:var(--ink);
+    outline:none;
+    border-radius:0;
+    padding:8px;
+    font-size:13px;
+  }
+  textarea{
+    resize:none;
+    min-height:94px;
+    line-height:1.25;
+  }
+  input[type="color"]{
+    padding:0;
+    height:34px;
+    width:48px;
+  }
+  .btn{
+    font-family:var(--mono);
+    font-size:12px;
+    border:1px solid var(--line2);
+    background:transparent;
+    color:var(--ink);
+    padding:8px 10px;
+    border-radius:0;
+    cursor:pointer;
+    user-select:none;
+    white-space:nowrap;
+  }
+  .btn:active{ transform: translateY(1px); }
+  .btn.primary{ background:rgba(255,255,255,.06); }
+  .btn.danger{ border-color:rgba(255,255,255,.28); }
+  .hint{
+    margin-top:8px;
+    font-family:var(--mono);
+    font-size:12px;
+    opacity:.52;
+    line-height:1.25;
+  }
+
+  /* ===== list ===== */
+  #listHeader{
+    padding:10px;
+    border-bottom:1px solid var(--line);
+    display:flex;
+    align-items:center;
+    gap:10px;
+  }
+  #search{
+    flex:1;
+  }
+  #count{
+    font-family:var(--mono);
+    font-size:12px;
+    opacity:.62;
+    white-space:nowrap;
+  }
+
+  #list{
+    flex:1;
+    overflow:auto;
+  }
+  .item{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    padding:10px;
+    border-bottom:1px solid var(--line);
+    cursor:pointer;
+    user-select:none;
+    background:transparent;
+  }
+  .item:hover{ background:rgba(255,255,255,.03); }
+  .item.sel{ background:rgba(255,255,255,.06); }
+  .swatch{
+    width:12px; height:12px;
+    border:1px solid rgba(255,255,255,.35);
+    background:var(--chip);
+    flex:0 0 auto;
+  }
+  .name{
+    font-family:var(--mono);
+    font-size:12px;
+    opacity:.95;
+    flex:1;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+  }
+  .stamp{
+    font-family:var(--mono);
+    font-size:12px;
+    opacity:.45;
+    white-space:nowrap;
+  }
+
+  /* ===== editor (right) ===== */
+  #editor{
+    padding:10px;
+    border-bottom:1px solid var(--line);
+    display:flex;
+    align-items:center;
+    gap:8px;
+    flex-wrap:wrap;
+  }
+  #editor .tag{
+    font-family:var(--mono);
+    font-size:12px;
+    opacity:.62;
+  }
+  #detail{
+    padding:10px;
+    overflow:auto;
+  }
+  .kv{
+    display:grid;
+    grid-template-columns: 90px 1fr;
+    gap:8px;
+    align-items:start;
+    margin-bottom:10px;
+  }
+  .kv .k{
+    font-family:var(--mono);
+    font-size:12px;
+    opacity:.7;
+    padding-top:9px;
+  }
+
+  /* ===== modes ===== */
+  body.fs #topbar, body.fs #botbar { display:none; }
+  body.fs #wrap{ inset:0; }
+
+  /* uniform text size rule */
+  button, input, textarea { font-size:13px; }
+</style>
+</head>
+<body>
+  <div id="topbar">
+    <div class="title">KETADATA // PEOPLE LIST</div>
+    <button class="pill" id="toggleFs" title="Fullscreen (Shift+F)">FULL</button>
+    <button class="pill" id="toggleInvert" title="Invert (Shift+I)">INVERT</button>
+    <div class="spacer"></div>
+    <div class="meta" id="sig"></div>
+  </div>
+
+  <div id="wrap">
+    <div id="left">
+      <div class="panel">
+        <div class="row">
+          <label>NAME</label>
+          <input id="inName" type="text" placeholder="Person name"/>
+        </div>
+        <div class="row">
+          <label>COLOR</label>
+          <input id="inColor" type="color" value="#ffffff"/>
+          <input id="inColorHex" type="text" placeholder="#RRGGBB" style="width:140px"/>
+        </div>
+        <div class="row">
+          <label>NOTES</label>
+        </div>
+        <textarea id="inNotes" placeholder="What you think, context, flags, whatever."></textarea>
+        <div class="row">
+          <button class="btn primary" id="addBtn">ADD</button>
+          <button class="btn" id="updateBtn" disabled>UPDATE</button>
+          <button class="btn danger" id="deleteBtn" disabled>DELETE</button>
+          <div class="spacer"></div>
+          <button class="btn" id="newBtn">NEW</button>
+        </div>
+        <div class="hint">
+          Local-first: auto-saves to your browser storage for this file.<br/>
+          Click a row to edit. Use color freely.
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="row">
+          <button class="btn" id="exportBtn">EXPORT JSON</button>
+          <button class="btn" id="importBtn">IMPORT JSON</button>
+          <input id="importFile" type="file" accept="application/json" style="display:none"/>
+          <div class="spacer"></div>
+          <button class="btn" id="wipeBtn" title="Deletes all records from this file's storage">WIPE</button>
+        </div>
+        <div class="hint">
+          Export is a real file download. Import merges/overwrites by id.
+        </div>
+      </div>
+    </div>
+
+    <div id="right">
+      <div id="listHeader">
+        <input id="search" type="text" placeholder="Search name/notes…"/>
+        <div id="count"></div>
+      </div>
+
+      <div id="list"></div>
+
+      <div id="editor">
+        <span class="tag" id="selTag">NO SELECTION</span>
+        <div class="spacer"></div>
+        <span class="tag">SORT</span>
+        <button class="btn" id="sortName">NAME</button>
+        <button class="btn" id="sortRecent">RECENT</button>
+      </div>
+
+      <div id="detail">
+        <div class="hint">Select a person to see details here.</div>
+      </div>
+    </div>
+  </div>
+
+  <div id="botbar">
+    <div class="meta" id="status">READY</div>
+    <div class="meta">SHIFT+F FULL • SHIFT+I INVERT</div>
+  </div>
+
+<script>
+/* =======================
+   KETADATA PEOPLE LIST
+   Local-first storage by FILE_ID.
+======================= */
+
+/* ---- helpers ---- */
+const $ = (id)=>document.getElementById(id);
+const nowISO = ()=> new Date().toISOString();
+const uid = ()=> "p_" + Math.random().toString(16).slice(2) + "_" + Date.now().toString(16);
+
+function clampHex(s){
+  s = (s||"").trim();
+  if(!s) return "#ffffff";
+  if(s[0] !== "#") s = "#"+s;
+  // allow #rgb
+  if(/^#[0-9a-fA-F]{3}$/.test(s)){
+    const r=s[1], g=s[2], b=s[3];
+    return ("#"+r+r+g+g+b+b).toLowerCase();
+  }
+  if(/^#[0-9a-fA-F]{6}$/.test(s)) return s.toLowerCase();
+  return "#ffffff";
+}
+function safeText(s){ return (s||"").toString(); }
+
+/* ---- file identity + storage key ---- */
+const FILE_ID = (()=>{
+  // stable per-file: if user duplicates file, it becomes new identity.
+  // We seed once per origin+pathname; user can also "WIPE" to reset.
+  const seedKey = "KTD_PEOPLELIST__FILE_SEED__" + location.origin + location.pathname;
+  let seed = localStorage.getItem(seedKey);
+  if(!seed){
+    seed = "KTDPL_" + uid();
+    localStorage.setItem(seedKey, seed);
+  }
+  return seed;
+})();
+const LS_KEY = "KTD_PEOPLELIST__STATE__" + FILE_ID;
+
+/* ---- state ---- */
+let STATE = {
+  fileId: FILE_ID,
+  updatedAt: nowISO(),
+  ui: { invert:false, fullscreen:false, sort:"recent", q:"" },
+  selId: null,
+  people: [] // {id,name,notes,color,createdAt,updatedAt}
+};
+
+function load(){
+  try{
+    const raw = localStorage.getItem(LS_KEY);
+    if(!raw) return;
+    const data = JSON.parse(raw);
+    if(!data || !Array.isArray(data.people)) return;
+    STATE = {
+      fileId: FILE_ID,
+      updatedAt: data.updatedAt || nowISO(),
+      ui: Object.assign({invert:false, fullscreen:false, sort:"recent", q:""}, data.ui||{}),
+      selId: data.selId || null,
+      people: data.people.map(p=>({
+        id: safeText(p.id || uid()),
+        name: safeText(p.name||""),
+        notes: safeText(p.notes||""),
+        color: clampHex(p.color||"#ffffff"),
+        createdAt: safeText(p.createdAt||nowISO()),
+        updatedAt: safeText(p.updatedAt||nowISO()),
+      }))
+    };
+  }catch(e){
+    // ignore load errors; keep fresh state
+  }
+}
+function save(){
+  STATE.updatedAt = nowISO();
+  localStorage.setItem(LS_KEY, JSON.stringify(STATE));
+  $("sig").textContent = `FILE ${STATE.fileId} • UPDATED ${STATE.updatedAt}`;
+}
+function setStatus(msg){
+  $("status").textContent = msg;
+}
+
+/* ---- derived ---- */
+function filteredPeople(){
+  const q = (STATE.ui.q||"").trim().toLowerCase();
+  let arr = STATE.people.slice();
+
+  if(q){
+    arr = arr.filter(p=>{
+      return (p.name||"").toLowerCase().includes(q) ||
+             (p.notes||"").toLowerCase().includes(q);
+    });
+  }
+
+  if(STATE.ui.sort === "name"){
+    arr.sort((a,b)=> (a.name||"").localeCompare((b.name||""), undefined, {sensitivity:"base"}));
+  }else{
+    // recent
+    arr.sort((a,b)=> (b.updatedAt||"").localeCompare(a.updatedAt||""));
+  }
+  return arr;
+}
+
+/* ---- render ---- */
+function renderList(){
+  const list = $("list");
+  list.innerHTML = "";
+  const arr = filteredPeople();
+  $("count").textContent = `${arr.length} / ${STATE.people.length}`;
+
+  arr.forEach(p=>{
+    const row = document.createElement("div");
+    row.className = "item" + (p.id===STATE.selId ? " sel":"");
+    row.dataset.id = p.id;
+
+    const sw = document.createElement("div");
+    sw.className = "swatch";
+    sw.style.background = p.color;
+
+    const nm = document.createElement("div");
+    nm.className = "name";
+    nm.textContent = p.name || "(untitled)";
+
+    const st = document.createElement("div");
+    st.className = "stamp";
+    st.textContent = (p.updatedAt||"").slice(0,10);
+
+    row.appendChild(sw);
+    row.appendChild(nm);
+    row.appendChild(st);
+
+    row.addEventListener("click", ()=> select(p.id));
+    list.appendChild(row);
+  });
+}
+
+function renderDetail(){
+  const p = STATE.people.find(x=>x.id===STATE.selId) || null;
+
+  $("updateBtn").disabled = !p;
+  $("deleteBtn").disabled = !p;
+
+  if(!p){
+    $("selTag").textContent = "NO SELECTION";
+    $("detail").innerHTML = `<div class="hint">Select a person to see details here.</div>`;
+    return;
+  }
+
+  $("selTag").textContent = `SELECTED: ${p.name || "(untitled)"} • ${p.id}`;
+
+  $("detail").innerHTML = `
+    <div class="kv">
+      <div class="k">ID</div>
+      <div><input type="text" value="${escapeHtml(p.id)}" readonly></div>
+    </div>
+    <div class="kv">
+      <div class="k">NAME</div>
+      <div><input type="text" value="${escapeHtml(p.name)}" readonly></div>
+    </div>
+    <div class="kv">
+      <div class="k">COLOR</div>
+      <div class="row" style="margin:0">
+        <div class="swatch" style="background:${p.color}; width:16px; height:16px"></div>
+        <div class="meta">${p.color}</div>
+      </div>
+    </div>
+    <div class="kv">
+      <div class="k">NOTES</div>
+      <div><textarea readonly style="min-height:220px">${escapeHtml(p.notes)}</textarea></div>
+    </div>
+    <div class="kv">
+      <div class="k">CREATED</div>
+      <div><input type="text" value="${escapeHtml(p.createdAt)}" readonly></div>
+    </div>
+    <div class="kv">
+      <div class="k">UPDATED</div>
+      <div><input type="text" value="${escapeHtml(p.updatedAt)}" readonly></div>
+    </div>
+    <div class="hint">Tip: click the row, edit on the left, then UPDATE.</div>
+  `;
+}
+
+function renderUI(){
+  document.body.classList.toggle("fs", !!STATE.ui.fullscreen);
+  document.body.classList.toggle("invert", !!STATE.ui.invert);
+  $("toggleFs").classList.toggle("on", !!STATE.ui.fullscreen);
+  $("toggleInvert").classList.toggle("on", !!STATE.ui.invert);
+
+  // invert is purely visual: do it by CSS filter on body (keeps your colors “as chosen” but inverted view)
+  document.body.style.filter = STATE.ui.invert ? "invert(1) hue-rotate(180deg)" : "none";
+
+  $("search").value = STATE.ui.q || "";
+  $("inColorHex").value = clampHex($("inColor").value).toUpperCase();
+
+  renderList();
+  renderDetail();
+  save();
+}
+
+/* ---- selection + form ---- */
+function clearForm(){
+  $("inName").value = "";
+  $("inNotes").value = "";
+  $("inColor").value = "#ffffff";
+  $("inColorHex").value = "#FFFFFF";
+}
+function fillFormFromSelected(){
+  const p = STATE.people.find(x=>x.id===STATE.selId);
+  if(!p) return;
+  $("inName").value = p.name || "";
+  $("inNotes").value = p.notes || "";
+  $("inColor").value = clampHex(p.color||"#ffffff");
+  $("inColorHex").value = clampHex(p.color||"#ffffff").toUpperCase();
+}
+
+/* ---- CRUD ---- */
+function addPerson(){
+  const name = safeText($("inName").value).trim();
+  const notes = safeText($("inNotes").value);
+  const color = clampHex($("inColorHex").value || $("inColor").value);
+
+  const p = {
+    id: uid(),
+    name,
+    notes,
+    color,
+    createdAt: nowISO(),
+    updatedAt: nowISO()
+  };
+  STATE.people.unshift(p);
+  STATE.selId = p.id;
+  setStatus("ADDED");
+  renderUI();
+  fillFormFromSelected();
+}
+
+function updatePerson(){
+  const p = STATE.people.find(x=>x.id===STATE.selId);
+  if(!p) return;
+
+  p.name = safeText($("inName").value).trim();
+  p.notes = safeText($("inNotes").value);
+  p.color = clampHex($("inColorHex").value || $("inColor").value);
+  p.updatedAt = nowISO();
+
+  setStatus("UPDATED");
+  renderUI();
+  fillFormFromSelected();
+}
+
+function deletePerson(){
+  const p = STATE.people.find(x=>x.id===STATE.selId);
+  if(!p) return;
+  const ok = confirm(`Delete "${p.name || "(untitled)"}"?`);
+  if(!ok) return;
+
+  STATE.people = STATE.people.filter(x=>x.id!==STATE.selId);
+  STATE.selId = null;
+  clearForm();
+  setStatus("DELETED");
+  renderUI();
+}
+
+function select(id){
+  STATE.selId = id;
+  setStatus("SELECTED");
+  renderUI();
+  fillFormFromSelected();
+}
+
+/* ---- import/export (real files) ---- */
+function download(filename, text){
+  const blob = new Blob([text], {type:"application/json"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+function exportJSON(){
+  const payload = {
+    type:"KETADATA_PEOPLELIST_EXPORT",
+    exportedAt: nowISO(),
+    fileId: STATE.fileId,
+    data: STATE
+  };
+  const name = `KETADATA_PEOPLELIST_${STATE.fileId}_${new Date().toISOString().slice(0,10)}.json`;
+  download(name, JSON.stringify(payload, null, 2));
+  setStatus("EXPORTED");
+}
+
+function importJSONFile(file){
+  const reader = new FileReader();
+  reader.onload = ()=>{
+    try{
+      const obj = JSON.parse(reader.result);
+      const data = obj && obj.data ? obj.data : obj;
+      if(!data || !Array.isArray(data.people)) throw new Error("Invalid format");
+
+      // merge by id (incoming wins)
+      const map = new Map(STATE.people.map(p=>[p.id, p]));
+      data.people.forEach(ip=>{
+        const p = {
+          id: safeText(ip.id || uid()),
+          name: safeText(ip.name||""),
+          notes: safeText(ip.notes||""),
+          color: clampHex(ip.color||"#ffffff"),
+          createdAt: safeText(ip.createdAt||nowISO()),
+          updatedAt: safeText(ip.updatedAt||nowISO()),
+        };
+        map.set(p.id, p);
+      });
+      STATE.people = Array.from(map.values());
+
+      // keep current FILE_ID, but adopt UI if provided
+      if(data.ui) STATE.ui = Object.assign(STATE.ui, data.ui);
+      STATE.selId = null;
+
+      setStatus("IMPORTED");
+      renderUI();
+    }catch(e){
+      alert("Import failed: " + (e && e.message ? e.message : "unknown error"));
+    }
+  };
+  reader.readAsText(file);
+}
+
+function wipeAll(){
+  const ok = confirm("WIPE all people from this file's storage?");
+  if(!ok) return;
+  STATE.people = [];
+  STATE.selId = null;
+  clearForm();
+  setStatus("WIPED");
+  renderUI();
+}
+
+/* ---- events ---- */
+$("addBtn").addEventListener("click", addPerson);
+$("updateBtn").addEventListener("click", updatePerson);
+$("deleteBtn").addEventListener("click", deletePerson);
+$("newBtn").addEventListener("click", ()=>{
+  STATE.selId = null;
+  clearForm();
+  setStatus("NEW");
+  renderUI();
+});
+
+$("search").addEventListener("input", (e)=>{
+  STATE.ui.q = e.target.value || "";
+  renderUI();
+});
+
+$("inColor").addEventListener("input", ()=>{
+  $("inColorHex").value = clampHex($("inColor").value).toUpperCase();
+});
+
+$("inColorHex").addEventListener("input", ()=>{
+  const hx = clampHex($("inColorHex").value);
+  $("inColor").value = hx;
+});
+
+$("toggleFs").addEventListener("click", ()=>{
+  STATE.ui.fullscreen = !STATE.ui.fullscreen;
+  setStatus(STATE.ui.fullscreen ? "FULLSCREEN" : "WINDOWED");
+  renderUI();
+});
+$("toggleInvert").addEventListener("click", ()=>{
+  STATE.ui.invert = !STATE.ui.invert;
+  setStatus(STATE.ui.invert ? "INVERT ON" : "INVERT OFF");
+  renderUI();
+});
+
+$("sortName").addEventListener("click", ()=>{
+  STATE.ui.sort = "name";
+  setStatus("SORT: NAME");
+  renderUI();
+});
+$("sortRecent").addEventListener("click", ()=>{
+  STATE.ui.sort = "recent";
+  setStatus("SORT: RECENT");
+  renderUI();
+});
+
+$("exportBtn").addEventListener("click", exportJSON);
+$("importBtn").addEventListener("click", ()=> $("importFile").click());
+$("importFile").addEventListener("change", (e)=>{
+  const f = e.target.files && e.target.files[0];
+  if(f) importJSONFile(f);
+  e.target.value = "";
+});
+$("wipeBtn").addEventListener("click", wipeAll);
+
+window.addEventListener("keydown", (e)=>{
+  if(e.shiftKey && (e.key==="F" || e.key==="f")){
+    e.preventDefault();
+    STATE.ui.fullscreen = !STATE.ui.fullscreen;
+    setStatus(STATE.ui.fullscreen ? "FULLSCREEN" : "WINDOWED");
+    renderUI();
+  }
+  if(e.shiftKey && (e.key==="I" || e.key==="i")){
+    e.preventDefault();
+    STATE.ui.invert = !STATE.ui.invert;
+    setStatus(STATE.ui.invert ? "INVERT ON" : "INVERT OFF");
+    renderUI();
+  }
+});
+
+/* ---- tiny sanitizer for readonly detail ---- */
+function escapeHtml(str){
+  return String(str||"")
+    .replaceAll("&","&amp;")
+    .replaceAll("<","&lt;")
+    .replaceAll(">","&gt;")
+    .replaceAll('"',"&quot;")
+    .replaceAll("'","&#039;");
+}
+
+/* ---- init ---- */
+load();
+renderUI();
+setStatus("READY");
+</script>
+
+<!--
+AE // FILE_ID: (autoseeded per path) • ROOM_ID: PEOPLE_LIST • VERSION: 1
+EE // UPDATED_AT: 2026-01-08 • CHANGELOG: initial local-first people list; color-coded records; search/sort; export/import file
+WB // NOTES: Single-file HTML, localStorage persistence keyed by FILE_ID; real file download import/export
+-->
+</body>
+</html>
