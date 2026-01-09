@@ -1,0 +1,508 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>KETADATA // CAM FLUID SUBSTANCE (SENSITIVE)</title>
+
+<style>
+:root{
+  --bg:#000;
+  --fg:rgba(255,255,255,.86);
+  --muted:rgba(255,255,255,.52);
+  --line:rgba(255,255,255,.14);
+  --line2:rgba(255,255,255,.22);
+  --mono: ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace;
+  --sans: Arial,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;
+  --top:44px;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);overflow:hidden;font-family:var(--sans)}
+#top{
+  position:fixed;left:0;right:0;top:0;height:var(--top);
+  display:flex;align-items:center;gap:8px;padding:6px 8px;
+  background:rgba(0,0,0,.78);border-bottom:1px solid var(--line);
+  z-index:80;
+}
+.btn,.chip{
+  height:30px;display:inline-flex;align-items:center;gap:8px;
+  padding:0 10px;border:1px solid var(--line2);
+  background:rgba(0,0,0,.30);color:var(--fg);
+  font:12px/1 var(--sans);white-space:nowrap;user-select:none;
+}
+.btn{cursor:pointer}
+.btn:active{transform:translateY(1px)}
+.k{font-family:var(--mono);opacity:.9}
+.sep{flex:1}
+input[type="range"]{width:110px;accent-color:#fff}
+
+#stage{
+  position:fixed;left:0;top:var(--top);
+  width:100vw;height:calc(100vh - var(--top));
+}
+video{position:fixed;left:-9999px;top:-9999px;width:1px;height:1px;opacity:0}
+
+/* VIZ */
+#vizSmall{
+  position:fixed;right:8px;bottom:8px;width:260px;height:160px;
+  border:1px solid var(--line);background:#000;z-index:70;display:none;
+}
+#vizBig{
+  position:fixed;left:0;top:var(--top);right:0;bottom:0;
+  z-index:60;display:none;
+}
+#vizBig canvas{position:absolute;inset:0;width:100%;height:100%;background:#000}
+#vizBig .label{
+  position:absolute;left:8px;bottom:8px;
+  border:1px solid var(--line);
+  background:rgba(0,0,0,.55);
+  padding:6px 8px;
+  font:12px/1.2 var(--sans);
+  color:var(--muted);
+}
+body.vizSmall #vizSmall{display:block}
+body.vizBig #vizBig{display:block}
+
+body.invert{filter:invert(1)}
+</style>
+</head>
+
+<body>
+<div id="top">
+  <div class="chip k">KETADATA // CAM FLUID SUBSTANCE</div>
+
+  <div class="btn" id="start">START CAM</div>
+  <div class="btn" id="stopCam">STOP CAM</div>
+  <div class="btn" id="run">STOP</div>
+  <div class="btn" id="invert">INVERT</div>
+  <div class="btn" id="vizToggle">VIZ: OFF</div>
+
+  <div class="chip">SENSE <input id="sense" type="range" min="0" max="100" value="92"></div>
+  <div class="chip">FLOW <input id="flow" type="range" min="0" max="100" value="82"></div>
+  <div class="chip">VISC <input id="visc" type="range" min="0" max="100" value="58"></div>
+  <div class="chip">TRAIL <input id="trail" type="range" min="0" max="100" value="90"></div>
+  <div class="chip">THR <input id="thr" type="range" min="1" max="80" value="10"></div>
+  <div class="chip">DENS <input id="dens" type="range" min="30000" max="240000" value="120000"></div>
+
+  <div class="sep"></div>
+  <div class="chip k" id="status">LOCAL</div>
+</div>
+
+<canvas id="stage"></canvas>
+
+<canvas id="vizSmall" width="260" height="160"></canvas>
+<div id="vizBig">
+  <canvas id="vizBigCanvas"></canvas>
+  <div class="label">
+    <div class="k">VIZ</div>
+    <div>V = cycle viz • Esc = close big viz</div>
+  </div>
+</div>
+
+<video id="video" playsinline muted autoplay></video>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+
+  const stage = $("stage");
+  const ctx = stage.getContext("2d",{alpha:false});
+
+  const vizSmall = $("vizSmall");
+  const vsctx = vizSmall.getContext("2d");
+
+  const vizBigCanvas = $("vizBigCanvas");
+  const vbctx = vizBigCanvas.getContext("2d");
+
+  let W=0,H=0,DPR=1;
+  const TOP=44;
+
+  function resizeStage(){
+    DPR = Math.max(1, Math.min(2, devicePixelRatio||1));
+    W = Math.max(1, Math.floor((stage.offsetWidth||1) * DPR));
+    H = Math.max(1, Math.floor((stage.offsetHeight||1) * DPR));
+    stage.width=W; stage.height=H;
+  }
+  function resizeVizBig(){
+    const w = Math.max(1, Math.floor(innerWidth * DPR));
+    const h = Math.max(1, Math.floor((innerHeight - TOP) * DPR));
+    vizBigCanvas.width=w; vizBigCanvas.height=h;
+  }
+  function resizeAll(){ resizeStage(); resizeVizBig(); }
+  addEventListener("resize", resizeAll);
+  addEventListener("orientationchange", () => setTimeout(resizeAll, 60));
+  setTimeout(resizeAll, 0);
+
+  const STATE={
+    running:true,
+    sense:0.92,
+    flow:0.82,
+    visc:0.58,
+    trail:0.90,
+    thr:10,
+    dens:120000,
+    camOn:false,
+    vizMode:0 // 0 off, 1 small, 2 big
+  };
+
+  const setStatus = s => ($("status").textContent = s);
+
+  $("invert").onclick = () => document.body.classList.toggle("invert");
+
+  function applyVizMode(){
+    document.body.classList.toggle("vizSmall", STATE.vizMode===1);
+    document.body.classList.toggle("vizBig", STATE.vizMode===2);
+    $("vizToggle").textContent = STATE.vizMode===0 ? "VIZ: OFF" : (STATE.vizMode===1 ? "VIZ: SMALL" : "VIZ: BIG");
+    if(STATE.vizMode===2) setTimeout(resizeVizBig, 40);
+  }
+  $("vizToggle").onclick = () => { STATE.vizMode=(STATE.vizMode+1)%3; applyVizMode(); };
+
+  $("sense").oninput = e => STATE.sense=(+e.target.value)/100;
+  $("flow").oninput  = e => STATE.flow=(+e.target.value)/100;
+  $("visc").oninput  = e => STATE.visc=(+e.target.value)/100;
+  $("trail").oninput = e => STATE.trail=(+e.target.value)/100;
+  $("thr").oninput   = e => STATE.thr=(+e.target.value)|0;
+  $("dens").oninput  = e => STATE.dens=(+e.target.value)|0;
+
+  $("run").onclick = () => { STATE.running=!STATE.running; $("run").textContent=STATE.running?"STOP":"RUN"; };
+
+  addEventListener("keydown",(e)=>{
+    if(e.repeat) return;
+    const k=e.key.toLowerCase();
+    if(k==="v"){ STATE.vizMode=(STATE.vizMode+1)%3; applyVizMode(); }
+    if(k==="escape" && STATE.vizMode===2){ STATE.vizMode=0; applyVizMode(); }
+  });
+
+  // ===== CAM DIFF -> FLUID FIELD =====
+  const video=$("video");
+  let stream=null;
+
+  // Field grid (coarser than before = more fluid, less pixel-chatter)
+  const GW=140, GH=78;
+  const det=document.createElement("canvas");
+  det.width=GW; det.height=GH;
+  const dctx=det.getContext("2d",{willReadFrequently:true});
+
+  // velocity field on grid
+  let VX=new Float32Array(GW*GH);
+  let VY=new Float32Array(GW*GH);
+
+  // luma history
+  let prev=null;
+
+  // global motion energy
+  let energy=0, eSmooth=0;
+
+  function stopCam(){
+    if(stream){ try{ for(const t of stream.getTracks()) t.stop(); }catch(_){} }
+    stream=null; STATE.camOn=false;
+    prev=null; VX.fill(0); VY.fill(0);
+    energy=0; eSmooth=0;
+    setStatus("LOCAL");
+  }
+
+  async function startCam(){
+    if(STATE.camOn) return;
+    setStatus("CAM REQUEST");
+    try{
+      stream=await navigator.mediaDevices.getUserMedia({
+        video:{ facingMode:"user", width:{ideal:1280}, height:{ideal:720} },
+        audio:false
+      });
+      video.srcObject=stream;
+      await video.play();
+      STATE.camOn=true;
+      prev=null;
+      setStatus("CAM ON");
+    }catch(e){
+      setStatus("CAM BLOCKED");
+    }
+  }
+
+  $("start").onclick=startCam;
+  $("stopCam").onclick=stopCam;
+
+  function updateFluid(){
+    // decay (viscosity): higher visc => stronger decay + more smoothing
+    const visc = STATE.visc;
+    const decay = 0.90 - 0.18*visc; // 0.72..0.90
+    for(let i=0;i<VX.length;i++){ VX[i]*=decay; VY[i]*=decay; }
+
+    if(!STATE.camOn){ energy=0; return null; }
+
+    // mirrored downsampled frame
+    dctx.save();
+    dctx.scale(-1,1);
+    dctx.drawImage(video, -GW, 0, GW, GH);
+    dctx.restore();
+
+    const data=dctx.getImageData(0,0,GW,GH).data;
+    const cur=new Uint8Array(GW*GH);
+    let p=0;
+    for(let i=0;i<data.length;i+=4){
+      const r=data[i], g=data[i+1], b=data[i+2];
+      cur[p++]=(r*0.2126+g*0.7152+b*0.0722)|0;
+    }
+    if(!prev){ prev=cur; energy=0; return null; }
+
+    const thr=STATE.thr|0;
+
+    // diff
+    const diff=new Uint8Array(GW*GH);
+    let total=0;
+    for(let i=0;i<diff.length;i++){
+      const d=Math.abs(cur[i]-prev[i]);
+      prev[i]=cur[i];
+      diff[i]=d;
+      if(d>thr) total += (d-thr);
+    }
+    energy = Math.max(0, Math.min(2.0, total/((GW*GH)*7.0)));
+    eSmooth = eSmooth*0.86 + energy*0.14;
+
+    // inject “stirring” into fluid from motion gradients
+    const sense = STATE.sense;
+    const flow = STATE.flow;
+
+    const inject = (0.0012 + 0.010*flow) * (0.8 + 4.0*(sense*eSmooth));
+
+    for(let y=1;y<GH-1;y++){
+      const row=y*GW;
+      for(let x=1;x<GW-1;x++){
+        const i=row+x;
+        const d=diff[i];
+        if(d<thr) continue;
+
+        const w=(d-thr)/(80-thr+1e-6);
+
+        // gradient of diff
+        const gx = (diff[i+1]-diff[i-1]);
+        const gy = (diff[i+GW]-diff[i-GW]);
+        const mag = Math.hypot(gx,gy)+1e-6;
+
+        // normalized gradient
+        const ux=gx/mag, uy=gy/mag;
+
+        // perpendicular for swirl
+        const px=-uy, py=ux;
+
+        // alternate swirl direction for turbulence
+        const swirl = ((x*3+y*5)&1) ? 1 : -1;
+
+        const s = inject*(0.35 + 3.6*w);
+
+        // push both along gradient and perpendicular to create fluid curl
+        VX[i] += (0.30*ux + 0.70*px*swirl) * s;
+        VY[i] += (0.30*uy + 0.70*py*swirl) * s;
+      }
+    }
+
+    // diffusion/smoothing pass (makes it fluid, not noisy)
+    const smooth = 0.10 + 0.30*visc; // more visc => more smoothing
+    if(smooth>0.0001){
+      const nx=new Float32Array(VX.length);
+      const ny=new Float32Array(VY.length);
+      for(let y=1;y<GH-1;y++){
+        const row=y*GW;
+        for(let x=1;x<GW-1;x++){
+          const i=row+x;
+          const ax = (VX[i] + VX[i-1] + VX[i+1] + VX[i-GW] + VX[i+GW]) * 0.2;
+          const ay = (VY[i] + VY[i-1] + VY[i+1] + VY[i-GW] + VY[i+GW]) * 0.2;
+          nx[i] = VX[i]*(1-smooth) + ax*smooth;
+          ny[i] = VY[i]*(1-smooth) + ay*smooth;
+        }
+      }
+      VX.set(nx);
+      VY.set(ny);
+    }
+
+    return diff;
+  }
+
+  function drawViz(diff){
+    if(STATE.vizMode===0 || !diff) return;
+
+    const c = (STATE.vizMode===1) ? vsctx : vbctx;
+    const outW = (STATE.vizMode===1) ? vizSmall.width : vizBigCanvas.width;
+    const outH = (STATE.vizMode===1) ? vizSmall.height : vizBigCanvas.height;
+
+    c.fillStyle="#000"; c.fillRect(0,0,outW,outH);
+
+    // diff layer
+    const img=c.createImageData(GW,GH);
+    for(let i=0;i<diff.length;i++){
+      const v=diff[i];
+      const a=Math.max(0, Math.min(255, (v-STATE.thr)*8));
+      const o=i*4;
+      img.data[o]=255; img.data[o+1]=255; img.data[o+2]=255; img.data[o+3]=a;
+    }
+    const tmp=document.createElement("canvas");
+    tmp.width=GW; tmp.height=GH;
+    tmp.getContext("2d").putImageData(img,0,0);
+
+    c.imageSmoothingEnabled=false;
+    c.drawImage(tmp,0,0,GW,GH,0,0,outW,outH);
+
+    // vectors (sparser)
+    c.strokeStyle="rgba(255,255,255,.55)";
+    c.lineWidth=1;
+    const step=(STATE.vizMode===1)?10:8;
+    const sx=outW/GW, sy=outH/GH;
+    for(let y=0;y<GH;y+=step){
+      for(let x=0;x<GW;x+=step){
+        const i=y*GW+x;
+        const vx=VX[i]*5200*(1+eSmooth);
+        const vy=VY[i]*5200*(1+eSmooth);
+        const px=x*sx, py=y*sy;
+        c.beginPath();
+        c.moveTo(px,py);
+        c.lineTo(px+vx, py+vy);
+        c.stroke();
+      }
+    }
+
+    // energy bar
+    const e=Math.max(0, Math.min(1, eSmooth/1.2));
+    c.fillStyle="rgba(255,255,255,.18)";
+    c.fillRect(8,outH-12,outW-16,4);
+    c.fillStyle="rgba(255,255,255,.86)";
+    c.fillRect(8,outH-12,(outW-16)*e,4);
+  }
+
+  // ===== PARTICLES (FLUID ADVECTED) =====
+  let P=[];
+  function reseed(n){
+    P.length=0;
+    for(let i=0;i<n;i++){
+      P.push({
+        x:Math.random()*W,
+        y:Math.random()*H,
+        vx:(Math.random()-.5)*0.05,
+        vy:(Math.random()-.5)*0.05,
+        m: 0.6 + Math.random()*0.8 // mass variation
+      });
+    }
+  }
+  reseed(STATE.dens);
+
+  function ensureDensity(){
+    const n=STATE.dens|0;
+    if(P.length===n) return;
+    if(P.length>n){ P.length=n; return; }
+    while(P.length<n){
+      P.push({
+        x:Math.random()*W,
+        y:Math.random()*H,
+        vx:(Math.random()-.5)*0.05,
+        vy:(Math.random()-.5)*0.05,
+        m: 0.6 + Math.random()*0.8
+      });
+    }
+  }
+
+  function sampleV(x,y){
+    const fx=(x/W)*(GW-1);
+    const fy=(y/H)*(GH-1);
+    const x0=fx|0, y0=fy|0;
+    const x1=Math.min(GW-1,x0+1);
+    const y1=Math.min(GH-1,y0+1);
+    const tx=fx-x0, ty=fy-y0;
+
+    const i00=y0*GW+x0, i10=y0*GW+x1, i01=y1*GW+x0, i11=y1*GW+x1;
+
+    const vx0=VX[i00]*(1-tx)+VX[i10]*tx;
+    const vx1=VX[i01]*(1-tx)+VX[i11]*tx;
+    const vy0=VY[i00]*(1-tx)+VY[i10]*tx;
+    const vy1=VY[i01]*(1-tx)+VY[i11]*tx;
+
+    return { vx: vx0*(1-ty)+vx1*ty, vy: vy0*(1-ty)+vy1*ty };
+  }
+
+  function clamp(v,min,max){ return v<min?min:(v>max?max:v); }
+
+  // ===== LOOP =====
+  let last=performance.now();
+  function frame(t){
+    requestAnimationFrame(frame);
+    if(!STATE.running) return;
+
+    resizeAll();
+    ensureDensity();
+
+    const dt=Math.min(32, t-last); last=t;
+
+    const diff = updateFluid();
+    drawViz(diff);
+
+    // Trails: keep persistent but not freezing
+    const baseClear = 0.12 - 0.11*STATE.trail; // 0.01..0.12
+    const clearA = Math.max(0.006, baseClear - (STATE.sense*eSmooth*0.05));
+    ctx.globalCompositeOperation="source-over";
+    ctx.fillStyle=`rgba(0,0,0,${clearA})`;
+    ctx.fillRect(0,0,W,H);
+
+    ctx.globalCompositeOperation="lighter";
+
+    // Brightness: strong + motion-reactive
+    const alpha = Math.min(0.98, 0.28 + 0.10*STATE.flow + 0.52*(STATE.sense*eSmooth));
+    ctx.fillStyle=`rgba(255,255,255,${Math.max(0.28, alpha)})`;
+
+    // Fluid strength
+    const flow = STATE.flow;
+    const sense = STATE.sense;
+
+    // IMPORTANT: make motion visibly move particles, not just smear
+    const fieldScale = (5200 + 14000*flow) * (0.8 + 2.8*(sense*eSmooth));
+    const jitter = (0.002 + 0.018*flow) * (1.0 + 5.0*(sense*eSmooth));
+    const maxSpeed = (1.2 + 8.0*flow) * (1.0 + 1.6*(sense*eSmooth));
+
+    // Viscosity => particle damping (lower visc = freer motion)
+    const visc = STATE.visc;
+    const pDamp = 0.985 - 0.09*visc; // 0.895..0.985
+
+    // Draw size
+    const px = (eSmooth > 0.35) ? 2 : 1;
+
+    for(const p of P){
+      const v = sampleV(p.x,p.y);
+
+      // advect strongly
+      p.vx = p.vx*pDamp + (v.vx*fieldScale)/p.m + (Math.random()-0.5)*jitter;
+      p.vy = p.vy*pDamp + (v.vy*fieldScale)/p.m + (Math.random()-0.5)*jitter;
+
+      p.vx = clamp(p.vx, -maxSpeed, maxSpeed);
+      p.vy = clamp(p.vy, -maxSpeed, maxSpeed);
+
+      p.x += p.vx*dt;
+      p.y += p.vy*dt;
+
+      if(p.x<0) p.x+=W; else if(p.x>=W) p.x-=W;
+      if(p.y<0) p.y+=H; else if(p.y>=H) p.y-=H;
+
+      ctx.fillRect(p.x, p.y, px, px);
+    }
+
+    ctx.globalCompositeOperation="source-over";
+    if(STATE.camOn) setStatus(eSmooth>0.06 ? "CAM + FLUID" : "CAM (LOW MOTION)");
+    else setStatus("LOCAL");
+  }
+
+  requestAnimationFrame(frame);
+  addEventListener("beforeunload", () => { try{ stopCam(); }catch(_){} });
+
+  applyVizMode();
+})();
+</script>
+
+<!--
+AE: KETADATA
+EE: CAM_FLUID_SUBSTANCE_SENSITIVE
+WB: SINGLE_FILE_HTML
+FILE_ID: KETA_CAM_FLUID_SENSITIVE_v1
+ROOM_ID: BASE
+VERSION: 1
+UPDATED_AT: 2026-01-08
+CHANGELOG:
+- v1: coarser fluid grid + curl injection + diffusion = smoother liquid motion; strong advection scaling for clearly motion-sensitive particles; VIZ OFF/SMALL/BIG
+-->
+</body>
+</html>
