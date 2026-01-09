@@ -1,0 +1,505 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>KETADATA // FINDER INDEX (SOVEREIGN)</title>
+<style>
+:root{
+  --bg:#000;
+  --fg:rgba(255,255,255,.86);
+  --muted:rgba(255,255,255,.52);
+  --line:rgba(255,255,255,.14);
+  --line2:rgba(255,255,255,.22);
+  --mono: ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace;
+  --sans: Arial,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;
+  --top:44px;
+  --bot:34px;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);overflow:hidden;font-family:var(--sans)}
+#top{
+  position:fixed;left:0;right:0;top:0;height:var(--top);
+  display:flex;align-items:center;gap:8px;padding:6px 8px;
+  background:rgba(0,0,0,.78);border-bottom:1px solid var(--line);z-index:10;
+}
+.btn,.chip,input,select{
+  height:30px;display:inline-flex;align-items:center;gap:8px;
+  padding:0 10px;border:1px solid var(--line2);
+  background:rgba(0,0,0,.30);color:var(--fg);
+  font:12px/1 var(--sans);white-space:nowrap;user-select:none;
+}
+.btn{cursor:pointer}
+.btn:active{transform:translateY(1px)}
+.k{font-family:var(--mono);opacity:.9}
+.sep{flex:1}
+input[type="text"]{outline:none;display:inline-flex}
+#main{
+  position:fixed;left:0;right:0;top:var(--top);bottom:var(--bot);
+  display:grid;
+  grid-template-columns: 320px 1fr;
+  gap:8px;
+  padding:8px;
+}
+.panel{
+  border:1px solid var(--line);
+  background:rgba(0,0,0,.25);
+  overflow:hidden;
+  display:flex;
+  flex-direction:column;
+}
+.panel .hd{
+  padding:8px;
+  border-bottom:1px solid var(--line);
+  display:flex;
+  gap:8px;
+  align-items:center;
+}
+.panel .bd{flex:1;overflow:auto;padding:8px}
+.row{display:flex;gap:8px;align-items:center}
+.small{font:12px/1.2 var(--sans);color:var(--muted)}
+.drop{
+  border:1px dashed var(--line2);
+  padding:10px;
+  min-height:120px;
+}
+.drop.drag{background:rgba(255,255,255,.06)}
+.card{
+  border:1px solid var(--line);
+  padding:8px;
+  margin:0 0 8px 0;
+  background:rgba(0,0,0,.25);
+}
+.card .t{display:flex;gap:8px;align-items:center}
+.badge{
+  border:1px solid var(--line2);
+  padding:2px 6px;
+  font:12px/1 var(--mono);
+  color:var(--muted);
+}
+.pill{
+  border:1px solid var(--line2);
+  padding:2px 6px;
+  font:12px/1 var(--sans);
+  color:var(--fg);
+  opacity:.9;
+}
+.color{
+  width:14px;height:14px;border:1px solid var(--line2);
+  display:inline-block;flex:0 0 auto;
+}
+.grid{
+  display:grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap:8px;
+}
+@media (max-width: 980px){
+  #main{grid-template-columns: 1fr}
+  .grid{grid-template-columns: repeat(2, minmax(0, 1fr))}
+}
+#bot{
+  position:fixed;left:0;right:0;bottom:0;height:var(--bot);
+  display:flex;align-items:center;gap:8px;padding:6px 8px;
+  border-top:1px solid var(--line);
+  background:rgba(0,0,0,.78);
+}
+a{color:var(--fg);text-decoration:none}
+textarea{
+  width:100%;min-height:120px;resize:vertical;
+  background:rgba(0,0,0,.35);
+  border:1px solid var(--line2);
+  color:var(--fg);
+  font:12px/1.2 var(--mono);
+  padding:8px;
+  outline:none;
+}
+</style>
+</head>
+<body>
+
+<div id="top">
+  <div class="chip k">KETADATA // FINDER INDEX</div>
+
+  <div class="btn" id="importBtn">IMPORT JSON</div>
+  <div class="btn" id="exportBtn">EXPORT JSON</div>
+  <div class="btn" id="clearBtn">CLEAR</div>
+
+  <div class="sep"></div>
+
+  <input class="btn" id="q" type="text" placeholder="SEARCH (name, tags, notes)" />
+  <div class="chip">VIEW
+    <select id="view" style="height:30px;background:transparent;border:none;color:inherit;font:inherit">
+      <option value="grid">GRID</option>
+      <option value="list">LIST</option>
+    </select>
+  </div>
+</div>
+
+<div id="main">
+  <!-- LEFT: ingest + tags -->
+  <div class="panel">
+    <div class="hd">
+      <div class="badge">INGEST</div>
+      <div class="sep"></div>
+      <div class="btn" id="filePick">ADD FILES</div>
+    </div>
+    <div class="bd">
+      <div class="drop" id="drop">
+        <div class="small">Drag files here from Finder. This does not move files; it indexes metadata + your tags/notes.</div>
+      </div>
+
+      <div style="height:10px"></div>
+
+      <div class="row">
+        <div class="badge">TAGS</div>
+        <input id="newTag" class="btn" type="text" placeholder="new tag name" style="flex:1"/>
+        <div class="btn" id="addTag">ADD</div>
+      </div>
+      <div style="height:8px"></div>
+      <div id="tagList"></div>
+
+      <div style="height:12px"></div>
+      <div class="badge">LIMITS</div>
+      <div class="small" style="margin-top:6px">
+        Browser can’t reorganize Finder. This tool builds a KETADATA index you can sort, tag, export, and use as your operational map.
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT: library -->
+  <div class="panel">
+    <div class="hd">
+      <div class="badge">LIBRARY</div>
+      <div class="sep"></div>
+      <div class="chip k" id="countLabel">0</div>
+    </div>
+    <div class="bd" id="list"></div>
+  </div>
+</div>
+
+<div id="bot">
+  <div class="badge">STATE</div>
+  <div class="chip k" id="sig">—</div>
+  <div class="sep"></div>
+  <div class="small">Tip: use tags as “clusters” (PROJECT, MEDIA, EXPORT, TRASH, TO_SCAN, etc.).</div>
+</div>
+
+<input id="importFile" type="file" accept="application/json" style="display:none" multiple="false"/>
+<input id="pickFiles" type="file" style="display:none" multiple/>
+
+<script>
+(() => {
+  const $ = (id)=>document.getElementById(id);
+  const KEY = "KETA_FINDER_INDEX__v1";
+
+  const STATE = load() || {
+    tags: [
+      {id: uid(), name:"PROJECT", color:"#ffffff"},
+      {id: uid(), name:"TO_SORT", color:"#a0a0a0"},
+      {id: uid(), name:"EXPORT", color:"#ffffff"}
+    ],
+    items: [] // {id,name,size,type,lastModified,notes,tags:[tagId],color,addedAt}
+  };
+
+  function uid(){ return Math.random().toString(16).slice(2)+Date.now().toString(16); }
+
+  function save(){
+    localStorage.setItem(KEY, JSON.stringify(STATE));
+    $("sig").textContent = sig();
+  }
+  function load(){
+    try{
+      const s = localStorage.getItem(KEY);
+      return s ? JSON.parse(s) : null;
+    }catch{return null}
+  }
+  function sig(){
+    return `items:${STATE.items.length} tags:${STATE.tags.length} updated:${new Date().toISOString().slice(0,19)}Z`;
+  }
+
+  // --- ingest
+  const drop = $("drop");
+  drop.addEventListener("dragover",(e)=>{e.preventDefault();drop.classList.add("drag");});
+  drop.addEventListener("dragleave",()=>drop.classList.remove("drag"));
+  drop.addEventListener("drop",(e)=>{
+    e.preventDefault();
+    drop.classList.remove("drag");
+    const files = [...(e.dataTransfer.files||[])];
+    if(files.length) addFiles(files);
+  });
+
+  $("filePick").onclick=()=>$("pickFiles").click();
+  $("pickFiles").addEventListener("change",(e)=>{
+    const files=[...e.target.files];
+    e.target.value="";
+    if(files.length) addFiles(files);
+  });
+
+  function addFiles(files){
+    for(const f of files){
+      // best-effort type
+      const type = f.type || guessType(f.name);
+      const item = {
+        id: uid(),
+        name: f.name,
+        size: f.size || 0,
+        type,
+        lastModified: f.lastModified || null,
+        notes: "",
+        tags: [],
+        color: "#ffffff",
+        addedAt: Date.now()
+      };
+      STATE.items.unshift(item);
+    }
+    save(); render();
+  }
+  function guessType(name){
+    const ext = (name.split(".").pop()||"").toLowerCase();
+    if(["jpg","jpeg","png","gif","webp","heic","tif","tiff","svg"].includes(ext)) return "image";
+    if(["mov","mp4","m4v","avi","mkv","webm"].includes(ext)) return "video";
+    if(["mp3","wav","aiff","m4a","flac"].includes(ext)) return "audio";
+    if(["pdf"].includes(ext)) return "pdf";
+    if(["html","css","js","json","md","txt","py","sql"].includes(ext)) return "code/text";
+    return ext ? `.${ext}` : "file";
+  }
+
+  // --- tags
+  $("addTag").onclick=()=>{
+    const name = ($("newTag").value||"").trim();
+    if(!name) return;
+    STATE.tags.push({id:uid(), name, color:"#ffffff"});
+    $("newTag").value="";
+    save(); render();
+  };
+
+  function renderTags(){
+    const wrap=$("tagList");
+    wrap.innerHTML="";
+    for(const t of STATE.tags){
+      const row=document.createElement("div");
+      row.className="card";
+      row.innerHTML = `
+        <div class="t">
+          <span class="color" style="background:${esc(t.color)}"></span>
+          <span class="pill">${esc(t.name)}</span>
+          <span class="sep"></span>
+          <input data-id="${t.id}" class="btn tagColor" type="text" value="${esc(t.color)}" style="width:120px">
+          <div class="btn delTag" data-id="${t.id}">DEL</div>
+        </div>
+      `;
+      wrap.appendChild(row);
+    }
+
+    wrap.querySelectorAll(".tagColor").forEach(inp=>{
+      inp.addEventListener("change",()=>{
+        const id=inp.getAttribute("data-id");
+        const tag=STATE.tags.find(x=>x.id===id);
+        if(tag){ tag.color=inp.value.trim()||"#ffffff"; save(); render(); }
+      });
+    });
+    wrap.querySelectorAll(".delTag").forEach(b=>{
+      b.onclick=()=>{
+        const id=b.getAttribute("data-id");
+        STATE.tags = STATE.tags.filter(t=>t.id!==id);
+        for(const it of STATE.items) it.tags = it.tags.filter(tid=>tid!==id);
+        save(); render();
+      };
+    });
+  }
+
+  // --- library render
+  function render(){
+    renderTags();
+
+    const q = ($("q").value||"").toLowerCase().trim();
+    const view = $("view").value;
+
+    let items = STATE.items.slice();
+
+    if(q){
+      items = items.filter(it=>{
+        const tagNames = it.tags.map(tid => (STATE.tags.find(t=>t.id===tid)?.name||"")).join(" ");
+        return (
+          (it.name||"").toLowerCase().includes(q) ||
+          (it.notes||"").toLowerCase().includes(q) ||
+          tagNames.toLowerCase().includes(q) ||
+          (it.type||"").toLowerCase().includes(q)
+        );
+      });
+    }
+
+    $("countLabel").textContent = String(items.length);
+
+    const list = $("list");
+    list.className = view==="grid" ? "bd grid" : "bd";
+    list.innerHTML="";
+
+    for(const it of items){
+      const card=document.createElement("div");
+      card.className="card";
+      const tags = it.tags.map(tid=>{
+        const t=STATE.tags.find(x=>x.id===tid);
+        if(!t) return "";
+        return `<span class="pill" style="border-color:${esc(t.color)}">${esc(t.name)}</span>`;
+      }).join(" ");
+
+      const size = fmtBytes(it.size||0);
+      const lm = it.lastModified ? new Date(it.lastModified).toISOString().slice(0,10) : "—";
+
+      card.innerHTML = `
+        <div class="t">
+          <span class="color" style="background:${esc(it.color||"#fff")}"></span>
+          <span class="pill" style="opacity:.92">${esc(it.name)}</span>
+        </div>
+        <div style="height:6px"></div>
+        <div class="small">type: ${esc(it.type||"")} • size: ${esc(size)} • modified: ${esc(lm)}</div>
+        <div style="height:8px"></div>
+        <div class="row">
+          <div class="badge">COLOR</div>
+          <input class="btn itemColor" data-id="${it.id}" type="text" value="${esc(it.color||"#ffffff")}" style="width:120px">
+          <div class="sep"></div>
+          <div class="badge">TAGS</div>
+        </div>
+        <div style="height:6px"></div>
+        <div class="row" style="flex-wrap:wrap;gap:6px">
+          ${renderTagToggles(it)}
+        </div>
+        <div style="height:8px"></div>
+        <div class="badge">NOTES</div>
+        <div style="height:6px"></div>
+        <textarea class="itemNotes" data-id="${it.id}" placeholder="notes...">${esc(it.notes||"")}</textarea>
+        <div style="height:8px"></div>
+        <div class="row">
+          <div class="btn delItem" data-id="${it.id}">REMOVE FROM INDEX</div>
+          <div class="sep"></div>
+          <div class="small k">${esc(it.id.slice(0,10))}</div>
+        </div>
+      `;
+      list.appendChild(card);
+    }
+
+    // bind
+    list.querySelectorAll(".itemNotes").forEach(t=>{
+      t.addEventListener("input",()=>{
+        const id=t.getAttribute("data-id");
+        const it=STATE.items.find(x=>x.id===id);
+        if(it){ it.notes=t.value; save(); }
+      });
+    });
+
+    list.querySelectorAll(".itemColor").forEach(inp=>{
+      inp.addEventListener("change",()=>{
+        const id=inp.getAttribute("data-id");
+        const it=STATE.items.find(x=>x.id===id);
+        if(it){ it.color=inp.value.trim()||"#ffffff"; save(); render(); }
+      });
+    });
+
+    list.querySelectorAll(".tagToggle").forEach(chk=>{
+      chk.addEventListener("change",()=>{
+        const itemId=chk.getAttribute("data-item");
+        const tagId=chk.getAttribute("data-tag");
+        const it=STATE.items.find(x=>x.id===itemId);
+        if(!it) return;
+        if(chk.checked){
+          if(!it.tags.includes(tagId)) it.tags.push(tagId);
+        }else{
+          it.tags = it.tags.filter(x=>x!==tagId);
+        }
+        save(); // no full re-render needed
+      });
+    });
+
+    list.querySelectorAll(".delItem").forEach(b=>{
+      b.onclick=()=>{
+        const id=b.getAttribute("data-id");
+        STATE.items = STATE.items.filter(x=>x.id!==id);
+        save(); render();
+      };
+    });
+
+    $("sig").textContent = sig();
+  }
+
+  function renderTagToggles(it){
+    return STATE.tags.map(t=>{
+      const on = it.tags.includes(t.id);
+      return `
+        <label class="chip" style="border-color:${esc(t.color)};gap:6px;cursor:pointer">
+          <input class="tagToggle" type="checkbox" data-item="${it.id}" data-tag="${t.id}" ${on?"checked":""}
+                 style="width:auto;height:auto;margin:0;accent-color:#fff">
+          <span>${esc(t.name)}</span>
+        </label>
+      `;
+    }).join("");
+  }
+
+  function fmtBytes(n){
+    const u=["B","KB","MB","GB","TB"];
+    let i=0, x=n;
+    while(x>=1024 && i<u.length-1){ x/=1024; i++; }
+    return (i===0? String(x|0) : x.toFixed(1))+" "+u[i];
+  }
+
+  function esc(s){
+    return String(s??"").replace(/[&<>"']/g, m=>({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[m]));
+  }
+
+  // --- import/export
+  $("exportBtn").onclick=()=>{
+    const payload = JSON.stringify({version:1, exportedAt:new Date().toISOString(), state:STATE}, null, 2);
+    const blob = new Blob([payload], {type:"application/json"});
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `ketadata_finder_index_${new Date().toISOString().slice(0,10)}.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(()=>URL.revokeObjectURL(a.href), 2500);
+  };
+
+  $("importBtn").onclick=()=>$("importFile").click();
+  $("importFile").addEventListener("change", async (e)=>{
+    const f = e.target.files?.[0];
+    e.target.value="";
+    if(!f) return;
+    try{
+      const txt = await f.text();
+      const obj = JSON.parse(txt);
+      const st = obj.state || obj;
+      if(!st || !Array.isArray(st.items) || !Array.isArray(st.tags)) return;
+      STATE.tags = st.tags;
+      STATE.items = st.items;
+      save(); render();
+    }catch{}
+  });
+
+  $("clearBtn").onclick=()=>{
+    STATE.items = [];
+    save(); render();
+  };
+
+  $("q").addEventListener("input", render);
+  $("view").addEventListener("change", render);
+
+  // init
+  save();
+  render();
+
+})();
+</script>
+
+<!--
+AE: KETADATA
+EE: FINDER_INDEX_LOCAL_FIRST
+WB: SINGLE_FILE_HTML
+FILE_ID: KETA_FINDER_INDEX_v1
+ROOM_ID: BASE
+VERSION: 1
+UPDATED_AT: 2026-01-08
+CHANGELOG:
+- v1: drag-drop file indexing with tags/notes/colors, search, import/export JSON, localStorage persistence
+-->
+</body>
+</html>
