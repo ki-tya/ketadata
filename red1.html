@@ -1,0 +1,702 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>KETA_RED // SUBJECTIVITY FEEDBACK LOOP (STD)</title>
+<style>
+  :root{
+    --bg:#000;
+    --ink:rgba(255,255,255,.86);
+    --muted:rgba(255,255,255,.52);
+    --line:rgba(255,255,255,.14);
+    --line2:rgba(255,255,255,.26);
+
+    --red:255;          /* 0..255 */
+    --redAlpha:.72;     /* 0..1 */
+    --heat:.62;         /* 0..1 */
+    --grain:.28;        /* 0..1 */
+    --pulse:.35;        /* 0..1 */
+    --scan:.55;         /* 0..1 */
+
+    --top:44px;
+    --bot:34px;
+    --pad:10px;
+    --r:0px;
+
+    --drawerW: 320px;
+
+    --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace;
+    --sans: Arial, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0}
+  body{background:var(--bg);color:var(--ink);font:12px/1.35 var(--sans);overflow:hidden}
+  #root{position:fixed;inset:0}
+
+  /* bars */
+  .bar{
+    position:fixed;left:0;right:0;height:var(--top);
+    display:flex;align-items:center;gap:8px;
+    padding:0 var(--pad);
+    background:rgba(0,0,0,.78);
+    border-bottom:1px solid var(--line);
+    z-index:80;
+  }
+  .bar.bot{
+    top:auto;bottom:0;height:var(--bot);
+    border-bottom:0;border-top:1px solid var(--line);
+    z-index:80;
+  }
+  .brand{font-family:var(--mono);letter-spacing:.06em;opacity:.9;white-space:nowrap}
+  .tiny{opacity:.65}
+  .sp{flex:1}
+
+  .chip{
+    font-family:var(--mono);
+    padding:4px 8px;
+    border:1px solid var(--line);
+    background:rgba(0,0,0,.35);
+    border-radius:var(--r);
+    cursor:pointer;user-select:none;
+    opacity:.9;
+  }
+  .chip:active{transform:translateY(1px)}
+  .chip.on{border-color:var(--line2);opacity:1}
+
+  /* main canvas */
+  .canvas{
+    position:fixed;left:0;right:0;top:var(--top);bottom:var(--bot);
+    overflow:hidden;
+  }
+  .layer{position:absolute;inset:0;pointer-events:none}
+  .vignette{
+    background:
+      radial-gradient(ellipse at 50% 50%, rgba(0,0,0,0) 0%, rgba(0,0,0,.55) 70%, rgba(0,0,0,.85) 100%);
+  }
+  .redwash{
+    background:
+      radial-gradient(ellipse at 50% 45%,
+        rgba(var(--red),0,0,var(--redAlpha)) 0%,
+        rgba(var(--red),0,0,calc(var(--redAlpha)*.55)) 30%,
+        rgba(0,0,0,0) 68%,
+        rgba(0,0,0,.95) 100%);
+    mix-blend-mode:screen;
+    opacity:calc(.25 + var(--heat)*.85);
+    filter: blur(0.6px);
+  }
+  .scan{
+    background:
+      repeating-linear-gradient(
+        to bottom,
+        rgba(255,255,255,0) 0px,
+        rgba(255,255,255,0) 9px,
+        rgba(255,255,255,calc(.04 + var(--scan)*.08)) 10px
+      );
+    mix-blend-mode:overlay;
+    opacity:calc(.05 + var(--scan)*.45);
+    animation: scanMove 1400ms linear infinite;
+  }
+  @keyframes scanMove{
+    0%{transform:translateY(-12px)}
+    100%{transform:translateY(12px)}
+  }
+  .grain{
+    opacity:calc(.05 + var(--grain)*.5);
+    mix-blend-mode:overlay;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)' opacity='.32'/%3E%3C/svg%3E");
+    background-size:180px 180px;
+  }
+
+  /* rig */
+  #rig{position:absolute;inset:0;display:flex;align-items:center;justify-content:center}
+  #field{
+    width:min(760px,92vw);
+    height:min(520px,76vh);
+    position:relative;
+    border:1px solid var(--line);
+    background:rgba(0,0,0,.25);
+    border-radius:var(--r);
+    overflow:hidden;
+    cursor:pointer;
+    user-select:none;
+  }
+
+  /* object layers inside field (all pointer-events none so clicks still reseed) */
+  #grid{
+    position:absolute;inset:0;pointer-events:none;
+    background:
+      linear-gradient(to right, rgba(255,255,255,0) 0%, rgba(255,255,255,0) 49%, rgba(255,255,255,.06) 50%, rgba(255,255,255,0) 51%, rgba(255,255,255,0) 100%),
+      linear-gradient(to bottom, rgba(255,255,255,0) 0%, rgba(255,255,255,0) 49%, rgba(255,255,255,.06) 50%, rgba(255,255,255,0) 51%, rgba(255,255,255,0) 100%);
+    background-size:56px 56px;
+    opacity:.45;
+    mix-blend-mode:screen;
+    animation: gridDrift 4200ms linear infinite;
+  }
+  @keyframes gridDrift{
+    0%{transform:translate3d(0,0,0)}
+    100%{transform:translate3d(-56px,-56px,0)}
+  }
+  #cut{
+    position:absolute;inset:0;pointer-events:none;
+    background:linear-gradient(to right,
+      rgba(0,0,0,0) 0%,
+      rgba(0,0,0,0) 46%,
+      rgba(255,255,255,.18) 50%,
+      rgba(0,0,0,0) 54%,
+      rgba(0,0,0,0) 100%);
+    opacity:.42;
+    mix-blend-mode:screen;
+  }
+  #ring{
+    position:absolute;left:50%;top:50%;pointer-events:none;
+    width:520px;height:520px;
+    transform:translate(-50%,-50%);
+    border:1px solid rgba(255,255,255,.10);
+    border-radius:50%;
+    opacity:.55;
+  }
+  #ring:before, #ring:after{
+    content:"";
+    position:absolute;inset:-2px;
+    border-radius:50%;
+    border:1px solid rgba(var(--red),0,0,calc(.10 + var(--heat)*.24));
+    opacity:calc(.25 + var(--pulse)*.65);
+    transform:scale(0.92);
+    animation:ringPulse 1200ms ease-in-out infinite;
+  }
+  #ring:after{
+    inset:10px;
+    border-color:rgba(255,255,255,.12);
+    opacity:calc(.18 + var(--pulse)*.35);
+    animation-duration:1800ms;
+    transform:scale(0.88);
+  }
+  @keyframes ringPulse{
+    0%,100%{transform:scale(0.86);filter:blur(0px)}
+    50%{transform:scale(1.02);filter:blur(0.2px)}
+  }
+
+  svg{position:absolute;inset:0;pointer-events:none}
+  .trace{
+    fill:none;
+    stroke:rgba(var(--red),0,0,calc(.24 + var(--heat)*.46));
+    stroke-width:1.2;
+    opacity:calc(.20 + var(--pulse)*.65);
+    filter: drop-shadow(0 0 8px rgba(var(--red),0,0,calc(.18 + var(--heat)*.45)));
+    stroke-linecap:round;
+    stroke-linejoin:round;
+  }
+  .trace2{
+    fill:none;
+    stroke:rgba(255,255,255,.18);
+    stroke-width:1;
+    opacity:.55;
+    stroke-dasharray:2 6;
+  }
+
+  /* overlay (text) */
+  #overlay{
+    position:absolute;inset:0;
+    padding:10S 10px;
+    padding:10px;
+    display:flex;flex-direction:column;gap:8px;
+    pointer-events:none; /* key: never blocks interaction */
+  }
+  .row{display:flex;gap:10px;align-items:flex-start}
+  .cell{
+    flex:1;
+    border:1px solid rgba(255,255,255,.08);
+    background:rgba(0,0,0,.28);
+    padding:8px;
+    opacity:.95;
+  }
+  .mono{font-family:var(--mono)}
+  .muted{opacity:.62}
+  .red{color:rgba(var(--red),0,0,calc(.50 + var(--heat)*.45))}
+  .tight{letter-spacing:.02em}
+  .footer{margin-top:auto;display:flex;gap:10px;align-items:center}
+
+  /* hide overlay + chrome modes */
+  #root.overlayOff #overlay{display:none}
+  #root.chromeOff .bar,
+  #root.chromeOff .bar.bot{display:none}
+  #root.chromeOff .canvas{top:0;bottom:0}
+
+  /* drawer: RIGHT PANEL (not full page) */
+  #drawer{
+    position:fixed;top:var(--top);bottom:var(--bot);right:0;
+    width:var(--drawerW);
+    background:rgba(0,0,0,.92);
+    border-left:1px solid var(--line);
+    transform:translateX(102%);
+    transition:transform 160ms linear;
+    z-index:90;
+    padding:10px;
+    overflow:auto;
+  }
+  #drawer.open{transform:translateX(0)}
+  #root.chromeOff #drawer{top:0;bottom:0}
+
+  .hr{height:1px;background:var(--line);margin:8px 0}
+  .ctl{display:grid;grid-template-columns:130px 1fr 54px;gap:8px;align-items:center;margin:6px 0}
+  input[type="range"]{width:100%}
+  .val{font-family:var(--mono);opacity:.8;text-align:right}
+  .btnrow{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+  .btn{
+    font-family:var(--mono);
+    border:1px solid var(--line);
+    background:rgba(0,0,0,.35);
+    color:var(--ink);
+    padding:6px 10px;
+    border-radius:var(--r);
+    cursor:pointer;user-select:none;
+  }
+  .btn:active{transform:translateY(1px)}
+  .note{opacity:.62}
+
+  /* small hint text */
+  #hint{font-family:var(--mono);opacity:.7;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:64vw}
+</style>
+</head>
+<body>
+<div id="root">
+  <div class="bar">
+    <div class="brand">KETA_RED</div>
+    <div class="brand tiny">STD</div>
+    <div class="sp"></div>
+
+    <div id="overlayBtn" class="chip on">OVERLAY</div>
+    <div id="chromeBtn" class="chip on">CHROME</div>
+    <div id="drawerBtn" class="chip">SYSTEM</div>
+
+    <div id="pulseBtn" class="chip on">PULSE</div>
+    <div id="scanBtn" class="chip on">SCAN</div>
+    <div id="grainBtn" class="chip on">GRAIN</div>
+  </div>
+
+  <div class="canvas">
+    <div class="layer redwash" id="lw"></div>
+    <div class="layer scan" id="ls"></div>
+    <div class="layer grain" id="lg"></div>
+    <div class="layer vignette"></div>
+
+    <div id="rig">
+      <div id="field" aria-label="ketadata interpretive field" title="CLICK = RESEED">
+        <div id="grid"></div>
+        <div id="cut"></div>
+        <div id="ring"></div>
+
+        <svg viewBox="0 0 760 520" preserveAspectRatio="none" aria-hidden="true">
+          <path id="p1" class="trace" d=""></path>
+          <path id="p2" class="trace2" d=""></path>
+          <path id="p3" class="trace" d=""></path>
+        </svg>
+
+        <div id="overlay">
+          <div class="row">
+            <div class="cell">
+              <div class="mono tight muted">SIGNAL</div>
+              <div class="tight">TRACKING OTHERS / NOT TRACKED BACK</div>
+              <div class="tight muted">ASYMMETRY LOAD, FEEDBACK DELAY, RESENTMENT INTEREST</div>
+            </div>
+            <div class="cell">
+              <div class="mono tight muted">BOUNDARY</div>
+              <div class="tight">REAL-TIME EXIT OVER LATER DETONATION</div>
+              <div class="tight muted">ONE LINE, ONE ACTION, NO PROVING</div>
+            </div>
+          </div>
+
+          <div class="row">
+            <div class="cell">
+              <div class="mono tight muted">HEAT</div>
+              <div class="tight"><span class="red">RED</span> = FLOOD / DISCHARGE / THRESHOLD</div>
+              <div class="tight muted">STAY CLEAN: ANGER WITHOUT CONTEMPT</div>
+            </div>
+            <div class="cell">
+              <div class="mono tight muted">RULE</div>
+              <div class="tight">CLOSENESS REQUIRES REGULATION</div>
+              <div class="tight muted">ACCESS IS CONDITIONAL ON BEHAVIOR</div>
+            </div>
+          </div>
+
+          <div class="footer">
+            <div class="cell" style="flex:1">
+              <div class="mono tight muted">STATE</div>
+              <div class="mono tight" id="sig"></div>
+            </div>
+            <div class="cell" style="flex:1">
+              <div class="mono tight muted">MODE</div>
+              <div class="mono tight" id="mode"></div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <div class="bar bot">
+    <div id="hint">CLICK FIELD = RESEED • O = OVERLAY • N = NULL (NO CHROME) • SHIFT+S SAVE • SHIFT+L LOAD • SHIFT+R RESET</div>
+    <div class="sp"></div>
+    <div class="brand tiny mono">LOCAL-FIRST</div>
+  </div>
+
+  <div id="drawer" role="dialog" aria-label="system drawer">
+    <div class="mono">SYSTEM</div>
+    <div class="hr"></div>
+
+    <div class="ctl">
+      <div class="mono">RED</div>
+      <input id="red" type="range" min="0" max="255" value="255" />
+      <div class="val" id="redV">255</div>
+    </div>
+    <div class="ctl">
+      <div class="mono">RED_ALPHA</div>
+      <input id="redA" type="range" min="0" max="100" value="72" />
+      <div class="val" id="redAV">72</div>
+    </div>
+    <div class="ctl">
+      <div class="mono">HEAT</div>
+      <input id="heat" type="range" min="0" max="100" value="62" />
+      <div class="val" id="heatV">62</div>
+    </div>
+    <div class="ctl">
+      <div class="mono">PULSE</div>
+      <input id="pulse" type="range" min="0" max="100" value="35" />
+      <div class="val" id="pulseV">35</div>
+    </div>
+    <div class="ctl">
+      <div class="mono">SCAN</div>
+      <input id="scan" type="range" min="0" max="100" value="55" />
+      <div class="val" id="scanV">55</div>
+    </div>
+    <div class="ctl">
+      <div class="mono">GRAIN</div>
+      <input id="grain" type="range" min="0" max="100" value="28" />
+      <div class="val" id="grainV">28</div>
+    </div>
+
+    <div class="hr"></div>
+    <div class="note">RIGHT PANEL ONLY. OVERLAY NEVER BLOCKS CLICKS. NULL HIDES CHROME FOR IMMERSION.</div>
+
+    <div class="btnrow">
+      <div class="btn" id="seedBtn">RESEED</div>
+      <div class="btn" id="calmBtn">CALM</div>
+      <div class="btn" id="hotBtn">HOT</div>
+      <div class="btn" id="voidBtn">VOID</div>
+      <div class="btn" id="saveBtn">SAVE</div>
+      <div class="btn" id="loadBtn">LOAD</div>
+      <div class="btn" id="resetBtn">RESET</div>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  "use strict";
+
+  const $ = (id) => document.getElementById(id);
+
+  const FILE_ID = "KETA_RED_STD_" + (localStorage.getItem("KETA_RED_STD_FILE_ID") || cryptoRand(10));
+  localStorage.setItem("KETA_RED_STD_FILE_ID", FILE_ID);
+
+  const LS_KEY = "KETA_RED_STD_STATE::" + FILE_ID;
+
+  const DEFAULT = {
+    ui:{
+      drawer:false,
+      pulseOn:true,
+      scanOn:true,
+      grainOn:true,
+      overlayOn:true,
+      chromeOn:true,
+
+      red:255,
+      redA:72,
+      heat:62,
+      pulse:35,
+      scan:55,
+      grain:28,
+      seed: cryptoRand(8),
+    }
+  };
+
+  let STATE = deepClone(DEFAULT);
+
+  function deepClone(x){ return JSON.parse(JSON.stringify(x)); }
+  function cryptoRand(n){
+    const a = new Uint8Array(n);
+    crypto.getRandomValues(a);
+    return Array.from(a).map(b => (b%36).toString(36)).join("");
+  }
+  function clamp(v,min,max){ return Math.max(min, Math.min(max, v)); }
+
+  function save(){
+    try{ localStorage.setItem(LS_KEY, JSON.stringify(STATE)); }catch(e){}
+    renderSig();
+  }
+
+  function load(){
+    try{
+      const raw = localStorage.getItem(LS_KEY);
+      if(!raw) return false;
+      const obj = JSON.parse(raw);
+      if(obj && obj.ui) STATE = { ui: { ...DEFAULT.ui, ...obj.ui } };
+      return true;
+    }catch(e){ return false; }
+  }
+
+  function reset(){
+    STATE = deepClone(DEFAULT);
+    STATE.ui.seed = cryptoRand(8);
+    save();
+    reseedFromState();
+    render();
+  }
+
+  function cssSet(name, val){
+    document.documentElement.style.setProperty(name, String(val));
+  }
+
+  function render(){
+    // toggles
+    $("drawer").classList.toggle("open", !!STATE.ui.drawer);
+    $("pulseBtn").classList.toggle("on", !!STATE.ui.pulseOn);
+    $("scanBtn").classList.toggle("on", !!STATE.ui.scanOn);
+    $("grainBtn").classList.toggle("on", !!STATE.ui.grainOn);
+
+    $("overlayBtn").classList.toggle("on", !!STATE.ui.overlayOn);
+    $("chromeBtn").classList.toggle("on", !!STATE.ui.chromeOn);
+
+    $("ring").style.display = STATE.ui.pulseOn ? "block" : "none";
+    $("ls").style.display   = STATE.ui.scanOn  ? "block" : "none";
+    $("lg").style.display   = STATE.ui.grainOn ? "block" : "none";
+
+    const root = $("root");
+    root.classList.toggle("overlayOff", !STATE.ui.overlayOn);
+    root.classList.toggle("chromeOff", !STATE.ui.chromeOn);
+
+    // params
+    const red   = clamp(+STATE.ui.red,0,255);
+    const redA  = clamp(+STATE.ui.redA,0,100)/100;
+    const heat  = clamp(+STATE.ui.heat,0,100)/100;
+    const pulse = clamp(+STATE.ui.pulse,0,100)/100;
+    const scan  = clamp(+STATE.ui.scan,0,100)/100;
+    const grain = clamp(+STATE.ui.grain,0,100)/100;
+
+    cssSet("--red", red);
+    cssSet("--redAlpha", redA.toFixed(3));
+    cssSet("--heat", heat.toFixed(3));
+    cssSet("--pulse", pulse.toFixed(3));
+    cssSet("--scan", scan.toFixed(3));
+    cssSet("--grain", grain.toFixed(3));
+
+    setCtl("red", red);
+    setCtl("redA", Math.round(redA*100));
+    setCtl("heat", Math.round(heat*100));
+    setCtl("pulse", Math.round(pulse*100));
+    setCtl("scan", Math.round(scan*100));
+    setCtl("grain", Math.round(grain*100));
+
+    renderSig();
+    renderMode();
+  }
+
+  function setCtl(id, v){
+    const el = $(id);
+    if(el && String(el.value) !== String(v)) el.value = String(v);
+    const vEl = $(id+"V");
+    if(vEl) vEl.textContent = String(v);
+  }
+
+  function stableSig(){
+    const u = STATE.ui;
+    return [
+      "FILE_ID="+FILE_ID,
+      "SEED="+u.seed,
+      "RED="+u.red,
+      "A="+u.redA,
+      "HEAT="+u.heat,
+      "PULSE="+u.pulse,
+      "SCAN="+u.scan,
+      "GRAIN="+u.grain,
+      "OL="+(u.overlayOn?1:0),
+      "CH="+(u.chromeOn?1:0),
+      "PON="+(u.pulseOn?1:0),
+      "SON="+(u.scanOn?1:0),
+      "GON="+(u.grainOn?1:0),
+    ].join(" | ");
+  }
+
+  function renderSig(){ $("sig").textContent = stableSig(); }
+  function renderMode(){
+    const u = STATE.ui;
+    const mode = [
+      u.heat>=70 ? "HOT" : (u.heat<=25 ? "CALM" : "LIVE"),
+      u.pulseOn ? "PULSE" : "STILL",
+      u.scanOn ? "SCAN" : "NO_SCAN",
+      u.grainOn ? "GRAIN" : "NO_GRAIN",
+      u.overlayOn ? "OVERLAY" : "NO_OVERLAY",
+      u.chromeOn ? "CHROME" : "NULL"
+    ].join(" / ");
+    $("mode").textContent = mode;
+  }
+
+  /* traces */
+  function mulberry32(a){
+    return function(){
+      let t = a += 0x6D2B79F5;
+      t = Math.imul(t ^ (t >>> 15), t | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  function seedToInt(seed){
+    let h = 2166136261;
+    for(let i=0;i<seed.length;i++){
+      h ^= seed.charCodeAt(i);
+      h = Math.imul(h, 16777619);
+    }
+    return h >>> 0;
+  }
+  function pathFromSeed(seed, w=760, h=520){
+    const r = mulberry32(seedToInt(seed));
+    const pts = [];
+    const cx = w*0.5, cy = h*0.5;
+    const base = Math.min(w,h)*0.26;
+    const loops = 5 + Math.floor(r()*5);
+    let ang = r()*Math.PI*2;
+
+    for(let i=0;i<loops;i++){
+      const t = i/(loops-1);
+      const amp = base*(0.65 + r()*0.85) * (0.35 + (1-t)*0.95);
+      const jitter = (r()-0.5)*0.9;
+      ang += (0.55 + r()*1.1) + jitter;
+      const rad = amp*(0.85 + r()*0.55);
+      pts.push([ cx + Math.cos(ang)*rad, cy + Math.sin(ang)*rad*(0.78 + r()*0.55) ]);
+    }
+
+    let d = "";
+    if(pts.length){
+      d += "M " + pts[0][0].toFixed(1) + " " + pts[0][1].toFixed(1) + " ";
+      for(let i=1;i<pts.length;i++){
+        const p0 = pts[i-1], p1 = pts[i];
+        const c1x = p0[0] + (p1[0]-p0[0])*(0.35 + r()*0.25);
+        const c1y = p0[1] + (p1[1]-p0[1])*(0.10 + r()*0.25);
+        const c2x = p0[0] + (p1[0]-p0[0])*(0.60 + r()*0.25);
+        const c2y = p0[1] + (p1[1]-p0[1])*(0.70 + r()*0.25);
+        d += "C " + c1x.toFixed(1) + " " + c1y.toFixed(1) + ", " + c2x.toFixed(1) + " " + c2y.toFixed(1) + ", " + p1[0].toFixed(1) + " " + p1[1].toFixed(1) + " ";
+      }
+    }
+    return d.trim();
+  }
+
+  function reseed(){
+    STATE.ui.seed = cryptoRand(8);
+    reseedFromState();
+    save();
+    render();
+  }
+
+  function reseedFromState(){
+    const s = STATE.ui.seed || cryptoRand(8);
+    $("p1").setAttribute("d", pathFromSeed("A"+s));
+    $("p2").setAttribute("d", pathFromSeed("B"+s));
+    $("p3").setAttribute("d", pathFromSeed("C"+s));
+  }
+
+  /* wiring */
+  function bind(){
+    $("drawerBtn").addEventListener("click", () => { STATE.ui.drawer = !STATE.ui.drawer; save(); render(); });
+    $("pulseBtn").addEventListener("click", () => { STATE.ui.pulseOn = !STATE.ui.pulseOn; save(); render(); });
+    $("scanBtn").addEventListener("click",  () => { STATE.ui.scanOn  = !STATE.ui.scanOn;  save(); render(); });
+    $("grainBtn").addEventListener("click", () => { STATE.ui.grainOn = !STATE.ui.grainOn; save(); render(); });
+
+    $("overlayBtn").addEventListener("click", () => { STATE.ui.overlayOn = !STATE.ui.overlayOn; save(); render(); });
+    $("chromeBtn").addEventListener("click",  () => { STATE.ui.chromeOn  = !STATE.ui.chromeOn;  save(); render(); });
+
+    $("red").addEventListener("input",   e => { STATE.ui.red   = +e.target.value; save(); render(); });
+    $("redA").addEventListener("input",  e => { STATE.ui.redA  = +e.target.value; save(); render(); });
+    $("heat").addEventListener("input",  e => { STATE.ui.heat  = +e.target.value; save(); render(); });
+    $("pulse").addEventListener("input", e => { STATE.ui.pulse = +e.target.value; save(); render(); });
+    $("scan").addEventListener("input",  e => { STATE.ui.scan  = +e.target.value; save(); render(); });
+    $("grain").addEventListener("input", e => { STATE.ui.grain = +e.target.value; save(); render(); });
+
+    $("seedBtn").addEventListener("click", reseed);
+
+    $("calmBtn").addEventListener("click", () => {
+      STATE.ui.heat = 18; STATE.ui.pulse = 18; STATE.ui.scan = 28; STATE.ui.grain = 18;
+      STATE.ui.red = 210; STATE.ui.redA = 42;
+      save(); render();
+    });
+    $("hotBtn").addEventListener("click", () => {
+      STATE.ui.heat = 82; STATE.ui.pulse = 58; STATE.ui.scan = 72; STATE.ui.grain = 44;
+      STATE.ui.red = 255; STATE.ui.redA = 78;
+      save(); render();
+    });
+    $("voidBtn").addEventListener("click", () => {
+      STATE.ui.heat = 10; STATE.ui.pulse = 0; STATE.ui.scan = 0; STATE.ui.grain = 0;
+      STATE.ui.red = 120; STATE.ui.redA = 18;
+      STATE.ui.pulseOn = false; STATE.ui.scanOn = false; STATE.ui.grainOn = false;
+      save(); render();
+    });
+
+    $("saveBtn").addEventListener("click", () => { save(); flashHint("SAVED"); });
+    $("loadBtn").addEventListener("click", () => {
+      const ok = load();
+      if(ok){ reseedFromState(); render(); flashHint("LOADED"); }
+      else flashHint("NO SAVE");
+    });
+    $("resetBtn").addEventListener("click", () => { reset(); flashHint("RESET"); });
+
+    $("field").addEventListener("click", reseed);
+
+    window.addEventListener("keydown", (e) => {
+      const k = e.key;
+      if(k === "Escape" && STATE.ui.drawer){ STATE.ui.drawer = false; save(); render(); }
+
+      if(k === "o" || k === "O"){ STATE.ui.overlayOn = !STATE.ui.overlayOn; save(); render(); flashHint(STATE.ui.overlayOn ? "OVERLAY ON":"OVERLAY OFF"); }
+      if(k === "n" || k === "N"){
+        STATE.ui.chromeOn = !STATE.ui.chromeOn;
+        save(); render();
+        flashHint(STATE.ui.chromeOn ? "CHROME ON":"NULL");
+      }
+
+      if(e.shiftKey && (k==="S" || k==="s")){ e.preventDefault(); save(); flashHint("SAVED"); }
+      if(e.shiftKey && (k==="L" || k==="l")){ e.preventDefault(); const ok=load(); if(ok){ reseedFromState(); render(); flashHint("LOADED"); } else flashHint("NO SAVE"); }
+      if(e.shiftKey && (k==="R" || k==="r")){ e.preventDefault(); reset(); flashHint("RESET"); }
+    }, {passive:false});
+  }
+
+  let hintT=null;
+  function flashHint(msg){
+    const el = $("hint");
+    if(!el) return;
+    const base = "CLICK FIELD = RESEED • O = OVERLAY • N = NULL (NO CHROME) • SHIFT+S SAVE • SHIFT+L LOAD • SHIFT+R RESET";
+    el.textContent = msg + " • " + base;
+    clearTimeout(hintT);
+    hintT = setTimeout(()=>{ el.textContent = base; }, 900);
+  }
+
+  // boot
+  const had = load();
+  reseedFromState();
+  render();
+  bind();
+  if(!had) save();
+})();
+</script>
+
+<!--
+AE::KETA_RED
+EE::LOCAL_FIRST_STATE + OVERLAY_TOGGLE + NULL_CHROME + RIGHT_DRAWER
+WB::NO_NETWORK / NO_EXTERNAL_DEPS
+FILE_ID::KETA_RED_SUBJECTIVITY_FEEDBACK_LOOP_STD
+ROOM_ID::KETA_RED
+VERSION::v2
+UPDATED_AT::2026-01-09
+CHANGELOG::drawer is right panel; overlay toggle; NULL chrome toggle; overlay never blocks clicks; top bar cleaned
+-->
+</body>
+</html>
