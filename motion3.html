@@ -1,0 +1,479 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>KETADATA // SOVEREIGN MOTION (FULL + VIZ)</title>
+
+<style>
+:root{
+  --bg:#000;
+  --fg:rgba(255,255,255,.86);
+  --muted:rgba(255,255,255,.52);
+  --line:rgba(255,255,255,.14);
+  --line2:rgba(255,255,255,.22);
+  --mono: ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace;
+  --sans: Arial,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;
+  --top:44px;
+}
+*{box-sizing:border-box}
+html,body{
+  margin:0;height:100%;
+  background:var(--bg);color:var(--fg);
+  overflow:hidden;font-family:var(--sans);
+}
+#top{
+  position:fixed;left:0;right:0;top:0;height:var(--top);
+  display:flex;align-items:center;gap:8px;padding:6px 8px;
+  background:rgba(0,0,0,.78);border-bottom:1px solid var(--line);
+  z-index:10;
+}
+.btn,.chip{
+  height:30px;display:inline-flex;align-items:center;gap:8px;
+  padding:0 10px;border:1px solid var(--line2);
+  background:rgba(0,0,0,.30);color:var(--fg);
+  font:12px/1 var(--sans);white-space:nowrap;user-select:none;
+}
+.btn{cursor:pointer}
+.btn:active{transform:translateY(1px)}
+.k{font-family:var(--mono);opacity:.9}
+.sep{flex:1}
+input[type="range"]{width:140px;accent-color:#fff}
+
+#stage{
+  position:fixed;left:0;top:var(--top);
+  width:100vw;height:calc(100vh - var(--top));
+}
+
+video{
+  position:fixed;left:-9999px;top:-9999px;width:1px;height:1px;opacity:0;
+}
+
+/* VIZ panel */
+#viz{
+  position:fixed;
+  right:8px;
+  bottom:8px;
+  width:260px;
+  height:160px;
+  border:1px solid var(--line);
+  background:#000;
+  z-index:20;
+  display:none;
+}
+body.showviz #viz{display:block}
+
+#hint{
+  position:fixed;left:8px;bottom:8px;
+  border:1px solid var(--line);
+  background:rgba(0,0,0,.55);
+  padding:6px 8px;
+  font:12px/1.2 var(--sans);
+  color:var(--muted);
+  z-index:20;
+  max-width:70ch;
+}
+body.showviz #hint{left:8px;bottom:176px} /* avoid overlap with viz */
+
+body.invert{filter:invert(1)}
+</style>
+</head>
+
+<body>
+
+<div id="top">
+  <div class="chip k">KETADATA // SOVEREIGN MOTION</div>
+
+  <div class="btn" id="start">START CAM</div>
+  <div class="btn" id="stopCam">STOP CAM</div>
+  <div class="btn" id="run">STOP</div>
+  <div class="btn" id="invert">INVERT</div>
+  <div class="btn" id="vizBtn">VIZ</div>
+
+  <div class="chip">INT <input id="intensity" type="range" min="0" max="100" value="55"></div>
+  <div class="chip">COUNT <input id="count" type="range" min="2000" max="45000" value="18000"></div>
+  <div class="chip">THR <input id="thr" type="range" min="1" max="80" value="18"></div>
+
+  <div class="sep"></div>
+  <div class="chip k" id="status">LOCAL</div>
+</div>
+
+<canvas id="stage"></canvas>
+<canvas id="viz" width="260" height="160"></canvas>
+<video id="video" playsinline muted autoplay></video>
+
+<div id="hint">
+  <div style="color:rgba(255,255,255,.86)">SOVEREIGN: NO MODEL, NO FILES, NO NETWORK.</div>
+  <div>Motion control needs contrast: move hands against a darker background or brighter light.</div>
+  <div>VIZ shows the motion mask + detected L/R centroids.</div>
+</div>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+
+  const canvas = $("stage");
+  const ctx = canvas.getContext("2d",{alpha:false});
+
+  const viz = $("viz");
+  const vctx = viz.getContext("2d");
+
+  let W=0,H=0,DPR=1;
+  function resize(){
+    DPR = Math.max(1, Math.min(2, window.devicePixelRatio||1));
+    const ow = canvas.offsetWidth || 0;
+    const oh = canvas.offsetHeight || 0;
+    W = Math.max(1, Math.floor(ow * DPR));
+    H = Math.max(1, Math.floor(oh * DPR));
+    canvas.width = W;
+    canvas.height = H;
+  }
+  addEventListener("resize", resize);
+  addEventListener("orientationchange", () => setTimeout(resize, 60));
+  setTimeout(resize, 0);
+
+  const STATE={
+    running:true,
+    intensity:0.55,
+    targetCount:18000,
+    motionThr:18,
+    camOn:false,
+    showViz:false
+  };
+
+  const setStatus = s => ($("status").textContent = s);
+
+  $("invert").onclick = () => document.body.classList.toggle("invert");
+  $("vizBtn").onclick = () => {
+    STATE.showViz = !STATE.showViz;
+    document.body.classList.toggle("showviz", STATE.showViz);
+  };
+
+  $("intensity").oninput = e => STATE.intensity = (+e.target.value)/100;
+  $("count").oninput = e => STATE.targetCount = (+e.target.value)|0;
+  $("thr").oninput = e => STATE.motionThr = (+e.target.value)|0;
+
+  $("run").onclick = () => {
+    STATE.running = !STATE.running;
+    $("run").textContent = STATE.running ? "STOP" : "RUN";
+  };
+
+  /* ===== PARTICLES ===== */
+  let P=[];
+  function seed(n){
+    P.length=0;
+    for(let i=0;i<n;i++){
+      P.push({
+        x:Math.random()*W,
+        y:Math.random()*H,
+        vx:(Math.random()-.5)*.25,
+        vy:(Math.random()-.5)*.25
+      });
+    }
+  }
+  function ensureCount(){
+    const n = STATE.targetCount|0;
+    if(P.length===n) return;
+    if(P.length>n){ P.length=n; return; }
+    while(P.length<n){
+      P.push({
+        x:Math.random()*W,
+        y:Math.random()*H,
+        vx:(Math.random()-.5)*.25,
+        vy:(Math.random()-.5)*.25
+      });
+    }
+  }
+
+  /* ===== ATTRACTORS ===== */
+  const A=[
+    {x:0,y:0,str:1,alive:true},   // mouse
+    {x:0,y:0,str:0,alive:false},  // left motion centroid
+    {x:0,y:0,str:0,alive:false}   // right motion centroid
+  ];
+
+  let mouseDown=false;
+  addEventListener("pointerdown",e=>{mouseDown=true;setMouse(e)});
+  addEventListener("pointerup",()=>mouseDown=false);
+  addEventListener("pointermove",setMouse);
+
+  function setMouse(e){
+    const r=canvas.getBoundingClientRect();
+    const x=(e.clientX-r.left)*DPR;
+    const y=(e.clientY-r.top)*DPR;
+    A[0].x=x; A[0].y=y;
+    A[0].str=mouseDown?2.2:1.1;
+  }
+
+  /* ===== WEBCAM MOTION ===== */
+  const video=$("video");
+  let stream=null;
+
+  // slightly bigger than your prior to reduce aliasing
+  const DET_W=200, DET_H=112;
+  const det=document.createElement("canvas");
+  det.width=DET_W; det.height=DET_H;
+  const dctx=det.getContext("2d",{willReadFrequently:true});
+
+  let prevLuma=null; // Uint8Array length DET_W*DET_H
+
+  function stopCam(){
+    if(stream){
+      try{ for(const t of stream.getTracks()) t.stop(); }catch(_){}
+    }
+    stream=null;
+    STATE.camOn=false;
+    prevLuma=null;
+    A[1].alive=false; A[1].str=0;
+    A[2].alive=false; A[2].str=0;
+    setStatus("LOCAL");
+  }
+
+  async function startCam(){
+    if(STATE.camOn) return;
+    setStatus("CAM REQUEST");
+    try{
+      stream = await navigator.mediaDevices.getUserMedia({
+        video:{ facingMode:"user", width:{ideal:1280}, height:{ideal:720} },
+        audio:false
+      });
+      video.srcObject = stream;
+
+      // iOS stability: autoplay+muted+playsinline present; still call play() from gesture.
+      await video.play();
+
+      STATE.camOn=true;
+      prevLuma=null;
+      setStatus("CAM ON");
+    }catch(e){
+      setStatus("CAM BLOCKED");
+    }
+  }
+
+  $("start").onclick=startCam;
+  $("stopCam").onclick=stopCam;
+
+  function updateMotion(){
+    if(!STATE.camOn) return;
+
+    // draw mirrored selfie frame
+    dctx.save();
+    dctx.scale(-1,1);
+    dctx.drawImage(video, -DET_W, 0, DET_W, DET_H);
+    dctx.restore();
+
+    const img = dctx.getImageData(0,0,DET_W,DET_H).data;
+
+    // build luma frame
+    const cur = new Uint8Array(DET_W*DET_H);
+    let p=0;
+    for(let i=0;i<img.length;i+=4){
+      // luma approx
+      const r=img[i], g=img[i+1], b=img[i+2];
+      cur[p++] = (r*0.2126 + g*0.7152 + b*0.0722) | 0;
+    }
+
+    if(!prevLuma){
+      prevLuma = cur;
+      A[1].alive=false; A[1].str=0;
+      A[2].alive=false; A[2].str=0;
+      if(STATE.showViz) drawViz(cur, null);
+      return;
+    }
+
+    const thr = STATE.motionThr|0;
+
+    let lx=0,ly=0,lm=0, rx=0,ry=0,rm=0;
+
+    // also prepare a viz mask (0/255)
+    const mask = STATE.showViz ? new Uint8ClampedArray(DET_W*DET_H) : null;
+
+    for(let y=0;y<DET_H;y++){
+      for(let x=0;x<DET_W;x++){
+        const idx = y*DET_W + x;
+        const d = Math.abs(cur[idx] - prevLuma[idx]);
+        prevLuma[idx] = cur[idx];
+
+        if(d < thr){
+          if(mask) mask[idx]=0;
+          continue;
+        }
+
+        // weight by motion magnitude
+        const w = d;
+        if(mask) mask[idx]=255;
+
+        if(x < DET_W/2){
+          lm += w; lx += x*w; ly += y*w;
+        }else{
+          rm += w; rx += x*w; ry += y*w;
+        }
+      }
+    }
+
+    if(lm){
+      A[1].x = (lx/lm)/DET_W * W;
+      A[1].y = (ly/lm)/DET_H * H;
+      A[1].str = Math.min(3.2, lm/5200);
+      A[1].alive = A[1].str > 0.10;
+    }else{
+      A[1].str=0; A[1].alive=false;
+    }
+
+    if(rm){
+      A[2].x = (rx/rm)/DET_W * W;
+      A[2].y = (ry/rm)/DET_H * H;
+      A[2].str = Math.min(3.2, rm/5200);
+      A[2].alive = A[2].str > 0.10;
+    }else{
+      A[2].str=0; A[2].alive=false;
+    }
+
+    if(STATE.showViz) drawViz(cur, mask);
+  }
+
+  function drawViz(curLuma, mask){
+    // Background: luma preview
+    const w = viz.width, h = viz.height;
+    vctx.fillStyle="#000";
+    vctx.fillRect(0,0,w,h);
+
+    // draw luma as image
+    const imgData = vctx.createImageData(DET_W, DET_H);
+    for(let i=0;i<curLuma.length;i++){
+      const v = curLuma[i];
+      const o = i*4;
+      imgData.data[o]=v;
+      imgData.data[o+1]=v;
+      imgData.data[o+2]=v;
+      imgData.data[o+3]=255;
+    }
+    // scale into viz
+    const tmp = document.createElement("canvas");
+    tmp.width=DET_W; tmp.height=DET_H;
+    tmp.getContext("2d").putImageData(imgData,0,0);
+    vctx.imageSmoothingEnabled=false;
+    vctx.globalAlpha=0.55;
+    vctx.drawImage(tmp, 0,0, DET_W,DET_H, 0,0, w,h);
+    vctx.globalAlpha=1;
+
+    // overlay motion mask
+    if(mask){
+      const maskImg = vctx.createImageData(DET_W, DET_H);
+      for(let i=0;i<mask.length;i++){
+        const v = mask[i];
+        const o = i*4;
+        maskImg.data[o]=255;
+        maskImg.data[o+1]=255;
+        maskImg.data[o+2]=255;
+        maskImg.data[o+3]=v; // alpha = mask
+      }
+      const tmp2 = document.createElement("canvas");
+      tmp2.width=DET_W; tmp2.height=DET_H;
+      tmp2.getContext("2d").putImageData(maskImg,0,0);
+      vctx.globalAlpha=0.9;
+      vctx.drawImage(tmp2, 0,0, DET_W,DET_H, 0,0, w,h);
+      vctx.globalAlpha=1;
+    }
+
+    // plot L/R points (mapped from main space back into viz space)
+    vctx.fillStyle="rgba(0,0,0,0.0)";
+    const sx = w/W, sy = h/H;
+
+    if(A[1].alive){
+      vctx.fillStyle="rgba(255,255,255,.86)";
+      vctx.fillRect(A[1].x*sx-2, A[1].y*sy-2, 4,4);
+    }
+    if(A[2].alive){
+      vctx.fillStyle="rgba(255,255,255,.86)";
+      vctx.fillRect(A[2].x*sx-2, A[2].y*sy-2, 4,4);
+    }
+  }
+
+  /* ===== LOOP ===== */
+  let last=performance.now();
+  function frame(t){
+    requestAnimationFrame(frame);
+    if(!STATE.running) return;
+
+    // keep canvas correct even under iOS dynamic bars
+    resize();
+
+    // lazy init particles once we have real dimensions
+    if(P.length===0 || P._seededOnce!==true){
+      seed(STATE.targetCount|0);
+      P._seededOnce=true;
+    }
+
+    ensureCount();
+    updateMotion();
+
+    const dt = Math.min(32, t-last); last=t;
+
+    // trails (more fun + makes “working” obvious)
+    ctx.globalCompositeOperation="source-over";
+    ctx.fillStyle="rgba(0,0,0,0.16)";
+    ctx.fillRect(0,0,W,H);
+
+    const pull = 0.00065 + 0.0044*STATE.intensity;
+    const damp = 0.986 - 0.085*STATE.intensity;
+    const jitter = 0.00010 + 0.00055*STATE.intensity;
+
+    ctx.globalCompositeOperation="lighter";
+    ctx.fillStyle="rgba(255,255,255,0.10)";
+
+    for(const p of P){
+      let ax=0, ay=0;
+
+      // mouse always; motion attractors only if alive
+      for(let i=0;i<A.length;i++){
+        const a=A[i];
+        if(i>0 && !a.alive) continue;
+
+        const dx=a.x-p.x, dy=a.y-p.y;
+        const inv=1/(dx*dx+dy*dy+100);
+        ax += dx*inv*pull*a.str;
+        ay += dy*inv*pull*a.str;
+      }
+
+      ax += (Math.random()-0.5)*jitter;
+      ay += (Math.random()-0.5)*jitter;
+
+      p.vx = (p.vx + ax*dt) * damp;
+      p.vy = (p.vy + ay*dt) * damp;
+
+      p.x = (p.x + p.vx*dt + W) % W;
+      p.y = (p.y + p.vy*dt + H) % H;
+
+      ctx.fillRect(p.x,p.y,1,1);
+    }
+
+    ctx.globalCompositeOperation="source-over";
+
+    if(STATE.camOn){
+      const live = (A[1].alive || A[2].alive);
+      setStatus(live ? "CAM + MOTION" : "CAM (LOW MOTION)");
+    }else{
+      setStatus("LOCAL");
+    }
+  }
+
+  requestAnimationFrame(frame);
+
+  addEventListener("beforeunload", () => { try{ stopCam(); }catch(_){} });
+})();
+</script>
+
+<!--
+AE: KETADATA
+EE: SOVEREIGN_MOTION_FULLSCREEN_VIZ
+WB: SINGLE_FILE_HTML
+FILE_ID: KETA_SOV_MOTION_FS_VIZ_v1
+ROOM_ID: BASE
+VERSION: 1
+UPDATED_AT: 2026-01-08
+CHANGELOG:
+- v1: adds VIZ + stop cam; uses luma diff + motion mask overlay; iOS-stable autoplay/play; adds trails for obvious feedback
+-->
+</body>
+</html>
