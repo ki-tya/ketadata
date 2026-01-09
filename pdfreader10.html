@@ -1,0 +1,958 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>KETADATA // PDF READER</title>
+
+<script src="./vendor/pdfjs/pdf.min.js"></script>
+
+<style>
+  :root{
+    --bg:#000;
+    --fg:rgba(255,255,255,.86);
+    --muted:rgba(255,255,255,.52);
+    --line:rgba(255,255,255,.12);
+    --line2:rgba(255,255,255,.22);
+    --mono:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace;
+    --sans:Arial,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0}
+  body{
+    background:var(--bg);
+    color:var(--fg);
+    font-family:var(--sans);
+    font-size:13px;
+    overflow:hidden;
+  }
+  button,input,textarea{font:inherit;color:inherit;background:transparent}
+  button{
+    border:1px solid var(--line);
+    padding:6px 10px;
+    cursor:pointer;
+    transition:border-color .15s;
+  }
+  button:hover{border-color:var(--line2)}
+  button:disabled{opacity:.4;cursor:default}
+
+  .root{
+    position:fixed;
+    inset:0;
+    display:flex;
+    flex-direction:column;
+  }
+
+  .bar{
+    height:42px;
+    border-bottom:1px solid var(--line);
+    display:flex;
+    align-items:center;
+    padding:0 12px;
+    gap:10px;
+    overflow-x:auto;
+    overflow-y:hidden;
+    flex-shrink:0;
+  }
+  .bar::-webkit-scrollbar{height:6px}
+  .bar::-webkit-scrollbar-thumb{background:rgba(255,255,255,.1)}
+  
+  .grp{display:flex;align-items:center;gap:8px}
+  .sep{width:1px;height:20px;background:var(--line)}
+  
+  .pill{
+    border:1px solid var(--line);
+    padding:5px 10px;
+    display:flex;
+    align-items:center;
+    gap:8px;
+  }
+  
+  .file-wrap{
+    position:relative;
+    display:inline-block;
+  }
+  .file-wrap input[type="file"]{
+    position:absolute;
+    inset:0;
+    opacity:0;
+    cursor:pointer;
+  }
+  
+  input[type="text"],
+  input[type="number"]{
+    border:1px solid var(--line);
+    padding:5px 8px;
+    outline:none;
+    background:#000;
+  }
+  input:focus{border-color:var(--line2)}
+
+  .main{
+    flex:1;
+    display:grid;
+    grid-template-columns:1fr 400px;
+    min-height:0;
+  }
+
+  .view-area{
+    position:relative;
+    border-right:1px solid var(--line);
+    overflow:hidden;
+  }
+
+  .drop{
+    position:absolute;
+    inset:0;
+    display:none;
+    align-items:center;
+    justify-content:center;
+    background:rgba(0,0,0,.9);
+    border:1px dashed var(--line2);
+    margin:20px;
+    pointer-events:none;
+  }
+  .drop.on{display:flex}
+  .drop-box{
+    border:1px solid var(--line);
+    padding:20px;
+    text-align:center;
+  }
+
+  .viewer{
+    position:absolute;
+    inset:0;
+    overflow:auto;
+    padding:20px;
+  }
+
+  .page{
+    position:relative;
+    margin:0 auto;
+    display:none;
+    background:#000;
+  }
+  .page.on{
+    display:inline-block;
+    border:1px solid var(--line);
+  }
+
+  canvas{display:block}
+
+  .txt-layer{
+    position:absolute;
+    inset:0;
+    color:transparent;
+    user-select:text;
+  }
+  .txt-layer span{
+    position:absolute;
+    white-space:pre;
+    transform-origin:0 0;
+    line-height:1;
+  }
+  .txt-layer ::selection{background:rgba(255,255,255,.2)}
+
+  .side{
+    display:flex;
+    flex-direction:column;
+    min-height:0;
+  }
+
+  .tabs{
+    height:38px;
+    border-bottom:1px solid var(--line);
+    display:flex;
+    padding:0 12px;
+    gap:2px;
+  }
+
+  .tab{
+    padding:0 14px;
+    border:none;
+    border-bottom:2px solid transparent;
+    background:transparent;
+    color:var(--muted);
+    cursor:pointer;
+    transition:all .15s;
+  }
+  .tab:hover{color:var(--fg)}
+  .tab.on{
+    color:var(--fg);
+    border-bottom-color:var(--fg);
+  }
+
+  .panel{
+    flex:1;
+    min-height:0;
+    display:none;
+    flex-direction:column;
+  }
+  .panel.on{display:flex}
+
+  .panel-bar{
+    height:38px;
+    border-bottom:1px solid var(--line);
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    padding:0 12px;
+  }
+
+  .panel-title{
+    font-size:11px;
+    letter-spacing:.5px;
+    color:var(--muted);
+  }
+
+  .btn-grp{display:flex;gap:6px}
+  .btn-sm{padding:4px 8px;font-size:12px}
+
+  textarea{
+    flex:1;
+    width:100%;
+    border:none;
+    outline:none;
+    padding:12px;
+    resize:none;
+    background:#000;
+  }
+
+  .list{
+    flex:1;
+    overflow:auto;
+    padding:12px;
+  }
+
+  .item{
+    border:1px solid var(--line);
+    padding:10px;
+    margin-bottom:10px;
+    transition:border-color .15s;
+  }
+  .item:hover{border-color:var(--line2)}
+
+  .item-head{
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-start;
+    gap:10px;
+    margin-bottom:8px;
+  }
+
+  .item-info{flex:1;min-width:0}
+  .item-name{
+    font-weight:600;
+    margin-bottom:2px;
+    word-break:break-word;
+  }
+  .item-sub{
+    font-size:12px;
+    color:var(--muted);
+  }
+
+  .item-btns{
+    display:flex;
+    gap:6px;
+    flex-wrap:wrap;
+  }
+
+  .empty{
+    padding:40px 20px;
+    text-align:center;
+    color:var(--muted);
+  }
+
+  .err{
+    position:absolute;
+    inset:20px;
+    background:#000;
+    border:1px solid rgba(255,50,50,.5);
+    padding:30px;
+    overflow:auto;
+    display:none;
+    z-index:100;
+  }
+  .err.on{display:block}
+  .err h2{
+    color:rgba(255,100,100,1);
+    margin:0 0 20px 0;
+    font-size:16px;
+    letter-spacing:1px;
+  }
+  .err p{
+    color:var(--muted);
+    line-height:1.6;
+    margin:12px 0;
+  }
+  .err h3{
+    color:var(--fg);
+    font-size:13px;
+    margin:20px 0 10px 0;
+    letter-spacing:.5px;
+  }
+  .err code{
+    background:rgba(255,255,255,.08);
+    padding:2px 6px;
+    font-family:var(--mono);
+    font-size:12px;
+  }
+  .err pre{
+    background:rgba(255,255,255,.04);
+    padding:12px;
+    border:1px solid var(--line);
+    overflow-x:auto;
+    font-family:var(--mono);
+    font-size:11px;
+    line-height:1.5;
+  }
+</style>
+
+</head>
+
+<body>
+
+<div class="root">
+  <div class="bar">
+    <div class="grp">
+      <div class="pill file-wrap">
+        <span class="muted">OPEN</span>
+        <input id="file" type="file" accept="application/pdf"/>
+      </div>
+      
+      <div class="pill file-wrap">
+        <span class="muted">IMPORT</span>
+        <input id="import" type="file" accept="application/pdf" multiple/>
+      </div>
+    </div>
+
+    <div class="sep"></div>
+
+    <div class="grp">
+      <span class="muted" style="font-size:11px">TITLE</span>
+      <input id="title" type="text" placeholder="UNTITLED" style="width:200px"/>
+      <button id="save">SAVE</button>
+    </div>
+
+    <div class="sep"></div>
+
+    <div class="grp">
+      <button id="prev">PREV</button>
+      <button id="next">NEXT</button>
+      <input id="pageNum" type="number" min="1" value="1" style="width:50px;text-align:center"/>
+      <span class="muted">/ <span id="pageTotal">0</span></span>
+    </div>
+
+    <div class="sep"></div>
+
+    <div class="grp">
+      <button id="zoomOut">−</button>
+      <button id="zoomIn">+</button>
+      <button id="fit">FIT</button>
+      <button id="rotL">↶</button>
+      <button id="rotR">↷</button>
+    </div>
+
+    <div style="flex:1"></div>
+
+    <div class="pill">
+      <span class="muted" style="font-size:11px">STATUS</span>
+      <span id="status">READY</span>
+    </div>
+  </div>
+
+  <div class="main">
+    <div class="view-area">
+      <div class="err" id="err">
+        <h2>SETUP REQUIRED</h2>
+        <p>PDF.JS LIBRARY FILES ARE MISSING.</p>
+        
+        <h3>REQUIRED STRUCTURE:</h3>
+        <pre>your_folder/
+├── pdf_reader.html
+└── vendor/
+    └── pdfjs/
+        ├── pdf.min.js
+        └── pdf.worker.min.js</pre>
+
+        <h3>SETUP INSTRUCTIONS:</h3>
+        <p>1. DOWNLOAD PDF.JS FROM <code>github.com/mozilla/pdf.js/releases</code></p>
+        <p>2. CREATE <code>vendor/pdfjs/</code> FOLDER NEXT TO THIS FILE</p>
+        <p>3. COPY <code>pdf.min.js</code> AND <code>pdf.worker.min.js</code> INTO IT</p>
+        <p>4. RELOAD THIS PAGE</p>
+        
+        <h3>FILE SIZES:</h3>
+        <p>pdf.min.js: ~800KB</p>
+        <p>pdf.worker.min.js: ~1.8MB</p>
+        <p>TOTAL: ~2.6MB (ONE-TIME SETUP)</p>
+      </div>
+
+      <div class="drop" id="drop">
+        <div class="drop-box">
+          <div>DROP PDF HERE</div>
+          <div class="muted" style="margin-top:8px;font-size:12px">ALT = IMPORT TO LIBRARY</div>
+        </div>
+      </div>
+
+      <div class="viewer" id="viewer">
+        <div class="page" id="page">
+          <canvas id="canvas"></canvas>
+          <div class="txt-layer" id="txt"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="side">
+      <div class="tabs">
+        <button class="tab on" data-tab="lib">LIB (<span id="libCount">0</span>)</button>
+        <button class="tab" data-tab="extract">EXTRACT</button>
+        <button class="tab" data-tab="prompt">PROMPT</button>
+      </div>
+
+      <div class="panel on" data-panel="lib">
+        <div class="list" id="list">
+          <div class="empty">
+            <div style="font-size:24px;margin-bottom:12px">◼</div>
+            <div>NO PDFS IN LIBRARY</div>
+            <div style="font-size:11px;margin-top:6px">OPEN OR DROP FILES</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel" data-panel="extract">
+        <div class="panel-bar">
+          <div class="panel-title">TEXT EXTRACTION</div>
+          <div class="btn-grp">
+            <button id="extPage" class="btn-sm">PAGE</button>
+            <button id="extAll" class="btn-sm">ALL</button>
+            <button id="copy" class="btn-sm">COPY</button>
+          </div>
+        </div>
+        <textarea id="extract" spellcheck="false" placeholder="EXTRACTED TEXT APPEARS HERE"></textarea>
+      </div>
+
+      <div class="panel" data-panel="prompt">
+        <div class="panel-bar">
+          <div class="panel-title">PROMPT BUILDER</div>
+          <div class="btn-grp">
+            <button id="copyPr" class="btn-sm">COPY</button>
+            <button id="clearPr" class="btn-sm">CLEAR</button>
+          </div>
+        </div>
+        <textarea id="promptTxt" spellcheck="false" placeholder="BUILD PROMPT LIST FROM LIBRARY"></textarea>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const LS="pdf_state";
+  const DB="pdf_lib";
+  const STORE="pdfs";
+
+  const $=id=>document.getElementById(id);
+
+  let lib=null,PDF=null,bytes=null;
+  let n=1,total=0,fit=true,zoom=1,rot=0;
+  let rendering=false,pending=null;
+
+  const CUR={src:"",id:"",orig:"",title:""};
+  const ST={ui:{page:1,zoom:1,fit:true,rot:0,tab:"lib"},lastId:"",prompt:""};
+
+  function clamp(v,min,max){return Math.max(min,Math.min(max,v))}
+  function safe(s){const x=String(s||"").trim();return x||"UNTITLED"}
+
+  function load(){
+    try{
+      const r=localStorage.getItem(LS);
+      if(!r)return;
+      const s=JSON.parse(r);
+      if(s&&s.ui)Object.assign(ST.ui,s.ui);
+      if(s.lastId)ST.lastId=s.lastId;
+      if(s.prompt)ST.prompt=s.prompt;
+    }catch(e){}
+  }
+  function save(){try{localStorage.setItem(LS,JSON.stringify(ST))}catch(e){}}
+
+  function status(t){$("status").textContent=String(t||"")}
+
+  function tab(name){
+    ST.ui.tab=name;
+    save();
+    document.querySelectorAll(".tab").forEach(b=>b.classList.toggle("on",b.dataset.tab===name));
+    document.querySelectorAll(".panel").forEach(p=>p.classList.toggle("on",p.dataset.panel===name));
+  }
+
+  function check(){
+    if(window.pdfjsLib){
+      lib=window.pdfjsLib;
+      lib.GlobalWorkerOptions.workerSrc="./vendor/pdfjs/pdf.worker.min.js";
+      status("READY");
+      return true;
+    }
+    $("err").classList.add("on");
+    status("SETUP REQUIRED");
+    return false;
+  }
+
+  async function openBytes(data,name){
+    if(!lib){status("NO LIB");return}
+
+    bytes=data;
+    const sug=safe(String(name||"PDF").replace(/\.pdf$/i,""));
+    if(!CUR.title)CUR.title=sug;
+    $("title").value=CUR.title;
+
+    status("LOADING...");
+
+    try{
+      const doc=await lib.getDocument({data}).promise;
+      PDF=doc;
+      total=PDF.numPages||0;
+      $("pageTotal").textContent=String(total);
+
+      n=clamp(ST.ui.page||1,1,Math.max(1,total));
+      zoom=clamp(ST.ui.zoom||1,.2,4);
+      fit=(ST.ui.fit!==false);
+      rot=((ST.ui.rot||0)%360+360)%360;
+
+      $("pageNum").value=String(n);
+      $("pageNum").max=String(total);
+
+      status("READY");
+      await render(n);
+    }catch(e){
+      status("LOAD FAILED");
+    }
+  }
+
+  async function openFile(f){
+    if(!f)return;
+    try{
+      CUR.src="file";CUR.id="";
+      CUR.orig=f.name||"PDF";
+      CUR.title=safe(String(f.name||"PDF").replace(/\.pdf$/i,""));
+      const data=await f.arrayBuffer();
+      await openBytes(data,f.name||"DOC.PDF");
+    }catch(e){
+      status("READ FAILED");
+    }
+  }
+
+  async function renderTxt(page,vp){
+    const t=$("txt");
+    t.innerHTML="";
+
+    try{
+      const tc=await page.getTextContent();
+      for(const i of tc.items){
+        if(!i.str)continue;
+        
+        const s=document.createElement("span");
+        s.textContent=i.str;
+
+        const tx=lib.Util.transform(vp.transform,i.transform);
+        const x=tx[4],y=tx[5];
+        const h=Math.hypot(tx[2],tx[3]);
+        const a=Math.atan2(tx[1],tx[0]);
+
+        s.style.left=x+"px";
+        s.style.top=(y-h)+"px";
+        s.style.fontSize=h+"px";
+        s.style.transform=`rotate(${a}rad)`;
+        s.style.fontFamily="sans-serif";
+
+        t.appendChild(s);
+      }
+    }catch(e){}
+  }
+
+  function scale(base){
+    const v=$("viewer");
+    const pad=40;
+    const avail=Math.max(320,v.clientWidth-pad);
+    return clamp(avail/base.width,.2,4);
+  }
+
+  async function render(num){
+    if(!PDF)return;
+    if(rendering){pending=num;return}
+    rendering=true;
+
+    try{
+      status("RENDERING...");
+      $("prev").disabled=num<=1;
+      $("next").disabled=num>=total;
+
+      const page=await PDF.getPage(num);
+      const base=page.getViewport({scale:1,rotation:rot});
+      const sc=fit?scale(base):zoom;
+      const vp=page.getViewport({scale:sc,rotation:rot});
+
+      const c=$("canvas");
+      const ctx=c.getContext("2d",{alpha:false});
+
+      c.width=Math.floor(vp.width);
+      c.height=Math.floor(vp.height);
+
+      const pg=$("page");
+      pg.classList.add("on");
+      pg.style.width=c.width+"px";
+      pg.style.height=c.height+"px";
+      $("txt").style.width=c.width+"px";
+      $("txt").style.height=c.height+"px";
+
+      $("txt").innerHTML="";
+
+      await page.render({canvasContext:ctx,viewport:vp}).promise;
+      await renderTxt(page,vp);
+
+      status("READY");
+      $("pageNum").value=String(num);
+      n=num;
+
+      ST.ui.page=n;
+      ST.ui.zoom=zoom;
+      ST.ui.fit=fit;
+      ST.ui.rot=rot;
+      save();
+    }catch(e){
+      status("RENDER ERROR");
+    }finally{
+      rendering=false;
+      if(pending&&pending!==num){
+        const go=pending;pending=null;
+        render(go);
+      }else pending=null;
+    }
+  }
+
+  function setZoom(z){
+    zoom=clamp(z,.2,4);
+    fit=false;
+    $("fit").textContent="FREE";
+    render(n);
+  }
+
+  function toggleFit(){
+    fit=!fit;
+    $("fit").textContent=fit?"FIT":"FREE";
+    render(n);
+  }
+
+  function setRot(deg){
+    rot=((deg%360)+360)%360;
+    render(n);
+  }
+
+  async function extract(mode){
+    if(!PDF)return;
+    status("EXTRACTING...");
+    const out=[];
+    const start=(mode==="page")?n:1;
+    const end=(mode==="page")?n:total;
+    
+    try{
+      for(let i=start;i<=end;i++){
+        const p=await PDF.getPage(i);
+        const tc=await p.getTextContent();
+        const lines=tc.items.map(x=>x.str).filter(Boolean);
+        out.push(`PAGE ${i}/${total}`);
+        out.push(lines.join(" "));
+        out.push("");
+      }
+      $("extract").value=out.join("\n");
+      status("READY");
+    }catch(e){
+      status("EXTRACT FAILED");
+    }
+  }
+
+  async function copyTxt(txt){
+    try{
+      await navigator.clipboard.writeText(txt);
+      status("COPIED");
+      setTimeout(()=>status("READY"),800);
+    }catch(e){status("COPY FAILED")}
+  }
+
+  function dbOpen(){
+    return new Promise((res,rej)=>{
+      const r=indexedDB.open(DB,1);
+      r.onupgradeneeded=()=>{
+        const db=r.result;
+        if(!db.objectStoreNames.contains(STORE)){
+          db.createObjectStore(STORE,{keyPath:"id"});
+        }
+      };
+      r.onsuccess=()=>res(r.result);
+      r.onerror=()=>rej(r.error);
+    });
+  }
+
+  function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2)}
+
+  async function dbPut(rec){
+    const db=await dbOpen();
+    return new Promise((res,rej)=>{
+      const tx=db.transaction(STORE,"readwrite");
+      tx.oncomplete=()=>{db.close();res()};
+      tx.onerror=()=>{db.close();rej(tx.error)};
+      tx.objectStore(STORE).put(rec);
+    });
+  }
+
+  async function dbGet(id){
+    const db=await dbOpen();
+    return new Promise((res,rej)=>{
+      const tx=db.transaction(STORE,"readonly");
+      const rq=tx.objectStore(STORE).get(id);
+      rq.onsuccess=()=>{db.close();res(rq.result||null)};
+      rq.onerror=()=>{db.close();rej(rq.error)};
+    });
+  }
+
+  async function dbDel(id){
+    const db=await dbOpen();
+    return new Promise((res,rej)=>{
+      const tx=db.transaction(STORE,"readwrite");
+      tx.oncomplete=()=>{db.close();res()};
+      tx.onerror=()=>{db.close();rej(tx.error)};
+      tx.objectStore(STORE).delete(id);
+    });
+  }
+
+  async function dbList(){
+    const db=await dbOpen();
+    return new Promise((res,rej)=>{
+      const tx=db.transaction(STORE,"readonly");
+      const rq=tx.objectStore(STORE).getAll();
+      rq.onsuccess=()=>{db.close();res(rq.result||[])};
+      rq.onerror=()=>{db.close();rej(rq.error)};
+    });
+  }
+
+  async function importMulti(files){
+    if(!files||!files.length)return;
+    status("IMPORTING...");
+    
+    for(const f of files){
+      try{
+        const data=await f.arrayBuffer();
+        const id=uid();
+        const orig=f.name||"PDF";
+        const title=safe(orig.replace(/\.pdf$/i,""));
+        await dbPut({id,title,orig,added:Date.now(),bytes:data});
+        ST.lastId=id;
+        save();
+      }catch(e){}
+    }
+    
+    await refresh();
+    status("IMPORTED");
+    setTimeout(()=>status("READY"),1000);
+  }
+
+  async function saveLib(){
+    if(!bytes){status("NO PDF");return}
+    const title=safe($("title").value);
+    CUR.title=title;
+
+    if(CUR.src==="lib"&&CUR.id){
+      const r=await dbGet(CUR.id);
+      if(!r){status("MISSING");return}
+      r.title=title;
+      await dbPut(r);
+      await refresh();
+      status("SAVED");
+      setTimeout(()=>status("READY"),700);
+      return;
+    }
+
+    const id=uid();
+    const orig=CUR.orig||(title+".pdf");
+    await dbPut({id,title,orig,added:Date.now(),bytes});
+
+    CUR.src="lib";
+    CUR.id=id;
+    ST.lastId=id;
+    save();
+
+    await refresh();
+    status("SAVED");
+    setTimeout(()=>status("READY"),700);
+  }
+
+  async function refresh(){
+    const lst=$("list");
+    lst.innerHTML="";
+    
+    const items=await dbList();
+    items.sort((a,b)=>(b.added||0)-(a.added||0));
+    
+    $("libCount").textContent=String(items.length);
+
+    if(items.length===0){
+      lst.innerHTML=`
+        <div class="empty">
+          <div style="font-size:24px;margin-bottom:12px">◼</div>
+          <div>NO PDFS IN LIBRARY</div>
+          <div style="font-size:11px;margin-top:6px">OPEN OR DROP FILES</div>
+        </div>
+      `;
+      return;
+    }
+
+    for(const rec of items){
+      const item=document.createElement("div");
+      item.className="item";
+
+      item.innerHTML=`
+        <div class="item-head">
+          <div class="item-info">
+            <div class="item-name">${rec.title||"UNTITLED"}</div>
+            <div class="item-sub">${rec.orig||""}</div>
+          </div>
+        </div>
+        <div class="item-btns">
+          <button class="btn-sm open">OPEN</button>
+          <button class="btn-sm rename">RENAME</button>
+          <button class="btn-sm prompt">+ PROMPT</button>
+          <button class="btn-sm del">DEL</button>
+        </div>
+      `;
+
+      item.querySelector(".open").onclick=async()=>{
+        const r=await dbGet(rec.id);
+        if(!r)return;
+        CUR.src="lib";
+        CUR.id=r.id;
+        CUR.orig=r.orig||"PDF";
+        CUR.title=r.title||"UNTITLED";
+        ST.lastId=r.id;
+        save();
+        tab("extract");
+        await openBytes(r.bytes,r.title||"DOC.PDF");
+      };
+
+      item.querySelector(".rename").onclick=()=>{
+        const newT=prompt("NEW TITLE:",rec.title);
+        if(!newT)return;
+        rec.title=safe(newT);
+        dbPut(rec).then(refresh);
+      };
+
+      item.querySelector(".prompt").onclick=()=>{
+        const line=`- ${rec.title} (${rec.orig||"PDF"})`;
+        const cur=$("promptTxt").value||"";
+        $("promptTxt").value=cur?(cur+"\n"+line):line;
+        ST.prompt=$("promptTxt").value;
+        save();
+        tab("prompt");
+      };
+
+      item.querySelector(".del").onclick=async()=>{
+        if(!confirm(`DELETE "${rec.title}"?`))return;
+        await dbDel(rec.id);
+        if(ST.lastId===rec.id)ST.lastId="";
+        save();
+        await refresh();
+      };
+
+      lst.appendChild(item);
+    }
+  }
+
+  async function reopenLast(){
+    if(!ST.lastId)return;
+    try{
+      const r=await dbGet(ST.lastId);
+      if(!r)return;
+      CUR.src="lib";
+      CUR.id=r.id;
+      CUR.orig=r.orig||"PDF";
+      CUR.title=r.title||"UNTITLED";
+      await openBytes(r.bytes,r.title||"DOC.PDF");
+    }catch(e){}
+  }
+
+  function init(){
+    load();
+    const ok=check();
+
+    document.querySelectorAll(".tab").forEach(b=>
+      b.addEventListener("click",()=>tab(b.dataset.tab))
+    );
+    tab(ST.ui.tab||"lib");
+
+    $("file").addEventListener("change",async e=>{
+      const f=e.target.files&&e.target.files[0];
+      if(f)await openFile(f);
+      e.target.value="";
+    });
+
+    $("import").addEventListener("change",async e=>{
+      const fs=Array.from(e.target.files||[]);
+      if(fs.length)await importMulti(fs);
+      e.target.value="";
+    });
+
+    $("save").addEventListener("click",saveLib);
+    $("prev").addEventListener("click",()=>{if(PDF)render(clamp(n-1,1,total))});
+    $("next").addEventListener("click",()=>{if(PDF)render(clamp(n+1,1,total))});
+    $("pageNum").addEventListener("change",()=>{if(PDF)render(clamp(parseInt($("pageNum").value)||1,1,total))});
+    $("zoomOut").addEventListener("click",()=>setZoom(zoom*.85));
+    $("zoomIn").addEventListener("click",()=>setZoom(zoom/.85));
+    $("fit").addEventListener("click",toggleFit);
+    $("rotL").addEventListener("click",()=>setRot(rot-90));
+    $("rotR").addEventListener("click",()=>setRot(rot+90));
+
+    $("extPage").addEventListener("click",()=>extract("page"));
+    $("extAll").addEventListener("click",()=>extract("all"));
+    $("copy").addEventListener("click",()=>copyTxt($("extract").value||""));
+
+    $("promptTxt").value=ST.prompt||"";
+    $("copyPr").addEventListener("click",()=>copyTxt($("promptTxt").value||""));
+    $("clearPr").addEventListener("click",()=>{$("promptTxt").value="";ST.prompt="";save()});
+    $("promptTxt").addEventListener("input",()=>{ST.prompt=$("promptTxt").value||"";save()});
+
+    const area=document.querySelector(".view-area");
+    const drop=$("drop");
+    let depth=0;
+
+    area.addEventListener("dragenter",e=>{e.preventDefault();depth++;drop.classList.add("on")});
+    area.addEventListener("dragover",e=>{e.preventDefault()});
+    area.addEventListener("dragleave",e=>{e.preventDefault();depth--;if(depth===0)drop.classList.remove("on")});
+    area.addEventListener("drop",async e=>{
+      e.preventDefault();
+      depth=0;drop.classList.remove("on");
+      const f=e.dataTransfer&&e.dataTransfer.files&&e.dataTransfer.files[0];
+      if(!f)return;
+
+      if(e.altKey){
+        await importMulti([f]);
+        tab("lib");
+      }else{
+        await openFile(f);
+        tab("extract");
+      }
+    });
+
+    window.addEventListener("keydown",e=>{
+      if(e.target&&(e.target.tagName==="TEXTAREA"||e.target.tagName==="INPUT"))return;
+      if(e.key==="ArrowLeft")$("prev").click();
+      if(e.key==="ArrowRight")$("next").click();
+    });
+
+    if(ok){
+      refresh().then(reopenLast);
+    }
+  }
+
+  window.addEventListener("load",init);
+})();
+</script>
+
+</body>
+</html>
