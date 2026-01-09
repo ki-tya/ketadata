@@ -1,0 +1,399 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>KETADATA // SOVEREIGN MOTION HANDS</title>
+<style>
+  :root{
+    --bg:#000;
+    --fg:rgba(255,255,255,.86);
+    --muted:rgba(255,255,255,.52);
+    --line:rgba(255,255,255,.14);
+    --line2:rgba(255,255,255,.22);
+    --mono: ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace;
+    --sans: Arial,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;
+    --top:44px;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0;background:var(--bg);color:var(--fg);overflow:hidden;font-family:var(--sans)}
+  #top{
+    position:fixed; inset:0 0 auto 0; height:var(--top);
+    display:flex; align-items:center; gap:8px;
+    padding:6px 8px;
+    background:rgba(0,0,0,.78);
+    border-bottom:1px solid var(--line);
+    z-index:10;
+  }
+  .chip,.btn{
+    height:30px; display:inline-flex; align-items:center; gap:8px;
+    padding:0 10px;
+    border:1px solid var(--line2);
+    background:rgba(0,0,0,.30);
+    color:var(--fg);
+    font:12px/1 var(--sans);
+    user-select:none;
+    white-space:nowrap;
+  }
+  .btn{cursor:pointer}
+  .btn:active{transform:translateY(1px)}
+  .k{font-family:var(--mono); opacity:.9}
+  .sep{flex:1}
+  input[type="range"]{width:150px; accent-color:#fff}
+  #stage{position:fixed; inset:var(--top) 0 0 0}
+  #dbg{
+    position:fixed; left:8px; bottom:8px;
+    border:1px solid var(--line);
+    background:rgba(0,0,0,.55);
+    padding:6px 8px;
+    font:12px/1.2 var(--sans);
+    color:var(--muted);
+    z-index:10;
+    max-width:62ch;
+  }
+  video{position:fixed;left:-9999px;top:-9999px;width:1px;height:1px;opacity:0}
+  canvas#viz{
+    position:fixed; right:8px; bottom:8px;
+    width:220px; height:140px;
+    border:1px solid var(--line);
+    background:#000;
+    z-index:10;
+    display:none;
+  }
+  body.showviz canvas#viz{display:block}
+  body.invert{filter:invert(1)}
+</style>
+</head>
+<body>
+<div id="top">
+  <div class="chip k">KETADATA // SOVEREIGN MOTION HANDS</div>
+
+  <div class="btn" id="start">START CAM</div>
+  <div class="btn" id="stop">STOP</div>
+  <div class="btn" id="invert">INVERT</div>
+  <div class="btn" id="vizBtn">VIZ</div>
+
+  <div class="chip">INT <input id="intensity" type="range" min="0" max="100" value="55"></div>
+  <div class="chip">COUNT <input id="count" type="range" min="2000" max="45000" value="18000"></div>
+  <div class="chip">MOTION THR <input id="thr" type="range" min="1" max="80" value="18"></div>
+
+  <div class="sep"></div>
+  <div class="chip k" id="status">LOCAL</div>
+</div>
+
+<canvas id="stage"></canvas>
+<video id="video" playsinline muted></video>
+<canvas id="viz" width="220" height="140"></canvas>
+
+<div id="dbg">
+  <div style="color:rgba(255,255,255,.86)">NO MODEL. NO FILES. NO NETWORK.</div>
+  <div>Control is motion-based: move hands against background light for clean signal.</div>
+  <div>Mouse/touch fallback always works.</div>
+</div>
+
+<script>
+(() => {
+  const $ = (id)=>document.getElementById(id);
+
+  const canvas = $("stage");
+  const ctx = canvas.getContext("2d", {alpha:false});
+  const viz = $("viz");
+  const vctx = viz.getContext("2d");
+
+  let W=0,H=0,DPR=1;
+  function resize(){
+    DPR = Math.max(1, Math.min(2, devicePixelRatio||1));
+    W = Math.floor(canvas.clientWidth * DPR);
+    H = Math.floor(canvas.clientHeight * DPR);
+    canvas.width = W; canvas.height = H;
+  }
+  addEventListener("resize", resize); resize();
+
+  const STATE = {
+    running:true,
+    invert:false,
+    intensity:0.55,
+    targetCount:18000,
+    motionThr:18,
+    camOn:false,
+    viz:false
+  };
+
+  function setStatus(s){ $("status").textContent = s; }
+
+  $("invert").onclick = () => {
+    STATE.invert = !STATE.invert;
+    document.body.classList.toggle("invert", STATE.invert);
+  };
+  $("vizBtn").onclick = () => {
+    STATE.viz = !STATE.viz;
+    document.body.classList.toggle("showviz", STATE.viz);
+  };
+  $("intensity").oninput = (e)=> STATE.intensity = (+e.target.value)/100;
+  $("count").oninput = (e)=> STATE.targetCount = (+e.target.value)|0;
+  $("thr").oninput = (e)=> STATE.motionThr = (+e.target.value)|0;
+
+  $("stop").onclick = () => {
+    STATE.running = !STATE.running;
+    $("stop").textContent = STATE.running ? "STOP" : "RUN";
+  };
+
+  /* particles */
+  let P = [];
+  function seed(n){
+    P = new Array(n);
+    for(let i=0;i<n;i++){
+      const x=Math.random()*W, y=Math.random()*H;
+      P[i]={x,y,vx:(Math.random()-0.5)*0.2,vy:(Math.random()-0.5)*0.2,a:Math.random()*0.9+0.1};
+    }
+  }
+  seed(STATE.targetCount);
+
+  function ensureCount(){
+    const n=STATE.targetCount;
+    if(P.length===n) return;
+    if(n<P.length){ P.length=n; return; }
+    const old=P.length;
+    P.length=n;
+    for(let i=old;i<n;i++){
+      const x=Math.random()*W, y=Math.random()*H;
+      P[i]={x,y,vx:(Math.random()-0.5)*0.2,vy:(Math.random()-0.5)*0.2,a:Math.random()*0.9+0.1};
+    }
+  }
+
+  /* attractors: [0]=mouse, [1]=motion-left, [2]=motion-right */
+  const A = [
+    {x:W*0.5,y:H*0.5,str:1.0,alive:true},
+    {x:W*0.35,y:H*0.5,str:0.0,alive:false},
+    {x:W*0.65,y:H*0.5,str:0.0,alive:false},
+  ];
+
+  let mouseDown=false;
+  function setMouse(ev){
+    const r=canvas.getBoundingClientRect();
+    A[0].x = (ev.clientX - r.left) * DPR;
+    A[0].y = (ev.clientY - r.top) * DPR;
+    A[0].str = mouseDown ? 2.0 : 1.0;
+  }
+  addEventListener("pointerdown",(e)=>{mouseDown=true; setMouse(e);});
+  addEventListener("pointerup",()=>{mouseDown=false;});
+  addEventListener("pointermove",(e)=>setMouse(e));
+
+  /* webcam motion detector (sovereign) */
+  const video = $("video");
+  let stream=null;
+
+  const DET_W = 160;  // downsample for speed
+  const DET_H = 90;
+  const det = document.createElement("canvas");
+  det.width = DET_W; det.height = DET_H;
+  const dctx = det.getContext("2d", {willReadFrequently:true});
+  let prev = null;
+
+  async function startCam(){
+    if(STATE.camOn) return;
+    setStatus("CAM REQUEST");
+    try{
+      stream = await navigator.mediaDevices.getUserMedia({
+        video:{facingMode:"user", width:{ideal:1280}, height:{ideal:720}},
+        audio:false
+      });
+      video.srcObject = stream;
+      await video.play();
+      STATE.camOn=true;
+      setStatus("CAM ON");
+      prev = null;
+    }catch(e){
+      setStatus("CAM BLOCKED");
+    }
+  }
+
+  function stopCam(){
+    if(stream){ for(const t of stream.getTracks()) t.stop(); }
+    stream=null; STATE.camOn=false; prev=null;
+    A[1].alive=false; A[2].alive=false;
+    setStatus("LOCAL");
+  }
+
+  $("start").onclick = startCam;
+  $("start").ondblclick = () => { // fast toggle
+    if(STATE.camOn) stopCam(); else startCam();
+  };
+
+  function updateMotionAttractors(){
+    if(!STATE.camOn) return;
+
+    dctx.save();
+    dctx.scale(-1,1); // mirror like selfie
+    dctx.drawImage(video, -DET_W, 0, DET_W, DET_H);
+    dctx.restore();
+
+    const img = dctx.getImageData(0,0,DET_W,DET_H);
+    const data = img.data;
+
+    if(!prev){
+      prev = new Uint8ClampedArray(data); // seed
+      A[1].alive=false; A[2].alive=false;
+      return;
+    }
+
+    let sumLx=0,sumLy=0,sumLm=0;
+    let sumRx=0,sumRy=0,sumRm=0;
+
+    const thr = STATE.motionThr; // 1..80 (approx)
+    // compute simple frame difference on luma
+    for(let y=0;y<DET_H;y++){
+      for(let x=0;x<DET_W;x++){
+        const i = (y*DET_W + x)*4;
+        const r=data[i], g=data[i+1], b=data[i+2];
+        const pr=prev[i], pg=prev[i+1], pb=prev[i+2];
+
+        const l = (r*0.2126 + g*0.7152 + b*0.0722);
+        const pl= (pr*0.2126 + pg*0.7152 + pb*0.0722);
+
+        const d = Math.abs(l - pl);
+
+        // refresh prev
+        prev[i]=r; prev[i+1]=g; prev[i+2]=b; prev[i+3]=255;
+
+        if(d < thr) continue;
+
+        // weight = motion magnitude
+        const m = d;
+
+        if(x < DET_W/2){
+          sumLm += m; sumLx += x*m; sumLy += y*m;
+        }else{
+          sumRm += m; sumRx += x*m; sumRy += y*m;
+        }
+      }
+    }
+
+    // motion strength normalization (rough)
+    const norm = (DET_W*DET_H) * 2.0;
+    const Ls = Math.min(3.0, (sumLm / norm) * 12.0);
+    const Rs = Math.min(3.0, (sumRm / norm) * 12.0);
+
+    if(sumLm > 0){
+      const cx = (sumLx / sumLm) / DET_W;
+      const cy = (sumLy / sumLm) / DET_H;
+      A[1].x = cx * W;
+      A[1].y = cy * H;
+      A[1].str = 0.25 + Ls;
+      A[1].alive = (Ls > 0.20);
+    }else{
+      A[1].alive=false; A[1].str=0;
+    }
+
+    if(sumRm > 0){
+      const cx = (sumRx / sumRm) / DET_W;
+      const cy = (sumRy / sumRm) / DET_H;
+      A[2].x = cx * W;
+      A[2].y = cy * H;
+      A[2].str = 0.25 + Rs;
+      A[2].alive = (Rs > 0.20);
+    }else{
+      A[2].alive=false; A[2].str=0;
+    }
+
+    if(STATE.viz){
+      // show motion preview (thresholded)
+      const w=viz.width, h=viz.height;
+      vctx.fillStyle="#000"; vctx.fillRect(0,0,w,h);
+      vctx.globalAlpha=1;
+      vctx.drawImage(det,0,0,w,h);
+
+      // overlay attractors
+      vctx.fillStyle="rgba(255,255,255,.86)";
+      const pxL = (A[1].x/W)*w, pyL=(A[1].y/H)*h;
+      const pxR = (A[2].x/W)*w, pyR=(A[2].y/H)*h;
+      if(A[1].alive){ vctx.fillRect(pxL-2,pyL-2,4,4); }
+      if(A[2].alive){ vctx.fillRect(pxR-2,pyR-2,4,4); }
+    }
+  }
+
+  /* loop */
+  let lastT=performance.now();
+  function frame(t){
+    requestAnimationFrame(frame);
+    if(!STATE.running) return;
+
+    ensureCount();
+    updateMotionAttractors();
+
+    const dt = Math.min(32, t-lastT); lastT=t;
+
+    ctx.fillStyle="#000";
+    ctx.fillRect(0,0,W,H);
+
+    const inten=STATE.intensity;
+    const pullBase = 0.0006 + 0.0042*inten;
+    const damp = 0.985 - 0.08*inten;
+    const jitter = 0.00012 + 0.00055*inten;
+
+    ctx.globalCompositeOperation="lighter";
+    ctx.fillStyle="rgba(255,255,255,0.08)";
+
+    for(let i=0;i<P.length;i++){
+      const p=P[i];
+      let ax=0, ay=0;
+
+      // use mouse always; add motion attractors if alive
+      for(let j=0;j<3;j++){
+        const a=A[j];
+        if(j>0 && !a.alive) continue;
+
+        const dx=a.x-p.x, dy=a.y-p.y;
+        const d2=dx*dx+dy*dy+80.0;
+        const inv=1.0/d2;
+        const s=pullBase * a.str;
+
+        ax += dx*inv*s;
+        ay += dy*inv*s;
+      }
+
+      ax += (Math.random()-0.5)*jitter;
+      ay += (Math.random()-0.5)*jitter;
+
+      p.vx = (p.vx + ax*dt) * damp;
+      p.vy = (p.vy + ay*dt) * damp;
+      p.x += p.vx*dt;
+      p.y += p.vy*dt;
+
+      // wrap
+      if(p.x<0) p.x+=W; else if(p.x>W) p.x-=W;
+      if(p.y<0) p.y+=H; else if(p.y>H) p.y-=H;
+
+      ctx.fillRect(p.x,p.y,1,1);
+    }
+
+    ctx.globalCompositeOperation="source-over";
+
+    // status refinement
+    if(STATE.camOn){
+      const live = (A[1].alive||A[2].alive);
+      setStatus(live ? "CAM + MOTION" : "CAM (LOW MOTION)");
+    }
+  }
+
+  requestAnimationFrame(frame);
+
+  /* kill cam on unload */
+  addEventListener("beforeunload", () => { try{ stopCam(); }catch(_){} });
+
+})();
+</script>
+
+<!--
+AE: KETADATA
+EE: SOVEREIGN_MOTION_HANDS
+WB: SINGLE_FILE_HTML
+FILE_ID: KETA_SOV_MOTION_HANDS_v1
+ROOM_ID: BASE
+VERSION: 1
+UPDATED_AT: 2026-01-08
+CHANGELOG:
+- v1: single-file sovereign webcam motion attractors driving particle field (no models, no network)
+-->
+</body>
+</html>
