@@ -1,706 +1,1946 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>KETA_RED // SUBJECTIVITY FEEDBACK LOOP</title>
-<style>
-  :root{
-    --bg:#000;
-    --ink:rgba(255,255,255,.86);
-    --muted:rgba(255,255,255,.52);
-    --line:rgba(255,255,255,.14);
-    --line2:rgba(255,255,255,.26);
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>KETADATA // LINK TRIAGE (TREE + COMMITS + CAL)</title>
+  <style>
+    :root{color-scheme:dark}
+    html,body{margin:0;height:100%;background:#000;color:#fff;font:12px/1.35 Arial, Helvetica, sans-serif}
+    *{box-sizing:border-box}
+    a{color:inherit;text-decoration:none}
+    button,input,select,textarea{font:inherit;color:inherit}
+    textarea{resize:vertical}
 
-    --red: 255;         /* 0..255 */
-    --redAlpha: .72;    /* 0..1 */
-    --heat: 0.62;       /* 0..1 */
-    --grain: 0.28;      /* 0..1 */
-    --pulse: 0.35;      /* 0..1 */
-    --scan: 0.55;       /* 0..1 */
+    /* top bar */
+    .topbar{
+      position:fixed;inset:0 0 auto 0;
+      display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+      padding:10px 12px;
+      background:#000;
+      border-bottom:1px solid rgba(255,255,255,.16);
+      z-index:50;
+    }
+    .title{font-weight:700;letter-spacing:.14em;opacity:.92}
+    .meta{opacity:.65;letter-spacing:.06em}
+    .sp{flex:1}
+    .btn{
+      background:transparent;color:#fff;
+      border:1px solid rgba(255,255,255,.22);
+      padding:6px 8px;
+      letter-spacing:.08em;
+      cursor:pointer;
+      opacity:.92;
+      white-space:nowrap;
+    }
+    .btn:hover{border-color:rgba(255,255,255,.5);opacity:1}
+    .btn.on{border-color:rgba(255,255,255,.55);opacity:1}
+    .btn.danger{opacity:.85}
+    .btn.danger:hover{opacity:1}
 
-    --top:44px;
-    --bot:34px;
-    --pad:10px;
-    --r:0px;
+    .inp,.sel,.ta{
+      background:#000;color:#fff;
+      border:1px solid rgba(255,255,255,.22);
+      padding:6px 8px;
+      outline:none;
+      width:100%;
+    }
+    .inp:focus,.sel:focus,.ta:focus{border-color:rgba(255,255,255,.55)}
+    .ta{min-height:74px}
+    .ta.small{min-height:54px}
 
-    --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace;
-    --sans: Arial, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
-  }
-  *{box-sizing:border-box}
-  html,body{height:100%;margin:0}
-  body{background:var(--bg);color:var(--ink);font:12px/1.35 var(--sans);overflow:hidden}
-  #root{position:fixed;inset:0}
-  .bar{
-    position:fixed;left:0;right:0;height:var(--top);
-    display:flex;align-items:center;gap:8px;
-    padding:0 var(--pad);
-    background:rgba(0,0,0,.72);
-    border-bottom:1px solid var(--line);
-    z-index:50;
-  }
-  .bot{
-    top:auto;bottom:0;height:var(--bot);
-    border-bottom:0;border-top:1px solid var(--line);
-  }
-  .brand{font-family:var(--mono);letter-spacing:.06em;opacity:.9;white-space:nowrap}
-  .sp{flex:1}
-  .chip{
-    font-family:var(--mono);
-    padding:4px 8px;border:1px solid var(--line);
-    background:rgba(0,0,0,.35);
-    border-radius:var(--r);
-    cursor:pointer;user-select:none;
-    opacity:.9;
-  }
-  .chip:active{transform:translateY(1px)}
-  .chip.on{border-color:var(--line2);opacity:1}
-  .tiny{opacity:.65}
-  .canvas{
-    position:fixed;left:0;right:0;top:var(--top);bottom:var(--bot);
-    overflow:hidden;
-  }
+    /* layout */
+    .main{
+      padding-top:56px;
+      display:grid;
+      grid-template-columns: 380px 1fr;
+      min-height:100vh;
+    }
+    @media (max-width: 980px){
+      .main{grid-template-columns:1fr}
+      .left{border-right:none;border-bottom:1px solid rgba(255,255,255,.16)}
+    }
+    .left,.right{padding:12px}
+    .left{border-right:1px solid rgba(255,255,255,.16)}
 
-  /* ===== layers ===== */
-  .layer{position:absolute;inset:0;pointer-events:none}
-  .vignette{
-    background:
-      radial-gradient(ellipse at 50% 50%, rgba(0,0,0,0) 0%, rgba(0,0,0,.55) 70%, rgba(0,0,0,.85) 100%);
-    opacity:1;
-  }
-  .redwash{
-    background:
-      radial-gradient(ellipse at 50% 45%,
-        rgba(var(--red),0,0,var(--redAlpha)) 0%,
-        rgba(var(--red),0,0,calc(var(--redAlpha)*.55)) 30%,
-        rgba(0,0,0,0) 68%,
-        rgba(0,0,0,.95) 100%);
-    mix-blend-mode:screen;
-    opacity:calc(.25 + var(--heat)*.85);
-    filter: blur(0.6px);
-  }
-  .scan{
-    background:
-      repeating-linear-gradient(
-        to bottom,
-        rgba(255,255,255,0) 0px,
-        rgba(255,255,255,0) 9px,
-        rgba(255,255,255,calc(.04 + var(--scan)*.08)) 10px
-      );
-    mix-blend-mode:overlay;
-    opacity:calc(.05 + var(--scan)*.45);
-    transform: translateY(0);
-    animation: scanMove 1400ms linear infinite;
-  }
-  @keyframes scanMove{
-    0%{transform:translateY(-12px)}
-    100%{transform:translateY(12px)}
-  }
-  .grain{
-    opacity:calc(.05 + var(--grain)*.5);
-    mix-blend-mode:overlay;
-    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)' opacity='.32'/%3E%3C/svg%3E");
-    background-size:180px 180px;
-  }
+    .sec{
+      border:1px solid rgba(255,255,255,.16);
+      padding:10px;
+      margin-bottom:10px;
+    }
+    .secHd{
+      display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;
+      margin-bottom:10px;
+    }
+    .h{font-weight:700;letter-spacing:.14em}
+    .sub{opacity:.65;letter-spacing:.06em}
+    .row{display:flex;gap:8px}
+    .row > *{flex:1}
+    .hint{opacity:.65;letter-spacing:.06em}
+    .hr{border-top:1px solid rgba(255,255,255,.12);margin:10px 0}
 
-  /* ===== core rig ===== */
-  #rig{
-    position:absolute;inset:0;
-    display:flex;align-items:center;justify-content:center;
-  }
-  #field{
-    width:min(760px,92vw);
-    height:min(520px,76vh);
-    position:relative;
-    border:1px solid var(--line);
-    background:rgba(0,0,0,.25);
-    border-radius:var(--r);
-    overflow:hidden;
-  }
+    /* view switch */
+    .viewbar{
+      display:flex;gap:8px;flex-wrap:wrap;
+      margin-bottom:10px;
+    }
 
-  /* "tracking" grid */
-  #grid{
-    position:absolute;inset:0;
-    background:
-      linear-gradient(to right, rgba(255,255,255,0) 0%, rgba(255,255,255,0) 49%, rgba(255,255,255,.06) 50%, rgba(255,255,255,0) 51%, rgba(255,255,255,0) 100%),
-      linear-gradient(to bottom, rgba(255,255,255,0) 0%, rgba(255,255,255,0) 49%, rgba(255,255,255,.06) 50%, rgba(255,255,255,0) 51%, rgba(255,255,255,0) 100%);
-    background-size: 56px 56px;
-    opacity:.45;
-    mix-blend-mode:screen;
-    transform: translate3d(0,0,0);
-    animation: gridDrift 4200ms linear infinite;
-  }
-  @keyframes gridDrift{
-    0%{transform:translate3d(0,0,0)}
-    100%{transform:translate3d(-56px,-56px,0)}
-  }
+    /* lanes */
+    .lanes{display:flex;gap:8px;flex-wrap:wrap}
+    .laneBtn{
+      background:transparent;color:#fff;
+      border:1px solid rgba(255,255,255,.16);
+      padding:6px 8px;
+      letter-spacing:.08em;
+      cursor:pointer;
+      opacity:.85;
+      white-space:nowrap;
+    }
+    .laneBtn:hover{border-color:rgba(255,255,255,.5);opacity:1}
+    .laneBtn.active{border-color:rgba(255,255,255,.55);opacity:1}
+    .laneBtn.depr{opacity:.55}
 
-  /* pulse "threshold" ring */
-  #ring{
-    position:absolute;left:50%;top:50%;
-    width: 520px;height:520px;
-    transform:translate(-50%,-50%);
-    border:1px solid rgba(255,255,255,.10);
-    border-radius:50%;
-    opacity:.55;
-    filter: blur(.1px);
-  }
-  #ring:before, #ring:after{
-    content:"";
-    position:absolute;inset:-2px;
-    border-radius:50%;
-    border:1px solid rgba(var(--red),0,0,calc(.10 + var(--heat)*.24));
-    opacity:calc(.25 + var(--pulse)*.65);
-    transform:scale(0.92);
-    animation: ringPulse 1200ms ease-in-out infinite;
-  }
-  #ring:after{
-    inset:10px;
-    border-color:rgba(255,255,255,.12);
-    opacity:calc(.18 + var(--pulse)*.35);
-    animation-duration: 1800ms;
-    transform:scale(0.88);
-  }
-  @keyframes ringPulse{
-    0%,100%{transform:scale(0.86);filter:blur(0px)}
-    50%{transform:scale(1.02);filter:blur(0.2px)}
-  }
+    /* grid */
+    .grid{
+      display:grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap:10px;
+    }
+    .card{
+      border:1px solid rgba(255,255,255,.14);
+      padding:10px;
+      background:#000;
+      min-height:210px;
+      display:flex;
+      flex-direction:column;
+      gap:8px;
+    }
+    .card.depr{opacity:.55}
+    .card.missing{opacity:.55;border-style:dashed}
 
-  /* "boundary line" */
-  #cut{
-    position:absolute;inset:0;
-    background:
-      linear-gradient(to right,
-        rgba(0,0,0,0) 0%,
-        rgba(0,0,0,0) 46%,
-        rgba(255,255,255,.18) 50%,
-        rgba(0,0,0,0) 54%,
-        rgba(0,0,0,0) 100%);
-    opacity:.42;
-    mix-blend-mode:screen;
-  }
+    .cTop{
+      display:flex;gap:8px;align-items:baseline;flex-wrap:wrap;
+      border-bottom:1px solid rgba(255,255,255,.12);
+      padding-bottom:8px;margin-bottom:2px;
+    }
+    .hash{
+      opacity:.6;letter-spacing:.14em;
+      border:1px solid rgba(255,255,255,.16);
+      padding:2px 6px;
+      min-width:86px;
+      text-align:left;
+    }
+    .name{
+      flex:1;
+      font-weight:700;
+      letter-spacing:.08em;
+      opacity:.92;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      white-space:nowrap;
+      max-width: 60%;
+    }
+    .open{
+      color:#fff;
+      text-decoration:none;
+      border-bottom:1px solid rgba(255,255,255,.22);
+      letter-spacing:.08em;
+      white-space:nowrap;
+    }
+    .open:hover{border-bottom-color:rgba(255,255,255,.6)}
+    .pathline{
+      opacity:.65;letter-spacing:.06em;
+      overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+    }
 
-  /* "feedback scribble" traces */
-  svg{position:absolute;inset:0}
-  .trace{
-    fill:none;
-    stroke:rgba(var(--red),0,0,calc(.24 + var(--heat)*.46));
-    stroke-width:1.2;
-    opacity:calc(.20 + var(--pulse)*.65);
-    filter: drop-shadow(0 0 8px rgba(var(--red),0,0,calc(.18 + var(--heat)*.45)));
-    stroke-linecap:round;
-    stroke-linejoin:round;
-  }
-  .trace2{
-    fill:none;
-    stroke:rgba(255,255,255,.18);
-    stroke-width:1;
-    opacity:.55;
-    stroke-dasharray: 2 6;
-  }
+    .cGrid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+    .cGrid2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+    @media (max-width: 1200px){.cGrid3{grid-template-columns:1fr 1fr}}
+    @media (max-width: 540px){.cGrid3,.cGrid2{grid-template-columns:1fr}}
 
-  /* text overlay */
-  #txt{
-    position:absolute;left:0;right:0;top:0;bottom:0;
-    padding:10px;
-    display:flex;flex-direction:column;gap:8px;
-    pointer-events:none;
-  }
-  .row{display:flex;gap:10px;align-items:flex-start}
-  .cell{
-    flex:1;
-    border:1px solid rgba(255,255,255,.08);
-    background:rgba(0,0,0,.28);
-    padding:8px;
-    opacity:.95;
-  }
-  .mono{font-family:var(--mono)}
-  .muted{opacity:.62}
-  .red{color:rgba(var(--red),0,0,calc(.50 + var(--heat)*.45))}
-  .tight{letter-spacing:.02em}
-  .footer{
-    margin-top:auto;
-    display:flex;gap:10px;align-items:center;
-  }
+    .mini{
+      opacity:.65;letter-spacing:.06em;
+      display:flex;gap:8px;flex-wrap:wrap;
+    }
+    .pill{
+      border:1px solid rgba(255,255,255,.16);
+      padding:2px 6px;
+      letter-spacing:.08em;
+      opacity:.8;
+      white-space:nowrap;
+    }
 
-  /* drawer */
-  #drawer{
-    position:fixed;left:0;right:0;top:var(--top);
-    height:calc(100vh - var(--top) - var(--bot));
-    background:rgba(0,0,0,.92);
-    border-top:1px solid var(--line);
-    transform:translateY(-102%);
-    transition:transform 160ms linear;
-    z-index:60;
-    padding:10px;
-    overflow:auto;
-  }
-  #drawer.open{transform:translateY(0)}
-  .ctl{display:grid;grid-template-columns:160px 1fr 58px;gap:8px;align-items:center;margin:6px 0}
-  input[type="range"]{width:100%}
-  .val{font-family:var(--mono);opacity:.8;text-align:right}
-  .hr{height:1px;background:var(--line);margin:8px 0}
-  .btnrow{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
-  .btn{
-    font-family:var(--mono);
-    border:1px solid var(--line);
-    background:rgba(0,0,0,.35);
-    color:var(--ink);
-    padding:6px 10px;
-    border-radius:var(--r);
-    cursor:pointer;
-    user-select:none;
-  }
-  .btn:active{transform:translateY(1px)}
-  .note{opacity:.62}
-</style>
+    /* calendar */
+    .calWrap{
+      border:1px solid rgba(255,255,255,.16);
+      padding:10px;
+      margin-top:10px;
+    }
+    .calHdr{
+      display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+      margin-bottom:10px;
+    }
+    .calTitle{font-weight:700;letter-spacing:.14em;opacity:.92}
+    .calMeta{opacity:.65;letter-spacing:.06em}
+    .calGrid{
+      display:grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap:8px;
+    }
+    .calCell{
+      border:1px solid rgba(255,255,255,.14);
+      padding:8px;
+      min-height:72px;
+      cursor:pointer;
+      background:#000;
+      display:flex;
+      flex-direction:column;
+      gap:6px;
+    }
+    .calCell:hover{border-color:rgba(255,255,255,.5)}
+    .calCell.mute{opacity:.45}
+    .calCell.sel{border-color:rgba(255,255,255,.55)}
+    .calTop{
+      display:flex;gap:8px;align-items:baseline;justify-content:space-between;
+    }
+    .calDay{font-weight:700;letter-spacing:.08em;opacity:.9}
+    .calCount{opacity:.65;letter-spacing:.06em}
+    .dots{display:flex;gap:4px;flex-wrap:wrap}
+    .dot{
+      width:8px;height:8px;border:1px solid rgba(255,255,255,.22);
+      background:rgba(255,255,255,.08);
+    }
+
+    /* modal */
+    .modal{
+      position:fixed;inset:0;
+      background:rgba(0,0,0,.78);
+      display:none;
+      align-items:center;
+      justify-content:center;
+      padding:12px;
+      z-index:100;
+    }
+    .modal.show{display:flex}
+    .panel{
+      width:min(980px,100%);
+      background:#000;
+      border:1px solid rgba(255,255,255,.18);
+      padding:12px;
+    }
+    .panelHd{
+      display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;
+      margin-bottom:10px;
+    }
+    .panelHd .hh{font-weight:700;letter-spacing:.14em}
+    .panelHd .ss{opacity:.65;letter-spacing:.06em}
+    .panelActions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+  </style>
 </head>
 <body>
-<div id="root">
-  <div class="bar">
-    <div class="brand">KETA_RED</div>
-    <div class="brand tiny">SUBJECTIVITY_FEEDBACK</div>
+  <div class="topbar">
+    <div class="title">KETADATA // LINK TRIAGE</div>
+    <div class="meta" id="meta">BOOT</div>
     <div class="sp"></div>
-    <div id="drawerBtn" class="chip">SYSTEM</div>
-    <div id="pulseBtn" class="chip on">PULSE</div>
-    <div id="scanBtn" class="chip on">SCAN</div>
-    <div id="grainBtn" class="chip on">GRAIN</div>
+
+    <button class="btn" id="btnSyncTree">SYNC TREE</button>
+    <button class="btn" id="btnSyncCommits">SYNC COMMITS</button>
+    <button class="btn" id="btnAuto">AUTO: OFF</button>
+
+    <button class="btn" id="btnAddLane">ADD LANE</button>
+
+    <button class="btn" id="btnExportUrls">EXPORT URL LIST</button>
+    <button class="btn" id="btnExportState">EXPORT STATE</button>
+    <button class="btn" id="btnImportState">IMPORT STATE</button>
+    <button class="btn" id="btnExportPrompt">PROMPT EXPORT</button>
+    <button class="btn danger" id="btnNew">NEW</button>
   </div>
 
-  <div class="canvas">
-    <div class="layer redwash" id="lw"></div>
-    <div class="layer scan" id="ls"></div>
-    <div class="layer grain" id="lg"></div>
-    <div class="layer vignette"></div>
+  <div class="main">
+    <div class="left">
 
-    <div id="rig">
-      <div id="field" aria-label="ketadata interpretive field">
-        <div id="grid"></div>
-        <div id="cut"></div>
-        <div id="ring"></div>
+      <div class="sec">
+        <div class="secHd">
+          <div class="h">GITHUB</div>
+          <div class="sub">TREE + COMMITS (TOKEN OK)</div>
+        </div>
 
-        <svg viewBox="0 0 760 520" preserveAspectRatio="none" aria-hidden="true">
-          <path id="p1" class="trace" d=""></path>
-          <path id="p2" class="trace2" d=""></path>
-          <path id="p3" class="trace" d=""></path>
-        </svg>
+        <div class="row">
+          <input class="inp" id="repoOwner" placeholder="OWNER"/>
+          <input class="inp" id="repoName" placeholder="REPO"/>
+        </div>
+        <div style="height:8px"></div>
+        <div class="row">
+          <input class="inp" id="repoBranch" placeholder="BRANCH"/>
+          <input class="inp" id="pagesBase" placeholder="PAGES BASE URL"/>
+        </div>
 
-        <div id="txt">
-          <div class="row">
-            <div class="cell">
-              <div class="mono tight muted">SIGNAL</div>
-              <div class="tight">TRACKING OTHERS / NOT TRACKED BACK</div>
-              <div class="tight muted">ASYMMETRY LOAD, FEEDBACK DELAY, RESENTMENT INTEREST</div>
-            </div>
-            <div class="cell">
-              <div class="mono tight muted">BOUNDARY</div>
-              <div class="tight">REAL-TIME EXIT OVER LATER DETONATION</div>
-              <div class="tight muted">ONE LINE, ONE ACTION, NO PROVING</div>
-            </div>
+        <div style="height:8px"></div>
+        <input class="inp" id="ghToken" placeholder="GITHUB TOKEN (recommended)"/>
+        <div style="height:8px"></div>
+
+        <div class="row">
+          <select class="sel" id="commitScope">
+            <option value="missing">COMMITS SCOPE: MISSING ONLY</option>
+            <option value="lane">COMMITS SCOPE: CURRENT LANE</option>
+            <option value="view">COMMITS SCOPE: CURRENT VIEW (FILTERS)</option>
+            <option value="all">COMMITS SCOPE: ALL HTML</option>
+          </select>
+          <select class="sel" id="autoMins">
+            <option value="0">AUTO MINUTES: OFF</option>
+            <option value="2">AUTO MINUTES: 2</option>
+            <option value="5">AUTO MINUTES: 5</option>
+            <option value="10">AUTO MINUTES: 10</option>
+            <option value="20">AUTO MINUTES: 20</option>
+          </select>
+        </div>
+
+        <div style="height:8px"></div>
+        <div class="hint" id="hintApi">
+          SYNC TREE: <span style="opacity:.85">/git/trees/&lt;branch&gt;?recursive=1</span><br/>
+          SYNC COMMITS (first-run): per-file <span style="opacity:.85">/commits?path=&lt;file&gt;&amp;per_page=1</span><br/>
+          SYNC COMMITS (after): <span style="opacity:.85">/compare/&lt;lastHead&gt;...&lt;head&gt;</span> then refresh touched paths.<br/>
+          URL always derived: <span style="opacity:.85">PAGES_BASE + path</span>.
+        </div>
+      </div>
+
+      <div class="sec">
+        <div class="secHd">
+          <div class="h">KETA_NOTE</div>
+          <div class="sub">OPTIONAL / NON-INTERFERING</div>
+        </div>
+        <textarea class="ta" id="ketaNote" placeholder="KETA_NOTE (GLOBAL)"></textarea>
+      </div>
+
+      <div class="sec">
+        <div class="secHd">
+          <div class="h">FILTER</div>
+          <div class="sub">LANE / TAG / STATUS / SEARCH / DATE</div>
+        </div>
+
+        <div class="row">
+          <select class="sel" id="fltLane"></select>
+          <select class="sel" id="fltStatus">
+            <option value="active">ACTIVE ONLY</option>
+            <option value="all">ALL</option>
+            <option value="deprecated">DEPRECATED ONLY</option>
+          </select>
+        </div>
+
+        <div style="height:8px"></div>
+        <input class="inp" id="fltTag" placeholder="TAG CONTAINS (comma/space ok)"/>
+        <div style="height:8px"></div>
+        <input class="inp" id="fltSearch" placeholder="SEARCH (path / note / tags / msg)"/>
+
+        <div style="height:8px"></div>
+        <div class="row">
+          <input class="inp" id="fltDate" placeholder="DATE FILTER (YYYY-MM-DD from commit)"/>
+          <button class="btn" id="btnClearDate">CLEAR DATE</button>
+        </div>
+
+        <div style="height:8px"></div>
+        <div class="row">
+          <select class="sel" id="sortMode">
+            <option value="commit_desc">SORT: COMMIT (NEW→OLD)</option>
+            <option value="commit_asc">SORT: COMMIT (OLD→NEW)</option>
+            <option value="path_asc">SORT: PATH (A→Z)</option>
+            <option value="path_desc">SORT: PATH (Z→A)</option>
+            <option value="changed_range">SORT: CHANGED (COMPARE RANGE)</option>
+            <option value="noc">SORT: NO COMMIT FIRST</option>
+          </select>
+          <select class="sel" id="viewMode">
+            <option value="grid">VIEW: GRID</option>
+            <option value="calendar">VIEW: CALENDAR</option>
+          </select>
+        </div>
+
+        <div style="height:8px"></div>
+        <button class="btn" id="btnClearFilters" style="width:100%;">CLEAR FILTERS</button>
+      </div>
+
+      <div class="sec">
+        <div class="secHd">
+          <div class="h">STATE</div>
+          <div class="sub">LABEL + VERSION</div>
+        </div>
+        <input class="inp" id="exportLabel" placeholder="EXPORT LABEL (HUMAN)"/>
+        <div style="height:8px"></div>
+        <input class="inp" id="exportTag" placeholder="VERSION TAG (e.g. LINK_TRIAGE_v1)"/>
+        <div class="hr"></div>
+        <div class="hint" id="stateLine">—</div>
+      </div>
+
+    </div>
+
+    <div class="right">
+      <div class="sec">
+        <div class="secHd">
+          <div class="h">LANES</div>
+          <div class="sub" id="counts">0 LINKS</div>
+        </div>
+
+        <div class="lanes" id="lanes"></div>
+
+        <div style="height:10px"></div>
+
+        <div id="gridWrap">
+          <div class="grid" id="grid"></div>
+        </div>
+
+        <div id="calWrap" class="calWrap" style="display:none;">
+          <div class="calHdr">
+            <div class="calTitle" id="calMonth">MONTH</div>
+            <div class="calMeta" id="calCounts">0 days</div>
+            <div class="sp"></div>
+            <button class="btn" id="calPrev">◀</button>
+            <button class="btn" id="calToday">TODAY</button>
+            <button class="btn" id="calNext">▶</button>
           </div>
-
-          <div class="row">
-            <div class="cell">
-              <div class="mono tight muted">HEAT</div>
-              <div class="tight"><span class="red">RED</span> = FLOOD / DISCHARGE / THRESHOLD</div>
-              <div class="tight muted">STAY CLEAN: ANGER WITHOUT CONTEMPT</div>
-            </div>
-            <div class="cell">
-              <div class="mono tight muted">RULE</div>
-              <div class="tight">CLOSENESS REQUIRES REGULATION</div>
-              <div class="tight muted">ACCESS IS CONDITIONAL ON BEHAVIOR</div>
-            </div>
-          </div>
-
-          <div class="footer">
-            <div class="cell" style="flex:1">
-              <div class="mono tight muted">STATE</div>
-              <div class="mono tight" id="sig"></div>
-            </div>
-            <div class="cell" style="flex:1">
-              <div class="mono tight muted">MODE</div>
-              <div class="mono tight" id="mode"></div>
-            </div>
-          </div>
+          <div class="calGrid" id="calGrid"></div>
+          <div class="hr"></div>
+          <div class="hint" id="calHint">CLICK A DAY TO SET DATE FILTER (COMMIT DAY).</div>
         </div>
 
       </div>
     </div>
   </div>
 
-  <div class="bar bot">
-    <div class="brand tiny mono">CLICK FIELD = RE-SEED TRACES</div>
-    <div class="sp"></div>
-    <div class="brand tiny mono" id="hint">SHIFT+R RESET • SHIFT+S SAVE • SHIFT+L LOAD</div>
-  </div>
-
-  <div id="drawer" role="dialog" aria-label="system drawer">
-    <div class="mono">SYSTEM</div>
-    <div class="hr"></div>
-
-    <div class="ctl">
-      <div class="mono">RED</div>
-      <input id="red" type="range" min="0" max="255" value="255" />
-      <div class="val" id="redV">255</div>
-    </div>
-
-    <div class="ctl">
-      <div class="mono">RED_ALPHA</div>
-      <input id="redA" type="range" min="0" max="100" value="72" />
-      <div class="val" id="redAV">72</div>
-    </div>
-
-    <div class="ctl">
-      <div class="mono">HEAT</div>
-      <input id="heat" type="range" min="0" max="100" value="62" />
-      <div class="val" id="heatV">62</div>
-    </div>
-
-    <div class="ctl">
-      <div class="mono">PULSE</div>
-      <input id="pulse" type="range" min="0" max="100" value="35" />
-      <div class="val" id="pulseV">35</div>
-    </div>
-
-    <div class="ctl">
-      <div class="mono">SCAN</div>
-      <input id="scan" type="range" min="0" max="100" value="55" />
-      <div class="val" id="scanV">55</div>
-    </div>
-
-    <div class="ctl">
-      <div class="mono">GRAIN</div>
-      <input id="grain" type="range" min="0" max="100" value="28" />
-      <div class="val" id="grainV">28</div>
-    </div>
-
-    <div class="hr"></div>
-    <div class="note">THIS IS A SINGLE-FILE, LOCAL-FIRST INTERPRETIVE SURFACE. IT STORES ONLY ITS OWN UI STATE (NO NAMES, NO TEXT LOGS, NO EXTERNAL CALLS).</div>
-
-    <div class="btnrow">
-      <div class="btn" id="seedBtn">RESEED</div>
-      <div class="btn" id="calmBtn">CALM</div>
-      <div class="btn" id="hotBtn">HOT</div>
-      <div class="btn" id="voidBtn">VOID</div>
-      <div class="btn" id="saveBtn">SAVE</div>
-      <div class="btn" id="loadBtn">LOAD</div>
-      <div class="btn" id="resetBtn">RESET</div>
+  <!-- Modal -->
+  <div class="modal" id="modal">
+    <div class="panel">
+      <div class="panelHd">
+        <div class="hh" id="modalTitle">EXPORT</div>
+        <div class="ss" id="modalSub">STATE</div>
+        <div class="sp"></div>
+        <button class="btn" id="modalClose">CLOSE</button>
+      </div>
+      <div class="hr"></div>
+      <textarea class="ta" id="modalText" placeholder="JSON / URL LIST / PROMPT"></textarea>
+      <div class="panelActions">
+        <button class="btn" id="modalCopy">COPY</button>
+        <button class="btn" id="modalDownload">DOWNLOAD</button>
+        <button class="btn" id="modalApply">APPLY / IMPORT</button>
+      </div>
+      <div class="hr"></div>
+      <div class="hint" id="modalHint"></div>
     </div>
   </div>
-</div>
 
 <script>
 (() => {
-  "use strict";
+  /* ===========================
+     KETADATA LINK TRIAGE
+     TREE + COMMITS + CALENDAR
+     single-file
+  ============================ */
 
-  const $ = (id) => document.getElementById(id);
+  // -------------------------
+  // Utilities
+  // -------------------------
+  const nowISO = () => new Date().toISOString();
+  const uid = () => Math.random().toString(16).slice(2) + "-" + Date.now().toString(16);
 
-  const FILE_ID = "KETA_RED_SUBJECTIVITY_" + (localStorage.getItem("KETA_RED_FILE_ID") || cryptoRand(10));
-  localStorage.setItem("KETA_RED_FILE_ID", FILE_ID);
-
-  const LS_KEY = "KETA_RED_STATE::" + FILE_ID;
-
-  const DEFAULT = {
-    ui:{
-      drawer:false,
-      pulseOn:true,
-      scanOn:true,
-      grainOn:true,
-      red:255,
-      redA:72,
-      heat:62,
-      pulse:35,
-      scan:55,
-      grain:28,
-      seed: cryptoRand(8),
+  // stable 10-hex hash (FNV-1a-ish)
+  function hash10(str){
+    let h = 0x811c9dc5;
+    for (let i=0;i<str.length;i++){
+      h ^= str.charCodeAt(i);
+      h = (h * 0x01000193) >>> 0;
     }
+    let x = h.toString(16).padStart(8,"0");
+    let h2 = (h ^ (h>>>16)) >>> 0;
+    let y = h2.toString(16).padStart(8,"0");
+    return (x+y).slice(0,10);
+  }
+
+  function dayKeyFromISO(iso){
+    if (!iso || typeof iso !== "string") return "";
+    // commit dates are ISO Z; dayKey = YYYY-MM-DD
+    return iso.slice(0,10);
+  }
+
+  function monthLabel(y,m){
+    const d = new Date(y,m,1);
+    return d.toLocaleString(undefined,{month:"long", year:"numeric"});
+  }
+
+  function monthGridDays(y,m){
+    const first = new Date(y,m,1);
+    const startDow = first.getDay(); // 0 Sun
+    const start = new Date(y,m,1 - startDow);
+    const out = [];
+    for(let i=0;i<42;i++){
+      out.push(new Date(start.getFullYear(), start.getMonth(), start.getDate()+i));
+    }
+    return out;
+  }
+
+  function normalizePagesBase(s){
+    let x = (s || "").trim();
+    if (!x) return "";
+    if (!x.endsWith("/")) x += "/";
+    return x;
+  }
+
+  function isLikelyToken(t){
+    const x = (t||"").trim();
+    if (!x) return false;
+    return x.length >= 20;
+  }
+
+  function downloadText(filename, mime, text){
+    const blob = new Blob([text||""], {type:mime||"text/plain"});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename || "export.txt";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url), 800);
+  }
+
+  async function copyText(text){
+    try{
+      await navigator.clipboard.writeText(text||"");
+      return true;
+    } catch {
+      try{
+        const ta = document.createElement("textarea");
+        ta.value = text||"";
+        ta.style.position="fixed"; ta.style.left="-9999px";
+        document.body.appendChild(ta);
+        ta.focus(); ta.select();
+        document.execCommand("copy");
+        ta.remove();
+        return true;
+      } catch {
+        return false;
+      }
+    }
+  }
+
+  // concurrency limiter
+  async function mapLimit(items, limit, fn){
+    const out = new Array(items.length);
+    let idx = 0;
+    let active = 0;
+    return new Promise((resolve, reject) => {
+      const next = () => {
+        if (idx >= items.length && active === 0) return resolve(out);
+        while(active < limit && idx < items.length){
+          const i = idx++;
+          active++;
+          Promise.resolve()
+            .then(()=>fn(items[i], i))
+            .then((res)=>{ out[i]=res; })
+            .catch((e)=>{ out[i]=null; })
+            .finally(()=>{ active--; next(); });
+        }
+      };
+      next();
+    });
+  }
+
+  // -------------------------
+  // DOM
+  // -------------------------
+  const $meta = document.getElementById("meta");
+  const $counts = document.getElementById("counts");
+  const $lanes = document.getElementById("lanes");
+  const $grid = document.getElementById("grid");
+
+  const $repoOwner  = document.getElementById("repoOwner");
+  const $repoName   = document.getElementById("repoName");
+  const $repoBranch = document.getElementById("repoBranch");
+  const $pagesBase  = document.getElementById("pagesBase");
+  const $ghToken    = document.getElementById("ghToken");
+
+  const $ketaNote = document.getElementById("ketaNote");
+  const $exportLabel = document.getElementById("exportLabel");
+  const $exportTag = document.getElementById("exportTag");
+  const $stateLine = document.getElementById("stateLine");
+
+  const $fltLane = document.getElementById("fltLane");
+  const $fltStatus = document.getElementById("fltStatus");
+  const $fltTag = document.getElementById("fltTag");
+  const $fltSearch = document.getElementById("fltSearch");
+  const $fltDate = document.getElementById("fltDate");
+  const $btnClearDate = document.getElementById("btnClearDate");
+
+  const $sortMode = document.getElementById("sortMode");
+  const $viewMode = document.getElementById("viewMode");
+
+  const $commitScope = document.getElementById("commitScope");
+  const $autoMins = document.getElementById("autoMins");
+
+  const $btnSyncTree = document.getElementById("btnSyncTree");
+  const $btnSyncCommits = document.getElementById("btnSyncCommits");
+  const $btnAuto = document.getElementById("btnAuto");
+  const $btnAddLane = document.getElementById("btnAddLane");
+  const $btnExportUrls = document.getElementById("btnExportUrls");
+  const $btnExportState = document.getElementById("btnExportState");
+  const $btnImportState = document.getElementById("btnImportState");
+  const $btnExportPrompt = document.getElementById("btnExportPrompt");
+  const $btnNew = document.getElementById("btnNew");
+  const $btnClearFilters = document.getElementById("btnClearFilters");
+
+  const $gridWrap = document.getElementById("gridWrap");
+  const $calWrap = document.getElementById("calWrap");
+  const $calMonth = document.getElementById("calMonth");
+  const $calCounts = document.getElementById("calCounts");
+  const $calGrid = document.getElementById("calGrid");
+  const $calPrev = document.getElementById("calPrev");
+  const $calToday = document.getElementById("calToday");
+  const $calNext = document.getElementById("calNext");
+  const $calHint = document.getElementById("calHint");
+
+  const $modal = document.getElementById("modal");
+  const $modalTitle = document.getElementById("modalTitle");
+  const $modalSub = document.getElementById("modalSub");
+  const $modalText = document.getElementById("modalText");
+  const $modalClose = document.getElementById("modalClose");
+  const $modalCopy = document.getElementById("modalCopy");
+  const $modalDownload = document.getElementById("modalDownload");
+  const $modalApply = document.getElementById("modalApply");
+  const $modalHint = document.getElementById("modalHint");
+
+  function setMeta(s){ $meta.textContent = s; }
+
+  // -------------------------
+  // Defaults
+  // -------------------------
+  const DEFAULT_REPO = {
+    owner: "ki-tya",
+    repo: "ketadata",
+    branch: "main",
+    pagesBase: "https://ki-tya.github.io/ketadata/"
   };
 
-  let STATE = deepClone(DEFAULT);
+  const DEFAULT_LANES = () => ([
+    { id: "L0", name: "INBOX", deprecated:false },
+    { id: "L1", name: "CORE", deprecated:false },
+    { id: "L2", name: "EXPERIMENTS", deprecated:false },
+    { id: "L3", name: "DEPRECATED", deprecated:true }
+  ]);
 
-  function deepClone(x){ return JSON.parse(JSON.stringify(x)); }
+  // unique file id + isolated storage key
+  const FILE_ID = (() => {
+    const k = "KETADATA_LINK_TRIAGE__FILE_ID";
+    let v = localStorage.getItem(k);
+    if(!v){ v = "KLT-" + uid(); localStorage.setItem(k,v); }
+    return v;
+  })();
+  const LS_KEY = "KETADATA_LINK_TRIAGE__STATE__" + FILE_ID;
 
-  function cryptoRand(n){
-    const a = new Uint8Array(n);
-    crypto.getRandomValues(a);
-    return Array.from(a).map(b => (b%36).toString(36)).join("");
-  }
+  const DEFAULT_STATE = () => ({
+    version: "KETADATA_LINK_TRIAGE_TREE+COMMITS+CAL_v3",
+    fileId: FILE_ID,
+    createdAt: nowISO(),
+    updatedAt: nowISO(),
+    exportLabel: "",
+    exportTag: "",
+    ketaNote: "",
+    repo: { ...DEFAULT_REPO },
+    auth: { token: "" }, // stored locally
+    ui: {
+      laneId: "L0",
+      filterStatus: "active",
+      filterTag: "",
+      filterSearch: "",
+      filterDate: "",
+      sortMode: "commit_desc",
+      viewMode: "grid",
+      commitScope: "missing",
+      autoMinutes: 0,
+      // calendar month
+      calY: new Date().getFullYear(),
+      calM: new Date().getMonth(),
+    },
+    lanes: DEFAULT_LANES(),
+    links: {}, // path -> {path,url,laneId,tags,version,status,note,missing, git:{date,sha,msg,author,url}, seenInCompare:boolean}
+    git: {
+      lastHeadSha: "",        // baseline for compare
+      lastCompareBase: "",    // base used
+      lastCompareHead: "",    // head used
+      lastCompareAt: "",
+      compareChangedPaths: [], // last compare changed set
+      lastCommitSyncAt: "",
+      lastTreeSyncAt: ""
+    }
+  });
 
-  function clamp(v,min,max){ return Math.max(min, Math.min(max, v)); }
-
-  function save(){
-    try{ localStorage.setItem(LS_KEY, JSON.stringify(STATE)); }catch(e){}
-    renderSig();
-  }
-
-  function load(){
-    try{
-      const raw = localStorage.getItem(LS_KEY);
-      if(!raw) return false;
-      const obj = JSON.parse(raw);
-      if(obj && obj.ui) STATE = { ui: { ...DEFAULT.ui, ...obj.ui } };
-      return true;
-    }catch(e){ return false; }
-  }
-
-  function reset(){
-    STATE = deepClone(DEFAULT);
-    STATE.ui.seed = cryptoRand(8);
-    save();
-    reseed();
-    render();
-  }
-
-  function cssSet(name, val){
-    document.documentElement.style.setProperty(name, String(val));
-  }
-
-  function render(){
-    $("drawer").classList.toggle("open", !!STATE.ui.drawer);
-
-    const red = clamp(+STATE.ui.red,0,255);
-    const redA = clamp(+STATE.ui.redA,0,100)/100;
-    const heat = clamp(+STATE.ui.heat,0,100)/100;
-    const pulse = clamp(+STATE.ui.pulse,0,100)/100;
-    const scan = clamp(+STATE.ui.scan,0,100)/100;
-    const grain = clamp(+STATE.ui.grain,0,100)/100;
-
-    cssSet("--red", red);
-    cssSet("--redAlpha", redA.toFixed(3));
-    cssSet("--heat", heat.toFixed(3));
-    cssSet("--pulse", pulse.toFixed(3));
-    cssSet("--scan", scan.toFixed(3));
-    cssSet("--grain", grain.toFixed(3));
-
-    $("pulseBtn").classList.toggle("on", !!STATE.ui.pulseOn);
-    $("scanBtn").classList.toggle("on", !!STATE.ui.scanOn);
-    $("grainBtn").classList.toggle("on", !!STATE.ui.grainOn);
-
-    $("ring").style.display = STATE.ui.pulseOn ? "block" : "none";
-    $("ls").style.display = STATE.ui.scanOn ? "block" : "none";
-    $("lg").style.display = STATE.ui.grainOn ? "block" : "none";
-
-    // bind controls reflect state
-    setCtl("red", red);
-    setCtl("redA", Math.round(redA*100));
-    setCtl("heat", Math.round(heat*100));
-    setCtl("pulse", Math.round(pulse*100));
-    setCtl("scan", Math.round(scan*100));
-    setCtl("grain", Math.round(grain*100));
-
-    renderSig();
-    renderMode();
-  }
-
-  function setCtl(id, v){
-    const el = $(id);
-    if(el && String(el.value) !== String(v)) el.value = String(v);
-    const vEl = $(id+"V");
-    if(vEl) vEl.textContent = String(v);
-  }
-
-  function stableSig(){
-    const u = STATE.ui;
-    return [
-      "FILE_ID="+FILE_ID,
-      "SEED="+u.seed,
-      "RED="+u.red,
-      "A="+u.redA,
-      "HEAT="+u.heat,
-      "PULSE="+u.pulse,
-      "SCAN="+u.scan,
-      "GRAIN="+u.grain,
-      "PON="+(u.pulseOn?1:0),
-      "SON="+(u.scanOn?1:0),
-      "GON="+(u.grainOn?1:0),
-    ].join(" | ");
-  }
-
-  function renderSig(){
-    $("sig").textContent = stableSig();
-  }
-
-  function renderMode(){
-    const u = STATE.ui;
-    const mode = [
-      u.heat>=70 ? "HOT" : (u.heat<=25 ? "CALM" : "LIVE"),
-      u.pulseOn ? "PULSE" : "STILL",
-      u.scanOn ? "SCAN" : "NO_SCAN",
-      u.grainOn ? "GRAIN" : "NO_GRAIN"
-    ].join(" / ");
-    $("mode").textContent = mode;
-  }
-
-  // ===== traces =====
-  function mulberry32(a){
-    return function(){
-      let t = a += 0x6D2B79F5;
-      t = Math.imul(t ^ (t >>> 15), t | 1);
-      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  function normLane(l){
+    return {
+      id: typeof l.id === "string" ? l.id : ("L" + Math.random().toString(16).slice(2,6)),
+      name: typeof l.name === "string" ? l.name : "LANE",
+      deprecated: !!l.deprecated
     };
   }
 
-  function seedToInt(seed){
-    let h = 2166136261;
-    for(let i=0;i<seed.length;i++){
-      h ^= seed.charCodeAt(i);
-      h = Math.imul(h, 16777619);
+  function normalizeState(s){
+    const base = DEFAULT_STATE();
+    if(!s || typeof s !== "object") return base;
+
+    const out = {
+      ...base,
+      version: typeof s.version==="string" ? s.version : base.version,
+      fileId: base.fileId,
+      createdAt: typeof s.createdAt==="string" ? s.createdAt : base.createdAt,
+      updatedAt: typeof s.updatedAt==="string" ? s.updatedAt : nowISO(),
+      exportLabel: typeof s.exportLabel==="string" ? s.exportLabel : "",
+      exportTag: typeof s.exportTag==="string" ? s.exportTag : "",
+      ketaNote: typeof s.ketaNote==="string" ? s.ketaNote : "",
+      repo: { ...base.repo, ...(s.repo && typeof s.repo==="object" ? s.repo : {}) },
+      auth: { token: (s.auth && typeof s.auth.token==="string") ? s.auth.token : "" },
+      ui: { ...base.ui, ...(s.ui && typeof s.ui==="object" ? s.ui : {}) },
+      lanes: Array.isArray(s.lanes) ? s.lanes.map(normLane) : base.lanes,
+      links: (s.links && typeof s.links==="object") ? s.links : {},
+      git: { ...base.git, ...(s.git && typeof s.git==="object" ? s.git : {}) }
+    };
+
+    // repo harden
+    out.repo.owner = (out.repo.owner || DEFAULT_REPO.owner).trim();
+    out.repo.repo = (out.repo.repo || DEFAULT_REPO.repo).trim();
+    out.repo.branch = (out.repo.branch || DEFAULT_REPO.branch).trim();
+    out.repo.pagesBase = normalizePagesBase(out.repo.pagesBase || DEFAULT_REPO.pagesBase);
+    if (!out.repo.pagesBase) out.repo.pagesBase = normalizePagesBase(DEFAULT_REPO.pagesBase);
+
+    // lane exists
+    if(!out.lanes.some(l=>l.id===out.ui.laneId)) out.ui.laneId = out.lanes[0].id;
+
+    // links normalize
+    const fixed = {};
+    for(const [path, v] of Object.entries(out.links)){
+      const p = String(path||"").trim();
+      if(!p) continue;
+      const it = v && typeof v==="object" ? v : {};
+      fixed[p] = {
+        path: p,
+        url: String(it.url||""),
+        laneId: typeof it.laneId==="string" ? it.laneId : out.ui.laneId,
+        tags: String(it.tags||""),
+        version: String(it.version||""),
+        status: (it.status==="deprecated") ? "deprecated" : "active",
+        note: String(it.note||""),
+        missing: !!it.missing,
+        git: (it.git && typeof it.git==="object") ? {
+          date: String(it.git.date||""),
+          sha: String(it.git.sha||""),
+          msg: String(it.git.msg||""),
+          author: String(it.git.author||""),
+          url: String(it.git.url||"")
+        } : { date:"", sha:"", msg:"", author:"", url:"" },
+        seenInCompare: !!it.seenInCompare
+      };
+      // clamp lane id
+      if(!out.lanes.some(l=>l.id===fixed[p].laneId)) fixed[p].laneId = out.ui.laneId;
     }
-    return h >>> 0;
+    out.links = fixed;
+
+    // ui harden
+    out.ui.viewMode = (out.ui.viewMode==="calendar") ? "calendar" : "grid";
+    out.ui.sortMode = String(out.ui.sortMode||"commit_desc");
+    out.ui.commitScope = String(out.ui.commitScope||"missing");
+    out.ui.autoMinutes = Number(out.ui.autoMinutes||0);
+
+    return out;
   }
 
-  function pathFromSeed(seed, w=760, h=520, k=3){
-    const r = mulberry32(seedToInt(seed));
-    const pts = [];
-    const cx = w*0.5, cy = h*0.5;
-    const base = Math.min(w,h)*0.26;
-    const loops = 5 + Math.floor(r()*5);
-    let ang = r()*Math.PI*2;
+  function loadLocal(){
+    try{
+      const raw = localStorage.getItem(LS_KEY);
+      if(!raw) return null;
+      return normalizeState(JSON.parse(raw));
+    }catch{ return null; }
+  }
+  function saveLocal(){
+    try{
+      state.updatedAt = nowISO();
+      localStorage.setItem(LS_KEY, JSON.stringify(state));
+      $stateLine.textContent =
+        `FILE_ID ${state.fileId} · LINKS ${Object.keys(state.links).length} · UPDATED ${state.updatedAt}`;
+    }catch{}
+  }
 
-    for(let i=0;i<loops;i++){
-      const t = i/(loops-1);
-      const amp = base*(0.65 + r()*0.85) * (0.35 + (1-t)*0.95);
-      const jitter = (r()-0.5)*0.9;
-      ang += (0.55 + r()*1.1) + jitter;
-      const rad = amp*(0.85 + r()*0.55);
-      pts.push([
-        cx + Math.cos(ang)*rad,
-        cy + Math.sin(ang)*rad*(0.78 + r()*0.55)
-      ]);
+  let state = loadLocal() || DEFAULT_STATE();
+  let modalMode = "export_state";
+  let modalDefaultFilename = "export.txt";
+  let autoTimer = null;
+
+  // -------------------------
+  // GitHub API
+  // -------------------------
+  function ghHeaders(){
+    const headers = {
+      "Accept": "application/vnd.github+json"
+    };
+    const tok = (state.auth.token || "").trim();
+    if(tok){
+      // GitHub supports "Bearer" for fine-grained tokens; classic also works
+      headers["Authorization"] = "Bearer " + tok;
+    }
+    return headers;
+  }
+
+  async function ghJSON(url){
+    const res = await fetch(url, { headers: ghHeaders() });
+    const remaining = res.headers.get("x-ratelimit-remaining");
+    const reset = res.headers.get("x-ratelimit-reset");
+    if(!res.ok){
+      const txt = await res.text().catch(()=> "");
+      let extra = "";
+      if(remaining !== null && reset !== null){
+        const when = new Date(Number(reset)*1000).toISOString();
+        extra = `\nRATE: remaining=${remaining} reset=${when}`;
+      }
+      throw new Error(`GITHUB ${res.status} ${res.statusText}\n${url}\n${txt}${extra}`);
+    }
+    const data = await res.json();
+    return { data, remaining, reset };
+  }
+
+  async function fetchHeadSha(owner, repo, branch){
+    // /commits/{ref} is simplest
+    const u = `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/commits/${encodeURIComponent(branch)}`;
+    const { data } = await ghJSON(u);
+    const sha = data && data.sha ? String(data.sha) : "";
+    return sha;
+  }
+
+  async function fetchRepoTree(owner, repo, branch){
+    const u = `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/git/trees/${encodeURIComponent(branch)}?recursive=1`;
+    const { data } = await ghJSON(u);
+    if(!data || !Array.isArray(data.tree)) return [];
+    return data.tree; // [{path,type,sha,size,url}, ...]
+  }
+
+  async function fetchLastCommitForPath(owner, repo, branch, path){
+    // per-file last commit
+    const u = `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/commits?path=${encodeURIComponent(path)}&per_page=1&sha=${encodeURIComponent(branch)}`;
+    const { data } = await ghJSON(u);
+    if(!Array.isArray(data) || !data.length) return null;
+    const c = data[0];
+    const date = (c && c.commit && c.commit.committer && c.commit.committer.date) ? String(c.commit.committer.date) : "";
+    const msg = (c && c.commit && c.commit.message) ? String(c.commit.message) : "";
+    const author = (c && c.commit && c.commit.committer && c.commit.committer.name) ? String(c.commit.committer.name) : "";
+    const sha = (c && c.sha) ? String(c.sha) : "";
+    const html = (c && c.html_url) ? String(c.html_url) : "";
+    return { date, msg, author, sha, url: html };
+  }
+
+  async function compareCommits(owner, repo, base, head){
+    const u = `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/compare/${encodeURIComponent(base)}...${encodeURIComponent(head)}`;
+    const { data } = await ghJSON(u);
+    const files = (data && Array.isArray(data.files)) ? data.files : [];
+    // files entries include: filename, status, previous_filename, ...
+    return { files, ahead_by: data && data.ahead_by ? data.ahead_by : 0 };
+  }
+
+  function derivedUrl(path){
+    const base = state.repo.pagesBase;
+    return (base.endsWith("/") ? base : base + "/") + path.replace(/^\/+/, "");
+  }
+
+  function isPageHtml(path){
+    const p = (path || "").toLowerCase();
+    if(!p.endsWith(".html")) return false;
+    const denyPrefixes = ["content/","images/","img/","assets/","static/","media/","docs/"];
+    return !denyPrefixes.some(pref => p.startsWith(pref));
+  }
+
+  // -------------------------
+  // Filtering + Sorting
+  // -------------------------
+  function currentFilters(){
+    return {
+      laneId: $fltLane.value || state.ui.laneId,
+      status: $fltStatus.value || "active",
+      tag: ($fltTag.value || "").trim().toLowerCase(),
+      search: ($fltSearch.value || "").trim().toLowerCase(),
+      date: ($fltDate.value || "").trim()
+    };
+  }
+
+  function tagsMatch(needle, tags){
+    if(!needle) return true;
+    const need = needle.split(/[, ]+/).filter(Boolean);
+    const have = (tags||"").toLowerCase().split(/[, ]+/).filter(Boolean);
+    return need.every(n => have.includes(n));
+  }
+
+  function searchMatch(needle, it){
+    if(!needle) return true;
+    const blob = [
+      it.path || "",
+      it.tags || "",
+      it.note || "",
+      it.version || "",
+      (it.git && it.git.msg) ? it.git.msg : ""
+    ].join(" ").toLowerCase();
+    return blob.includes(needle);
+  }
+
+  function dateMatch(day, it){
+    if(!day) return true;
+    const dk = (it.git && it.git.date) ? dayKeyFromISO(it.git.date) : "";
+    return dk === day;
+  }
+
+  function sortLinks(arr){
+    const mode = $sortMode.value || state.ui.sortMode;
+    const cmp = (a,b) => a.localeCompare(b);
+
+    const changedSet = new Set(state.git.compareChangedPaths || []);
+    const getCommitTime = (it) => {
+      const t = (it.git && it.git.date) ? Date.parse(it.git.date) : NaN;
+      return isNaN(t) ? -1 : t;
+    };
+
+    if(mode === "path_desc"){
+      arr.sort((a,b)=> cmp(b.path, a.path));
+      return;
+    }
+    if(mode === "path_asc"){
+      arr.sort((a,b)=> cmp(a.path, b.path));
+      return;
+    }
+    if(mode === "commit_asc"){
+      arr.sort((a,b)=>{
+        const ta = getCommitTime(a);
+        const tb = getCommitTime(b);
+        if(ta === -1 && tb === -1) return cmp(a.path,b.path);
+        if(ta === -1) return 1;
+        if(tb === -1) return -1;
+        if(ta !== tb) return ta - tb;
+        return cmp(a.path,b.path);
+      });
+      return;
+    }
+    if(mode === "changed_range"){
+      arr.sort((a,b)=>{
+        const aa = changedSet.has(a.path) ? 0 : 1;
+        const bb = changedSet.has(b.path) ? 0 : 1;
+        if(aa !== bb) return aa - bb;
+        // within changed, newest commit first
+        const ta = getCommitTime(a), tb = getCommitTime(b);
+        if(ta !== tb) return (tb - ta);
+        return cmp(a.path,b.path);
+      });
+      return;
+    }
+    if(mode === "noc"){
+      arr.sort((a,b)=>{
+        const aa = (a.git && a.git.date) ? 1 : 0;
+        const bb = (b.git && b.git.date) ? 1 : 0;
+        if(aa !== bb) return aa - bb; // NO COMMIT first
+        const ta = (a.git && a.git.date) ? Date.parse(a.git.date) : 0;
+        const tb = (b.git && b.git.date) ? Date.parse(b.git.date) : 0;
+        if(ta !== tb) return tb - ta;
+        return cmp(a.path,b.path);
+      });
+      return;
     }
 
-    // to cubic path
-    let d = "";
-    if(pts.length){
-      d += "M " + pts[0][0].toFixed(1) + " " + pts[0][1].toFixed(1) + " ";
-      for(let i=1;i<pts.length;i++){
-        const p0 = pts[i-1];
-        const p1 = pts[i];
-        const c1x = p0[0] + (p1[0]-p0[0])*(0.35 + r()*0.25);
-        const c1y = p0[1] + (p1[1]-p0[1])*(0.10 + r()*0.25);
-        const c2x = p0[0] + (p1[0]-p0[0])*(0.60 + r()*0.25);
-        const c2y = p0[1] + (p1[1]-p0[1])*(0.70 + r()*0.25);
-        d += "C " + c1x.toFixed(1) + " " + c1y.toFixed(1) + ", " + c2x.toFixed(1) + " " + c2y.toFixed(1) + ", " + p1[0].toFixed(1) + " " + p1[1].toFixed(1) + " ";
+    // default commit_desc
+    arr.sort((a,b)=>{
+      const ta = getCommitTime(a);
+      const tb = getCommitTime(b);
+      if(ta === -1 && tb === -1) return cmp(a.path,b.path);
+      if(ta === -1) return 1;
+      if(tb === -1) return -1;
+      if(ta !== tb) return tb - ta;
+      return cmp(a.path,b.path);
+    });
+  }
+
+  // -------------------------
+  // Rendering
+  // -------------------------
+  function refreshLaneSelect(){
+    $fltLane.innerHTML = "";
+    for(const l of state.lanes){
+      const opt = document.createElement("option");
+      opt.value = l.id;
+      opt.textContent = l.name;
+      $fltLane.appendChild(opt);
+    }
+    $fltLane.value = state.ui.laneId || state.lanes[0].id;
+  }
+
+  function renderLanesBar(){
+    $lanes.innerHTML = "";
+    for(const l of state.lanes){
+      const b = document.createElement("button");
+      b.className = "laneBtn" + (l.id===state.ui.laneId ? " active" : "") + (l.deprecated ? " depr" : "");
+      b.textContent = l.name;
+      b.title = "CLICK TO SET CURRENT LANE / RIGHT-CLICK RENAME";
+      b.addEventListener("click", ()=>{
+        state.ui.laneId = l.id;
+        $fltLane.value = l.id;
+        saveLocal();
+        render();
+      });
+      b.addEventListener("contextmenu", (e)=>{
+        e.preventDefault();
+        const nn = prompt("RENAME LANE:", l.name);
+        if(nn === null) return;
+        l.name = (nn||"").trim() || l.name;
+        saveLocal();
+        render();
+        setMeta("LANE RENAMED");
+      });
+      $lanes.appendChild(b);
+    }
+  }
+
+  function visibleLinkList(){
+    const f = currentFilters();
+    const all = Object.values(state.links);
+
+    const out = [];
+    for(const it of all){
+      if(f.laneId && it.laneId !== f.laneId) continue;
+
+      if(f.status === "active" && it.status === "deprecated") continue;
+      if(f.status === "deprecated" && it.status !== "deprecated") continue;
+
+      if(!tagsMatch(f.tag, it.tags)) continue;
+      if(!searchMatch(f.search, it)) continue;
+      if(!dateMatch(f.date, it)) continue;
+
+      out.push(it);
+    }
+    sortLinks(out);
+    return out;
+  }
+
+  function filenameFromPath(p){
+    const s = (p||"").split("/").pop() || p || "";
+    return s;
+  }
+
+  function fmtCommit(it){
+    if(!it.git || !it.git.date) return { when:"NO COMMIT", msg:"—", day:"" };
+    const day = dayKeyFromISO(it.git.date);
+    // keep text same size; rely on opacity/weight
+    return {
+      when: day,
+      msg: (it.git.msg||"").split("\n")[0].slice(0, 92) || "—",
+      day
+    };
+  }
+
+  function renderGrid(){
+    const allLinks = Object.keys(state.links).length;
+    const f = currentFilters();
+
+    const laneCount = Object.values(state.links).filter(x => x.laneId === f.laneId).length;
+    const withCommit = Object.values(state.links).filter(x => x.git && x.git.date).length;
+    $counts.textContent = `${allLinks} LINKS // ${laneCount} IN LANE // ${withCommit} WITH COMMIT DATA`;
+
+    const list = visibleLinkList();
+    $grid.innerHTML = "";
+
+    const compareCount = (state.git.compareChangedPaths || []).length;
+    const range = (state.git.lastCompareBase && state.git.lastCompareHead)
+      ? `${state.git.lastCompareBase.slice(0,7)}...${state.git.lastCompareHead.slice(0,7)}`
+      : "—";
+    setMeta(`READY // VIEW ${state.ui.viewMode.toUpperCase()} // SORT ${state.ui.sortMode} // COMPARE ${range} // CHANGED ${compareCount}`);
+
+    for(const it of list){
+      const card = document.createElement("div");
+      card.className = "card" + (it.status==="deprecated" ? " depr" : "") + (it.missing ? " missing" : "");
+
+      const top = document.createElement("div");
+      top.className = "cTop";
+
+      const hs = document.createElement("div");
+      hs.className = "hash";
+      hs.textContent = hash10(it.path);
+
+      const nm = document.createElement("div");
+      nm.className = "name";
+      nm.textContent = filenameFromPath(it.path);
+
+      const open = document.createElement("a");
+      open.className = "open";
+      open.href = it.url;
+      open.target = "_blank";
+      open.rel = "noopener";
+      open.textContent = it.missing ? "OPEN (MISSING)" : "OPEN";
+
+      top.appendChild(hs);
+      top.appendChild(nm);
+      top.appendChild(open);
+
+      const pathline = document.createElement("div");
+      pathline.className = "pathline";
+      pathline.textContent = it.path;
+
+      const commit = fmtCommit(it);
+      const mini = document.createElement("div");
+      mini.className = "mini";
+      const p1 = document.createElement("div"); p1.className="pill"; p1.textContent = commit.when;
+      const p2 = document.createElement("div"); p2.className="pill"; p2.textContent = (commit.msg || "—");
+      mini.appendChild(p1);
+      mini.appendChild(p2);
+
+      const row1 = document.createElement("div");
+      row1.className = "cGrid3";
+
+      const laneSel = document.createElement("select");
+      laneSel.className = "sel";
+      for(const l of state.lanes){
+        const opt = document.createElement("option");
+        opt.value = l.id;
+        opt.textContent = l.name;
+        laneSel.appendChild(opt);
+      }
+      laneSel.value = it.laneId;
+      laneSel.addEventListener("change", ()=>{
+        it.laneId = laneSel.value;
+        state.updatedAt = nowISO();
+        saveLocal();
+        render();
+      });
+
+      const statusSel = document.createElement("select");
+      statusSel.className = "sel";
+      statusSel.innerHTML = `
+        <option value="active">ACTIVE</option>
+        <option value="deprecated">DEPRECATED</option>
+      `;
+      statusSel.value = it.status;
+      statusSel.addEventListener("change", ()=>{
+        it.status = statusSel.value;
+        state.updatedAt = nowISO();
+        saveLocal();
+        render();
+      });
+
+      const verInp = document.createElement("input");
+      verInp.className = "inp";
+      verInp.placeholder = "VERSION";
+      verInp.value = it.version || "";
+      verInp.addEventListener("input", ()=>{
+        it.version = verInp.value;
+        state.updatedAt = nowISO();
+        saveLocal();
+      });
+
+      row1.appendChild(laneSel);
+      row1.appendChild(statusSel);
+      row1.appendChild(verInp);
+
+      const row2 = document.createElement("div");
+      row2.className = "cGrid2";
+
+      const tagsInp = document.createElement("input");
+      tagsInp.className = "inp";
+      tagsInp.placeholder = "TAGS (comma/space)";
+      tagsInp.value = it.tags || "";
+      tagsInp.addEventListener("input", ()=>{
+        it.tags = tagsInp.value;
+        state.updatedAt = nowISO();
+        saveLocal();
+      });
+
+      const noteTa = document.createElement("textarea");
+      noteTa.className = "ta small";
+      noteTa.placeholder = "NOTE";
+      noteTa.value = it.note || "";
+      noteTa.addEventListener("input", ()=>{
+        it.note = noteTa.value;
+        state.updatedAt = nowISO();
+        saveLocal();
+      });
+
+      row2.appendChild(tagsInp);
+      row2.appendChild(noteTa);
+
+      card.appendChild(top);
+      card.appendChild(pathline);
+      card.appendChild(mini);
+      card.appendChild(row1);
+      card.appendChild(row2);
+
+      $grid.appendChild(card);
+    }
+  }
+
+  function renderCalendar(){
+    const list = visibleLinkList(); // respects lane/status/tag/search/date. But calendar should ignore date filter for overview.
+    // For calendar overview, we use a separate list that ignores date filter.
+    const f = currentFilters();
+    const all = Object.values(state.links);
+    const calList = [];
+    for(const it of all){
+      if(f.laneId && it.laneId !== f.laneId) continue;
+      if(f.status === "active" && it.status === "deprecated") continue;
+      if(f.status === "deprecated" && it.status !== "deprecated") continue;
+      if(!tagsMatch(f.tag, it.tags)) continue;
+      if(!searchMatch(f.search, it)) continue;
+      calList.push(it);
+    }
+
+    const y = state.ui.calY, m = state.ui.calM;
+    $calMonth.textContent = monthLabel(y,m);
+
+    const byDay = new Map();
+    let noCommit = 0;
+    for(const it of calList){
+      const dk = (it.git && it.git.date) ? dayKeyFromISO(it.git.date) : "";
+      if(!dk){ noCommit++; continue; }
+      if(!byDay.has(dk)) byDay.set(dk, []);
+      byDay.get(dk).push(it);
+    }
+
+    const cells = monthGridDays(y,m);
+    $calGrid.innerHTML = "";
+
+    // counts meta (days in month with any commits)
+    const monthPrefix = `${y}-${String(m+1).padStart(2,"0")}-`;
+    let activeDays = 0;
+    let totalHits = 0;
+    for(const [dk,arr] of byDay.entries()){
+      if(dk.startsWith(monthPrefix)){
+        activeDays++;
+        totalHits += arr.length;
       }
     }
-    return d.trim();
+    $calCounts.textContent = `${activeDays} DAYS WITH COMMITS // ${totalHits} FILES // ${noCommit} NO COMMIT`;
+
+    const sel = ($fltDate.value || "").trim();
+
+    for(const d of cells){
+      const dk = d.toISOString().slice(0,10); // UTC day key for grid labels; commit keys are also UTC slice
+      const inMonth = (d.getFullYear()===y && d.getMonth()===m);
+      const cell = document.createElement("div");
+      cell.className = "calCell" + (inMonth ? "" : " mute") + ((sel && dk===sel) ? " sel" : "");
+
+      const top = document.createElement("div");
+      top.className = "calTop";
+
+      const day = document.createElement("div");
+      day.className = "calDay";
+      day.textContent = String(d.getDate()).padStart(2,"0");
+
+      const arr = byDay.get(dk) || [];
+      const cnt = document.createElement("div");
+      cnt.className = "calCount";
+      cnt.textContent = arr.length ? (arr.length + " files") : "";
+
+      top.appendChild(day);
+      top.appendChild(cnt);
+
+      const dots = document.createElement("div");
+      dots.className = "dots";
+      // up to 14 dots
+      const n = Math.min(14, arr.length);
+      for(let i=0;i<n;i++){
+        const dd=document.createElement("div");
+        dd.className="dot";
+        // slightly dim deprecated/missing
+        const it = arr[i];
+        if(it.status==="deprecated" || it.missing) dd.style.opacity = "0.45";
+        dots.appendChild(dd);
+      }
+
+      cell.appendChild(top);
+      cell.appendChild(dots);
+
+      cell.addEventListener("click", ()=>{
+        $fltDate.value = dk;
+        state.ui.filterDate = dk;
+        saveLocal();
+        render();
+        setMeta("DATE FILTER SET: " + dk);
+      });
+
+      $calGrid.appendChild(cell);
+    }
+
+    const range = (state.git.lastCompareBase && state.git.lastCompareHead)
+      ? `${state.git.lastCompareBase.slice(0,7)}...${state.git.lastCompareHead.slice(0,7)}`
+      : "—";
+    $calHint.textContent = `CLICK A DAY TO SET DATE FILTER (COMMIT DAY). COMPARE RANGE: ${range}.`;
   }
 
-  function reseed(){
-    // new seed that keeps file identity stable
-    STATE.ui.seed = cryptoRand(8);
-    const s = STATE.ui.seed;
-    $("p1").setAttribute("d", pathFromSeed("A"+s));
-    $("p2").setAttribute("d", pathFromSeed("B"+s));
-    $("p3").setAttribute("d", pathFromSeed("C"+s));
-    save();
+  function syncViewModeUI(){
+    const vm = $viewMode.value || state.ui.viewMode;
+    if(vm === "calendar"){
+      $gridWrap.style.display = "none";
+      $calWrap.style.display = "block";
+    }else{
+      $gridWrap.style.display = "block";
+      $calWrap.style.display = "none";
+    }
+  }
+
+  function render(){
+    // hydrate inputs from state
+    $repoOwner.value = state.repo.owner;
+    $repoName.value = state.repo.repo;
+    $repoBranch.value = state.repo.branch;
+    $pagesBase.value = state.repo.pagesBase;
+    $ghToken.value = state.auth.token || "";
+
+    $ketaNote.value = state.ketaNote || "";
+    $exportLabel.value = state.exportLabel || "";
+    $exportTag.value = state.exportTag || "";
+
+    refreshLaneSelect();
+    $fltLane.value = state.ui.laneId || state.lanes[0].id;
+    $fltStatus.value = state.ui.filterStatus || "active";
+    $fltTag.value = state.ui.filterTag || "";
+    $fltSearch.value = state.ui.filterSearch || "";
+    $fltDate.value = state.ui.filterDate || "";
+
+    $sortMode.value = state.ui.sortMode || "commit_desc";
+    $viewMode.value = state.ui.viewMode || "grid";
+    $commitScope.value = state.ui.commitScope || "missing";
+    $autoMins.value = String(state.ui.autoMinutes || 0);
+
+    syncViewModeUI();
+    renderLanesBar();
+    renderGrid();
+    if($viewMode.value === "calendar") renderCalendar();
+
+    $btnAuto.classList.toggle("on", !!state.ui.autoMinutes);
+    $btnAuto.textContent = state.ui.autoMinutes ? `AUTO: ${state.ui.autoMinutes}m` : "AUTO: OFF";
+
+    saveLocal();
+  }
+
+  // -------------------------
+  // Modal
+  // -------------------------
+  function openModal(title, sub, text, hint, showApply, filename){
+    $modalTitle.textContent = title;
+    $modalSub.textContent = sub;
+    $modalText.value = text || "";
+    $modalHint.textContent = hint || "";
+    $modalApply.style.display = showApply ? "inline-block" : "none";
+    modalDefaultFilename = filename || "export.txt";
+    $modal.classList.add("show");
+    $modalText.focus();
+    $modalText.select();
+  }
+  function closeModal(){ $modal.classList.remove("show"); }
+
+  // -------------------------
+  // Sync Tree
+  // -------------------------
+  async function syncTree(){
+    // persist inputs
+    state.repo.owner = ($repoOwner.value || DEFAULT_REPO.owner).trim();
+    state.repo.repo = ($repoName.value || DEFAULT_REPO.repo).trim();
+    state.repo.branch = ($repoBranch.value || DEFAULT_REPO.branch).trim();
+    state.repo.pagesBase = normalizePagesBase($pagesBase.value || DEFAULT_REPO.pagesBase);
+    state.auth.token = ($ghToken.value || "").trim();
+
+    setMeta(`SYNC TREE: ${state.repo.owner}/${state.repo.repo}@${state.repo.branch} ...`);
+
+    // mark all missing
+    for(const k of Object.keys(state.links)){
+      state.links[k].missing = true;
+    }
+
+    const tree = await fetchRepoTree(state.repo.owner, state.repo.repo, state.repo.branch);
+
+    const htmls = tree
+      .filter(x => x.type === "blob")
+      .map(x => x.path)
+      .filter(isPageHtml)
+      .sort((a,b)=>a.localeCompare(b));
+
+    let added = 0, kept = 0;
+
+    for(const p of htmls){
+      const hit = state.links[p];
+      if(hit){
+        hit.missing = false;
+        hit.url = derivedUrl(p);
+        kept++;
+      } else {
+        state.links[p] = {
+          path: p,
+          url: derivedUrl(p),
+          laneId: state.ui.laneId || state.lanes[0].id,
+          tags: "",
+          version: "",
+          status: "active",
+          note: "",
+          missing: false,
+          git: { date:"", sha:"", msg:"", author:"", url:"" },
+          seenInCompare: false
+        };
+        added++;
+      }
+    }
+
+    state.git.lastTreeSyncAt = nowISO();
+    saveLocal();
     render();
+    setMeta(`TREE OK // ${htmls.length} HTML // +${added} NEW // ${kept} KEPT`);
   }
 
-  // ===== wiring =====
+  // -------------------------
+  // Sync Commits (fixed: first hydration + incremental compare)
+  // -------------------------
+  function commitTargetsByScope(scope){
+    const all = Object.values(state.links);
+    const f = currentFilters();
+
+    if(scope === "all") return all.filter(it => !it.missing); // only existing files
+    if(scope === "lane") return all.filter(it => it.laneId === (f.laneId || state.ui.laneId) && !it.missing);
+    if(scope === "view") return visibleLinkList().filter(it => !it.missing);
+
+    // missing only (default)
+    return all.filter(it => !it.missing && (!it.git || !it.git.date));
+  }
+
+  async function hydrateCommitsForPaths(paths){
+    const owner = state.repo.owner, repo = state.repo.repo, branch = state.repo.branch;
+    if(!paths.length) return { ok:0, fail:0 };
+
+    // Keep concurrency conservative. With token, you can increase.
+    const limit = isLikelyToken(state.auth.token) ? 8 : 4;
+
+    let ok = 0, fail = 0;
+    let done = 0;
+    const total = paths.length;
+
+    setMeta(`COMMITS: HYDRATE ${total} FILES ...`);
+
+    await mapLimit(paths, limit, async (p) => {
+      const info = await fetchLastCommitForPath(owner, repo, branch, p).catch(()=>null);
+      done++;
+      if(info){
+        const it = state.links[p];
+        if(it){
+          it.git = {
+            date: info.date || "",
+            sha: info.sha || "",
+            msg: info.msg || "",
+            author: info.author || "",
+            url: info.url || ""
+          };
+        }
+        ok++;
+      } else {
+        fail++;
+      }
+      if(done % 10 === 0 || done === total){
+        setMeta(`COMMITS: HYDRATE ${done}/${total} (OK ${ok} / FAIL ${fail})`);
+      }
+    });
+
+    return { ok, fail };
+  }
+
+  async function syncCommits(){
+    // persist inputs
+    state.repo.owner = ($repoOwner.value || DEFAULT_REPO.owner).trim();
+    state.repo.repo = ($repoName.value || DEFAULT_REPO.repo).trim();
+    state.repo.branch = ($repoBranch.value || DEFAULT_REPO.branch).trim();
+    state.repo.pagesBase = normalizePagesBase($pagesBase.value || DEFAULT_REPO.pagesBase);
+    state.auth.token = ($ghToken.value || "").trim();
+
+    // if no links, do tree first
+    if(Object.keys(state.links).length === 0){
+      await syncTree();
+    }
+
+    const owner = state.repo.owner, repo = state.repo.repo, branch = state.repo.branch;
+
+    setMeta(`COMMITS: FETCH HEAD ...`);
+    const headSha = await fetchHeadSha(owner, repo, branch);
+
+    // Decide: first hydration vs incremental compare
+    const haveBaseline = !!state.git.lastHeadSha;
+    const baseline = state.git.lastHeadSha;
+
+    const scope = ($commitScope.value || state.ui.commitScope || "missing");
+    state.ui.commitScope = scope;
+
+    // Always clear compare flags
+    for(const it of Object.values(state.links)){ it.seenInCompare = false; }
+    state.git.compareChangedPaths = [];
+
+    // First-run: hydrate per-file (or if baseline missing)
+    if(!haveBaseline){
+      const targets = commitTargetsByScope(scope);
+      const paths = targets.map(x => x.path);
+      setMeta(`COMMITS: FIRST-RUN (NO BASELINE) // ${paths.length} TARGETS`);
+      const { ok, fail } = await hydrateCommitsForPaths(paths);
+
+      state.git.lastHeadSha = headSha; // set baseline for future compare
+      state.git.lastCompareBase = "";
+      state.git.lastCompareHead = headSha;
+      state.git.lastCompareAt = nowISO();
+      state.git.lastCommitSyncAt = nowISO();
+      saveLocal();
+      render();
+
+      setMeta(`COMMITS OK // FIRST-RUN // OK ${ok} / FAIL ${fail} // BASELINE ${headSha.slice(0,7)}`);
+      return;
+    }
+
+    // If head unchanged, optionally still hydrate missing depending on scope
+    if(baseline === headSha){
+      const targets = commitTargetsByScope(scope);
+      const paths = targets.map(x => x.path);
+      if(paths.length){
+        setMeta(`COMMITS: HEAD UNCHANGED // FILL MISSING (${paths.length})`);
+        const { ok, fail } = await hydrateCommitsForPaths(paths);
+        state.git.lastCommitSyncAt = nowISO();
+        saveLocal();
+        render();
+        setMeta(`COMMITS OK // HEAD UNCHANGED // FILLED OK ${ok} / FAIL ${fail}`);
+      } else {
+        setMeta(`COMMITS OK // HEAD UNCHANGED // NOTHING TO DO`);
+      }
+      return;
+    }
+
+    // Incremental: compare baseline...head
+    setMeta(`COMMITS: COMPARE ${baseline.slice(0,7)}...${headSha.slice(0,7)} ...`);
+    const cmp = await compareCommits(owner, repo, baseline, headSha);
+
+    const changed = [];
+    for(const f of (cmp.files||[])){
+      const fn = f && f.filename ? String(f.filename) : "";
+      if(fn && isPageHtml(fn)) changed.push(fn);
+      // handle renames: keep notes by moving key
+      if(f && f.previous_filename && f.status === "renamed"){
+        const prev = String(f.previous_filename);
+        const cur = fn;
+        if(prev && cur && state.links[prev] && !state.links[cur]){
+          state.links[cur] = state.links[prev];
+          state.links[cur].path = cur;
+          state.links[cur].url = derivedUrl(cur);
+          delete state.links[prev];
+        }
+      }
+    }
+
+    // mark seenInCompare for changed paths
+    const changedSet = new Set(changed);
+    for(const p of changed){
+      if(state.links[p]) state.links[p].seenInCompare = true;
+    }
+
+    // Refresh commit info for changed, plus fill missing if scope is missing/view/lane/all
+    const refreshPaths = Array.from(changedSet);
+
+    // If scope includes extra targets beyond changed:
+    if(scope !== "missing"){
+      const extra = commitTargetsByScope(scope).map(x=>x.path);
+      for(const p of extra){
+        if(!changedSet.has(p)) refreshPaths.push(p);
+      }
+    } else {
+      // missing-only also should include missing among changedSet already; fine.
+      // additionally fill missing-only across repo if user chose missing
+      const extra = commitTargetsByScope("missing").map(x=>x.path);
+      for(const p of extra){
+        if(!changedSet.has(p)) refreshPaths.push(p);
+      }
+    }
+
+    // Deduplicate refresh list
+    const uniq = [];
+    const seen = new Set();
+    for(const p of refreshPaths){
+      if(!p || seen.has(p)) continue;
+      seen.add(p);
+      // ignore missing files
+      if(state.links[p] && !state.links[p].missing) uniq.push(p);
+    }
+
+    // Hydrate per-file for touched targets (fast path)
+    const { ok, fail } = await hydrateCommitsForPaths(uniq);
+
+    state.git.lastCompareBase = baseline;
+    state.git.lastCompareHead = headSha;
+    state.git.lastCompareAt = nowISO();
+    state.git.compareChangedPaths = changed;
+    state.git.lastHeadSha = headSha; // advance baseline
+    state.git.lastCommitSyncAt = nowISO();
+
+    saveLocal();
+    render();
+    setMeta(`COMMITS OK // ${changed.length} FILES CHANGED // REFRESH ${uniq.length} // OK ${ok} / FAIL ${fail}`);
+  }
+
+  // -------------------------
+  // Auto
+  // -------------------------
+  function stopAuto(){
+    if(autoTimer){ clearInterval(autoTimer); autoTimer = null; }
+  }
+
+  function startAuto(minutes){
+    stopAuto();
+    const m = Number(minutes||0);
+    if(!m) return;
+    autoTimer = setInterval(async ()=>{
+      try{
+        await syncTree();
+        await syncCommits();
+      }catch(e){
+        setMeta("AUTO FAILED");
+      }
+    }, m * 60 * 1000);
+  }
+
+  // -------------------------
+  // Export
+  // -------------------------
+  function exportStateJSON(){
+    const out = normalizeState({
+      ...state,
+      updatedAt: nowISO(),
+      exportLabel: ($exportLabel.value || "").trim(),
+      exportTag: ($exportTag.value || "").trim(),
+      ketaNote: ($ketaNote.value || "").trim(),
+      repo: {
+        owner: ($repoOwner.value || DEFAULT_REPO.owner).trim(),
+        repo: ($repoName.value || DEFAULT_REPO.repo).trim(),
+        branch: ($repoBranch.value || DEFAULT_REPO.branch).trim(),
+        pagesBase: normalizePagesBase($pagesBase.value || DEFAULT_REPO.pagesBase)
+      },
+      auth: { token: ($ghToken.value || "").trim() },
+      ui: {
+        ...state.ui,
+        laneId: $fltLane.value || state.ui.laneId,
+        filterStatus: $fltStatus.value || "active",
+        filterTag: $fltTag.value || "",
+        filterSearch: $fltSearch.value || "",
+        filterDate: $fltDate.value || "",
+        sortMode: $sortMode.value || "commit_desc",
+        viewMode: $viewMode.value || "grid",
+        commitScope: $commitScope.value || "missing",
+        autoMinutes: Number($autoMins.value || 0)
+      }
+    });
+    return JSON.stringify(out, null, 2);
+  }
+
+  function exportPromptText(){
+    const label = (($exportLabel.value || state.exportLabel || "").trim());
+    const tag = (($exportTag.value || state.exportTag || "").trim());
+    const stamp = nowISO();
+
+    const lines = [];
+    lines.push(`KETADATA LINK TRIAGE PROMPT`);
+    lines.push(`FILE_ID: ${state.fileId}`);
+    if(label) lines.push(`EXPORT_LABEL: ${label}`);
+    if(tag) lines.push(`VERSION_TAG: ${tag}`);
+    lines.push(`UPDATED_AT: ${stamp}`);
+    lines.push(`REPO: ${state.repo.owner}/${state.repo.repo}@${state.repo.branch}`);
+    lines.push(`PAGES_BASE: ${state.repo.pagesBase}`);
+    lines.push("");
+
+    const gnote = ($ketaNote.value || state.ketaNote || "").trim();
+    if(gnote){
+      lines.push(`GLOBAL_KETA_NOTE:`);
+      lines.push(gnote);
+      lines.push("");
+    }
+
+    for(const lane of state.lanes){
+      lines.push(`LANE: ${lane.name}${lane.deprecated ? " [LANE_DEPRECATED]" : ""}`);
+      const laneLinks = Object.values(state.links)
+        .filter(x => x.laneId === lane.id)
+        .sort((a,b)=>a.path.localeCompare(b.path));
+
+      for(const it of laneLinks){
+        const flags = [];
+        if(it.status === "deprecated") flags.push("DEPRECATED");
+        if(it.missing) flags.push("MISSING");
+        const dk = (it.git && it.git.date) ? dayKeyFromISO(it.git.date) : "";
+        if(dk) flags.push("COMMIT_DAY:" + dk);
+        if(it.version) flags.push("VER:" + it.version);
+        if(it.tags) flags.push("TAGS:" + it.tags);
+
+        const msg = (it.git && it.git.msg) ? it.git.msg.split("\n")[0] : "";
+        if(msg) flags.push("MSG:" + msg.slice(0, 64));
+
+        lines.push(`- ${it.url}  (${it.path})${flags.length ? "  ["+flags.join(" | ")+"]" : ""}`);
+        if(it.note) lines.push(`  NOTE: ${it.note}`);
+      }
+      lines.push("");
+    }
+
+    lines.push(`INSTRUCTIONS:`);
+    lines.push(`- CORE CLEAN`);
+    lines.push(`- EXPERIMENTS OK`);
+    lines.push(`- DEPRECATED = HISTORICAL`);
+    lines.push(`- MISSING = FILE REMOVED BUT NOTES PRESERVED`);
+    return lines.join("\n");
+  }
+
+  function exportUrlList(){
+    const list = visibleLinkList();
+    const lines = list.map(it => {
+      const dk = (it.git && it.git.date) ? dayKeyFromISO(it.git.date) : "NO_COMMIT";
+      const flags = [];
+      if(it.status==="deprecated") flags.push("DEPR");
+      if(it.missing) flags.push("MISSING");
+      return `${it.url}  (${it.path})  [${dk}${flags.length ? " | "+flags.join(" | ") : ""}]`;
+    });
+    return lines.join("\n");
+  }
+
+  // -------------------------
+  // Wiring
+  // -------------------------
   function bind(){
-    $("drawerBtn").addEventListener("click", () => {
-      STATE.ui.drawer = !STATE.ui.drawer;
-      save(); render();
+    // local edits
+    $ketaNote.addEventListener("input", ()=>{ state.ketaNote = $ketaNote.value || ""; saveLocal(); });
+    $exportLabel.addEventListener("input", ()=>{ state.exportLabel = $exportLabel.value || ""; saveLocal(); });
+    $exportTag.addEventListener("input", ()=>{ state.exportTag = $exportTag.value || ""; saveLocal(); });
+
+    $repoOwner.addEventListener("input", ()=>{ state.repo.owner = $repoOwner.value; saveLocal(); });
+    $repoName.addEventListener("input", ()=>{ state.repo.repo = $repoName.value; saveLocal(); });
+    $repoBranch.addEventListener("input", ()=>{ state.repo.branch = $repoBranch.value; saveLocal(); });
+    $pagesBase.addEventListener("input", ()=>{ state.repo.pagesBase = normalizePagesBase($pagesBase.value); saveLocal(); });
+    $ghToken.addEventListener("input", ()=>{ state.auth.token = ($ghToken.value||"").trim(); saveLocal(); });
+
+    $fltLane.addEventListener("change", ()=>{ state.ui.laneId = $fltLane.value; saveLocal(); render(); });
+    $fltStatus.addEventListener("change", ()=>{ state.ui.filterStatus = $fltStatus.value; saveLocal(); render(); });
+    $fltTag.addEventListener("input", ()=>{ state.ui.filterTag = $fltTag.value; saveLocal(); render(); });
+    $fltSearch.addEventListener("input", ()=>{ state.ui.filterSearch = $fltSearch.value; saveLocal(); render(); });
+    $fltDate.addEventListener("input", ()=>{ state.ui.filterDate = $fltDate.value; saveLocal(); render(); });
+
+    $btnClearDate.addEventListener("click", ()=>{
+      $fltDate.value = "";
+      state.ui.filterDate = "";
+      saveLocal();
+      render();
+      setMeta("DATE CLEARED");
     });
 
-    $("pulseBtn").addEventListener("click", () => {
-      STATE.ui.pulseOn = !STATE.ui.pulseOn;
-      save(); render();
-    });
-    $("scanBtn").addEventListener("click", () => {
-      STATE.ui.scanOn = !STATE.ui.scanOn;
-      save(); render();
-    });
-    $("grainBtn").addEventListener("click", () => {
-      STATE.ui.grainOn = !STATE.ui.grainOn;
-      save(); render();
+    $sortMode.addEventListener("change", ()=>{ state.ui.sortMode = $sortMode.value; saveLocal(); render(); });
+    $viewMode.addEventListener("change", ()=>{ state.ui.viewMode = $viewMode.value; saveLocal(); render(); });
+
+    $commitScope.addEventListener("change", ()=>{ state.ui.commitScope = $commitScope.value; saveLocal(); });
+
+    $autoMins.addEventListener("change", ()=>{
+      state.ui.autoMinutes = Number($autoMins.value||0);
+      saveLocal();
+      startAuto(state.ui.autoMinutes);
+      render();
+      setMeta(state.ui.autoMinutes ? `AUTO SET ${state.ui.autoMinutes}m` : "AUTO OFF");
     });
 
-    // sliders
-    $("red").addEventListener("input", (e)=>{ STATE.ui.red = +e.target.value; save(); render(); });
-    $("redA").addEventListener("input", (e)=>{ STATE.ui.redA = +e.target.value; save(); render(); });
-    $("heat").addEventListener("input", (e)=>{ STATE.ui.heat = +e.target.value; save(); render(); });
-    $("pulse").addEventListener("input", (e)=>{ STATE.ui.pulse = +e.target.value; save(); render(); });
-    $("scan").addEventListener("input", (e)=>{ STATE.ui.scan = +e.target.value; save(); render(); });
-    $("grain").addEventListener("input", (e)=>{ STATE.ui.grain = +e.target.value; save(); render(); });
-
-    // presets
-    $("seedBtn").addEventListener("click", reseed);
-
-    $("calmBtn").addEventListener("click", () => {
-      STATE.ui.heat = 18; STATE.ui.pulse = 18; STATE.ui.scan = 28; STATE.ui.grain = 18;
-      STATE.ui.red = 210; STATE.ui.redA = 42;
-      save(); render();
-    });
-    $("hotBtn").addEventListener("click", () => {
-      STATE.ui.heat = 82; STATE.ui.pulse = 58; STATE.ui.scan = 72; STATE.ui.grain = 44;
-      STATE.ui.red = 255; STATE.ui.redA = 78;
-      save(); render();
-    });
-    $("voidBtn").addEventListener("click", () => {
-      STATE.ui.heat = 10; STATE.ui.pulse = 0; STATE.ui.scan = 0; STATE.ui.grain = 0;
-      STATE.ui.red = 120; STATE.ui.redA = 18;
-      STATE.ui.pulseOn = false; STATE.ui.scanOn = false; STATE.ui.grainOn = false;
-      save(); render();
+    $btnSyncTree.addEventListener("click", ()=>{
+      syncTree().catch(e=>{
+        setMeta("TREE FAILED");
+        openModal("ERROR","TREE",String(e && e.message ? e.message : e),
+          "CHECK OWNER/REPO/BRANCH. TOKEN RECOMMENDED IF RATE LIMITED.",
+          false,
+          "error.txt"
+        );
+      });
     });
 
-    $("saveBtn").addEventListener("click", () => { save(); flashHint("SAVED"); });
-    $("loadBtn").addEventListener("click", () => {
-      const ok = load();
-      if(ok){ render(); reseedFromState(); flashHint("LOADED"); }
-      else flashHint("NO SAVE");
+    $btnSyncCommits.addEventListener("click", ()=>{
+      syncCommits().catch(e=>{
+        setMeta("COMMITS FAILED");
+        openModal("ERROR","COMMITS",String(e && e.message ? e.message : e),
+          "WITHOUT TOKEN YOU WILL HIT RATE LIMIT QUICKLY. ADD TOKEN THEN RETRY.",
+          false,
+          "error.txt"
+        );
+      });
     });
-    $("resetBtn").addEventListener("click", () => { reset(); flashHint("RESET"); });
 
-    // click field reseed
-    $("field").addEventListener("click", () => reseed());
+    $btnAuto.addEventListener("click", ()=>{
+      // toggle between OFF and selected minutes
+      const cur = Number(state.ui.autoMinutes||0);
+      if(cur){
+        state.ui.autoMinutes = 0;
+        $autoMins.value = "0";
+        stopAuto();
+        saveLocal();
+        render();
+        setMeta("AUTO OFF");
+      } else {
+        const m = Number($autoMins.value||5) || 5;
+        state.ui.autoMinutes = m;
+        $autoMins.value = String(m);
+        startAuto(m);
+        saveLocal();
+        render();
+        setMeta("AUTO ON");
+      }
+    });
 
-    // hotkeys
-    window.addEventListener("keydown", (e) => {
-      if(e.key === "Escape" && STATE.ui.drawer){ STATE.ui.drawer=false; save(); render(); }
-      if(e.shiftKey && (e.key==="R" || e.key==="r")){ e.preventDefault(); reset(); flashHint("RESET"); }
-      if(e.shiftKey && (e.key==="S" || e.key==="s")){ e.preventDefault(); save(); flashHint("SAVED"); }
-      if(e.shiftKey && (e.key==="L" || e.key==="l")){ e.preventDefault(); const ok=load(); if(ok){ render(); reseedFromState(); flashHint("LOADED"); } else flashHint("NO SAVE"); }
-    }, {passive:false});
+    $btnAddLane.addEventListener("click", ()=>{
+      const id = "L" + Math.random().toString(16).slice(2,6).toUpperCase();
+      state.lanes.push({ id, name:"LANE", deprecated:false });
+      state.ui.laneId = id;
+      saveLocal();
+      render();
+      setMeta("LANE ADDED");
+    });
+
+    $btnClearFilters.addEventListener("click", ()=>{
+      state.ui.filterStatus = "active";
+      state.ui.filterTag = "";
+      state.ui.filterSearch = "";
+      state.ui.filterDate = "";
+      $fltStatus.value = "active";
+      $fltTag.value = "";
+      $fltSearch.value = "";
+      $fltDate.value = "";
+      saveLocal();
+      render();
+      setMeta("FILTERS CLEARED");
+    });
+
+    $btnExportUrls.addEventListener("click", ()=>{
+      modalMode = "export_urls";
+      const text = exportUrlList();
+      openModal("EXPORT","URL LIST",text,"CURRENT VIEW (FILTERS) ONLY.",false,`KETADATA_LINKS_${state.fileId}_${nowISO().slice(0,10)}.txt`);
+    });
+
+    $btnExportState.addEventListener("click", ()=>{
+      modalMode = "export_state";
+      openModal("EXPORT","STATE",exportStateJSON(),"COPY JSON, OR DOWNLOAD. IMPORT PASTES JSON BACK IN.",true,`KETADATA_LINK_TRIAGE_STATE_${state.fileId}_${nowISO().slice(0,10)}.json`);
+    });
+
+    $btnImportState.addEventListener("click", ()=>{
+      modalMode = "import_state";
+      openModal("IMPORT","STATE","", "PASTE JSON STATE THEN APPLY.", true, "import.json");
+    });
+
+    $btnExportPrompt.addEventListener("click", ()=>{
+      modalMode = "export_prompt";
+      openModal("EXPORT","PROMPT",exportPromptText(),"GROUPED BY LANES.",false,`KETADATA_LINK_TRIAGE_PROMPT_${state.fileId}_${nowISO().slice(0,10)}.txt`);
+    });
+
+    $btnNew.addEventListener("click", ()=>{
+      if(!confirm("RESET TO NEW? (local state will be replaced)")) return;
+      stopAuto();
+      state = DEFAULT_STATE();
+      saveLocal();
+      render();
+      setMeta("NEW");
+      // auto tree+commits on boot (short delay)
+      setTimeout(()=>syncTree().catch(()=>{}), 120);
+      setTimeout(()=>syncCommits().catch(()=>{}), 420);
+    });
+
+    // calendar nav
+    $calPrev.addEventListener("click", ()=>{
+      let y=state.ui.calY, m=state.ui.calM;
+      m--; if(m<0){m=11;y--;}
+      state.ui.calY=y; state.ui.calM=m;
+      saveLocal(); render();
+    });
+    $calNext.addEventListener("click", ()=>{
+      let y=state.ui.calY, m=state.ui.calM;
+      m++; if(m>11){m=0;y++;}
+      state.ui.calY=y; state.ui.calM=m;
+      saveLocal(); render();
+    });
+    $calToday.addEventListener("click", ()=>{
+      const d=new Date();
+      state.ui.calY=d.getFullYear();
+      state.ui.calM=d.getMonth();
+      saveLocal(); render();
+    });
+
+    // modal
+    $modalClose.addEventListener("click", closeModal);
+    $modal.addEventListener("click", (e)=>{ if(e.target === $modal) closeModal(); });
+    $modalCopy.addEventListener("click", async ()=>{
+      const ok = await copyText($modalText.value||"");
+      setMeta(ok ? "COPIED" : "COPY FAILED");
+    });
+    $modalDownload.addEventListener("click", ()=>{
+      const text = $modalText.value || "";
+      const mime = (modalDefaultFilename.endsWith(".json")) ? "application/json" : "text/plain";
+      downloadText(modalDefaultFilename, mime, text);
+      setMeta("DOWNLOADED");
+    });
+    $modalApply.addEventListener("click", ()=>{
+      if(modalMode !== "import_state"){ closeModal(); return; }
+      try{
+        const obj = JSON.parse($modalText.value || "");
+        state = normalizeState(obj);
+        // enforce current file id isolation
+        state.fileId = FILE_ID;
+        saveLocal();
+        render();
+        setMeta("IMPORTED");
+        closeModal();
+      }catch{
+        setMeta("IMPORT FAILED");
+        $modalHint.textContent = "INVALID JSON. FIX THEN APPLY.";
+      }
+    });
   }
 
-  function reseedFromState(){
-    const s = STATE.ui.seed || cryptoRand(8);
-    $("p1").setAttribute("d", pathFromSeed("A"+s));
-    $("p2").setAttribute("d", pathFromSeed("B"+s));
-    $("p3").setAttribute("d", pathFromSeed("C"+s));
+  // -------------------------
+  // Init
+  // -------------------------
+  function init(){
+    // hydrate UI
+    $repoOwner.value = state.repo.owner;
+    $repoName.value = state.repo.repo;
+    $repoBranch.value = state.repo.branch;
+    $pagesBase.value = state.repo.pagesBase;
+    $ghToken.value = state.auth.token || "";
+
+    $ketaNote.value = state.ketaNote || "";
+    $exportLabel.value = state.exportLabel || "";
+    $exportTag.value = state.exportTag || "";
+
+    refreshLaneSelect();
+
+    // auto timer
+    startAuto(state.ui.autoMinutes);
+
+    bind();
+    render();
+    setMeta("READY");
+
+    // Boot behavior: quick tree; commits only if token present (avoids immediate rate-limit pain)
+    setTimeout(()=>syncTree().catch(()=>{}), 120);
+    setTimeout(()=>{
+      if(isLikelyToken(state.auth.token)) syncCommits().catch(()=>{});
+      else setMeta("READY (ADD TOKEN THEN SYNC COMMITS)");
+    }, 360);
   }
 
-  let hintT = null;
-  function flashHint(msg){
-    const el = $("hint");
-    if(!el) return;
-    const prev = el.textContent;
-    el.textContent = msg + " • " + prev;
-    clearTimeout(hintT);
-    hintT = setTimeout(()=>{ el.textContent = prev; }, 900);
-  }
+  init();
 
-  // boot
-  const had = load();
-  reseedFromState();
-  render();
-  bind();
-  if(!had) save();
+  /* ===========================
+     AE/EE/WB SERIALIZATION STAMP
+     (mandatory)
+  ============================ */
+  /*
+  AE: monochrome operational grid; uniform text size; weight/opacity only; calendar month grid
+  EE: tree inventory; per-file commit hydration on first run; incremental compare updates; sort by commit/path/changed; date filter; lanes; export url list/state/prompt
+  WB: GitHub REST fetch w/ optional token; localStorage isolated by FILE_ID; modal copy+download; auto sync timer
+
+  FILE_ID: ${FILE_ID}
+  ROOM_ID: LINK_TRIAGE_TREE_COMMITS_CAL
+  VERSION: 3.0.0
+  UPDATED_AT: ${new Date().toISOString()}
+  CHANGELOG:
+  - v3: fixed commit logic (first-run per-file hydration, then compare incremental)
+  - v3: month calendar view + date filter integration
+  - v3: improved name visibility (filename + full path line) without changing font size
+  - v3: export URL list for current view
+  */
 })();
 </script>
-
-<!--
-AE::KETA_MONO
-EE::LOCAL_FIRST_STATE + FIELD_TRACES + INTENSITY_CONTROLS
-WB::NO_NETWORK / NO_EXTERNAL_DEPS
-FILE_ID::KETA_RED_SUBJECTIVITY_FEEDBACK_LOOP
-ROOM_ID::KETA_RED
-VERSION::v1
-UPDATED_AT::2026-01-09
-CHANGELOG::init; red intensity controls; local save/load; reseed traces; no names logged
--->
 </body>
 </html>
