@@ -1,0 +1,819 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>KETADATA // PDF VIEWER</title>
+
+<!-- PDF.js LEGACY (for conversion only) -->
+<script src="https://unpkg.com/pdfjs-dist@3.4.120/legacy/build/pdf.min.js"></script>
+<!-- JSZip -->
+<script src="https://unpkg.com/jszip@3.10.1/dist/jszip.min.js"></script>
+
+<style>
+  :root{
+    --bg:#000;
+    --fg:rgba(255,255,255,.86);
+    --muted:rgba(255,255,255,.52);
+    --line:rgba(255,255,255,.12);
+    --line2:rgba(255,255,255,.22);
+    --mono:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace;
+    --sans:Arial,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0}
+  body{
+    background:var(--bg);
+    color:var(--fg);
+    font-family:var(--sans);
+    font-size:13px;
+    overflow:hidden;
+  }
+  button,input,textarea{font:inherit;color:inherit;background:transparent}
+  button{
+    border:1px solid var(--line);
+    padding:6px 10px;
+    cursor:pointer;
+    transition:border-color .15s;
+  }
+  button:hover{border-color:var(--line2)}
+  button:disabled{opacity:.4;cursor:default}
+
+  .root{
+    position:fixed;
+    inset:0;
+    display:flex;
+    flex-direction:column;
+  }
+
+  .bar{
+    height:42px;
+    border-bottom:1px solid var(--line);
+    display:flex;
+    align-items:center;
+    padding:0 12px;
+    gap:10px;
+    overflow-x:auto;
+    overflow-y:hidden;
+    flex-shrink:0;
+  }
+  .bar::-webkit-scrollbar{height:6px}
+  .bar::-webkit-scrollbar-thumb{background:rgba(255,255,255,.1)}
+  
+  .grp{display:flex;align-items:center;gap:8px}
+  .sep{width:1px;height:20px;background:var(--line)}
+  
+  .pill{
+    border:1px solid var(--line);
+    padding:5px 10px;
+    display:flex;
+    align-items:center;
+    gap:8px;
+  }
+  
+  .file-wrap{
+    position:relative;
+    display:inline-block;
+  }
+  .file-wrap input[type="file"]{
+    position:absolute;
+    inset:0;
+    opacity:0;
+    cursor:pointer;
+  }
+  
+  input[type="text"]{
+    border:1px solid var(--line);
+    padding:5px 8px;
+    outline:none;
+    background:#000;
+  }
+  input:focus{border-color:var(--line2)}
+
+  .main{
+    flex:1;
+    display:grid;
+    grid-template-columns:1fr 400px;
+    min-height:0;
+  }
+
+  .view-area{
+    position:relative;
+    border-right:1px solid var(--line);
+    overflow:hidden;
+  }
+
+  .drop{
+    position:absolute;
+    inset:0;
+    display:none;
+    align-items:center;
+    justify-content:center;
+    background:rgba(0,0,0,.95);
+    border:1px dashed var(--line2);
+    margin:20px;
+    pointer-events:none;
+    z-index:100;
+  }
+  .drop.on{display:flex}
+  .drop-box{
+    border:1px solid var(--line);
+    padding:20px;
+    text-align:center;
+  }
+
+  .viewer{
+    position:absolute;
+    inset:0;
+  }
+
+  .viewer iframe{
+    width:100%;
+    height:100%;
+    border:none;
+    background:#000;
+  }
+
+  .empty-viewer{
+    position:absolute;
+    inset:0;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    flex-direction:column;
+    color:var(--muted);
+  }
+  .empty-viewer.hide{display:none}
+
+  .side{
+    display:flex;
+    flex-direction:column;
+    min-height:0;
+  }
+
+  .tabs{
+    height:38px;
+    border-bottom:1px solid var(--line);
+    display:flex;
+    padding:0 12px;
+    gap:2px;
+  }
+
+  .tab{
+    padding:0 14px;
+    border:none;
+    border-bottom:2px solid transparent;
+    background:transparent;
+    color:var(--muted);
+    cursor:pointer;
+    transition:all .15s;
+  }
+  .tab:hover{color:var(--fg)}
+  .tab.on{
+    color:var(--fg);
+    border-bottom-color:var(--fg);
+  }
+
+  .panel{
+    flex:1;
+    min-height:0;
+    display:none;
+    flex-direction:column;
+  }
+  .panel.on{display:flex}
+
+  .panel-bar{
+    height:38px;
+    border-bottom:1px solid var(--line);
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    padding:0 12px;
+  }
+
+  .panel-title{
+    font-size:11px;
+    letter-spacing:.5px;
+    color:var(--muted);
+  }
+
+  .btn-grp{display:flex;gap:6px}
+  .btn-sm{padding:4px 8px;font-size:12px}
+
+  textarea{
+    flex:1;
+    width:100%;
+    border:none;
+    outline:none;
+    padding:12px;
+    resize:none;
+    background:#000;
+  }
+
+  .list{
+    flex:1;
+    overflow:auto;
+    padding:12px;
+  }
+
+  .item{
+    border:1px solid var(--line);
+    padding:10px;
+    margin-bottom:10px;
+    transition:border-color .15s;
+  }
+  .item:hover{border-color:var(--line2)}
+
+  .item-head{
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-start;
+    gap:10px;
+    margin-bottom:8px;
+  }
+
+  .item-info{flex:1;min-width:0}
+  .item-name{
+    font-weight:600;
+    margin-bottom:2px;
+    word-break:break-word;
+  }
+  .item-sub{
+    font-size:12px;
+    color:var(--muted);
+  }
+
+  .item-btns{
+    display:flex;
+    gap:6px;
+    flex-wrap:wrap;
+  }
+
+  .empty{
+    padding:40px 20px;
+    text-align:center;
+    color:var(--muted);
+  }
+
+  .note{
+    padding:12px;
+    border-bottom:1px solid var(--line);
+    color:var(--muted);
+    font-size:12px;
+    line-height:1.5;
+  }
+</style>
+
+</head>
+
+<body>
+
+<div class="root">
+  <div class="bar">
+    <div class="grp">
+      <div class="pill file-wrap">
+        <span class="muted">OPEN</span>
+        <input id="file" type="file" accept="application/pdf"/>
+      </div>
+      
+      <div class="pill file-wrap">
+        <span class="muted">IMPORT</span>
+        <input id="import" type="file" accept="application/pdf" multiple/>
+      </div>
+    </div>
+
+    <div class="sep"></div>
+
+    <div class="grp">
+      <span class="muted" style="font-size:11px">TITLE</span>
+      <input id="title" type="text" placeholder="UNTITLED" style="width:200px"/>
+      <button id="save">SAVE TO LIB</button>
+    </div>
+
+    <div class="sep"></div>
+
+    <div class="grp">
+      <button id="download">DOWNLOAD</button>
+      <button id="convert">CONVERT → INVERTED ZIP</button>
+    </div>
+
+    <div style="flex:1"></div>
+
+    <div class="pill">
+      <span class="muted" style="font-size:11px">STATUS</span>
+      <span id="status">READY</span>
+    </div>
+  </div>
+
+  <div class="main">
+    <div class="view-area">
+      <div class="drop" id="drop">
+        <div class="drop-box">
+          <div>DROP PDF HERE</div>
+          <div class="muted" style="margin-top:8px;font-size:12px">ALT = IMPORT TO LIBRARY</div>
+        </div>
+      </div>
+
+      <div class="viewer">
+        <div class="empty-viewer" id="emptyView">
+          <div style="font-size:48px;margin-bottom:16px;opacity:.3">◼</div>
+          <div>NO PDF LOADED</div>
+          <div style="font-size:11px;margin-top:8px">OPEN OR DROP A FILE</div>
+        </div>
+        <iframe id="viewer" style="display:none"></iframe>
+      </div>
+    </div>
+
+    <div class="side">
+      <div class="tabs">
+        <button class="tab on" data-tab="lib">LIBRARY (<span id="libCount">0</span>)</button>
+        <button class="tab" data-tab="prompt">PROMPTS</button>
+      </div>
+
+      <div class="panel on" data-panel="lib">
+        <div class="note">
+          ZERO SETUP • BROWSER NATIVE VIEWER • NO DEPENDENCIES • INVERTED JPEG CONVERSION
+        </div>
+        <div class="list" id="list">
+          <div class="empty">
+            <div style="font-size:24px;margin-bottom:12px">◼</div>
+            <div>NO PDFS IN LIBRARY</div>
+            <div style="font-size:11px;margin-top:6px">OPEN OR DROP FILES TO START</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel" data-panel="prompt">
+        <div class="panel-bar">
+          <div class="panel-title">PROMPT BUILDER</div>
+          <div class="btn-grp">
+            <button id="copyPr" class="btn-sm">COPY</button>
+            <button id="clearPr" class="btn-sm">CLEAR</button>
+          </div>
+        </div>
+        <textarea id="promptTxt" spellcheck="false" placeholder="BUILD PROMPT LIST FROM LIBRARY ITEMS"></textarea>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const LS="pdf_viewer_state";
+  const DB="pdf_library";
+  const STORE="pdfs";
+
+  const $=id=>document.getElementById(id);
+
+  let currentUrl=null;
+  let currentBytes=null;
+
+  const CUR={src:"",id:"",orig:"",title:""};
+  const ST={ui:{tab:"lib"},lastId:"",prompt:""};
+
+  function safe(s){const x=String(s||"").trim();return x||"UNTITLED"}
+
+  function load(){
+    try{
+      const r=localStorage.getItem(LS);
+      if(!r)return;
+      const s=JSON.parse(r);
+      if(s&&s.ui)Object.assign(ST.ui,s.ui);
+      if(s.lastId)ST.lastId=s.lastId;
+      if(s.prompt)ST.prompt=s.prompt;
+    }catch(e){}
+  }
+  function save(){try{localStorage.setItem(LS,JSON.stringify(ST))}catch(e){}}
+
+  function status(t){$("status").textContent=String(t||"")}
+
+  function tab(name){
+    ST.ui.tab=name;
+    save();
+    document.querySelectorAll(".tab").forEach(b=>b.classList.toggle("on",b.dataset.tab===name));
+    document.querySelectorAll(".panel").forEach(p=>p.classList.toggle("on",p.dataset.panel===name));
+  }
+
+  function showPdf(blob,name){
+    if(currentUrl)URL.revokeObjectURL(currentUrl);
+    currentUrl=URL.createObjectURL(blob);
+    
+    const viewer=$("viewer");
+    viewer.src=currentUrl;
+    viewer.style.display="block";
+    $("emptyView").classList.add("hide");
+
+    const sug=safe(String(name||"PDF").replace(/\.pdf$/i,""));
+    if(!CUR.title)CUR.title=sug;
+    $("title").value=CUR.title;
+
+    status("READY");
+  }
+
+  async function openFile(f){
+    if(!f)return;
+    status("LOADING...");
+    try{
+      currentBytes=await f.arrayBuffer();
+      const blob=new Blob([currentBytes],{type:"application/pdf"});
+      
+      CUR.src="file";
+      CUR.id="";
+      CUR.orig=f.name||"PDF";
+      CUR.title=safe(String(f.name||"PDF").replace(/\.pdf$/i,""));
+      
+      showPdf(blob,f.name);
+    }catch(e){
+      status("LOAD FAILED");
+    }
+  }
+
+  function dbOpen(){
+    return new Promise((res,rej)=>{
+      const r=indexedDB.open(DB,1);
+      r.onupgradeneeded=()=>{
+        const db=r.result;
+        if(!db.objectStoreNames.contains(STORE)){
+          db.createObjectStore(STORE,{keyPath:"id"});
+        }
+      };
+      r.onsuccess=()=>res(r.result);
+      r.onerror=()=>rej(r.error);
+    });
+  }
+
+  function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2)}
+
+  async function dbPut(rec){
+    const db=await dbOpen();
+    return new Promise((res,rej)=>{
+      const tx=db.transaction(STORE,"readwrite");
+      tx.oncomplete=()=>{db.close();res()};
+      tx.onerror=()=>{db.close();rej(tx.error)};
+      tx.objectStore(STORE).put(rec);
+    });
+  }
+
+  async function dbGet(id){
+    const db=await dbOpen();
+    return new Promise((res,rej)=>{
+      const tx=db.transaction(STORE,"readonly");
+      const rq=tx.objectStore(STORE).get(id);
+      rq.onsuccess=()=>{db.close();res(rq.result||null)};
+      rq.onerror=()=>{db.close();rej(rq.error)};
+    });
+  }
+
+  async function dbDel(id){
+    const db=await dbOpen();
+    return new Promise((res,rej)=>{
+      const tx=db.transaction(STORE,"readwrite");
+      tx.oncomplete=()=>{db.close();res()};
+      tx.onerror=()=>{db.close();rej(tx.error)};
+      tx.objectStore(STORE).delete(id);
+    });
+  }
+
+  async function dbList(){
+    const db=await dbOpen();
+    return new Promise((res,rej)=>{
+      const tx=db.transaction(STORE,"readonly");
+      const rq=tx.objectStore(STORE).getAll();
+      rq.onsuccess=()=>{db.close();res(rq.result||[])};
+      rq.onerror=()=>{db.close();rej(rq.error)};
+    });
+  }
+
+  async function importMulti(files){
+    if(!files||!files.length)return;
+    status("IMPORTING...");
+    
+    for(const f of files){
+      try{
+        const data=await f.arrayBuffer();
+        const id=uid();
+        const orig=f.name||"PDF";
+        const title=safe(orig.replace(/\.pdf$/i,""));
+        await dbPut({id,title,orig,added:Date.now(),bytes:data});
+        ST.lastId=id;
+        save();
+      }catch(e){}
+    }
+    
+    await refresh();
+    status("IMPORTED");
+    setTimeout(()=>status("READY"),1000);
+  }
+
+  async function saveLib(){
+    if(!currentBytes){status("NO PDF LOADED");return}
+    const title=safe($("title").value);
+    CUR.title=title;
+
+    if(CUR.src==="lib"&&CUR.id){
+      const r=await dbGet(CUR.id);
+      if(!r){status("MISSING");return}
+      r.title=title;
+      await dbPut(r);
+      await refresh();
+      status("SAVED");
+      setTimeout(()=>status("READY"),700);
+      return;
+    }
+
+    const id=uid();
+    const orig=CUR.orig||(title+".pdf");
+    await dbPut({id,title,orig,added:Date.now(),bytes:currentBytes});
+
+    CUR.src="lib";
+    CUR.id=id;
+    ST.lastId=id;
+    save();
+
+    await refresh();
+    status("SAVED");
+    setTimeout(()=>status("READY"),700);
+  }
+
+  function downloadPdf(){
+    if(!currentBytes){status("NO PDF TO DOWNLOAD");return}
+    const blob=new Blob([currentBytes],{type:"application/pdf"});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement("a");
+    a.href=url;
+    a.download=(CUR.title||"document")+".pdf";
+    a.click();
+    URL.revokeObjectURL(url);
+    status("DOWNLOADED");
+    setTimeout(()=>status("READY"),800);
+  }
+
+  async function convertToInvertedZip(){
+    if(!currentBytes){status("NO PDF LOADED");return}
+    
+    status("CONVERTING...");
+    
+    try{
+      // Configure PDF.js
+      pdfjsLib.GlobalWorkerOptions.workerSrc=null;
+      
+      // Load PDF
+      const pdf=await pdfjsLib.getDocument({
+        data:currentBytes,
+        disableWorker:true
+      }).promise;
+      
+      // Create ZIP
+      const zip=new JSZip();
+      const folderName=(CUR.title||"document").replace(/[^a-z0-9_-]/gi,"_");
+      const folder=zip.folder(folderName);
+      
+      // Process each page
+      for(let i=1;i<=pdf.numPages;i++){
+        status(`CONVERTING ${i}/${pdf.numPages}...`);
+        
+        const page=await pdf.getPage(i);
+        const viewport=page.getViewport({scale:2});
+        
+        const canvas=document.createElement("canvas");
+        const ctx=canvas.getContext("2d");
+        canvas.width=viewport.width;
+        canvas.height=viewport.height;
+        
+        await page.render({canvasContext:ctx,viewport}).promise;
+        
+        // INVERT COLORS
+        const imgData=ctx.getImageData(0,0,canvas.width,canvas.height);
+        for(let p=0;p<imgData.data.length;p+=4){
+          imgData.data[p]=255-imgData.data[p];
+          imgData.data[p+1]=255-imgData.data[p+1];
+          imgData.data[p+2]=255-imgData.data[p+2];
+        }
+        ctx.putImageData(imgData,0,0);
+        
+        // Convert to JPEG
+        const blob=await new Promise(r=>canvas.toBlob(r,"image/jpeg",0.9));
+        folder.file(`page_${String(i).padStart(3,"0")}.jpg`,blob);
+      }
+      
+      status("ZIPPING...");
+      const zipBlob=await zip.generateAsync({type:"blob"});
+      
+      // Download
+      const url=URL.createObjectURL(zipBlob);
+      const a=document.createElement("a");
+      a.href=url;
+      a.download=folderName+"_inverted.zip";
+      a.click();
+      URL.revokeObjectURL(url);
+      
+      status("CONVERTED");
+      setTimeout(()=>status("READY"),1200);
+    }catch(e){
+      status("CONVERSION FAILED");
+      console.error(e);
+      setTimeout(()=>status("READY"),2000);
+    }
+  }
+
+  async function refresh(){
+    const lst=$("list");
+    lst.innerHTML="";
+    
+    const items=await dbList();
+    items.sort((a,b)=>(b.added||0)-(a.added||0));
+    
+    $("libCount").textContent=String(items.length);
+
+    if(items.length===0){
+      lst.innerHTML=`
+        <div class="empty">
+          <div style="font-size:24px;margin-bottom:12px">◼</div>
+          <div>NO PDFS IN LIBRARY</div>
+          <div style="font-size:11px;margin-top:6px">OPEN OR DROP FILES TO START</div>
+        </div>
+      `;
+      return;
+    }
+
+    for(const rec of items){
+      const item=document.createElement("div");
+      item.className="item";
+
+      item.innerHTML=`
+        <div class="item-head">
+          <div class="item-info">
+            <div class="item-name">${rec.title||"UNTITLED"}</div>
+            <div class="item-sub">${rec.orig||""}</div>
+          </div>
+        </div>
+        <div class="item-btns">
+          <button class="btn-sm open">OPEN</button>
+          <button class="btn-sm rename">RENAME</button>
+          <button class="btn-sm download">DOWNLOAD</button>
+          <button class="btn-sm convert-item">CONVERT</button>
+          <button class="btn-sm prompt">+ PROMPT</button>
+          <button class="btn-sm del">DEL</button>
+        </div>
+      `;
+
+      item.querySelector(".open").onclick=async()=>{
+        const r=await dbGet(rec.id);
+        if(!r)return;
+        
+        currentBytes=r.bytes;
+        const blob=new Blob([r.bytes],{type:"application/pdf"});
+        
+        CUR.src="lib";
+        CUR.id=r.id;
+        CUR.orig=r.orig||"PDF";
+        CUR.title=r.title||"UNTITLED";
+        ST.lastId=r.id;
+        save();
+        
+        showPdf(blob,r.title);
+      };
+
+      item.querySelector(".rename").onclick=()=>{
+        const newT=prompt("NEW TITLE:",rec.title);
+        if(!newT)return;
+        rec.title=safe(newT);
+        dbPut(rec).then(refresh);
+      };
+
+      item.querySelector(".download").onclick=async()=>{
+        const r=await dbGet(rec.id);
+        if(!r)return;
+        const blob=new Blob([r.bytes],{type:"application/pdf"});
+        const url=URL.createObjectURL(blob);
+        const a=document.createElement("a");
+        a.href=url;
+        a.download=(r.title||"document")+".pdf";
+        a.click();
+        URL.revokeObjectURL(url);
+      };
+
+      item.querySelector(".convert-item").onclick=async()=>{
+        const r=await dbGet(rec.id);
+        if(!r)return;
+        
+        // Temporarily set current to this item
+        const prevBytes=currentBytes;
+        const prevCur={...CUR};
+        
+        currentBytes=r.bytes;
+        CUR.src="lib";
+        CUR.id=r.id;
+        CUR.title=r.title||"UNTITLED";
+        
+        await convertToInvertedZip();
+        
+        // Restore previous current
+        currentBytes=prevBytes;
+        Object.assign(CUR,prevCur);
+      };
+
+      item.querySelector(".prompt").onclick=()=>{
+        const line=`- ${rec.title} (${rec.orig||"PDF"})`;
+        const cur=$("promptTxt").value||"";
+        $("promptTxt").value=cur?(cur+"\n"+line):line;
+        ST.prompt=$("promptTxt").value;
+        save();
+        tab("prompt");
+      };
+
+      item.querySelector(".del").onclick=async()=>{
+        if(!confirm(`DELETE "${rec.title}"?`))return;
+        await dbDel(rec.id);
+        if(ST.lastId===rec.id)ST.lastId="";
+        save();
+        await refresh();
+      };
+
+      lst.appendChild(item);
+    }
+  }
+
+  async function reopenLast(){
+    if(!ST.lastId)return;
+    try{
+      const r=await dbGet(ST.lastId);
+      if(!r)return;
+      
+      currentBytes=r.bytes;
+      const blob=new Blob([r.bytes],{type:"application/pdf"});
+      
+      CUR.src="lib";
+      CUR.id=r.id;
+      CUR.orig=r.orig||"PDF";
+      CUR.title=r.title||"UNTITLED";
+      
+      showPdf(blob,r.title);
+    }catch(e){}
+  }
+
+  function init(){
+    load();
+
+    document.querySelectorAll(".tab").forEach(b=>
+      b.addEventListener("click",()=>tab(b.dataset.tab))
+    );
+    tab(ST.ui.tab||"lib");
+
+    $("file").addEventListener("change",async e=>{
+      const f=e.target.files&&e.target.files[0];
+      if(f)await openFile(f);
+      e.target.value="";
+    });
+
+    $("import").addEventListener("change",async e=>{
+      const fs=Array.from(e.target.files||[]);
+      if(fs.length)await importMulti(fs);
+      e.target.value="";
+    });
+
+    $("save").addEventListener("click",saveLib);
+    $("download").addEventListener("click",downloadPdf);
+    $("convert").addEventListener("click",convertToInvertedZip);
+
+    $("promptTxt").value=ST.prompt||"";
+    $("copyPr").addEventListener("click",async()=>{
+      try{
+        await navigator.clipboard.writeText($("promptTxt").value||"");
+        status("COPIED");
+        setTimeout(()=>status("READY"),800);
+      }catch(e){status("COPY FAILED")}
+    });
+    $("clearPr").addEventListener("click",()=>{$("promptTxt").value="";ST.prompt="";save()});
+    $("promptTxt").addEventListener("input",()=>{ST.prompt=$("promptTxt").value||"";save()});
+
+    const area=document.querySelector(".view-area");
+    const drop=$("drop");
+    let depth=0;
+
+    area.addEventListener("dragenter",e=>{e.preventDefault();depth++;drop.classList.add("on")});
+    area.addEventListener("dragover",e=>{e.preventDefault()});
+    area.addEventListener("dragleave",e=>{e.preventDefault();depth--;if(depth===0)drop.classList.remove("on")});
+    area.addEventListener("drop",async e=>{
+      e.preventDefault();
+      depth=0;drop.classList.remove("on");
+      const f=e.dataTransfer&&e.dataTransfer.files&&e.dataTransfer.files[0];
+      if(!f)return;
+
+      if(e.altKey){
+        await importMulti([f]);
+        tab("lib");
+      }else{
+        await openFile(f);
+      }
+    });
+
+    refresh().then(reopenLast);
+  }
+
+  window.addEventListener("load",init);
+})();
+</script>
+
+</body>
+</html>
