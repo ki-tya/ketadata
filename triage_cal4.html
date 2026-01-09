@@ -1,0 +1,1551 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>KETADATA // LINK TRIAGE CALENDAR (GITHUB SYNC)</title>
+  <style>
+    :root{ color-scheme:dark; }
+
+    :root{
+      --bg:#000;
+      --fg:#fff;
+      --muted:rgba(255,255,255,.62);
+      --line:rgba(255,255,255,.16);
+      --line2:rgba(255,255,255,.26);
+
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace;
+      --sans: Arial, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+
+      --top:56px;
+      --pad:12px;
+      --gap:10px;
+
+      --btnPad:6px 8px;
+      --ctlPad:6px 8px;
+      --r:0px;
+
+      --cellMin:120px;
+      --weekHdrH:28px;
+      --chip:rgba(255,255,255,.06);
+      --chip2:rgba(255,255,255,.12);
+    }
+
+    *{ box-sizing:border-box; }
+    html,body{ height:100%; margin:0; background:var(--bg); color:var(--fg); font:12px/1.35 var(--sans); }
+    a{ color:inherit; text-decoration:none; }
+    button,input,select,textarea{ font:inherit; color:inherit; }
+
+    .topbar{
+      position:fixed; top:0; left:0; right:0;
+      display:flex; align-items:center; gap:10px; flex-wrap:wrap;
+      padding:10px 12px;
+      background:#000;
+      border-bottom:1px solid var(--line);
+      z-index:50;
+    }
+    .title{
+      font-weight:700;
+      letter-spacing:.14em;
+      font-family:var(--mono);
+      white-space:nowrap;
+    }
+    .meta{
+      opacity:.65;
+      letter-spacing:.06em;
+      font-family:var(--mono);
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      max-width:min(42vw,720px);
+    }
+    .sp{ flex:1; }
+
+    .btn{
+      background:transparent;
+      color:#fff;
+      border:1px solid rgba(255,255,255,.22);
+      padding:var(--btnPad);
+      letter-spacing:.08em;
+      font-family:var(--mono);
+      cursor:pointer;
+      user-select:none;
+    }
+    .btn:hover{ border-color:rgba(255,255,255,.5); }
+    .btn:active{ transform:translateY(1px); }
+    .btn.danger{ opacity:.85; }
+    .btn.danger:hover{ opacity:1; }
+    .btn.ghost{ opacity:.82; border-color:rgba(255,255,255,.16); }
+    .btn.ghost:hover{ opacity:1; border-color:rgba(255,255,255,.48); }
+
+    .inp,.sel,.ta{
+      background:#000; color:#fff;
+      border:1px solid rgba(255,255,255,.22);
+      padding:var(--ctlPad);
+      outline:none;
+      width:100%;
+      font-family:var(--mono);
+      letter-spacing:.04em;
+    }
+    .inp:focus,.sel:focus,.ta:focus{ border-color:rgba(255,255,255,.55); }
+    .ta{ min-height:74px; resize:vertical; }
+    .ta.small{ min-height:54px; }
+    .hint{ opacity:.65; letter-spacing:.06em; font-family:var(--mono); }
+    .mono{ font-family:var(--mono); letter-spacing:.06em; }
+
+    .main{
+      padding-top:var(--top);
+      display:grid;
+      grid-template-columns: 380px 1fr;
+      min-height:100vh;
+    }
+    @media (max-width: 980px){
+      .main{ grid-template-columns: 1fr; }
+      .left{ border-right:none; border-bottom:1px solid var(--line); }
+    }
+    .left,.right{ padding:12px; min-height:0; }
+    .left{ border-right:1px solid var(--line); }
+
+    .sec{
+      border:1px solid var(--line);
+      padding:10px;
+      margin-bottom:10px;
+      background:#000;
+    }
+    .secHd{
+      display:flex; align-items:baseline; gap:10px; flex-wrap:wrap;
+      margin-bottom:10px;
+    }
+    .h{
+      font-weight:700;
+      letter-spacing:.14em;
+      font-family:var(--mono);
+    }
+    .sub{
+      opacity:.65;
+      letter-spacing:.06em;
+      font-family:var(--mono);
+    }
+    .row{ display:flex; gap:8px; }
+    .row > *{ flex:1; }
+
+    .hr{ border-top:1px solid rgba(255,255,255,.12); margin:10px 0; }
+
+    /* lanes bar */
+    .lanes{ display:flex; gap:8px; flex-wrap:wrap; }
+    .laneBtn{
+      background:transparent; color:#fff;
+      border:1px solid rgba(255,255,255,.16);
+      padding:var(--btnPad);
+      letter-spacing:.08em;
+      font-family:var(--mono);
+      cursor:pointer;
+      opacity:.85;
+      white-space:nowrap;
+    }
+    .laneBtn:hover{ border-color:rgba(255,255,255,.5); opacity:1; }
+    .laneBtn.active{ border-color:rgba(255,255,255,.55); opacity:1; }
+    .laneBtn.depr{ opacity:.55; }
+
+    /* calendar */
+    .calWrap{
+      border:1px solid var(--line);
+      background:#000;
+      min-height:0;
+      display:flex;
+      flex-direction:column;
+    }
+    .calHdr{
+      display:flex; align-items:center; gap:8px; flex-wrap:wrap;
+      padding:10px;
+      border-bottom:1px solid rgba(255,255,255,.12);
+    }
+    .monthLabel{
+      font-weight:700;
+      letter-spacing:.14em;
+      font-family:var(--mono);
+      white-space:nowrap;
+    }
+    .calMeta{
+      opacity:.65;
+      letter-spacing:.06em;
+      font-family:var(--mono);
+      white-space:nowrap;
+    }
+    .weekHdr{
+      display:grid;
+      grid-template-columns:repeat(7,1fr);
+      height:var(--weekHdrH);
+      border-bottom:1px solid rgba(255,255,255,.12);
+    }
+    .weekHdr div{
+      display:flex; align-items:center; justify-content:center;
+      font-family:var(--mono);
+      letter-spacing:.14em;
+      opacity:.72;
+      border-right:1px solid rgba(255,255,255,.06);
+    }
+    .weekHdr div:last-child{ border-right:none; }
+
+    .calGrid{
+      display:grid;
+      grid-template-columns:repeat(7,1fr);
+      grid-auto-rows:minmax(var(--cellMin), 1fr);
+      height:calc(100vh - var(--top) - 12px - 12px - 2px - 56px); /* aims full month view */
+      min-height:520px;
+    }
+    @media (max-width: 980px){
+      .calGrid{ height:calc(100vh - var(--top) - 12px - 12px - 2px - 56px); }
+    }
+    .day{
+      border-right:1px solid rgba(255,255,255,.06);
+      border-bottom:1px solid rgba(255,255,255,.06);
+      padding:8px;
+      min-height:0;
+      display:flex;
+      flex-direction:column;
+      gap:8px;
+      cursor:pointer;
+    }
+    .day:nth-child(7n){ border-right:none; }
+    .day.mute{ opacity:.45; }
+    .day.sel{ outline:1px solid rgba(255,255,255,.45); outline-offset:-1px; }
+    .day.today{ outline:1px solid rgba(255,255,255,.72); outline-offset:-1px; }
+    .dayTop{
+      display:flex; align-items:baseline; gap:8px;
+      border-bottom:1px solid rgba(255,255,255,.10);
+      padding-bottom:6px;
+      margin-bottom:2px;
+      min-height:0;
+    }
+    .dNum{
+      font-family:var(--mono);
+      letter-spacing:.14em;
+      opacity:.86;
+    }
+    .dKey{
+      font-family:var(--mono);
+      letter-spacing:.06em;
+      opacity:.55;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+    .dCount{
+      margin-left:auto;
+      font-family:var(--mono);
+      letter-spacing:.14em;
+      opacity:.62;
+      border:1px solid rgba(255,255,255,.14);
+      padding:2px 6px;
+      white-space:nowrap;
+    }
+    .dayList{
+      min-height:0;
+      overflow:auto;
+      display:flex;
+      flex-direction:column;
+      gap:6px;
+      padding-right:2px;
+    }
+
+    .linkChip{
+      border:1px solid rgba(255,255,255,.14);
+      background:#000;
+      padding:8px;
+      display:flex;
+      flex-direction:column;
+      gap:6px;
+    }
+    .linkChip.depr{ opacity:.55; }
+    .linkChip.missing{ opacity:.55; border-style:dashed; }
+    .lcTop{
+      display:flex; gap:8px; align-items:baseline;
+      border-bottom:1px solid rgba(255,255,255,.10);
+      padding-bottom:6px;
+    }
+    .lcHash{
+      opacity:.6;
+      letter-spacing:.14em;
+      border:1px solid rgba(255,255,255,.16);
+      padding:2px 6px;
+      min-width:78px;
+      font-family:var(--mono);
+    }
+    .lcPath{
+      flex:1;
+      font-weight:700;
+      letter-spacing:.08em;
+      font-family:var(--mono);
+      overflow:hidden;
+      text-overflow:ellipsis;
+      white-space:nowrap;
+      opacity:.92;
+    }
+    .lcOpen{
+      font-family:var(--mono);
+      letter-spacing:.08em;
+      border-bottom:1px solid rgba(255,255,255,.22);
+      opacity:.92;
+      white-space:nowrap;
+    }
+    .lcOpen:hover{ border-bottom-color:rgba(255,255,255,.6); }
+
+    .lcGrid3{
+      display:grid;
+      grid-template-columns:1fr 1fr 1fr;
+      gap:8px;
+    }
+    .lcGrid2{
+      display:grid;
+      grid-template-columns:1fr 1fr;
+      gap:8px;
+    }
+    @media (max-width: 1200px){
+      .lcGrid3{ grid-template-columns:1fr 1fr; }
+    }
+    @media (max-width: 540px){
+      .lcGrid3,.lcGrid2{ grid-template-columns:1fr; }
+    }
+
+    .pill{
+      border:1px solid rgba(255,255,255,.16);
+      padding:2px 6px;
+      font-family:var(--mono);
+      letter-spacing:.14em;
+      opacity:.72;
+      white-space:nowrap;
+    }
+
+    /* modal */
+    .modal{
+      position:fixed; inset:0;
+      background:rgba(0,0,0,.78);
+      display:none;
+      align-items:center;
+      justify-content:center;
+      padding:12px;
+      z-index:100;
+    }
+    .modal.show{ display:flex; }
+    .panel{
+      width:min(980px, 100%);
+      background:#000;
+      border:1px solid rgba(255,255,255,.18);
+      padding:12px;
+    }
+    .panelHd{
+      display:flex; align-items:baseline; gap:10px; flex-wrap:wrap;
+      margin-bottom:10px;
+      font-family:var(--mono);
+      letter-spacing:.10em;
+    }
+    .panelHd .hh{ font-weight:700; letter-spacing:.14em; }
+    .panelHd .ss{ opacity:.65; letter-spacing:.06em; }
+    .panelActions{ display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
+  </style>
+</head>
+<body>
+
+  <div class="topbar">
+    <div class="title">KETADATA // LINK TRIAGE // CALENDAR</div>
+    <div class="meta" id="meta">BOOT</div>
+    <div class="sp"></div>
+
+    <button class="btn ghost" id="btnPrev">◀</button>
+    <button class="btn ghost" id="btnToday">TODAY</button>
+    <button class="btn ghost" id="btnNext">▶</button>
+
+    <button class="btn" id="btnSync">SYNC REPO</button>
+    <button class="btn" id="btnExportState">EXPORT STATE → FILE</button>
+    <button class="btn" id="btnImportState">FILE → STATE</button>
+    <button class="btn" id="btnExportMonth">EXPORT MONTH (URLS)</button>
+    <button class="btn danger" id="btnNew">NEW</button>
+  </div>
+
+  <div class="main">
+    <div class="left">
+
+      <div class="sec">
+        <div class="secHd">
+          <div class="h">REPO</div>
+          <div class="sub">TREE API / AUTO URLS / OPTIONAL TOKEN</div>
+        </div>
+
+        <div class="row">
+          <input class="inp" id="repoOwner" placeholder="OWNER"/>
+          <input class="inp" id="repoName" placeholder="REPO"/>
+        </div>
+        <div style="height:8px"></div>
+        <div class="row">
+          <input class="inp" id="repoBranch" placeholder="BRANCH"/>
+          <input class="inp" id="pagesBase" placeholder="PAGES BASE URL"/>
+        </div>
+        <div style="height:8px"></div>
+        <div class="row">
+          <input class="inp" id="ghToken" placeholder="GITHUB TOKEN (OPTIONAL, STORED LOCAL)"/>
+          <button class="btn ghost" id="btnClearToken">CLEAR</button>
+        </div>
+        <div style="height:8px"></div>
+        <div class="hint">
+          SYNC uses: <span style="opacity:.85">/git/trees/&lt;branch&gt;?recursive=1</span> (one call).<br/>
+          INVENTORY = <b>.html pages only</b>. EXCLUDES content/, images/, img/, assets/, static/, media/, docs/ by default.<br/>
+          URL is derived: <span style="opacity:.85">PAGES_BASE + path</span>.<br/>
+          TOKEN avoids rate-limit. Leave blank if you don’t care.
+        </div>
+      </div>
+
+      <div class="sec">
+        <div class="secHd">
+          <div class="h">KETA_NOTE</div>
+          <div class="sub">OPTIONAL / NON-INTERFERING</div>
+        </div>
+        <textarea class="ta" id="ketaNote" placeholder="KETA_NOTE (GLOBAL)"></textarea>
+      </div>
+
+      <div class="sec">
+        <div class="secHd">
+          <div class="h">LANES</div>
+          <div class="sub" id="counts">0 LINKS</div>
+        </div>
+        <div class="lanes" id="lanes"></div>
+        <div style="height:8px"></div>
+        <div class="row">
+          <button class="btn" id="btnAddLane">ADD LANE</button>
+          <button class="btn ghost" id="btnLaneDepr">TOGGLE LANE DEPR</button>
+        </div>
+        <div style="height:8px"></div>
+        <div class="hint">Click lane = current lane for newly-seen repo pages. Right-click lane = rename.</div>
+      </div>
+
+      <div class="sec">
+        <div class="secHd">
+          <div class="h">FILTER</div>
+          <div class="sub">LANE / STATUS / TAG / SEARCH</div>
+        </div>
+
+        <div class="row">
+          <select class="sel" id="fltLane"></select>
+          <select class="sel" id="fltStatus">
+            <option value="active">ACTIVE ONLY</option>
+            <option value="all">ALL</option>
+            <option value="deprecated">DEPRECATED ONLY</option>
+          </select>
+        </div>
+
+        <div style="height:8px"></div>
+        <input class="inp" id="fltTag" placeholder="TAG CONTAINS (comma/space ok)"/>
+        <div style="height:8px"></div>
+        <input class="inp" id="fltSearch" placeholder="SEARCH (path / note / tags / version)"/>
+        <div style="height:8px"></div>
+        <button class="btn" id="btnClearFilters" style="width:100%;">CLEAR FILTERS</button>
+      </div>
+
+      <div class="sec">
+        <div class="secHd">
+          <div class="h">STATE</div>
+          <div class="sub" id="sig">—</div>
+        </div>
+        <div class="hint">
+          Local-first autosave. Import/export uses real file download/upload.
+        </div>
+        <input type="file" id="fileIn" accept=".json,application/json,text/plain" style="display:none"/>
+      </div>
+
+    </div>
+
+    <div class="right">
+      <div class="calWrap">
+        <div class="calHdr">
+          <div class="monthLabel" id="monthLabel">—</div>
+          <div class="calMeta" id="monthMeta">0 LINKS</div>
+          <div class="sp"></div>
+          <div class="pill" id="selPill">SEL —</div>
+        </div>
+        <div class="weekHdr" id="weekHdr"></div>
+        <div class="calGrid" id="calGrid"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal -->
+  <div class="modal" id="modal">
+    <div class="panel">
+      <div class="panelHd">
+        <div class="hh" id="modalTitle">EXPORT</div>
+        <div class="ss" id="modalSub">STATE</div>
+        <div style="flex:1"></div>
+        <button class="btn" id="modalClose">CLOSE</button>
+      </div>
+      <div class="hr"></div>
+      <textarea class="ta" id="modalText" placeholder="JSON OR EXPORT OUTPUT"></textarea>
+      <div class="panelActions">
+        <button class="btn" id="modalCopy">COPY</button>
+        <button class="btn" id="modalDownload">DOWNLOAD</button>
+        <button class="btn" id="modalApply">APPLY / IMPORT</button>
+      </div>
+      <div class="hr"></div>
+      <div class="hint" id="modalHint"></div>
+    </div>
+  </div>
+
+<script>
+(() => {
+  // -------------------------
+  // Utilities
+  // -------------------------
+  const nowISO = () => new Date().toISOString();
+
+  function uid(){
+    return Math.random().toString(16).slice(2) + "-" + Date.now().toString(16);
+  }
+
+  // stable 10-hex hash (FNV-ish)
+  function hash10(str){
+    let h = 0x811c9dc5;
+    for (let i=0;i<str.length;i++){
+      h ^= str.charCodeAt(i);
+      h = (h * 0x01000193) >>> 0;
+    }
+    let x = h.toString(16).padStart(8,"0");
+    let h2 = (h ^ (h>>>16)) >>> 0;
+    let y = h2.toString(16).padStart(8,"0");
+    return (x+y).slice(0,10);
+  }
+
+  function toDayKey(d){
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth()+1).padStart(2,"0");
+    const dd = String(d.getDate()).padStart(2,"0");
+    return `${yyyy}-${mm}-${dd}`;
+  }
+
+  function parseDayKey(k){
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(k||"");
+    if(!m) return null;
+    const d = new Date(Number(m[1]), Number(m[2])-1, Number(m[3]));
+    return isNaN(d.getTime()) ? null : d;
+  }
+
+  function monthLabel(y,m){
+    const d = new Date(y,m,1);
+    return d.toLocaleString(undefined,{month:"long", year:"numeric"}).toUpperCase();
+  }
+
+  function normalizePagesBase(s){
+    let x = (s || "").trim();
+    if (!x) return "";
+    if (!x.endsWith("/")) x += "/";
+    return x;
+  }
+
+  function downloadTextFile(filename, mime, text){
+    const blob = new Blob([text||""], {type:mime||"text/plain"});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename || "export.txt";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url), 800);
+    setMeta("DOWNLOADED");
+  }
+
+  async function copyText(t){
+    try{
+      await navigator.clipboard.writeText(t||"");
+      setMeta("COPIED");
+      return true;
+    }catch(e){
+      try{
+        const ta=document.createElement("textarea");
+        ta.value=t||"";
+        ta.style.position="fixed"; ta.style.left="-9999px";
+        document.body.appendChild(ta);
+        ta.focus(); ta.select();
+        document.execCommand("copy");
+        ta.remove();
+        setMeta("COPIED");
+        return true;
+      }catch(e2){
+        setMeta("COPY FAILED");
+        return false;
+      }
+    }
+  }
+
+  function safeOpen(url){
+    try{
+      const u = new URL(url);
+      window.open(u.href, "_blank", "noopener,noreferrer");
+    }catch{
+      setMeta("BAD URL");
+    }
+  }
+
+  function tagsMatch(needle, tags){
+    if (!needle) return true;
+    const need = needle.split(/[, ]+/).filter(Boolean);
+    const have = (tags || "").toLowerCase().split(/[, ]+/).filter(Boolean);
+    return need.every(n => have.includes(n));
+  }
+
+  function searchMatch(needle, fields){
+    if (!needle) return true;
+    const blob = fields.join(" ").toLowerCase();
+    return blob.includes(needle);
+  }
+
+  // -------------------------
+  // DOM
+  // -------------------------
+  const $ = (id) => document.getElementById(id);
+
+  const $meta = $("meta");
+  const $counts = $("counts");
+  const $lanes = $("lanes");
+  const $fltLane = $("fltLane");
+  const $fltStatus = $("fltStatus");
+  const $fltTag = $("fltTag");
+  const $fltSearch = $("fltSearch");
+
+  const $repoOwner  = $("repoOwner");
+  const $repoName   = $("repoName");
+  const $repoBranch = $("repoBranch");
+  const $pagesBase  = $("pagesBase");
+  const $ghToken    = $("ghToken");
+  const $btnClearToken = $("btnClearToken");
+
+  const $ketaNote = $("ketaNote");
+  const $monthLabel = $("monthLabel");
+  const $monthMeta = $("monthMeta");
+  const $selPill = $("selPill");
+  const $weekHdr = $("weekHdr");
+  const $calGrid = $("calGrid");
+  const $sig = $("sig");
+
+  const $btnPrev = $("btnPrev");
+  const $btnToday = $("btnToday");
+  const $btnNext = $("btnNext");
+  const $btnSync = $("btnSync");
+  const $btnAddLane = $("btnAddLane");
+  const $btnLaneDepr = $("btnLaneDepr");
+  const $btnClearFilters = $("btnClearFilters");
+  const $btnExportState = $("btnExportState");
+  const $btnImportState = $("btnImportState");
+  const $btnExportMonth = $("btnExportMonth");
+  const $btnNew = $("btnNew");
+  const $fileIn = $("fileIn");
+
+  // modal
+  const $modal = $("modal");
+  const $modalTitle = $("modalTitle");
+  const $modalSub = $("modalSub");
+  const $modalText = $("modalText");
+  const $modalClose = $("modalClose");
+  const $modalCopy = $("modalCopy");
+  const $modalApply = $("modalApply");
+  const $modalDownload = $("modalDownload");
+  const $modalHint = $("modalHint");
+
+  function setMeta(s){ $meta.textContent = String(s || ""); }
+
+  // -------------------------
+  // Storage Isolation (per-file)
+  // -------------------------
+  const FILE_ID = (() => {
+    const k = "KETADATA_LINK_TRIAGE_CAL_GH__FILE_ID";
+    let v = localStorage.getItem(k);
+    if(!v){ v = "KLCGH-" + uid(); localStorage.setItem(k,v); }
+    return v;
+  })();
+
+  const LS_KEY = "KETADATA_LINK_TRIAGE_CAL_GH__STATE__" + FILE_ID;
+  const TOKEN_KEY = "KETADATA_LINK_TRIAGE_CAL_GH__TOKEN__" + FILE_ID;
+
+  // -------------------------
+  // Defaults / State
+  // -------------------------
+  const DEFAULT_REPO = {
+    owner: "ki-tya",
+    repo: "ketadata",
+    branch: "main",
+    pagesBase: "https://ki-tya.github.io/ketadata/"
+  };
+
+  const DEFAULT_LANES = () => ([
+    { id:"L0", name:"INBOX", deprecated:false },
+    { id:"L1", name:"CORE", deprecated:false },
+    { id:"L2", name:"EXPERIMENTS", deprecated:false },
+    { id:"L3", name:"DEPRECATED", deprecated:true }
+  ]);
+
+  const DEFAULT_STATE = () => ({
+    version: "KETADATA_LINK_TRIAGE_CALENDAR_GITHUB_TREE_v1",
+    fileId: FILE_ID,
+    createdAt: nowISO(),
+    updatedAt: nowISO(),
+    ketaNote: "",
+    repo: { ...DEFAULT_REPO },
+    ui: {
+      monthY: new Date().getFullYear(),
+      monthM: new Date().getMonth(),
+      selectedDay: toDayKey(new Date()),
+      laneId: "L0",
+      filterStatus: "active",
+      filterTag: "",
+      filterSearch: ""
+    },
+    lanes: DEFAULT_LANES(),
+    // links keyed by path (stable identity)
+    links: {} // path -> {path,url,day,laneId,tags,version,status,note,missing,createdAt,updatedAt}
+  });
+
+  function normLane(l){
+    return {
+      id: typeof l.id === "string" ? l.id : ("L" + Math.random().toString(16).slice(2,6).toUpperCase()),
+      name: typeof l.name === "string" ? l.name : "LANE",
+      deprecated: !!l.deprecated
+    };
+  }
+
+  function normalizeState(s){
+    const base = DEFAULT_STATE();
+    if (!s || typeof s !== "object") return base;
+
+    const out = {
+      ...base,
+      version: typeof s.version === "string" ? s.version : base.version,
+      createdAt: typeof s.createdAt === "string" ? s.createdAt : base.createdAt,
+      updatedAt: typeof s.updatedAt === "string" ? s.updatedAt : nowISO(),
+      ketaNote: typeof s.ketaNote === "string" ? s.ketaNote : "",
+      repo: { ...base.repo, ...(s.repo && typeof s.repo === "object" ? s.repo : {}) },
+      ui: { ...base.ui, ...(s.ui && typeof s.ui === "object" ? s.ui : {}) },
+      lanes: Array.isArray(s.lanes) ? s.lanes.map(normLane) : base.lanes,
+      links: (s.links && typeof s.links === "object") ? s.links : {}
+    };
+
+    // harden repo
+    out.repo.owner = (out.repo.owner || DEFAULT_REPO.owner).trim();
+    out.repo.repo = (out.repo.repo || DEFAULT_REPO.repo).trim();
+    out.repo.branch = (out.repo.branch || DEFAULT_REPO.branch).trim();
+    out.repo.pagesBase = normalizePagesBase(out.repo.pagesBase || DEFAULT_REPO.pagesBase);
+
+    // harden ui lane
+    if (!out.lanes.some(l => l.id === out.ui.laneId)) out.ui.laneId = out.lanes[0].id;
+
+    // normalize links entries
+    const fixed = {};
+    for (const [path, v] of Object.entries(out.links)){
+      const p = String(path || "").trim();
+      if (!p) continue;
+      const day = (v && v.day ? String(v.day).trim() : "");
+      fixed[p] = {
+        path: p,
+        url: (v && v.url ? String(v.url) : ""),
+        day: /^\d{4}-\d{2}-\d{2}$/.test(day) ? day : "",
+        laneId: (v && typeof v.laneId === "string") ? v.laneId : out.ui.laneId,
+        tags: (v && v.tags ? String(v.tags) : ""),
+        version: (v && v.version ? String(v.version) : ""),
+        status: (v && v.status === "deprecated") ? "deprecated" : "active",
+        note: (v && v.note ? String(v.note) : ""),
+        missing: !!(v && v.missing),
+        createdAt: (v && v.createdAt ? String(v.createdAt) : out.createdAt),
+        updatedAt: (v && v.updatedAt ? String(v.updatedAt) : out.updatedAt)
+      };
+    }
+    out.links = fixed;
+    return out;
+  }
+
+  function loadLocal(){
+    try{
+      const raw = localStorage.getItem(LS_KEY);
+      if (!raw) return null;
+      return normalizeState(JSON.parse(raw));
+    }catch{return null;}
+  }
+
+  function saveLocal(){
+    state.updatedAt = nowISO();
+    try{ localStorage.setItem(LS_KEY, JSON.stringify(state)); }catch{}
+    renderSig();
+  }
+
+  let state = loadLocal() || DEFAULT_STATE();
+
+  // token local
+  function loadToken(){
+    try{ return localStorage.getItem(TOKEN_KEY) || ""; }catch{ return ""; }
+  }
+  function saveToken(t){
+    try{ localStorage.setItem(TOKEN_KEY, t || ""); }catch{}
+  }
+
+  // -------------------------
+  // GitHub Tree Sync
+  // -------------------------
+  async function ghJSON(url){
+    const token = ($ghToken.value || "").trim();
+    const headers = { "Accept": "application/vnd.github+json" };
+    if (token) headers["Authorization"] = "Bearer " + token;
+
+    const res = await fetch(url, { headers });
+    if (!res.ok){
+      const txt = await res.text().catch(() => "");
+      throw new Error(`GITHUB API ${res.status} ${res.statusText}\n${url}\n${txt}`);
+    }
+    return res.json();
+  }
+
+  async function fetchRepoTree(owner, repo, branch){
+    const u = `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/git/trees/${encodeURIComponent(branch)}?recursive=1`;
+    const data = await ghJSON(u);
+    if (!data || !Array.isArray(data.tree)) return [];
+    return data.tree;
+  }
+
+  function derivedUrl(path){
+    const base = normalizePagesBase(state.repo.pagesBase);
+    return base + path.replace(/^\/+/, "");
+  }
+
+  function isPageHtml(path){
+    const p = (path || "").toLowerCase();
+    if (!p.endsWith(".html")) return false;
+    const deny = ["content/","images/","img/","assets/","static/","media/","docs/"];
+    return !deny.some(pref => p.startsWith(pref));
+  }
+
+  async function syncRepo(){
+    // persist inputs
+    state.repo.owner = ($repoOwner.value || DEFAULT_REPO.owner).trim();
+    state.repo.repo = ($repoName.value || DEFAULT_REPO.repo).trim();
+    state.repo.branch = ($repoBranch.value || DEFAULT_REPO.branch).trim();
+    state.repo.pagesBase = normalizePagesBase($pagesBase.value || DEFAULT_REPO.pagesBase);
+    saveToken(($ghToken.value || "").trim());
+
+    setMeta(`SYNCING ${state.repo.owner}/${state.repo.repo}@${state.repo.branch} ...`);
+
+    // mark existing as missing
+    for (const k of Object.keys(state.links)){
+      state.links[k].missing = true;
+      state.links[k].updatedAt = nowISO();
+    }
+
+    const tree = await fetchRepoTree(state.repo.owner, state.repo.repo, state.repo.branch);
+
+    const htmls = tree
+      .filter(x => x.type === "blob")
+      .map(x => x.path)
+      .filter(isPageHtml)
+      .sort((a,b)=>a.localeCompare(b));
+
+    let added = 0, kept = 0;
+
+    for (const p of htmls){
+      const hit = state.links[p];
+      if (hit){
+        hit.missing = false;
+        hit.url = derivedUrl(p); // FORCE AUTO URL
+        hit.updatedAt = nowISO();
+        kept++;
+      } else {
+        state.links[p] = {
+          path: p,
+          url: derivedUrl(p),
+          day: "", // unassigned until you set
+          laneId: state.ui.laneId || state.lanes[0].id,
+          tags: "",
+          version: "",
+          status: "active",
+          note: "",
+          missing: false,
+          createdAt: nowISO(),
+          updatedAt: nowISO()
+        };
+        added++;
+      }
+    }
+
+    saveLocal();
+    render();
+    setMeta(`SYNC DONE // ${htmls.length} HTML // +${added} NEW // ${kept} KEPT`);
+  }
+
+  // -------------------------
+  // Calendar month cells (42)
+  // -------------------------
+  function monthCells(y,m){
+    const first = new Date(y,m,1);
+    const startDow = first.getDay(); // 0 Sun
+    const start = new Date(y,m,1 - startDow);
+    const cells = [];
+    for(let i=0;i<42;i++){
+      const d = new Date(start.getFullYear(), start.getMonth(), start.getDate()+i);
+      cells.push(d);
+    }
+    return cells;
+  }
+
+  function weekdayLabels(){
+    // always Sun..Sat to match JS getDay
+    const arr = ["SUN","MON","TUE","WED","THU","FRI","SAT"];
+    return arr;
+  }
+
+  // -------------------------
+  // Filtering / selection
+  // -------------------------
+  function currentFilters(){
+    return {
+      laneId: $fltLane.value || state.ui.laneId,
+      status: $fltStatus.value || "active",
+      tag: ($fltTag.value || "").trim().toLowerCase(),
+      search: ($fltSearch.value || "").trim().toLowerCase()
+    };
+  }
+
+  function filteredLinksForDay(dayKey){
+    const f = currentFilters();
+    const all = Object.values(state.links);
+
+    return all.filter(it => {
+      if (it.day !== dayKey) return false;
+
+      if (f.laneId && it.laneId !== f.laneId) return false;
+
+      if (f.status === "active" && it.status === "deprecated") return false;
+      if (f.status === "deprecated" && it.status !== "deprecated") return false;
+
+      if (!tagsMatch(f.tag, it.tags)) return false;
+      if (!searchMatch(f.search, [it.path, it.tags, it.note, it.version])) return false;
+
+      return true;
+    }).sort((a,b)=>a.path.localeCompare(b.path));
+  }
+
+  function countAllInLane(){
+    const f = currentFilters();
+    const total = Object.keys(state.links).length;
+    const inLane = Object.values(state.links).filter(x => x.laneId === f.laneId).length;
+    $counts.textContent = `${total} LINKS // ${inLane} IN LANE`;
+  }
+
+  // -------------------------
+  // Render
+  // -------------------------
+  function refreshLaneSelect(){
+    $fltLane.innerHTML = "";
+    for (const l of state.lanes){
+      const opt = document.createElement("option");
+      opt.value = l.id;
+      opt.textContent = l.name;
+      $fltLane.appendChild(opt);
+    }
+    $fltLane.value = state.ui.laneId || state.lanes[0].id;
+  }
+
+  function renderLanesBar(){
+    $lanes.innerHTML = "";
+    for (const l of state.lanes){
+      const b = document.createElement("button");
+      b.className = "laneBtn" + (l.id === state.ui.laneId ? " active" : "") + (l.deprecated ? " depr" : "");
+      b.textContent = l.name;
+      b.title = "CLICK TO SET CURRENT LANE (USED FOR NEW REPO PAGES)";
+      b.addEventListener("click", () => {
+        state.ui.laneId = l.id;
+        $fltLane.value = l.id;
+        saveLocal();
+        render();
+      });
+      b.addEventListener("contextmenu", (e) => {
+        e.preventDefault();
+        const nn = prompt("RENAME LANE:", l.name);
+        if (nn === null) return;
+        l.name = (nn || "").trim() || l.name;
+        saveLocal();
+        render();
+      });
+      $lanes.appendChild(b);
+    }
+  }
+
+  function renderWeekHdr(){
+    $weekHdr.innerHTML = "";
+    for(const w of weekdayLabels()){
+      const d = document.createElement("div");
+      d.textContent = w;
+      $weekHdr.appendChild(d);
+    }
+  }
+
+  function renderCalendar(){
+    const y = state.ui.monthY, m = state.ui.monthM;
+    const sel = state.ui.selectedDay;
+    const today = toDayKey(new Date());
+
+    $monthLabel.textContent = monthLabel(y,m);
+    $selPill.textContent = `SEL ${sel}`;
+
+    // month meta: how many assigned items in this month (respect current filter lane/status/tag/search only when assigned to day)
+    const prefix = `${y}-${String(m+1).padStart(2,"0")}-`;
+    let monthCount = 0;
+    for(const k of Object.keys(state.links)){
+      const it = state.links[k];
+      if (it.day && it.day.startsWith(prefix)){
+        // count only those passing current filters
+        if (filteredLinksForDay(it.day).some(x => x.path === it.path)) monthCount++;
+      }
+    }
+    $monthMeta.textContent = `${monthCount} LINKS (FILTERED)`;
+
+    $calGrid.innerHTML = "";
+    const cells = monthCells(y,m);
+
+    for(const d of cells){
+      const dayKey = toDayKey(d);
+      const dayEl = document.createElement("div");
+      dayEl.className = "day";
+      if (d.getMonth() !== m) dayEl.classList.add("mute");
+      if (dayKey === sel) dayEl.classList.add("sel");
+      if (dayKey === today) dayEl.classList.add("today");
+
+      const top = document.createElement("div");
+      top.className = "dayTop";
+
+      const dn = document.createElement("div");
+      dn.className = "dNum";
+      dn.textContent = String(d.getDate()).padStart(2,"0");
+
+      const dk = document.createElement("div");
+      dk.className = "dKey";
+      dk.textContent = dayKey;
+
+      const items = filteredLinksForDay(dayKey);
+
+      const ct = document.createElement("div");
+      ct.className = "dCount";
+      ct.textContent = String(items.length);
+
+      top.appendChild(dn);
+      top.appendChild(dk);
+      top.appendChild(ct);
+
+      const list = document.createElement("div");
+      list.className = "dayList";
+
+      // render up to N chips; if more, show "…"
+      const MAX = 10;
+      const show = items.slice(0, MAX);
+
+      for(const it of show){
+        const chip = document.createElement("div");
+        chip.className = "linkChip" + (it.status === "deprecated" ? " depr" : "") + (it.missing ? " missing" : "");
+
+        const cTop = document.createElement("div");
+        cTop.className = "lcTop";
+
+        const hs = document.createElement("div");
+        hs.className = "lcHash";
+        hs.textContent = hash10(it.path);
+
+        const path = document.createElement("div");
+        path.className = "lcPath";
+        path.textContent = it.path;
+
+        const open = document.createElement("a");
+        open.className = "lcOpen";
+        open.href = it.url || "#";
+        open.target = "_blank";
+        open.rel = "noopener";
+        open.textContent = it.missing ? "OPEN (MISSING)" : "OPEN";
+        open.addEventListener("click", (e) => {
+          if (!it.url) { e.preventDefault(); setMeta("NO URL"); }
+        });
+
+        cTop.appendChild(hs);
+        cTop.appendChild(path);
+        cTop.appendChild(open);
+
+        const row1 = document.createElement("div");
+        row1.className = "lcGrid3";
+
+        const laneSel = document.createElement("select");
+        laneSel.className = "sel";
+        for(const l of state.lanes){
+          const opt = document.createElement("option");
+          opt.value = l.id;
+          opt.textContent = l.name;
+          laneSel.appendChild(opt);
+        }
+        laneSel.value = it.laneId;
+
+        laneSel.addEventListener("change", () => {
+          it.laneId = laneSel.value;
+          it.updatedAt = nowISO();
+          saveLocal();
+          render();
+        });
+
+        const statusSel = document.createElement("select");
+        statusSel.className = "sel";
+        statusSel.innerHTML = `
+          <option value="active">ACTIVE</option>
+          <option value="deprecated">DEPRECATED</option>
+        `;
+        statusSel.value = it.status;
+        statusSel.addEventListener("change", () => {
+          it.status = statusSel.value;
+          it.updatedAt = nowISO();
+          saveLocal();
+          render();
+        });
+
+        const dayInp = document.createElement("input");
+        dayInp.className = "inp";
+        dayInp.placeholder = "DAY (YYYY-MM-DD)";
+        dayInp.value = it.day || "";
+        dayInp.addEventListener("change", () => {
+          const v = (dayInp.value || "").trim();
+          if (v && !/^\d{4}-\d{2}-\d{2}$/.test(v)){
+            dayInp.value = it.day || "";
+            setMeta("BAD DAY");
+            return;
+          }
+          it.day = v;
+          it.updatedAt = nowISO();
+          if (v){
+            state.ui.selectedDay = v;
+            const dd = parseDayKey(v);
+            if (dd){ state.ui.monthY = dd.getFullYear(); state.ui.monthM = dd.getMonth(); }
+          }
+          saveLocal();
+          render();
+          setMeta("DAY SET");
+        });
+
+        row1.appendChild(laneSel);
+        row1.appendChild(statusSel);
+        row1.appendChild(dayInp);
+
+        const row2 = document.createElement("div");
+        row2.className = "lcGrid2";
+
+        const tagsInp = document.createElement("input");
+        tagsInp.className = "inp";
+        tagsInp.placeholder = "TAGS (comma/space)";
+        tagsInp.value = it.tags || "";
+        tagsInp.addEventListener("input", () => {
+          it.tags = tagsInp.value;
+          it.updatedAt = nowISO();
+          saveLocal();
+        });
+
+        const noteTa = document.createElement("textarea");
+        noteTa.className = "ta small";
+        noteTa.placeholder = "NOTE";
+        noteTa.value = it.note || "";
+        noteTa.addEventListener("input", () => {
+          it.note = noteTa.value;
+          it.updatedAt = nowISO();
+          saveLocal();
+        });
+
+        row2.appendChild(tagsInp);
+        row2.appendChild(noteTa);
+
+        chip.appendChild(cTop);
+        chip.appendChild(row1);
+        chip.appendChild(row2);
+
+        // click day selects day (but allow interacting with fields)
+        chip.addEventListener("click", (e) => {
+          const t = e.target && e.target.tagName;
+          if (t === "INPUT" || t === "TEXTAREA" || t === "SELECT" || t === "A" || t === "BUTTON") return;
+          state.ui.selectedDay = dayKey;
+          saveLocal();
+          render();
+        });
+
+        list.appendChild(chip);
+      }
+
+      if (items.length > MAX){
+        const more = document.createElement("div");
+        more.className = "hint";
+        more.textContent = `… +${items.length - MAX} MORE (tighten filters / move items)`;
+        list.appendChild(more);
+      }
+
+      dayEl.appendChild(top);
+      dayEl.appendChild(list);
+
+      dayEl.addEventListener("click", (e) => {
+        const t = e.target && e.target.tagName;
+        if (t === "INPUT" || t === "TEXTAREA" || t === "SELECT" || t === "A" || t === "BUTTON") return;
+        state.ui.selectedDay = dayKey;
+        saveLocal();
+        render();
+      });
+
+      $calGrid.appendChild(dayEl);
+    }
+  }
+
+  function renderSig(){
+    $sig.textContent = `FILE_ID ${state.fileId} · LINKS ${Object.keys(state.links).length} · UPDATED ${state.updatedAt}`;
+  }
+
+  function render(){
+    // hydrate repo UI
+    $repoOwner.value = state.repo.owner;
+    $repoName.value = state.repo.repo;
+    $repoBranch.value = state.repo.branch;
+    $pagesBase.value = state.repo.pagesBase;
+    $ghToken.value = loadToken();
+
+    // note
+    $ketaNote.value = state.ketaNote || "";
+
+    // filters
+    refreshLaneSelect();
+    $fltLane.value = state.ui.laneId || state.lanes[0].id;
+    $fltStatus.value = state.ui.filterStatus || "active";
+    $fltTag.value = state.ui.filterTag || "";
+    $fltSearch.value = state.ui.filterSearch || "";
+
+    renderLanesBar();
+    countAllInLane();
+    renderWeekHdr();
+    renderCalendar();
+    renderSig();
+
+    saveLocal();
+  }
+
+  // -------------------------
+  // Export / Import (file)
+  // -------------------------
+  let modalMode = "export_state";
+  let lastDownload = { filename:"export.json", mime:"application/json", text:"" };
+
+  function openModal(title, sub, text, hint, showApply, showDownload){
+    $modalTitle.textContent = title;
+    $modalSub.textContent = sub;
+    $modalText.value = text || "";
+    $modalHint.textContent = hint || "";
+    $modalApply.style.display = showApply ? "inline-block" : "none";
+    $modalDownload.style.display = showDownload ? "inline-block" : "none";
+    $modal.classList.add("show");
+    $modalText.focus();
+    $modalText.select();
+  }
+  function closeModal(){ $modal.classList.remove("show"); }
+
+  function stamp(){
+    const d=new Date();
+    const yyyy=d.getFullYear();
+    const mm=String(d.getMonth()+1).padStart(2,"0");
+    const dd=String(d.getDate()).padStart(2,"0");
+    const hh=String(d.getHours()).padStart(2,"0");
+    const mi=String(d.getMinutes()).padStart(2,"0");
+    return `${yyyy}${mm}${dd}_${hh}${mi}`;
+  }
+
+  function exportStateJSON(){
+    const out = normalizeState({
+      ...state,
+      updatedAt: nowISO(),
+      ketaNote: ($ketaNote.value || "").trim(),
+      repo: {
+        owner: ($repoOwner.value || DEFAULT_REPO.owner).trim(),
+        repo: ($repoName.value || DEFAULT_REPO.repo).trim(),
+        branch: ($repoBranch.value || DEFAULT_REPO.branch).trim(),
+        pagesBase: normalizePagesBase($pagesBase.value || DEFAULT_REPO.pagesBase)
+      },
+      ui: {
+        ...state.ui,
+        laneId: $fltLane.value || state.ui.laneId,
+        filterStatus: $fltStatus.value || "active",
+        filterTag: $fltTag.value || "",
+        filterSearch: $fltSearch.value || ""
+      }
+    });
+    return JSON.stringify(out, null, 2);
+  }
+
+  function exportMonthUrls(){
+    const y = state.ui.monthY, m = state.ui.monthM;
+    const prefix = `${y}-${String(m+1).padStart(2,"0")}-`;
+    const allDays = new Map();
+
+    // gather filtered items per day
+    for(const it of Object.values(state.links)){
+      if(!it.day || !it.day.startsWith(prefix)) continue;
+      const list = filteredLinksForDay(it.day);
+      // filteredLinksForDay returns array; we only want those passing filter
+      if(!list.some(x => x.path === it.path)) continue;
+
+      if(!allDays.has(it.day)) allDays.set(it.day, []);
+      allDays.get(it.day).push(it);
+    }
+
+    const days = Array.from(allDays.keys()).sort((a,b)=>a.localeCompare(b));
+    const lines = [];
+    for(const d of days){
+      lines.push(d);
+      const arr = allDays.get(d).slice().sort((a,b)=>a.path.localeCompare(b.path));
+      for(const it of arr){
+        const flags = [];
+        if (it.status === "deprecated") flags.push("DEPRECATED");
+        if (it.missing) flags.push("MISSING");
+        if (it.laneId) flags.push("LANE:" + it.laneId);
+        if (it.tags) flags.push("TAGS:" + it.tags);
+        lines.push(`- ${it.url}  (${it.path})${flags.length ? "  ["+flags.join(" | ")+"]" : ""}`);
+        if (it.note) lines.push(`  NOTE: ${it.note}`);
+      }
+      lines.push("");
+    }
+    return lines.join("\n").trim();
+  }
+
+  function importStateFromText(text){
+    const obj = JSON.parse(text || "");
+    const next = normalizeState(obj);
+    // keep current FILE_ID (isolation)
+    next.fileId = FILE_ID;
+    next.updatedAt = nowISO();
+    state = next;
+    saveLocal();
+    render();
+  }
+
+  // -------------------------
+  // Wiring
+  // -------------------------
+  $ketaNote.addEventListener("input", () => { state.ketaNote = $ketaNote.value || ""; saveLocal(); });
+
+  $repoOwner.addEventListener("input", () => { state.repo.owner = $repoOwner.value; saveLocal(); });
+  $repoName.addEventListener("input", () => { state.repo.repo = $repoName.value; saveLocal(); });
+  $repoBranch.addEventListener("input", () => { state.repo.branch = $repoBranch.value; saveLocal(); });
+  $pagesBase.addEventListener("input", () => { state.repo.pagesBase = normalizePagesBase($pagesBase.value); saveLocal(); });
+
+  $ghToken.addEventListener("input", () => { saveToken(($ghToken.value || "").trim()); });
+  $btnClearToken.addEventListener("click", () => { $ghToken.value=""; saveToken(""); setMeta("TOKEN CLEARED"); });
+
+  $fltLane.addEventListener("change", () => { state.ui.laneId = $fltLane.value; saveLocal(); render(); });
+  $fltStatus.addEventListener("change", () => { state.ui.filterStatus = $fltStatus.value; saveLocal(); render(); });
+  $fltTag.addEventListener("input", () => { state.ui.filterTag = $fltTag.value; saveLocal(); render(); });
+  $fltSearch.addEventListener("input", () => { state.ui.filterSearch = $fltSearch.value; saveLocal(); render(); });
+
+  $btnClearFilters.addEventListener("click", () => {
+    state.ui.filterStatus = "active";
+    state.ui.filterTag = "";
+    state.ui.filterSearch = "";
+    $fltStatus.value = "active";
+    $fltTag.value = "";
+    $fltSearch.value = "";
+    saveLocal();
+    render();
+    setMeta("FILTERS CLEARED");
+  });
+
+  $btnAddLane.addEventListener("click", () => {
+    const id = "L" + Math.random().toString(16).slice(2,6).toUpperCase();
+    state.lanes.push({ id, name:"LANE", deprecated:false });
+    state.ui.laneId = id;
+    saveLocal();
+    render();
+    setMeta("LANE ADDED");
+  });
+
+  $btnLaneDepr.addEventListener("click", () => {
+    const id = state.ui.laneId;
+    const lane = state.lanes.find(l => l.id === id);
+    if (!lane) return;
+    lane.deprecated = !lane.deprecated;
+    saveLocal();
+    render();
+    setMeta(lane.deprecated ? "LANE DEPRECATED" : "LANE ACTIVE");
+  });
+
+  $btnPrev.addEventListener("click", () => {
+    let y=state.ui.monthY, m=state.ui.monthM;
+    m--; if(m<0){ m=11; y--; }
+    state.ui.monthY=y; state.ui.monthM=m;
+    // keep selection inside month
+    state.ui.selectedDay = `${y}-${String(m+1).padStart(2,"0")}-01`;
+    saveLocal();
+    render();
+  });
+
+  $btnNext.addEventListener("click", () => {
+    let y=state.ui.monthY, m=state.ui.monthM;
+    m++; if(m>11){ m=0; y++; }
+    state.ui.monthY=y; state.ui.monthM=m;
+    state.ui.selectedDay = `${y}-${String(m+1).padStart(2,"0")}-01`;
+    saveLocal();
+    render();
+  });
+
+  $btnToday.addEventListener("click", () => {
+    const d = new Date();
+    state.ui.monthY = d.getFullYear();
+    state.ui.monthM = d.getMonth();
+    state.ui.selectedDay = toDayKey(d);
+    saveLocal();
+    render();
+  });
+
+  $btnSync.addEventListener("click", () => {
+    syncRepo().catch(e => {
+      setMeta("SYNC FAILED");
+      modalMode = "error";
+      openModal(
+        "ERROR",
+        "SYNC",
+        String(e && e.message ? e.message : e),
+        "WITHOUT TOKEN YOU CAN HIT RATE LIMITS. TOKEN IS OPTIONAL BUT RECOMMENDED.",
+        false,
+        false
+      );
+    });
+  });
+
+  $btnExportState.addEventListener("click", () => {
+    modalMode = "export_state";
+    const text = exportStateJSON();
+    const filename = `KETADATA_LINK_TRIAGE_CAL_GH_STATE_${state.fileId}_${stamp()}.json`;
+    lastDownload = { filename, mime:"application/json", text };
+    openModal("EXPORT", "STATE", text, "DOWNLOAD IS REAL FILE. IMPORT USES FILE PICKER OR PASTE+APPLY.", true, true);
+  });
+
+  $btnImportState.addEventListener("click", () => {
+    $fileIn.click();
+  });
+
+  $fileIn.addEventListener("change", (e) => {
+    const f = e.target.files && e.target.files[0];
+    if (!f) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try{
+        importStateFromText(String(reader.result || ""));
+        setMeta("STATE IMPORTED");
+      }catch{
+        setMeta("IMPORT FAILED");
+        modalMode = "import_state";
+        openModal("IMPORT", "STATE", "", "FILE LOOKS INVALID. YOU CAN ALSO PASTE JSON HERE AND APPLY.", true, false);
+      }
+    };
+    reader.readAsText(f);
+    e.target.value = "";
+  });
+
+  $btnExportMonth.addEventListener("click", () => {
+    modalMode = "export_month";
+    const text = exportMonthUrls();
+    const filename = `KETADATA_LINK_TRIAGE_CAL_GH_MONTH_${state.fileId}_${stamp()}.txt`;
+    lastDownload = { filename, mime:"text/plain", text };
+    openModal("EXPORT", "MONTH URLS", text, "FILTERS APPLY. DOWNLOAD IS REAL FILE.", false, true);
+  });
+
+  $btnNew.addEventListener("click", () => {
+    if (!confirm("RESET TO NEW? (local state will be replaced)")) return;
+    state = DEFAULT_STATE();
+    saveLocal();
+    render();
+    setMeta("NEW");
+    setTimeout(() => syncRepo().catch(()=>{}), 120);
+  });
+
+  // modal
+  $modalClose.addEventListener("click", () => closeModal());
+  $modal.addEventListener("click", (e) => { if (e.target === $modal) closeModal(); });
+  $modalCopy.addEventListener("click", () => copyText($modalText.value || ""));
+  $modalDownload.addEventListener("click", () => {
+    downloadTextFile(lastDownload.filename, lastDownload.mime, $modalText.value || lastDownload.text || "");
+  });
+  $modalApply.addEventListener("click", () => {
+    if (modalMode !== "import_state") {
+      closeModal();
+      return;
+    }
+    try{
+      importStateFromText($modalText.value || "");
+      setMeta("IMPORTED");
+      closeModal();
+    }catch{
+      setMeta("IMPORT FAILED");
+      $modalHint.textContent = "INVALID JSON. FIX THEN APPLY.";
+    }
+  });
+
+  // keyboard: month nav
+  window.addEventListener("keydown", (e) => {
+    if ($modal.classList.contains("show")){
+      if ((e.key || "").toLowerCase() === "escape") closeModal();
+      return;
+    }
+    const k = (e.key || "").toLowerCase();
+    if (k === "arrowleft" && (e.altKey || e.metaKey)){
+      e.preventDefault(); $btnPrev.click();
+    }
+    if (k === "arrowright" && (e.altKey || e.metaKey)){
+      e.preventDefault(); $btnNext.click();
+    }
+    if (k === "t" && (e.altKey || e.metaKey)){
+      e.preventDefault(); $btnToday.click();
+    }
+  });
+
+  // -------------------------
+  // Init
+  // -------------------------
+  function init(){
+    // week header once
+    renderWeekHdr();
+
+    // hydrate UI from state
+    $repoOwner.value = state.repo.owner;
+    $repoName.value = state.repo.repo;
+    $repoBranch.value = state.repo.branch;
+    $pagesBase.value = state.repo.pagesBase;
+    $ghToken.value = loadToken();
+
+    $ketaNote.value = state.ketaNote || "";
+
+    refreshLaneSelect();
+    $fltLane.value = state.ui.laneId || state.lanes[0].id;
+    $fltStatus.value = state.ui.filterStatus || "active";
+    $fltTag.value = state.ui.filterTag || "";
+    $fltSearch.value = state.ui.filterSearch || "";
+
+    render();
+    setMeta("READY");
+
+    // auto-sync once on load (soft fail)
+    setTimeout(() => syncRepo().catch(()=>{ setMeta("READY (NO SYNC)"); }), 150);
+  }
+
+  init();
+})();
+</script>
+
+<!--
+AE/EE/WB SERIALIZATION STAMP (MANDATORY)
+AE: KETA_MONO black-on-white potential; operational mono typography; cuntier = tighter letterspacing + hash badges + lane bar + chip-cards inside month cells; no fluff.
+EE: FULL MONTH VIEW (42 cells) + per-day embedded link cards; lane/status/tag/search filters; day assignment per link; month export; state import/export.
+WB: LocalStorage isolation by FILE_ID; GitHub Tree API sync (1 call) with optional token; URL auto-derived (PAGES_BASE + path); real file download/upload; no external deps.
+
+FILE_ID: (runtime) KLCGH-*
+ROOM_ID: LINK_TRIAGE_CALENDAR_GITHUB
+VERSION: KETADATA_LINK_TRIAGE_CALENDAR_GITHUB_TREE_v1
+UPDATED_AT: (runtime) new Date().toISOString()
+CHANGELOG:
+- v1: calendar month grid + embedded link cards + GitHub tree sync + filters + file IO
+-->
+</body>
+</html>
