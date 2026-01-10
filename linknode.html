@@ -1,0 +1,1879 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>KETADATA // LINK NODES (ZONES + GITHUB SYNC)</title>
+<style>
+:root{
+  --bg:#000;
+  --ink:rgba(255,255,255,.88);
+  --muted:rgba(255,255,255,.54);
+  --line:rgba(255,255,255,.14);
+  --line2:rgba(255,255,255,.24);
+  --hot:rgba(255,255,255,.92);
+  --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace;
+  --sans: Arial, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+
+  --top:44px;
+  --left:340px;
+
+  --dot:10px;
+  --nodeW:180px;
+
+  /* stimuli */
+  --stim: 0.35;         /* 0..1 */
+  --pulse: 0.35;        /* 0..1 */
+  --glitch: 0.15;       /* 0..1 */
+  --magnet: 0.35;       /* 0..1 */
+  --snap: 0.35;         /* 0..1 */
+
+  --zoom: 1.0;          /* 0.6..1.8 */
+  --zoneAlpha: 0.14;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0;background:var(--bg);color:var(--ink);font:12px/1.35 var(--sans);overflow:hidden}
+button,input,select,textarea{font:inherit;color:inherit}
+a{color:inherit;text-decoration:none}
+
+#topbar{
+  position:fixed;inset:0 0 auto 0;height:var(--top);
+  display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+  padding:8px 10px;background:#000;border-bottom:1px solid var(--line);
+  z-index:50;
+}
+#title{font-weight:700;letter-spacing:.14em;opacity:.92}
+#meta{opacity:.62;letter-spacing:.08em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:42vw}
+.sp{flex:1}
+.btn{
+  border:1px solid var(--line2);
+  background:transparent;
+  padding:6px 8px;
+  letter-spacing:.08em;
+  cursor:pointer;
+  opacity:.92;
+  white-space:nowrap;
+}
+.btn:hover{border-color:rgba(255,255,255,.55);opacity:1}
+.btn.on{border-color:rgba(255,255,255,.66);opacity:1}
+.inp,.sel,.ta{
+  width:100%;
+  background:#000;
+  border:1px solid var(--line2);
+  padding:6px 8px;
+  outline:none;
+}
+.inp:focus,.sel:focus,.ta:focus{border-color:rgba(255,255,255,.66)}
+.ta{min-height:70px;resize:vertical}
+
+#layout{
+  position:fixed;inset:var(--top) 0 0 0;
+  display:grid;
+  grid-template-columns: var(--left) 1fr;
+  min-height:calc(100vh - var(--top));
+}
+@media (max-width: 980px){
+  #layout{grid-template-columns: 1fr}
+  #left{display:none}
+}
+#left{
+  border-right:1px solid var(--line);
+  padding:10px;
+  overflow:auto;
+}
+#right{
+  position:relative;
+  overflow:hidden;
+}
+.sec{
+  border:1px solid var(--line);
+  padding:10px;
+  margin-bottom:10px;
+}
+.hd{
+  display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:8px
+}
+.h{font-weight:700;letter-spacing:.14em}
+.sub{opacity:.62;letter-spacing:.08em}
+.row{display:flex;gap:8px}
+.row>*{flex:1}
+.hint{opacity:.62;letter-spacing:.08em}
+.hr{border-top:1px solid rgba(255,255,255,.12);margin:10px 0}
+
+/* Canvas */
+#stage{
+  position:absolute;inset:0;
+  background:
+    radial-gradient(circle at 20% 10%, rgba(255,255,255,.04), rgba(0,0,0,0) 45%),
+    radial-gradient(circle at 70% 80%, rgba(255,255,255,.03), rgba(0,0,0,0) 48%),
+    linear-gradient(0deg, rgba(255,255,255,.03), rgba(255,255,255,0));
+}
+#world{
+  position:absolute;left:50%;top:50%;
+  width:1px;height:1px;
+  transform: translate(-50%,-50%) scale(var(--zoom));
+  transform-origin: 0 0;
+}
+#zones{
+  position:absolute;left:0;top:0;
+}
+.zone{
+  position:absolute;
+  width:420px;height:260px;
+  border:1px solid rgba(255,255,255,.22);
+  background: rgba(255,255,255,var(--zoneAlpha));
+  box-shadow: 0 0 0 1px rgba(0,0,0,.35) inset;
+  user-select:none;
+}
+.zone .zh{
+  position:absolute;left:0;top:0;right:0;height:26px;
+  display:flex;align-items:center;justify-content:space-between;gap:6px;
+  padding:0 8px;
+  border-bottom:1px solid rgba(255,255,255,.18);
+  background: rgba(0,0,0,.22);
+}
+.zone .zt{
+  font-family:var(--mono);
+  letter-spacing:.08em;
+  opacity:.9;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.zone .zb{
+  display:flex;gap:6px;align-items:center;
+}
+.zbtn{
+  border:1px solid rgba(255,255,255,.22);
+  background:transparent;
+  padding:2px 6px;
+  letter-spacing:.08em;
+  opacity:.85;
+  cursor:pointer;
+}
+.zbtn:hover{opacity:1;border-color:rgba(255,255,255,.55)}
+.zone .zmeta{
+  position:absolute;left:8px;bottom:8px;
+  opacity:.65;letter-spacing:.08em;font-family:var(--mono);
+}
+
+/* Nodes */
+.node{
+  position:absolute;
+  width:var(--nodeW);
+  border:1px solid rgba(255,255,255,.18);
+  background: rgba(0,0,0,.52);
+  box-shadow:
+    0 0 0 1px rgba(0,0,0,.55) inset,
+    0 0 26px rgba(255,255,255, calc(var(--stim) * .10));
+  padding:8px;
+  user-select:none;
+  cursor:grab;
+}
+.node:active{cursor:grabbing}
+.node .t{
+  font-family:var(--mono);
+  letter-spacing:.08em;
+  font-weight:700;
+  opacity:.92;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.node .p{
+  margin-top:6px;
+  font-family:var(--mono);
+  opacity:.64;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.node .m{
+  margin-top:6px;
+  display:flex;gap:6px;flex-wrap:wrap;
+  opacity:.75;
+}
+.pill{
+  border:1px solid rgba(255,255,255,.16);
+  padding:2px 6px;
+  font-family:var(--mono);
+  letter-spacing:.08em;
+  opacity:.82;
+  max-width:100%;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.node .a{
+  margin-top:8px;
+  display:flex;gap:8px;align-items:center;justify-content:space-between;
+}
+.node .open{
+  border-bottom:1px solid rgba(255,255,255,.22);
+  opacity:.92;
+}
+.node .open:hover{border-bottom-color:rgba(255,255,255,.62)}
+.node .pin{
+  border:1px solid rgba(255,255,255,.22);
+  background:transparent;
+  padding:2px 6px;
+  letter-spacing:.08em;
+  opacity:.86;
+  cursor:pointer;
+}
+.node .pin:hover{opacity:1;border-color:rgba(255,255,255,.55)}
+.node.sel{border-color:rgba(255,255,255,.66);box-shadow:0 0 0 1px rgba(255,255,255,.10) inset, 0 0 46px rgba(255,255,255, calc(var(--stim)*.18))}
+.node.new{border-style:dashed}
+.node.depr{opacity:.55}
+
+/* overlays */
+#hud{
+  position:fixed;right:10px;bottom:10px;
+  border:1px solid var(--line);
+  padding:8px;
+  background:rgba(0,0,0,.62);
+  font-family:var(--mono);
+  letter-spacing:.08em;
+  opacity:.86;
+  z-index:60;
+  max-width:52vw;
+}
+#hud b{font-weight:700}
+#toast{
+  position:fixed;left:10px;bottom:10px;
+  border:1px solid var(--line);
+  padding:8px;
+  background:rgba(0,0,0,.62);
+  font-family:var(--mono);
+  letter-spacing:.08em;
+  opacity:0;
+  transform: translateY(6px);
+  transition: opacity .16s ease, transform .16s ease;
+  z-index:60;
+}
+#toast.show{opacity:.9;transform:translateY(0)}
+
+/* subtle stimuli */
+@keyframes pulse {
+  0%,100% { filter: brightness(1); }
+  50% { filter: brightness(calc(1 + var(--pulse)*0.25)); }
+}
+@keyframes glitch {
+  0%,100%{transform: translate(0,0)}
+  25%{transform: translate(calc(var(--glitch)*1px), calc(var(--glitch)*-1px))}
+  50%{transform: translate(calc(var(--glitch)*-1px), calc(var(--glitch)*1px))}
+  75%{transform: translate(calc(var(--glitch)*1px), 0px)}
+}
+.stimPulse #stage{animation:pulse 2.2s ease-in-out infinite}
+.stimGlitch .node{animation:glitch 1.6s linear infinite}
+
+/* modal */
+#modal{
+  position:fixed;inset:0;background:rgba(0,0,0,.78);
+  display:none;align-items:center;justify-content:center;
+  padding:12px;z-index:200;
+}
+#modal.show{display:flex}
+#panel{
+  width:min(980px,100%);
+  border:1px solid rgba(255,255,255,.18);
+  background:#000;
+  padding:12px;
+}
+#panelHd{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+#panelHd .hh{font-weight:700;letter-spacing:.14em}
+#panelHd .ss{opacity:.62;letter-spacing:.08em}
+#panelAct{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+</style>
+</head>
+<body>
+  <div id="topbar">
+    <div id="title">KETADATA // LINK NODES</div>
+    <div id="meta">BOOT</div>
+    <div class="sp"></div>
+    <button class="btn" id="btnAddZone">ADD ZONE</button>
+    <button class="btn" id="btnZones">ZONES: ON</button>
+    <button class="btn" id="btnPulse">PULSE: ON</button>
+    <button class="btn" id="btnGlitch">GLITCH: OFF</button>
+    <button class="btn" id="btnExport">EXPORT</button>
+    <button class="btn" id="btnImport">IMPORT</button>
+    <button class="btn" id="btnSyncNew">SYNC NEW (GITHUB)</button>
+    <button class="btn" id="btnAuto">AUTO: OFF</button>
+  </div>
+
+  <div id="layout">
+    <div id="left">
+      <div class="sec">
+        <div class="hd"><div class="h">REPO</div><div class="sub">NEW FILE SYNC ONLY</div></div>
+        <div class="row">
+          <input class="inp" id="owner" placeholder="OWNER" value="ki-tya"/>
+          <input class="inp" id="repo" placeholder="REPO" value="ketadata"/>
+        </div>
+        <div style="height:8px"></div>
+        <div class="row">
+          <input class="inp" id="branch" placeholder="BRANCH" value="main"/>
+          <input class="inp" id="pages" placeholder="PAGES BASE" value="https://ki-tya.github.io/ketadata/"/>
+        </div>
+        <div style="height:8px"></div>
+        <input class="inp" id="token" placeholder="GITHUB TOKEN (recommended)"/>
+        <div style="height:8px"></div>
+        <div class="row">
+          <select class="sel" id="autoMins">
+            <option value="0">AUTO: OFF</option>
+            <option value="2">AUTO: 2 MIN</option>
+            <option value="5">AUTO: 5 MIN</option>
+            <option value="10">AUTO: 10 MIN</option>
+            <option value="20">AUTO: 20 MIN</option>
+          </select>
+          <button class="btn" id="btnSyncTree">SYNC TREE</button>
+        </div>
+        <div style="height:8px"></div>
+        <div class="hint">
+          This tool treats your provided list as the base set.<br/>
+          SYNC NEW pulls latest repo tree and adds ONLY files not already in your graph.
+        </div>
+      </div>
+
+      <div class="sec">
+        <div class="hd"><div class="h">WORK</div><div class="sub">ZONES + NODES</div></div>
+        <div class="row">
+          <button class="btn" id="btnScatter">SCATTER</button>
+          <button class="btn" id="btnStack">STACK ZONE</button>
+        </div>
+        <div style="height:8px"></div>
+        <div class="row">
+          <input class="inp" id="search" placeholder="SEARCH (filename)"/>
+          <button class="btn" id="btnClearSearch">CLEAR</button>
+        </div>
+        <div style="height:8px"></div>
+        <div class="row">
+          <select class="sel" id="zoneFilter"></select>
+          <button class="btn" id="btnUnzone">UNZONE SELECTED</button>
+        </div>
+        <div style="height:8px"></div>
+        <textarea class="ta" id="note" placeholder="NOTE (selected node / zone)"></textarea>
+      </div>
+
+      <div class="sec">
+        <div class="hd"><div class="h">STIMULI</div><div class="sub">FUN / ADJUSTABLE</div></div>
+        <div class="row">
+          <label class="hint" style="flex:1">ZOOM<br/><input class="inp" id="zoom" type="range" min="0.6" max="1.8" step="0.01"/></label>
+          <label class="hint" style="flex:1">MAGNET<br/><input class="inp" id="magnet" type="range" min="0" max="1" step="0.01"/></label>
+        </div>
+        <div style="height:8px"></div>
+        <div class="row">
+          <label class="hint" style="flex:1">SNAP<br/><input class="inp" id="snap" type="range" min="0" max="1" step="0.01"/></label>
+          <label class="hint" style="flex:1">PULSE<br/><input class="inp" id="pulse" type="range" min="0" max="1" step="0.01"/></label>
+        </div>
+        <div style="height:8px"></div>
+        <div class="row">
+          <label class="hint" style="flex:1">GLITCH<br/><input class="inp" id="glitch" type="range" min="0" max="1" step="0.01"/></label>
+          <label class="hint" style="flex:1">ZONE ALPHA<br/><input class="inp" id="zoneAlpha" type="range" min="0" max="0.35" step="0.01"/></label>
+        </div>
+      </div>
+
+      <div class="sec">
+        <div class="hd"><div class="h">STATE</div><div class="sub" id="stateLine">—</div></div>
+        <div class="hint">
+          HOTKEYS: <span style="opacity:.85">SHIFT+Z</span> zoom reset · <span style="opacity:.85">SHIFT+S</span> scatter · <span style="opacity:.85">DEL</span> delete zone (if selected) · <span style="opacity:.85">ENTER</span> open selected<br/>
+          Drag nodes into zones. Drag zone headers to move zones. Right-click node for quick assign.
+        </div>
+      </div>
+    </div>
+
+    <div id="right">
+      <div id="stage"></div>
+      <div id="world">
+        <div id="zones"></div>
+        <div id="nodes"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="hud"><b>—</b></div>
+  <div id="toast">—</div>
+
+  <div id="modal">
+    <div id="panel">
+      <div id="panelHd">
+        <div class="hh" id="mTitle">EXPORT</div>
+        <div class="ss" id="mSub">STATE</div>
+        <div class="sp"></div>
+        <button class="btn" id="mClose">CLOSE</button>
+      </div>
+      <div class="hr"></div>
+      <textarea class="ta" id="mText" placeholder="PASTE STATE JSON HERE"></textarea>
+      <div id="panelAct">
+        <button class="btn" id="mCopy">COPY</button>
+        <button class="btn" id="mDownload">DOWNLOAD</button>
+        <button class="btn" id="mApply">APPLY / IMPORT</button>
+      </div>
+      <div class="hr"></div>
+      <div class="hint" id="mHint"></div>
+    </div>
+  </div>
+
+<script>
+(() => {
+  /* ===========================
+     LINK NODES (ZONES)
+     - local-first
+     - provided list is canonical base
+     - GitHub sync: add NEW html files only
+  ============================ */
+
+  // ----- helpers
+  const nowISO = () => new Date().toISOString();
+  const uid = () => Math.random().toString(16).slice(2) + "-" + Date.now().toString(16);
+  const clamp = (v,a,b)=>Math.max(a,Math.min(b,v));
+  const normBase = (s)=>{ let x=(s||"").trim(); if(x && !x.endsWith("/")) x+="/"; return x; };
+  const filename = (p)=> (p||"").split("/").pop() || (p||"");
+  const isHtml = (p)=> (p||"").toLowerCase().endsWith(".html");
+  const isLikelyToken = (t)=>((t||"").trim().length>=20);
+
+  function toast(msg){
+    const t = document.getElementById("toast");
+    t.textContent = msg;
+    t.classList.add("show");
+    setTimeout(()=>t.classList.remove("show"), 1200);
+  }
+
+  function downloadText(filename, mime, text){
+    const blob = new Blob([text||""], {type:mime||"text/plain"});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href=url; a.download=filename||"export.txt";
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url), 800);
+  }
+
+  async function copyText(text){
+    try{ await navigator.clipboard.writeText(text||""); return true; }
+    catch{
+      try{
+        const ta=document.createElement("textarea");
+        ta.value=text||""; ta.style.position="fixed"; ta.style.left="-9999px";
+        document.body.appendChild(ta); ta.focus(); ta.select();
+        document.execCommand("copy"); ta.remove(); return true;
+      }catch{ return false; }
+    }
+  }
+
+  // ----- file id + state key
+  const FILE_ID = (() => {
+    const k="KETADATA_LINK_NODES__FILE_ID";
+    let v=localStorage.getItem(k);
+    if(!v){ v="KLN-"+uid(); localStorage.setItem(k,v); }
+    return v;
+  })();
+  const LS_KEY = "KETADATA_LINK_NODES__STATE__" + FILE_ID;
+
+  // ----- initial links list (your provided triage)
+  const SEED_LIST = `
+67.html
+aniversary1111.html
+anniversary1.html
+anniversary11.html
+anniversary111.html
+artaud.html
+artifact.html
+backend.html
+ball.html
+bataille1.html
+beatball.html
+blacklotus2.html
+bleak.html
+board.html
+board1.html
+board2.html
+board3.html
+borges.html
+burroughs.html
+calendar1.html
+capture.html
+capturegpt.html
+capturegpt2.html
+capturegpt3.html
+capturegpt4.html
+capturegpt5.html
+capturegpt6.html
+capturegpt7.html
+capturegpt8.html
+cashapp1.html
+cashapp3.html
+cctv1.html
+chakra.html
+christmas25.html
+circle.html
+classifier.html
+classifier1.html
+color1.html
+color3.html
+color5.html
+compiler.html
+contextifier.html
+contract.html
+controller.html
+controller1.html
+controller2.html
+controller3.html
+cp.html
+cp1.html
+crunch1.html
+cube.html
+cube1.html
+darkroom.html
+debord.html
+deleuze.html
+depth.html
+display1.html
+diva.html
+dmt.html
+dmt2.html
+dmt3.html
+dmt4.html
+dmtzoom.html
+doc2.html
+editor.html
+elevator3.html
+etal.html
+fivethirtysix.html
+font.html
+forge3.html
+forge4.html
+forge5.html
+forge7.html
+funding.html
+funnel.html
+funnel1.html
+funnel2.html
+funnel3.html
+funnel4.html
+goffman.html
+gptsubject.html
+holzer.html
+html.html
+hyperstition.html
+hyperstition1.html
+hyperstition2.html
+hyperstition3.html
+hyperstition5.html
+index_copy.html
+index.html
+index11.html
+infinity.html
+interfacer.html
+interfacer1.html
+interfacer2.html
+jung.html
+kdtv1.html
+kitty.html
+kmas.html
+lab.html
+lab1.html
+lab3.html
+lab9.html
+labyrinth.html
+land.html
+libra.html
+linklist.html
+linkorg4.html
+main2.html
+main3.html
+mandala.html
+mandala2.html
+mandala3.html
+mandalagpt.html
+mandalagpt2.html
+mandalagpt3.html
+mandalagpt4.html
+manifest.html
+manifest5.html
+map.html
+mcluhan.html
+mdma.html
+mdma2.html
+mdmagpt.html
+mdmagpt2.html
+memofesto.html
+metadata.html
+metadata1.html
+misc.html
+misc2.html
+misc3.html
+misc4.html
+misc5.html
+misc6.html
+misc7.html
+misc8.html
+modern.html
+nav.html
+newtrap.html
+newtrap2.html
+newtrap3.html
+pads.html
+page.html
+page2.html
+pdf2jpeg7.html
+pdf2jpeg8.html
+pool.html
+pool3.html
+pool4.html
+pool5.html
+pool6.html
+primitive.html
+primitive1.html
+primitive2.html
+primitive3.html
+prompt.html
+prompt1.html
+prompt3.html
+prompter.html
+release.html
+release2.html
+release3.html
+release4.html
+ripple.html
+ripple2.html
+ripple3.html
+ripplegpt.html
+room.html
+screenplane.html
+screenplane1.html
+sensory3.html
+sg.html
+sg1.html
+shop.html
+slopstream2.html
+slopstream3.html
+slopstream4.html
+slopstream6.html
+snakes.html
+sovereignty.html
+studio.html
+studiofront.html
+studiov1.html
+studiov2.html
+studiov3.html
+subgpt2.html
+subgpt3.html
+subgpt4.html
+subgpt5.html
+submit.html
+system6.html
+system8.html
+temple.html
+temple1.html
+tester3.html
+tester31.html
+to-do.html
+unifier.html
+vape-drive.html
+vault.html
+version.html
+video.html
+video2.html
+videomanager.html
+003.html
+acid_doc.html
+index0.html
+index001.html
+index002.html
+index003.html
+index004.html
+index005.html
+index006.html
+index007.html
+index008.html
+index009.html
+index01.html
+index011.html
+index012.html
+index013.html
+index014.html
+index015.html
+index02.html
+index03.html
+index04.html
+index05.html
+index06.html
+index07.html
+index08.html
+index09.html
+memofesto1.html
+intra.html
+polka1.html
+polka2.html
+polkadot.html
+2812.html
+drugprotocol.html
+widefield.html
+diagnostic.html
+d2.html
+mandala88.html
+reading.html
+teleo.html
+teleo1.html
+matryoshka.html
+substrate.html
+substrate1.html
+substrate3.html
+sublime.html
+substance.html
+design1.html
+chroma.html
+arranger.html
+mockups.html
+mockups1.html
+mockups2.html
+based_diva3.html
+based_diva8.html
+based_diva9.html
+deprecated.html
+backbone.html
+claude.html
+backbone1.html
+backbone2.html
+memofesto2.html
+sheets.html
+pulse.html
+systemkill.html
+based_diva98.html
+storagemanager.html
+based_diva98x.html
+bugtest.html
+debug.html
+quota.html
+obscura.html
+lib_cl.html
+lib_gpt.html
+to-do1.html
+darkroom1.html
+redroom.html
+to-do2.html
+linksv3.html
+molecule.html
+coffee.html
+coffee1.html
+matrix.html
+doc5.html
+master.html
+master1.html
+master2.html
+mastergpt.html
+reg.html
+regv3.html
+regv4.html
+surface.html
+surface1.html
+kdtv1a.html
+kdtv1b.html
+kdtv3.html
+vidlist.html
+kdtv1_prev.html
+liminal.html
+confidential.html
+liminal1.html
+liminal2.html
+liminal3.html
+liminal5.html
+liminal6.html
+liminal7.html
+liminal10.html
+liminal11.html
+doc6.html
+serpentine.html
+socials.html
+lizard.html
+serp1.html
+socials1.html
+popsplit.html
+socials2.html
+splitview.html
+popsplit1.html
+socials3.html
+research.html
+wordbank.html
+wordbowl.html
+thing.html
+router.html
+router1.html
+sur_based.html
+sur_based1.html
+sur_based2.html
+sur_based_diva9.html
+sur_based_diva91.html
+sur_based_diva911.html
+based_diva9x.html
+diva9_sur_based.html
+fishtank.html
+leopard.html
+octopus.html
+sur_base_li.html
+sur_base1.html
+sur_base2.html
+mockupsbase.html
+sur_base3.html
+pad1.html
+memofest0.html
+memofesto11.html
+memofesto22.html
+butterfly.html
+butterfly1.html
+butterfly2.html
+butterfly3.html
+trace.html
+growth.html
+kittycat.html
+grace.html
+growth1.html
+growth2.html
+grace1.html
+underwater.html
+ashtray.html
+catface.html
+grace3.html
+kittycat1.html
+kittycat2.html
+underwater1.html
+ashtray1.html
+catface1.html
+catface2.html
+matchbook.html
+pigface.html
+turbulence.html
+eye.html
+eyes.html
+sur_base91.html
+sur_base911.html
+sure_base9.html
+sur_base9_11.html
+sur_base911a.html
+jan6.html
+jan61.html
+sur_base9111.html
+screen6.html
+sur_base9111a.html
+sur_9ase.html
+borromean.html
+catball.html
+catball1.html
+crow.html
+finder.html
+grotto.html
+grotto1.html
+grotto2.html
+indesign.html
+indesign1.html
+ktball.html
+ktball1.html
+mirror.html
+mirror1.html
+motion.html
+motion1.html
+motion10.html
+motion11.html
+motion2.html
+motion3.html
+motion4.html
+motion5.html
+motion6.html
+motion7.html
+motion8.html
+motion9.html
+orthodox.html
+orthodox1.html
+orthodox2.html
+pdfreader.html
+pdfreader1.html
+pdfreader10.html
+pdfreader11.html
+pdfreader12.html
+pdfreader13.html
+pdfreader2.html
+pdfreader3.html
+pdfreader4.html
+pdfreader6.html
+pdfreader7.html
+pdfreader8.html
+pdfreader9.html
+ppl_list.html
+serve.html
+serve1.html
+serve2.html
+tball.html
+tball1.html
+tball2.html
+tball3.html
+tball4.html
+tball5.html
+tball6.html
+tball7.html
+tennis.html
+tennisball.html
+tennisball0.html
+tennisball10.html
+tennisball11.html
+tennisball12.html
+tennisball13.html
+tennisball14.html
+tennisball15.html
+tennisball16.html
+tennisball2.html
+tennisball3.html
+tennisball4.html
+tennisball5.html
+tennisball6.html
+tennisball666.html
+tennisball7.html
+tennisball8.html
+tennisball9.html
+tennisball91.html
+tenniscourt.html
+trans.html
+trans1.html
+orthodox3.html
+triage_cal.html
+triage_cal1.html
+triage_cal2.html
+triage_cal3.html
+triage_cal4.html
+triage.html
+triage2.html
+red.html
+red1.html
+triage_cal5.html
+triage_cal6.html
+triage_cal7.html
+target.html
+`.trim();
+
+  // ----- normalization
+  function parseSeed(list){
+    return list.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
+  }
+
+  // ----- state
+  const DEFAULT_STATE = () => ({
+    version: "KETADATA_LINK_NODES_v1",
+    fileId: FILE_ID,
+    createdAt: nowISO(),
+    updatedAt: nowISO(),
+    repo: { owner:"ki-tya", repo:"ketadata", branch:"main", pagesBase:"https://ki-tya.github.io/ketadata/" },
+    auth: { token:"" },
+    ui: {
+      zoom: 1.0,
+      stimPulseOn: true,
+      stimGlitchOn: false,
+      zonesOn: true,
+      pulse: 0.35,
+      glitch: 0.15,
+      magnet: 0.35,
+      snap: 0.35,
+      zoneAlpha: 0.14,
+      search: "",
+      zoneFilter: "ALL",
+      autoMinutes: 0,
+      selectedKind: "", // "node"|"zone"
+      selectedId: "",
+      camX: 0, camY: 0
+    },
+    notes: {
+      global: ""
+    },
+    zones: {
+      // id -> {id,name,x,y,w,h,note}
+    },
+    nodes: {
+      // id -> {id,path,url,x,y,zoneId,note,tags,createdAt,isNew}
+    },
+    git: {
+      lastTreeSha: "",
+      lastTreeSyncAt: "",
+      lastNewCount: 0
+    }
+  });
+
+  function loadLocal(){
+    try{
+      const raw = localStorage.getItem(LS_KEY);
+      if(!raw) return null;
+      return JSON.parse(raw);
+    }catch{ return null; }
+  }
+
+  function deepMerge(base, patch){
+    const out = Array.isArray(base) ? base.slice() : {...base};
+    for(const [k,v] of Object.entries(patch||{})){
+      if(v && typeof v==="object" && !Array.isArray(v)){
+        out[k] = deepMerge(base[k] && typeof base[k]==="object" ? base[k] : {}, v);
+      } else out[k] = v;
+    }
+    return out;
+  }
+
+  function normalizeState(s){
+    const b = DEFAULT_STATE();
+    if(!s || typeof s!=="object") s = {};
+    let out = deepMerge(b, s);
+    out.fileId = FILE_ID;
+    out.repo.pagesBase = normBase(out.repo.pagesBase);
+    out.updatedAt = nowISO();
+    // harden maps
+    out.zones = out.zones && typeof out.zones==="object" ? out.zones : {};
+    out.nodes = out.nodes && typeof out.nodes==="object" ? out.nodes : {};
+    return out;
+  }
+
+  let state = normalizeState(loadLocal() || {});
+  const $meta = document.getElementById("meta");
+  const $hud = document.getElementById("hud");
+  const $stateLine = document.getElementById("stateLine");
+
+  // inputs
+  const $owner = document.getElementById("owner");
+  const $repo = document.getElementById("repo");
+  const $branch = document.getElementById("branch");
+  const $pages = document.getElementById("pages");
+  const $token = document.getElementById("token");
+  const $autoMins = document.getElementById("autoMins");
+
+  const $search = document.getElementById("search");
+  const $zoneFilter = document.getElementById("zoneFilter");
+  const $note = document.getElementById("note");
+
+  const $zoom = document.getElementById("zoom");
+  const $magnet = document.getElementById("magnet");
+  const $snap = document.getElementById("snap");
+  const $pulse = document.getElementById("pulse");
+  const $glitch = document.getElementById("glitch");
+  const $zoneAlpha = document.getElementById("zoneAlpha");
+
+  // buttons
+  const $btnAddZone = document.getElementById("btnAddZone");
+  const $btnZones = document.getElementById("btnZones");
+  const $btnPulse = document.getElementById("btnPulse");
+  const $btnGlitch = document.getElementById("btnGlitch");
+  const $btnExport = document.getElementById("btnExport");
+  const $btnImport = document.getElementById("btnImport");
+  const $btnSyncNew = document.getElementById("btnSyncNew");
+  const $btnAuto = document.getElementById("btnAuto");
+  const $btnSyncTree = document.getElementById("btnSyncTree");
+
+  const $btnScatter = document.getElementById("btnScatter");
+  const $btnStack = document.getElementById("btnStack");
+  const $btnClearSearch = document.getElementById("btnClearSearch");
+  const $btnUnzone = document.getElementById("btnUnzone");
+
+  // world
+  const $right = document.getElementById("right");
+  const $world = document.getElementById("world");
+  const $zones = document.getElementById("zones");
+  const $nodes = document.getElementById("nodes");
+
+  // modal
+  const $modal = document.getElementById("modal");
+  const $mTitle = document.getElementById("mTitle");
+  const $mSub = document.getElementById("mSub");
+  const $mText = document.getElementById("mText");
+  const $mClose = document.getElementById("mClose");
+  const $mCopy = document.getElementById("mCopy");
+  const $mDownload = document.getElementById("mDownload");
+  const $mApply = document.getElementById("mApply");
+  const $mHint = document.getElementById("mHint");
+
+  let modalMode = "export";
+
+  // ----- persistence
+  function save(){
+    state.updatedAt = nowISO();
+    localStorage.setItem(LS_KEY, JSON.stringify(state));
+    $stateLine.textContent = `FILE_ID ${state.fileId} · NODES ${Object.keys(state.nodes).length} · ZONES ${Object.keys(state.zones).length} · UPDATED ${state.updatedAt}`;
+  }
+  function setMeta(s){ $meta.textContent = s; }
+  function setStimClass(){
+    document.body.classList.toggle("stimPulse", !!state.ui.stimPulseOn);
+    document.body.classList.toggle("stimGlitch", !!state.ui.stimGlitchOn && state.ui.glitch>0.01);
+  }
+
+  // ----- seed init (only if empty)
+  function initSeedIfEmpty(){
+    if(Object.keys(state.nodes).length) return;
+    const list = parseSeed(SEED_LIST);
+    const base = normBase(state.repo.pagesBase);
+    const centerX = 0, centerY = 0;
+
+    // make one default zone to start: INBOX
+    const zid = "Z-" + uid();
+    state.zones[zid] = { id:zid, name:"INBOX", x:-520, y:-260, w:520, h:320, note:"" };
+
+    const ring = Math.max(360, Math.sqrt(list.length) * 54);
+    list.forEach((p, i) => {
+      const id = "N-" + uid();
+      const ang = (i / list.length) * Math.PI * 2;
+      const rr = ring + (Math.sin(i*0.77)*90);
+      const x = centerX + Math.cos(ang)*rr;
+      const y = centerY + Math.sin(ang)*rr;
+      state.nodes[id] = {
+        id, path:p, url: base + p.replace(/^\/+/,""),
+        x, y,
+        zoneId: "", // unzoned
+        note:"",
+        tags:"",
+        createdAt: nowISO(),
+        isNew: false
+      };
+    });
+    state.ui.camX = 0; state.ui.camY = 0;
+    state.ui.selectedKind = ""; state.ui.selectedId = "";
+    save();
+    setMeta("SEEDED FROM PROVIDED LIST");
+  }
+
+  // ----- github api
+  function ghHeaders(){
+    const headers = { "Accept":"application/vnd.github+json" };
+    const tok = (state.auth.token||"").trim();
+    if(tok) headers["Authorization"] = "Bearer " + tok;
+    return headers;
+  }
+  async function ghJSON(url){
+    const res = await fetch(url, { headers: ghHeaders() });
+    if(!res.ok){
+      const txt = await res.text().catch(()=> "");
+      throw new Error(`GITHUB ${res.status} ${res.statusText}\n${url}\n${txt}`);
+    }
+    return res.json();
+  }
+  async function fetchTree(){
+    const o=state.repo.owner, r=state.repo.repo, b=state.repo.branch;
+    const url = `https://api.github.com/repos/${encodeURIComponent(o)}/${encodeURIComponent(r)}/git/trees/${encodeURIComponent(b)}?recursive=1`;
+    return ghJSON(url);
+  }
+
+  function knownPathsSet(){
+    const set = new Set();
+    for(const n of Object.values(state.nodes)){
+      if(n && n.path) set.add(String(n.path));
+    }
+    return set;
+  }
+
+  function addNewPaths(paths){
+    const base = normBase(state.repo.pagesBase);
+    const ks = knownPathsSet();
+    const newOnes = paths.filter(p => isHtml(p) && !ks.has(p));
+    if(!newOnes.length) return 0;
+
+    // drop new nodes near camera center, but jittered
+    const cx = state.ui.camX, cy = state.ui.camY;
+    const jitter = 260;
+
+    newOnes.forEach((p, i) => {
+      const id = "N-" + uid();
+      state.nodes[id] = {
+        id, path:p, url: base + p.replace(/^\/+/,""),
+        x: cx + (Math.random()-0.5)*jitter,
+        y: cy + (Math.random()-0.5)*jitter,
+        zoneId: "",
+        note:"",
+        tags:"NEW",
+        createdAt: nowISO(),
+        isNew: true
+      };
+    });
+
+    state.git.lastNewCount = newOnes.length;
+    save();
+    return newOnes.length;
+  }
+
+  async function syncNewFromGithub(){
+    // persist repo inputs
+    state.repo.owner = ($owner.value||"").trim() || "ki-tya";
+    state.repo.repo = ($repo.value||"").trim() || "ketadata";
+    state.repo.branch = ($branch.value||"").trim() || "main";
+    state.repo.pagesBase = normBase($pages.value||"https://ki-tya.github.io/ketadata/");
+    state.auth.token = ($token.value||"").trim();
+
+    save();
+
+    setMeta("SYNC NEW: FETCH TREE ...");
+    const tree = await fetchTree();
+    const list = (tree && Array.isArray(tree.tree)) ? tree.tree : [];
+    const html = list.filter(x=>x && x.type==="blob" && typeof x.path==="string")
+      .map(x=>x.path)
+      .filter(isHtml);
+
+    const n = addNewPaths(html);
+    state.git.lastTreeSyncAt = nowISO();
+    save();
+    render();
+    setMeta(`SYNC NEW OK // +${n} NODES`);
+    toast(n ? `+${n} NEW` : "NO NEW");
+  }
+
+  // ----- camera / zoom
+  function applyWorldTransform(){
+    // world origin is at 0,0; we use cam offsets by translating world container itself
+    // we keep world centered at screen center via its base translate(-50%,-50%)
+    $world.style.transform = `translate(calc(-50% + ${-state.ui.camX}px), calc(-50% + ${-state.ui.camY}px)) scale(${state.ui.zoom})`;
+    document.documentElement.style.setProperty("--zoom", String(state.ui.zoom));
+  }
+
+  // ----- zones dropdown
+  function refreshZoneFilter(){
+    $zoneFilter.innerHTML = "";
+    const optAll = document.createElement("option");
+    optAll.value="ALL"; optAll.textContent="ZONE: ALL";
+    $zoneFilter.appendChild(optAll);
+
+    const optUn = document.createElement("option");
+    optUn.value="UNZONED"; optUn.textContent="ZONE: UNZONED";
+    $zoneFilter.appendChild(optUn);
+
+    const z = Object.values(state.zones).sort((a,b)=>(a.name||"").localeCompare(b.name||""));
+    for(const zz of z){
+      const o = document.createElement("option");
+      o.value = zz.id;
+      o.textContent = `ZONE: ${zz.name}`;
+      $zoneFilter.appendChild(o);
+    }
+    $zoneFilter.value = state.ui.zoneFilter || "ALL";
+  }
+
+  // ----- selection
+  function select(kind, id){
+    state.ui.selectedKind = kind || "";
+    state.ui.selectedId = id || "";
+    save();
+    render();
+  }
+
+  function selectedObj(){
+    const k = state.ui.selectedKind;
+    const id = state.ui.selectedId;
+    if(k==="node") return state.nodes[id] || null;
+    if(k==="zone") return state.zones[id] || null;
+    return null;
+  }
+
+  // ----- magnet/snap behavior: on drop, assign to zone if intersecting
+  function zoneHitTest(x,y){
+    // x,y in world coords
+    for(const z of Object.values(state.zones)){
+      const zx=z.x, zy=z.y, zw=z.w, zh=z.h;
+      if(x>=zx && x<=zx+zw && y>=zy && y<=zy+zh) return z;
+    }
+    return null;
+  }
+
+  function snapToZone(node){
+    const mag = clamp(state.ui.magnet,0,1);
+    if(mag <= 0.01) return;
+
+    const z = zoneHitTest(node.x, node.y);
+    if(!z){ node.zoneId = ""; return; }
+
+    node.zoneId = z.id;
+
+    // soft magnet toward interior
+    const cx = z.x + z.w*0.5;
+    const cy = z.y + z.h*0.5;
+    node.x = node.x + (cx - node.x) * (0.16 * mag);
+    node.y = node.y + (cy - node.y) * (0.16 * mag);
+
+    // snap grid inside zone
+    const sn = clamp(state.ui.snap,0,1);
+    if(sn > 0.01){
+      const step = 26 + Math.floor(24*sn);
+      node.x = Math.round(node.x/step)*step;
+      node.y = Math.round(node.y/step)*step;
+    }
+  }
+
+  // ----- rendering
+  function passesFilters(n){
+    const q = (state.ui.search||"").trim().toLowerCase();
+    if(q){
+      const blob = (filename(n.path) + " " + (n.path||"") + " " + (n.tags||"")).toLowerCase();
+      if(!blob.includes(q)) return false;
+    }
+    const zf = state.ui.zoneFilter || "ALL";
+    if(zf==="ALL") return true;
+    if(zf==="UNZONED") return !n.zoneId;
+    return n.zoneId === zf;
+  }
+
+  function render(){
+    // inputs -> ui
+    $owner.value = state.repo.owner;
+    $repo.value = state.repo.repo;
+    $branch.value = state.repo.branch;
+    $pages.value = state.repo.pagesBase;
+    $token.value = state.auth.token || "";
+
+    $autoMins.value = String(state.ui.autoMinutes||0);
+
+    $search.value = state.ui.search || "";
+    refreshZoneFilter();
+
+    $zoom.value = String(state.ui.zoom);
+    $magnet.value = String(state.ui.magnet);
+    $snap.value = String(state.ui.snap);
+    $pulse.value = String(state.ui.pulse);
+    $glitch.value = String(state.ui.glitch);
+    $zoneAlpha.value = String(state.ui.zoneAlpha);
+
+    document.documentElement.style.setProperty("--stim", String(clamp(state.ui.pulse,0,1)));
+    document.documentElement.style.setProperty("--pulse", String(clamp(state.ui.pulse,0,1)));
+    document.documentElement.style.setProperty("--glitch", String(clamp(state.ui.glitch,0,1)));
+    document.documentElement.style.setProperty("--magnet", String(clamp(state.ui.magnet,0,1)));
+    document.documentElement.style.setProperty("--snap", String(clamp(state.ui.snap,0,1)));
+    document.documentElement.style.setProperty("--zoneAlpha", String(clamp(state.ui.zoneAlpha,0,0.35)));
+
+    $btnZones.classList.toggle("on", !!state.ui.zonesOn);
+    $btnZones.textContent = state.ui.zonesOn ? "ZONES: ON" : "ZONES: OFF";
+    $btnPulse.classList.toggle("on", !!state.ui.stimPulseOn);
+    $btnPulse.textContent = state.ui.stimPulseOn ? "PULSE: ON" : "PULSE: OFF";
+    $btnGlitch.classList.toggle("on", !!state.ui.stimGlitchOn);
+    $btnGlitch.textContent = state.ui.stimGlitchOn ? "GLITCH: ON" : "GLITCH: OFF";
+    $btnAuto.classList.toggle("on", !!state.ui.autoMinutes);
+    $btnAuto.textContent = state.ui.autoMinutes ? `AUTO: ${state.ui.autoMinutes} MIN` : "AUTO: OFF";
+
+    setStimClass();
+    applyWorldTransform();
+
+    // note box (selected)
+    const so = selectedObj();
+    if(!so){ $note.value=""; $note.placeholder="NOTE (selected node / zone)"; }
+    else{
+      $note.value = so.note || "";
+      $note.placeholder = (state.ui.selectedKind==="node") ? "NOTE (selected node)" : "NOTE (selected zone)";
+    }
+
+    // zones
+    $zones.style.display = state.ui.zonesOn ? "block" : "none";
+    $zones.innerHTML = "";
+    for(const z of Object.values(state.zones)){
+      const el = document.createElement("div");
+      el.className = "zone";
+      el.style.left = z.x + "px";
+      el.style.top = z.y + "px";
+      el.style.width = z.w + "px";
+      el.style.height = z.h + "px";
+      el.dataset.id = z.id;
+
+      const zh = document.createElement("div");
+      zh.className = "zh";
+
+      const zt = document.createElement("div");
+      zt.className = "zt";
+      zt.textContent = z.name || "ZONE";
+
+      const zb = document.createElement("div");
+      zb.className = "zb";
+
+      const rn = document.createElement("button");
+      rn.className = "zbtn";
+      rn.textContent = "RENAME";
+      rn.addEventListener("click", (e)=>{
+        e.stopPropagation();
+        const nn = prompt("ZONE NAME:", z.name||"ZONE");
+        if(nn===null) return;
+        z.name = (nn||"").trim() || z.name;
+        save(); render(); toast("ZONE RENAMED");
+      });
+
+      const del = document.createElement("button");
+      del.className = "zbtn";
+      del.textContent = "DEL";
+      del.addEventListener("click", (e)=>{
+        e.stopPropagation();
+        if(!confirm("DELETE ZONE? (nodes stay, become unzoned)")) return;
+        for(const n of Object.values(state.nodes)){
+          if(n.zoneId === z.id) n.zoneId = "";
+        }
+        delete state.zones[z.id];
+        if(state.ui.selectedKind==="zone" && state.ui.selectedId===z.id){
+          state.ui.selectedKind=""; state.ui.selectedId="";
+        }
+        save(); render(); toast("ZONE DELETED");
+      });
+
+      zb.appendChild(rn);
+      zb.appendChild(del);
+
+      const zm = document.createElement("div");
+      zm.className = "zmeta";
+      const count = Object.values(state.nodes).filter(n=>n.zoneId===z.id).length;
+      zm.textContent = `${count} NODES`;
+
+      zh.appendChild(zt);
+      zh.appendChild(zb);
+      el.appendChild(zh);
+      el.appendChild(zm);
+
+      // select zone
+      el.addEventListener("mousedown", (e)=>{
+        if(e.button!==0) return;
+        select("zone", z.id);
+      });
+
+      // drag zone by header
+      makeDraggable(zh, {
+        kind:"zone",
+        id:z.id,
+        onMove:(dx,dy)=>{
+          z.x += dx; z.y += dy;
+          save();
+          el.style.left = z.x+"px";
+          el.style.top = z.y+"px";
+        }
+      });
+
+      $zones.appendChild(el);
+    }
+
+    // nodes
+    $nodes.innerHTML = "";
+    const all = Object.values(state.nodes);
+    const visible = all.filter(passesFilters);
+
+    // HUD
+    const selTxt = state.ui.selectedKind ? `${state.ui.selectedKind.toUpperCase()} ${state.ui.selectedId}` : "NONE";
+    $hud.innerHTML = `<b>NODES</b> ${visible.length}/${all.length} · <b>ZONES</b> ${Object.keys(state.zones).length} · <b>SEL</b> ${selTxt} · <b>ZOOM</b> ${state.ui.zoom.toFixed(2)}`;
+
+    for(const n of visible){
+      const el = document.createElement("div");
+      el.className = "node" + (n.isNew ? " new":"") + (n.tags && n.tags.toUpperCase().includes("DEPR") ? " depr":"") + ((state.ui.selectedKind==="node" && state.ui.selectedId===n.id) ? " sel":"");
+      el.style.left = n.x + "px";
+      el.style.top = n.y + "px";
+      el.dataset.id = n.id;
+
+      const t = document.createElement("div");
+      t.className = "t";
+      t.textContent = filename(n.path);
+
+      const p = document.createElement("div");
+      p.className = "p";
+      p.textContent = n.path;
+
+      const m = document.createElement("div");
+      m.className = "m";
+      const zname = n.zoneId && state.zones[n.zoneId] ? state.zones[n.zoneId].name : "—";
+      const p1 = document.createElement("div"); p1.className="pill"; p1.textContent = "ZONE:" + zname;
+      const p2 = document.createElement("div"); p2.className="pill"; p2.textContent = (n.tags||"").trim() ? ("TAGS:" + (n.tags||"").trim()) : "TAGS:—";
+      m.appendChild(p1); m.appendChild(p2);
+
+      const a = document.createElement("div");
+      a.className = "a";
+      const open = document.createElement("a");
+      open.className = "open";
+      open.href = n.url;
+      open.target = "_blank";
+      open.rel = "noopener";
+      open.textContent = "OPEN";
+
+      const pin = document.createElement("button");
+      pin.className = "pin";
+      pin.textContent = "SELECT";
+      pin.addEventListener("click", (e)=>{ e.stopPropagation(); select("node", n.id); });
+
+      a.appendChild(open);
+      a.appendChild(pin);
+
+      el.appendChild(t);
+      el.appendChild(p);
+      el.appendChild(m);
+      el.appendChild(a);
+
+      // select on click
+      el.addEventListener("mousedown", (e)=>{
+        if(e.button!==0) return;
+        select("node", n.id);
+        // left click should mark new->false once interacted
+        if(n.isNew){ n.isNew=false; save(); }
+      });
+
+      // right-click: quick assign to zone
+      el.addEventListener("contextmenu", (e)=>{
+        e.preventDefault();
+        select("node", n.id);
+        const zs = Object.values(state.zones);
+        if(!zs.length){ toast("NO ZONES"); return; }
+        const names = zs.map(z=>z.name).join("\n");
+        const nn = prompt("ASSIGN TO ZONE (type exact name):\n" + names, (n.zoneId && state.zones[n.zoneId]) ? state.zones[n.zoneId].name : "");
+        if(nn===null) return;
+        const hit = zs.find(z=>z.name===nn);
+        if(hit){ n.zoneId=hit.id; save(); render(); toast("ZONED"); }
+        else toast("NO MATCH");
+      });
+
+      // drag node
+      makeDraggable(el, {
+        kind:"node",
+        id:n.id,
+        onMove:(dx,dy)=>{
+          n.x += dx; n.y += dy;
+          el.style.left = n.x+"px";
+          el.style.top = n.y+"px";
+        },
+        onUp:()=>{
+          snapToZone(n);
+          save();
+          render();
+        }
+      });
+
+      $nodes.appendChild(el);
+    }
+
+    save();
+  }
+
+  // ----- draggable engine (world-space deltas)
+  function screenToWorldDelta(dx,dy){
+    // account for zoom
+    const z = state.ui.zoom || 1;
+    return { dx: dx / z, dy: dy / z };
+  }
+
+  function makeDraggable(handle, opts){
+    let dragging=false, sx=0, sy=0;
+    const onDown = (e)=>{
+      if(e.button!==0) return;
+      dragging=true;
+      sx=e.clientX; sy=e.clientY;
+      e.preventDefault();
+      window.addEventListener("mousemove", onMove, {passive:false});
+      window.addEventListener("mouseup", onUp, {passive:false});
+    };
+    const onMove = (e)=>{
+      if(!dragging) return;
+      const mx=e.clientX, my=e.clientY;
+      const dd = screenToWorldDelta(mx - sx, my - sy);
+      sx=mx; sy=my;
+      opts.onMove && opts.onMove(dd.dx, dd.dy, e);
+      e.preventDefault();
+    };
+    const onUp = (e)=>{
+      if(!dragging) return;
+      dragging=false;
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+      opts.onUp && opts.onUp(e);
+      e.preventDefault();
+    };
+    handle.addEventListener("mousedown", onDown, {passive:false});
+  }
+
+  // ----- camera pan (empty stage drag)
+  (function bindPan(){
+    let panning=false, sx=0, sy=0;
+    const onDown = (e)=>{
+      // only if clicking background (right panel but not a node/zone header)
+      if(e.button!==0) return;
+      const target = e.target;
+      if(target.closest && (target.closest(".node") || target.closest(".zone"))) return;
+      panning=true; sx=e.clientX; sy=e.clientY;
+      window.addEventListener("mousemove", onMove, {passive:false});
+      window.addEventListener("mouseup", onUp, {passive:false});
+      e.preventDefault();
+    };
+    const onMove = (e)=>{
+      if(!panning) return;
+      const mx=e.clientX, my=e.clientY;
+      const dx = (mx - sx), dy = (my - sy);
+      sx=mx; sy=my;
+      // cam moves opposite
+      const dd = screenToWorldDelta(dx,dy);
+      state.ui.camX -= dd.dx;
+      state.ui.camY -= dd.dy;
+      applyWorldTransform();
+      save();
+      e.preventDefault();
+    };
+    const onUp = (e)=>{
+      panning=false;
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+      e.preventDefault();
+    };
+    document.getElementById("right").addEventListener("mousedown", onDown, {passive:false});
+  })();
+
+  // ----- scatter / stack
+  function scatter(){
+    const all = Object.values(state.nodes);
+    const vis = all.filter(passesFilters);
+    const cx = state.ui.camX, cy = state.ui.camY;
+    const r = Math.max(520, Math.sqrt(vis.length)*70);
+    vis.forEach((n,i)=>{
+      const ang = (i / vis.length) * Math.PI*2;
+      const rr = r + (Math.sin(i*0.77)*140);
+      n.x = cx + Math.cos(ang)*rr + (Math.random()-0.5)*120;
+      n.y = cy + Math.sin(ang)*rr + (Math.random()-0.5)*120;
+      n.zoneId = "";
+    });
+    save(); render(); toast("SCATTER");
+  }
+
+  function stackZone(){
+    const sid = state.ui.selectedKind==="zone" ? state.ui.selectedId : "";
+    if(!sid || !state.zones[sid]){ toast("SELECT A ZONE"); return; }
+    const z = state.zones[sid];
+    const nodes = Object.values(state.nodes).filter(n=>passesFilters(n));
+    let k = 0;
+    const cols = 4;
+    const step = 46;
+    const padX = 20, padY = 44;
+    for(const n of nodes){
+      n.zoneId = z.id;
+      const cx = z.x + padX + (k%cols)*step;
+      const cy = z.y + padY + Math.floor(k/cols)*step;
+      n.x = cx; n.y = cy;
+      k++;
+    }
+    save(); render(); toast("STACKED");
+  }
+
+  function unzoneSelected(){
+    if(state.ui.selectedKind!=="node") { toast("SELECT NODE"); return; }
+    const n = state.nodes[state.ui.selectedId];
+    if(!n) return;
+    n.zoneId = "";
+    save(); render(); toast("UNZONED");
+  }
+
+  // ----- zones
+  function addZone(){
+    const id = "Z-" + uid();
+    const cx = state.ui.camX, cy = state.ui.camY;
+    state.zones[id] = { id, name:"ZONE", x: cx-240, y: cy-140, w: 520, h: 320, note:"" };
+    save(); render(); toast("ZONE ADDED");
+  }
+
+  // ----- modal
+  function openModal(mode){
+    modalMode = mode;
+    $modal.classList.add("show");
+    $mHint.textContent = "";
+    if(mode==="export"){
+      $mTitle.textContent="EXPORT";
+      $mSub.textContent="STATE";
+      $mText.value = JSON.stringify(state, null, 2);
+      $mApply.style.display="none";
+    } else {
+      $mTitle.textContent="IMPORT";
+      $mSub.textContent="STATE";
+      $mText.value = "";
+      $mApply.style.display="inline-block";
+      $mHint.textContent="PASTE JSON THEN APPLY";
+    }
+    $mText.focus();
+    $mText.select();
+  }
+  function closeModal(){ $modal.classList.remove("show"); }
+
+  // ----- auto
+  let autoTimer=null;
+  function stopAuto(){ if(autoTimer){ clearInterval(autoTimer); autoTimer=null; } }
+  function startAuto(mins){
+    stopAuto();
+    const m = Number(mins||0);
+    if(!m) return;
+    autoTimer = setInterval(async ()=>{
+      try{
+        await syncNewFromGithub();
+      }catch(e){
+        setMeta("AUTO FAILED");
+      }
+    }, m*60*1000);
+  }
+
+  // ----- wiring
+  function bind(){
+    // repo inputs
+    $owner.addEventListener("input", ()=>{ state.repo.owner=$owner.value.trim(); save(); });
+    $repo.addEventListener("input", ()=>{ state.repo.repo=$repo.value.trim(); save(); });
+    $branch.addEventListener("input", ()=>{ state.repo.branch=$branch.value.trim(); save(); });
+    $pages.addEventListener("input", ()=>{ state.repo.pagesBase=normBase($pages.value); save(); });
+    $token.addEventListener("input", ()=>{ state.auth.token=$token.value.trim(); save(); });
+
+    // ui
+    $search.addEventListener("input", ()=>{ state.ui.search=$search.value; save(); render(); });
+    $btnClearSearch.addEventListener("click", ()=>{ state.ui.search=""; save(); render(); });
+
+    $zoneFilter.addEventListener("change", ()=>{ state.ui.zoneFilter=$zoneFilter.value; save(); render(); });
+
+    $note.addEventListener("input", ()=>{
+      const o = selectedObj();
+      if(!o) return;
+      o.note = $note.value;
+      save();
+    });
+
+    $zoom.addEventListener("input", ()=>{ state.ui.zoom = Number($zoom.value); save(); applyWorldTransform(); render(); });
+    $magnet.addEventListener("input", ()=>{ state.ui.magnet = Number($magnet.value); save(); render(); });
+    $snap.addEventListener("input", ()=>{ state.ui.snap = Number($snap.value); save(); render(); });
+    $pulse.addEventListener("input", ()=>{ state.ui.pulse = Number($pulse.value); save(); setStimClass(); render(); });
+    $glitch.addEventListener("input", ()=>{ state.ui.glitch = Number($glitch.value); save(); setStimClass(); render(); });
+    $zoneAlpha.addEventListener("input", ()=>{ state.ui.zoneAlpha = Number($zoneAlpha.value); save(); render(); });
+
+    // toggles
+    $btnZones.addEventListener("click", ()=>{ state.ui.zonesOn=!state.ui.zonesOn; save(); render(); });
+    $btnPulse.addEventListener("click", ()=>{ state.ui.stimPulseOn=!state.ui.stimPulseOn; save(); render(); });
+    $btnGlitch.addEventListener("click", ()=>{ state.ui.stimGlitchOn=!state.ui.stimGlitchOn; save(); render(); });
+
+    // actions
+    $btnAddZone.addEventListener("click", addZone);
+    $btnScatter.addEventListener("click", scatter);
+    $btnStack.addEventListener("click", stackZone);
+    $btnUnzone.addEventListener("click", unzoneSelected);
+
+    $btnSyncTree.addEventListener("click", async ()=>{
+      try{
+        setMeta("SYNC TREE ...");
+        const tree = await fetchTree();
+        const list = (tree && Array.isArray(tree.tree)) ? tree.tree : [];
+        const html = list.filter(x=>x && x.type==="blob" && typeof x.path==="string").map(x=>x.path).filter(isHtml);
+        state.git.lastTreeSyncAt = nowISO();
+        save();
+        setMeta(`TREE OK // ${html.length} HTML FILES`);
+        toast("TREE OK");
+      }catch(e){
+        setMeta("TREE FAILED");
+        openModal("export");
+        $mText.value = String(e && e.message ? e.message : e);
+      }
+    });
+
+    $btnSyncNew.addEventListener("click", ()=>syncNewFromGithub().catch(e=>{
+      setMeta("SYNC NEW FAILED");
+      openModal("export");
+      $mText.value = String(e && e.message ? e.message : e);
+    }));
+
+    // auto
+    $autoMins.addEventListener("change", ()=>{
+      state.ui.autoMinutes = Number($autoMins.value||0);
+      save();
+      startAuto(state.ui.autoMinutes);
+      render();
+      toast(state.ui.autoMinutes ? `AUTO ${state.ui.autoMinutes}m` : "AUTO OFF");
+    });
+    $btnAuto.addEventListener("click", ()=>{
+      if(state.ui.autoMinutes){
+        state.ui.autoMinutes=0; $autoMins.value="0";
+        stopAuto(); save(); render(); toast("AUTO OFF");
+      } else {
+        const m = Number($autoMins.value||5) || 5;
+        state.ui.autoMinutes=m; $autoMins.value=String(m);
+        startAuto(m); save(); render(); toast("AUTO ON");
+      }
+    });
+
+    // export/import
+    $btnExport.addEventListener("click", ()=>openModal("export"));
+    $btnImport.addEventListener("click", ()=>openModal("import"));
+    $mClose.addEventListener("click", closeModal);
+    $modal.addEventListener("click", (e)=>{ if(e.target===$modal) closeModal(); });
+    $mCopy.addEventListener("click", async ()=>{
+      const ok = await copyText($mText.value||"");
+      toast(ok ? "COPIED" : "COPY FAIL");
+    });
+    $mDownload.addEventListener("click", ()=>{
+      const name = (modalMode==="export") ? `KETADATA_LINK_NODES_STATE_${FILE_ID}_${nowISO().slice(0,10)}.json` : "import.json";
+      downloadText(name, "application/json", $mText.value||"");
+      toast("DOWNLOADED");
+    });
+    $mApply.addEventListener("click", ()=>{
+      try{
+        const obj = JSON.parse($mText.value||"");
+        state = normalizeState(obj);
+        save(); render(); closeModal(); toast("IMPORTED");
+      } catch {
+        $mHint.textContent = "INVALID JSON. FIX AND APPLY.";
+        toast("IMPORT FAIL");
+      }
+    });
+
+    // hotkeys
+    window.addEventListener("keydown", (e)=>{
+      if(e.key==="Enter"){
+        if(state.ui.selectedKind==="node"){
+          const n = state.nodes[state.ui.selectedId];
+          if(n && n.url) window.open(n.url, "_blank", "noopener");
+        }
+      }
+      if(e.key==="Delete"){
+        if(state.ui.selectedKind==="zone"){
+          const z = state.zones[state.ui.selectedId];
+          if(z && confirm("DELETE ZONE?")){
+            for(const n of Object.values(state.nodes)){ if(n.zoneId===z.id) n.zoneId=""; }
+            delete state.zones[z.id];
+            state.ui.selectedKind=""; state.ui.selectedId="";
+            save(); render(); toast("ZONE DELETED");
+          }
+        }
+      }
+      if(e.shiftKey && (e.key==="Z" || e.key==="z")){
+        state.ui.zoom = 1.0;
+        state.ui.camX = 0; state.ui.camY = 0;
+        save(); render(); toast("ZOOM RESET");
+      }
+      if(e.shiftKey && (e.key==="S" || e.key==="s")){
+        scatter();
+      }
+    }, {passive:true});
+  }
+
+  // ----- init
+  function init(){
+    initSeedIfEmpty();
+
+    // hydrate ui from state
+    $owner.value = state.repo.owner;
+    $repo.value = state.repo.repo;
+    $branch.value = state.repo.branch;
+    $pages.value = state.repo.pagesBase;
+    $token.value = state.auth.token || "";
+
+    $autoMins.value = String(state.ui.autoMinutes||0);
+
+    $zoom.value = String(state.ui.zoom);
+    $magnet.value = String(state.ui.magnet);
+    $snap.value = String(state.ui.snap);
+    $pulse.value = String(state.ui.pulse);
+    $glitch.value = String(state.ui.glitch);
+    $zoneAlpha.value = String(state.ui.zoneAlpha);
+
+    // start auto if set
+    startAuto(state.ui.autoMinutes);
+
+    setMeta("READY");
+    bind();
+    render();
+
+    // small nudge: if token present, do a quiet sync new on boot
+    setTimeout(()=>{
+      if(isLikelyToken(state.auth.token)){
+        syncNewFromGithub().catch(()=>{});
+      }
+    }, 420);
+  }
+
+  init();
+
+  /* ===========================
+     AE/EE/WB SERIALIZATION STAMP
+  ============================ */
+  /*
+  AE: black ketadata mode; uniform text size; zones = translucent fields; nodes = mono cards; pulse/glitch stimuli knobs; zoom
+  EE: node graph; zone assignment via drag; magnet+snap on drop; search + zone filter; stack/scatter; selection note; export/import
+  WB: GitHub tree fetch; sync NEW only (adds nodes missing from current graph); auto sync interval; localStorage isolated by FILE_ID
+
+  FILE_ID: ${FILE_ID}
+  ROOM_ID: LINK_NODES
+  VERSION: 1.0.0
+  UPDATED_AT: ${new Date().toISOString()}
+  CHANGELOG:
+  - v1: zones + draggable nodes + new-only GitHub sync + stimuli controls
+  */
+})();
+</script>
+</body>
+</html>
