@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>KETADATA // LIVE DATAMOSH CAM</title>
+
+<style>
+:root{
+  --bg:#000;
+  --fg:rgba(255,255,255,.86);
+  --muted:rgba(255,255,255,.52);
+  --line:rgba(255,255,255,.14);
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --top:42px; --bot:32px;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:#000;color:var(--fg);font-family:var(--mono)}
+#top,#bot{
+  position:fixed;left:0;right:0;height:var(--top);
+  background:rgba(0,0,0,.8);backdrop-filter:blur(8px);
+  display:flex;align-items:center;gap:10px;padding:0 10px;
+  border-bottom:1px solid var(--line);z-index:10;
+}
+#bot{top:auto;bottom:0;height:var(--bot);border-bottom:none;border-top:1px solid var(--line)}
+button{background:none;border:1px solid var(--line);color:var(--fg);padding:4px 10px;cursor:pointer}
+#view{position:fixed;left:0;right:0;top:var(--top);bottom:var(--bot)}
+canvas{width:100%;height:100%;display:block}
+</style>
+</head>
+<body>
+
+<div id="top">
+  <b>KETADATA LIVE MOSH</b>
+  <button id="start">START CAM</button>
+  <button id="key">KEYFRAME</button>
+  <button id="mosh">MOSH</button>
+</div>
+
+<div id="view"><canvas id="c"></canvas></div>
+
+<div id="bot">P-BUFFER · MOTION WEIGHT · REAL TIME</div>
+
+<video id="v" autoplay playsinline muted style="display:none"></video>
+
+<script>
+const canvas=c
+const ctx=canvas.getContext("2d",{alpha:false})
+const v=document.getElementById("v")
+
+let W=0,H=0
+let src,prev,pbuf
+let motion
+let mosh=true
+let lastKey=0
+
+function resize(){
+  const dpr=Math.min(2,window.devicePixelRatio||1)
+  W=canvas.clientWidth*dpr
+  H=canvas.clientHeight*dpr
+  canvas.width=W;canvas.height=H
+  src=new OffscreenCanvas(W,H)
+  prev=new OffscreenCanvas(W,H)
+  pbuf=new OffscreenCanvas(W,H)
+  motion=new Float32Array(Math.ceil(W/16)*Math.ceil(H/16))
+}
+window.onresize=resize
+
+function drawCam(c){
+  const cx=c.getContext("2d")
+  const s=Math.max(W/v.videoWidth,H/v.videoHeight)
+  const w=v.videoWidth*s,h=v.videoHeight*s
+  cx.drawImage(v,(W-w)/2,(H-h)/2,w,h)
+}
+
+function keyframe(){
+  lastKey=performance.now()
+  drawCam(pbuf)
+}
+
+function computeMotion(){
+  const a=src.getContext("2d").getImageData(0,0,W,H).data
+  const b=prev.getContext("2d").getImageData(0,0,W,H).data
+  const bx=Math.ceil(W/16)
+  for(let i=0;i<motion.length;i++){
+    const x=(i%bx)*16,y=((i/bx)|0)*16
+    const p=(y*W+x)*4
+    const d=Math.abs(a[p]-b[p])+Math.abs(a[p+1]-b[p+1])+Math.abs(a[p+2]-b[p+2])
+    motion[i]=d*d
+  }
+}
+
+function pickBlock(){
+  let s=0
+  for(let v of motion)s+=v
+  let r=Math.random()*s
+  for(let i=0;i<motion.length;i++){if((r-=motion[i])<=0)return i}
+  return (Math.random()*motion.length)|0
+}
+
+function loop(){
+  if(!v.videoWidth)return requestAnimationFrame(loop)
+
+  drawCam(prev)
+  drawCam(src)
+
+  if(performance.now()-lastKey>2000) keyframe()
+  computeMotion()
+
+  const pb=pbuf.getContext("2d")
+  pb.globalAlpha=0.992
+  pb.drawImage(pbuf,0,0)
+
+  if(mosh){
+    for(let i=0;i<200;i++){
+      const id=pickBlock()
+      const bx=Math.ceil(W/16)
+      const x=(id%bx)*16,y=((id/bx)|0)*16
+      pb.drawImage(src,x,y,16,16,x,y,16,16)
+    }
+  }else{
+    pb.drawImage(src,0,0)
+  }
+
+  ctx.drawImage(pbuf,0,0)
+  requestAnimationFrame(loop)
+}
+
+document.getElementById("start").onclick=async()=>{
+  const s=await navigator.mediaDevices.getUserMedia({video:true})
+  v.srcObject=s
+  await v.play()
+  resize()
+  keyframe()
+  loop()
+}
+document.getElementById("key").onclick=keyframe
+document.getElementById("mosh").onclick=()=>mosh=!mosh
+</script>
+
+</body>
+</html>
