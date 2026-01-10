@@ -1,0 +1,1141 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>KETADATA // LINK GRAPH (ULTRALIGHT v2)</title>
+<style>
+:root{
+  color-scheme: dark;
+  --bg:#000;
+  --fg:rgba(255,255,255,.86);
+  --muted:rgba(255,255,255,.55);
+  --line:rgba(255,255,255,.12);
+  --line2:rgba(255,255,255,.22);
+  --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace;
+  --sans: Arial, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+  --top:40px;
+  --text:12px;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0;background:var(--bg);color:var(--fg);font:var(--text)/1.2 var(--sans);overflow:hidden}
+button,input,select,textarea{font:var(--text)/1.2 var(--sans);color:var(--fg)}
+a{color:inherit;text-decoration:none}
+
+#top{
+  position:fixed; inset:0 0 auto 0; height:var(--top);
+  display:flex; align-items:center; gap:8px; flex-wrap:wrap;
+  padding:6px 10px;
+  border-bottom:1px solid var(--line);
+  background:#000;
+  z-index:50;
+}
+#brand{font-weight:700;letter-spacing:.14em;white-space:nowrap}
+#meta{opacity:.62;letter-spacing:.08em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:40vw}
+.sp{flex:1}
+
+.btn{
+  border:1px solid var(--line2);
+  background:transparent;
+  padding:5px 7px;
+  letter-spacing:.08em;
+  cursor:pointer;
+  opacity:.9;
+  white-space:nowrap;
+}
+.btn:hover{border-color:rgba(255,255,255,.55);opacity:1}
+.btn.on{border-color:rgba(255,255,255,.66);opacity:1}
+
+.inp{
+  border:1px solid var(--line2);
+  background:#000;
+  padding:5px 7px;
+  outline:none;
+  min-width:160px;
+  letter-spacing:.02em;
+}
+.inp:focus{border-color:rgba(255,255,255,.66)}
+.small{min-width:120px}
+.tiny{min-width:88px}
+
+#wrap{position:fixed; inset:var(--top) 0 0 0; overflow:hidden}
+#c{position:absolute; inset:0; width:100%; height:100%}
+
+/* Controller dock */
+#dock{
+  position:fixed; left:10px; bottom:10px;
+  width:min(1120px, calc(100vw - 20px));
+  border:1px solid var(--line);
+  background:rgba(0,0,0,.62);
+  padding:8px;
+  z-index:80;
+  font-family:var(--mono);
+  letter-spacing:.06em;
+}
+#dockRow{display:flex; gap:10px; flex-wrap:wrap; align-items:center}
+.grp{
+  display:flex; gap:6px; align-items:center;
+  border:1px solid rgba(255,255,255,.10);
+  padding:6px;
+  background:rgba(0,0,0,.35);
+}
+.lab{opacity:.62; white-space:nowrap}
+.rng{width:120px}
+.val{min-width:46px; text-align:right; opacity:.85}
+
+#toast{
+  position:fixed; right:10px; bottom:10px;
+  border:1px solid var(--line);
+  background:rgba(0,0,0,.55);
+  padding:7px 8px;
+  font-family:var(--mono);
+  letter-spacing:.08em;
+  opacity:0;
+  transform: translateY(6px);
+  transition: opacity .14s ease, transform .14s ease;
+  z-index:90;
+}
+#toast.show{opacity:.92;transform:translateY(0)}
+
+/* Minimal modal */
+#modal{
+  position:fixed; inset:0; background:rgba(0,0,0,.78);
+  display:none; align-items:center; justify-content:center;
+  padding:12px; z-index:200;
+}
+#modal.show{display:flex}
+#panel{
+  width:min(980px,100%);
+  border:1px solid rgba(255,255,255,.16);
+  background:#000;
+  padding:10px;
+}
+#ph{display:flex; gap:10px; flex-wrap:wrap; align-items:baseline; font-family:var(--mono); letter-spacing:.08em}
+#ph .t{font-weight:700}
+#ph .s{opacity:.62}
+#pt{
+  width:100%;
+  min-height:320px;
+  border:1px solid rgba(255,255,255,.16);
+  background:#000;
+  color:var(--fg);
+  padding:8px;
+  outline:none;
+  font-family:var(--mono);
+  letter-spacing:.02em;
+  resize:vertical;
+  margin-top:8px;
+}
+#pact{display:flex; gap:8px; flex-wrap:wrap; margin-top:8px}
+#mh{margin-top:8px; opacity:.62; font-family:var(--mono); letter-spacing:.08em}
+</style>
+</head>
+<body>
+
+<div id="top">
+  <div id="brand">KETADATA // LINK GRAPH (ULTRALIGHT v2)</div>
+  <div id="meta">READY</div>
+  <div class="sp"></div>
+
+  <input id="search" class="inp" placeholder="SEARCH (name contains)" />
+  <button class="btn" id="btnLoad">LOAD LINKS</button>
+  <button class="btn" id="btnExport">EXPORT</button>
+  <button class="btn" id="btnImport">IMPORT</button>
+
+  <button class="btn" id="btnLabels">LABELS: ALL</button>
+  <button class="btn" id="btnZones">ZONES: ON</button>
+  <button class="btn" id="btnLinks">LINKS: OFF</button>
+
+  <button class="btn" id="btnMakeZone">MAKE ZONE</button>
+  <button class="btn" id="btnUnion">UNION → ZONE</button>
+  <button class="btn" id="btnClearSel">CLEAR SEL</button>
+
+  <button class="btn" id="btnCenter">CENTER</button>
+  <button class="btn" id="btnScatter">SCATTER</button>
+  <button class="btn" id="btnFreeze">FREEZE: OFF</button>
+</div>
+
+<div id="wrap"><canvas id="c"></canvas></div>
+
+<div id="dock">
+  <div id="dockRow">
+    <div class="grp">
+      <div class="lab">ZOOM</div>
+      <input class="rng" id="zoom" type="range" min="0.45" max="2.2" step="0.01"/>
+      <div class="val" id="zoomV"></div>
+    </div>
+
+    <div class="grp">
+      <div class="lab">DOT</div>
+      <input class="rng" id="dot" type="range" min="1" max="10" step="1"/>
+      <div class="val" id="dotV"></div>
+    </div>
+
+    <div class="grp">
+      <div class="lab">LABEL OP</div>
+      <input class="rng" id="lop" type="range" min="0" max="1" step="0.01"/>
+      <div class="val" id="lopV"></div>
+    </div>
+
+    <div class="grp">
+      <div class="lab">REPULSION</div>
+      <input class="rng" id="repel" type="range" min="0" max="3" step="0.01"/>
+      <div class="val" id="repelV"></div>
+    </div>
+
+    <div class="grp">
+      <div class="lab">DAMP</div>
+      <input class="rng" id="damp" type="range" min="0.70" max="0.99" step="0.01"/>
+      <div class="val" id="dampV"></div>
+    </div>
+
+    <div class="grp">
+      <div class="lab">JITTER</div>
+      <input class="rng" id="jit" type="range" min="0" max="2" step="0.01"/>
+      <div class="val" id="jitV"></div>
+    </div>
+
+    <div class="grp">
+      <div class="lab">SNAP</div>
+      <input class="rng" id="snap" type="range" min="0" max="80" step="1"/>
+      <div class="val" id="snapV"></div>
+    </div>
+
+    <div class="grp">
+      <div class="lab">NETWORK</div>
+      <input class="rng" id="linkD" type="range" min="0" max="260" step="1"/>
+      <div class="val" id="linkDV"></div>
+    </div>
+
+    <div class="grp">
+      <div class="lab">AUTO</div>
+      <button class="btn" id="btnTick">STEP</button>
+      <button class="btn" id="btnRun">RUN: ON</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast">—</div>
+
+<div id="modal">
+  <div id="panel">
+    <div id="ph">
+      <div class="t" id="mt">LOAD</div>
+      <div class="s" id="ms">LINKS</div>
+      <div class="sp"></div>
+      <button class="btn" id="mClose">CLOSE</button>
+    </div>
+    <textarea id="pt" placeholder="PASTE LINKS (one per line). Example: page.html"></textarea>
+    <div id="pact">
+      <button class="btn" id="mApply">APPLY</button>
+      <button class="btn" id="mCopy">COPY</button>
+      <button class="btn" id="mDown">DOWNLOAD</button>
+    </div>
+    <div id="mh">—</div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const nowISO=()=>new Date().toISOString();
+  const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+  const uid=()=>Math.random().toString(16).slice(2)+"-"+Date.now().toString(16);
+  const isHtml=(p)=>String(p||"").toLowerCase().endsWith(".html");
+  const fname=(p)=>String(p||"").split("/").pop()||String(p||"");
+  const rnd=(a,b)=>a+(Math.random()*(b-a));
+
+  // isolate per file
+  const FILE_ID = (() => {
+    const k="KETADATA_LINK_GRAPH_ULTRALIGHT__FILE_ID";
+    let v=localStorage.getItem(k);
+    if(!v){ v="KLGU-"+uid(); localStorage.setItem(k,v); }
+    return v;
+  })();
+  const LS_KEY="KETADATA_LINK_GRAPH_ULTRALIGHT__STATE__"+FILE_ID;
+
+  const DEFAULT = () => ({
+    version:"KETADATA_LINK_GRAPH_ULTRALIGHT_v2",
+    fileId: FILE_ID,
+    createdAt: nowISO(),
+    updatedAt: nowISO(),
+    ui:{
+      search:"",
+      zoom:1.00,
+      camX:0, camY:0,
+      dot:4,
+      repel:1.10,
+      damp:0.90,
+      jitter:0.10,
+      snap:0,
+      labelOpacity:0.70,
+      labelsMode:"all",      // all | hover | off
+      zonesOn:true,
+      linksOn:false,
+      linkDist:90,
+      run:true,
+      freeze:false
+    },
+    zones:{},   // id -> {id,name,x,y,w,h}
+    nodes:{},   // id -> {id,path,x,y,vx,vy,zoneId,selected}
+    edges:{}    // key -> {a,b} generated + stored when unioning (optional)
+  });
+
+  function load(){
+    try{ const raw=localStorage.getItem(LS_KEY); return raw? JSON.parse(raw): null; }
+    catch{ return null; }
+  }
+  function deepMerge(a,b){
+    const out = Array.isArray(a)? a.slice(): {...a};
+    for(const [k,v] of Object.entries(b||{})){
+      if(v && typeof v==="object" && !Array.isArray(v)) out[k]=deepMerge(a[k] && typeof a[k]==="object"? a[k] : {}, v);
+      else out[k]=v;
+    }
+    return out;
+  }
+  function normalize(s){
+    let st = deepMerge(DEFAULT(), s||{});
+    st.fileId=FILE_ID;
+    st.ui.zoom = clamp(Number(st.ui.zoom||1), 0.45, 2.2);
+    st.ui.dot = clamp(Number(st.ui.dot||4), 1, 10);
+    st.ui.repel = clamp(Number(st.ui.repel||1.1), 0, 3);
+    st.ui.damp = clamp(Number(st.ui.damp||0.9), 0.70, 0.99);
+    st.ui.jitter = clamp(Number(st.ui.jitter||0.1), 0, 2);
+    st.ui.snap = clamp(Number(st.ui.snap||0), 0, 80);
+    st.ui.labelOpacity = clamp(Number(st.ui.labelOpacity||0.7), 0, 1);
+    st.ui.linkDist = clamp(Number(st.ui.linkDist||90), 0, 260);
+    st.ui.labelsMode = (st.ui.labelsMode==="hover"||st.ui.labelsMode==="off") ? st.ui.labelsMode : "all";
+    st.ui.zonesOn = st.ui.zonesOn!==false;
+    st.ui.linksOn = !!st.ui.linksOn;
+    st.ui.run = st.ui.run!==false;
+    st.ui.freeze = !!st.ui.freeze;
+    st.zones = (st.zones && typeof st.zones==="object") ? st.zones : {};
+    st.nodes = (st.nodes && typeof st.nodes==="object") ? st.nodes : {};
+    st.edges = (st.edges && typeof st.edges==="object") ? st.edges : {};
+    // harden nodes
+    for(const n of Object.values(st.nodes)){
+      n.selected = !!n.selected;
+      n.zoneId = typeof n.zoneId==="string" ? n.zoneId : "";
+      n.vx = Number(n.vx||0); n.vy = Number(n.vy||0);
+      n.x = Number(n.x||0); n.y = Number(n.y||0);
+    }
+    st.updatedAt=nowISO();
+    return st;
+  }
+
+  let state = normalize(load());
+
+  // DOM
+  const $meta = document.getElementById("meta");
+  const $search = document.getElementById("search");
+  const $btnLoad = document.getElementById("btnLoad");
+  const $btnExport = document.getElementById("btnExport");
+  const $btnImport = document.getElementById("btnImport");
+  const $btnLabels = document.getElementById("btnLabels");
+  const $btnZones = document.getElementById("btnZones");
+  const $btnLinks = document.getElementById("btnLinks");
+  const $btnMakeZone = document.getElementById("btnMakeZone");
+  const $btnUnion = document.getElementById("btnUnion");
+  const $btnClearSel = document.getElementById("btnClearSel");
+  const $btnCenter = document.getElementById("btnCenter");
+  const $btnScatter = document.getElementById("btnScatter");
+  const $btnFreeze = document.getElementById("btnFreeze");
+
+  const $zoom = document.getElementById("zoom");
+  const $dot = document.getElementById("dot");
+  const $lop = document.getElementById("lop");
+  const $repel = document.getElementById("repel");
+  const $damp = document.getElementById("damp");
+  const $jit = document.getElementById("jit");
+  const $snap = document.getElementById("snap");
+  const $linkD = document.getElementById("linkD");
+
+  const $zoomV = document.getElementById("zoomV");
+  const $dotV = document.getElementById("dotV");
+  const $lopV = document.getElementById("lopV");
+  const $repelV = document.getElementById("repelV");
+  const $dampV = document.getElementById("dampV");
+  const $jitV = document.getElementById("jitV");
+  const $snapV = document.getElementById("snapV");
+  const $linkDV = document.getElementById("linkDV");
+
+  const $btnTick = document.getElementById("btnTick");
+  const $btnRun = document.getElementById("btnRun");
+
+  const $toast = document.getElementById("toast");
+
+  const $modal = document.getElementById("modal");
+  const $mt = document.getElementById("mt");
+  const $ms = document.getElementById("ms");
+  const $pt = document.getElementById("pt");
+  const $mh = document.getElementById("mh");
+  const $mClose = document.getElementById("mClose");
+  const $mApply = document.getElementById("mApply");
+  const $mCopy = document.getElementById("mCopy");
+  const $mDown = document.getElementById("mDown");
+
+  const canvas = document.getElementById("c");
+  const ctx = canvas.getContext("2d", { alpha:false });
+
+  function toast(msg){
+    $toast.textContent = msg;
+    $toast.classList.add("show");
+    setTimeout(()=> $toast.classList.remove("show"), 950);
+  }
+  function save(){
+    state.updatedAt=nowISO();
+    localStorage.setItem(LS_KEY, JSON.stringify(state));
+  }
+  function setMeta(s){ $meta.textContent = s; }
+
+  // canvas sizing
+  let W=0,H=0, DPR=1;
+  function resize(){
+    const r=canvas.getBoundingClientRect();
+    W=Math.max(1, Math.floor(r.width));
+    H=Math.max(1, Math.floor(r.height));
+    DPR=Math.max(1, Math.floor(window.devicePixelRatio||1));
+    canvas.width=W*DPR;
+    canvas.height=H*DPR;
+    ctx.setTransform(DPR,0,0,DPR,0,0);
+  }
+  window.addEventListener("resize", resize);
+
+  // camera transform
+  function worldToScreen(x,y){
+    const z=state.ui.zoom;
+    return { x:(x - state.ui.camX)*z + W/2, y:(y - state.ui.camY)*z + H/2 };
+  }
+  function screenToWorld(x,y){
+    const z=state.ui.zoom;
+    return { x:(x - W/2)/z + state.ui.camX, y:(y - H/2)/z + state.ui.camY };
+  }
+
+  function passes(n){
+    const q=(state.ui.search||"").trim().toLowerCase();
+    if(!q) return true;
+    return fname(n.path).toLowerCase().includes(q) || String(n.path||"").toLowerCase().includes(q);
+  }
+
+  // pickers
+  function nodeAt(wx,wy){
+    const r=state.ui.dot*2.2;
+    let best="", bd=1e9;
+    for(const n of Object.values(state.nodes)){
+      if(!passes(n)) continue;
+      const dx=n.x-wx, dy=n.y-wy;
+      const d=dx*dx+dy*dy;
+      if(d<r*r && d<bd){ bd=d; best=n.id; }
+    }
+    return best;
+  }
+  function zoneAt(wx,wy){
+    for(const z of Object.values(state.zones)){
+      if(wx>=z.x && wx<=z.x+z.w && wy>=z.y && wy<=z.y+z.h) return z.id;
+    }
+    return "";
+  }
+
+  // selection set
+  function selectedIds(){
+    return Object.values(state.nodes).filter(n=>n.selected).map(n=>n.id);
+  }
+  function clearSelection(){
+    for(const n of Object.values(state.nodes)) n.selected=false;
+    save();
+    renderControls();
+    toast("SEL CLEARED");
+  }
+
+  // zones
+  function makeZoneAtCamera(){
+    const id="Z-"+uid();
+    state.zones[id]={
+      id,
+      name:"ZONE",
+      x: state.ui.camX - 260,
+      y: state.ui.camY - 160,
+      w: 520,
+      h: 320
+    };
+    save();
+    renderControls();
+    toast("ZONE MADE");
+    return id;
+  }
+
+  // UNION: put selected nodes into a chosen zone, and optionally create edges among them
+  function unionSelectedToZone(){
+    const sel = selectedIds();
+    if(sel.length<1){ toast("NO SEL"); return; }
+
+    let zid = "";
+    // prefer: zone under camera center if any
+    zid = zoneAt(state.ui.camX, state.ui.camY);
+    if(!zid){
+      // else: first zone, else create
+      zid = Object.keys(state.zones)[0] || makeZoneAtCamera();
+    }
+
+    for(const id of sel){
+      const n=state.nodes[id];
+      n.zoneId=zid;
+      n.selected=false;
+    }
+
+    // build a light "network" (complete graph) inside this zone as stored edges
+    // (still ultralight: edges only for selected union events)
+    for(let i=0;i<sel.length;i++){
+      for(let j=i+1;j<sel.length;j++){
+        const a=sel[i], b=sel[j];
+        const k = a<b ? (a+"|"+b) : (b+"|"+a);
+        state.edges[k]={a,b};
+      }
+    }
+
+    save();
+    renderControls();
+    toast(`UNION → ${sel.length}`);
+  }
+
+  // ultralight physics: repel + mild center pull + optional zone “cohesion”
+  function step(){
+    if(state.ui.freeze) return;
+    const nodes = Object.values(state.nodes).filter(passes);
+    const N = nodes.length;
+    if(N<=1) return;
+
+    const repel = state.ui.repel;
+    const damp = state.ui.damp;
+    const jit = state.ui.jitter;
+    const snap = state.ui.snap;
+
+    const pull = 0.0025;
+    const zonePull = state.ui.zonesOn ? 0.0045 : 0;
+
+    // precompute zone centers
+    const zc = {};
+    if(state.ui.zonesOn){
+      for(const z of Object.values(state.zones)){
+        zc[z.id] = { cx: z.x + z.w/2, cy: z.y + z.h/2 };
+      }
+    }
+
+    for(let i=0;i<N;i++){
+      const a=nodes[i];
+      let fx = (state.ui.camX - a.x) * pull;
+      let fy = (state.ui.camY - a.y) * pull;
+
+      // if node has zone assignment, pull toward zone center
+      if(zonePull && a.zoneId && zc[a.zoneId]){
+        fx += (zc[a.zoneId].cx - a.x) * zonePull;
+        fy += (zc[a.zoneId].cy - a.y) * zonePull;
+      }
+
+      for(let j=i+1;j<N;j++){
+        const b=nodes[j];
+        let dx=a.x-b.x, dy=a.y-b.y;
+        let d2=dx*dx+dy*dy + 20;
+        let inv = 1/Math.sqrt(d2);
+        let f = repel * 38 * inv * inv;
+        let fxp = dx*inv*f;
+        let fyp = dy*inv*f;
+        fx += fxp; fy += fyp;
+        b.vx -= fxp; b.vy -= fyp;
+      }
+
+      a.vx = (a.vx + fx + rnd(-jit,jit)) * damp;
+      a.vy = (a.vy + fy + rnd(-jit,jit)) * damp;
+    }
+
+    for(const a of nodes){
+      if(a._drag) continue;
+      a.x += a.vx;
+      a.y += a.vy;
+
+      if(snap>0){
+        a.x = Math.round(a.x/snap)*snap;
+        a.y = Math.round(a.y/snap)*snap;
+      }
+
+      // assign zone if inside any (soft)
+      if(state.ui.zonesOn){
+        const zid = zoneAt(a.x,a.y);
+        if(zid) a.zoneId = zid;
+      }
+    }
+  }
+
+  function drawEdges(){
+    if(!state.ui.linksOn) return;
+    const D = state.ui.linkDist || 0;
+    if(D<=0) return;
+
+    const nodes = Object.values(state.nodes).filter(passes);
+    if(nodes.length<2) return;
+
+    // (A) show stored edges (union networks) in slightly stronger ink
+    ctx.strokeStyle="rgba(255,255,255,.12)";
+    ctx.lineWidth=1;
+    for(const e of Object.values(state.edges)){
+      const a=state.nodes[e.a], b=state.nodes[e.b];
+      if(!a||!b) continue;
+      if(!passes(a)||!passes(b)) continue;
+      const A=worldToScreen(a.x,a.y);
+      const B=worldToScreen(b.x,b.y);
+      ctx.beginPath();
+      ctx.moveTo(A.x,A.y);
+      ctx.lineTo(B.x,B.y);
+      ctx.stroke();
+    }
+
+    // (B) optional proximity links (very faint)
+    ctx.strokeStyle="rgba(255,255,255,.05)";
+    for(let i=0;i<nodes.length;i++){
+      for(let j=i+1;j<nodes.length;j++){
+        const a=nodes[i], b=nodes[j];
+        const dx=a.x-b.x, dy=a.y-b.y;
+        const d=Math.sqrt(dx*dx+dy*dy);
+        if(d>D) continue;
+        const A=worldToScreen(a.x,a.y);
+        const B=worldToScreen(b.x,b.y);
+        ctx.beginPath();
+        ctx.moveTo(A.x,A.y);
+        ctx.lineTo(B.x,B.y);
+        ctx.stroke();
+      }
+    }
+  }
+
+  function draw(){
+    ctx.fillStyle="#000";
+    ctx.fillRect(0,0,W,H);
+
+    // zones
+    if(state.ui.zonesOn){
+      for(const z of Object.values(state.zones)){
+        const A=worldToScreen(z.x,z.y);
+        const B=worldToScreen(z.x+z.w,z.y+z.h);
+        const x=A.x, y=A.y, w=B.x-A.x, h=B.y-A.y;
+
+        ctx.strokeStyle="rgba(255,255,255,.14)";
+        ctx.lineWidth=1;
+        ctx.strokeRect(x,y,w,h);
+
+        ctx.fillStyle="rgba(255,255,255,.05)";
+        ctx.fillRect(x,y,w,h);
+
+        ctx.fillStyle="rgba(255,255,255,.62)";
+        ctx.font=`12px ${getComputedStyle(document.documentElement).getPropertyValue("--mono")}`;
+        ctx.fillText((z.name||"ZONE"), x+6, y+14);
+      }
+    }
+
+    // edges
+    drawEdges();
+
+    // nodes + labels
+    const dot = state.ui.dot;
+    const labelOp = state.ui.labelOpacity;
+    const labelsMode = state.ui.labelsMode;
+
+    for(const n of Object.values(state.nodes)){
+      if(!passes(n)) continue;
+      const p=worldToScreen(n.x,n.y);
+
+      const isHover = (n.id===hoverId);
+      const isSel = !!n.selected;
+
+      // dot
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, dot, 0, Math.PI*2);
+
+      if(isSel){
+        ctx.fillStyle="rgba(255,255,255,.18)";
+        ctx.fill();
+        ctx.strokeStyle="rgba(255,255,255,.72)";
+        ctx.lineWidth=1;
+        ctx.stroke();
+      } else {
+        ctx.fillStyle="rgba(255,255,255,.10)";
+        ctx.fill();
+        ctx.strokeStyle=isHover ? "rgba(255,255,255,.62)" : "rgba(255,255,255,.38)";
+        ctx.lineWidth=1;
+        ctx.stroke();
+      }
+
+      const show = (labelsMode==="all") || (labelsMode==="hover" && (isHover||isSel));
+      if(show){
+        const txt=fname(n.path);
+        ctx.globalAlpha = isSel ? 1 : labelOp;
+        ctx.fillStyle="rgba(255,255,255,.86)";
+        ctx.font=`12px ${getComputedStyle(document.documentElement).getPropertyValue("--mono")}`;
+        ctx.fillText(txt, p.x + dot + 6, p.y + 4);
+        ctx.globalAlpha = 1;
+      }
+    }
+  }
+
+  // animation
+  let raf=null;
+  function tick(){
+    if(state.ui.run) step();
+    draw();
+    raf=requestAnimationFrame(tick);
+  }
+
+  // apply links (paste)
+  function applyLinks(text){
+    const lines = String(text||"").split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
+    const uniq = Array.from(new Set(lines)).filter(isHtml);
+
+    const byPath = new Map();
+    for(const n of Object.values(state.nodes)) byPath.set(n.path, n);
+
+    let add=0, keep=0;
+    for(const p of uniq){
+      if(byPath.has(p)){ keep++; continue; }
+      const id="N-"+uid();
+      state.nodes[id]={
+        id, path:p,
+        x: state.ui.camX + rnd(-240,240),
+        y: state.ui.camY + rnd(-240,240),
+        vx:0, vy:0,
+        zoneId:"",
+        selected:false
+      };
+      add++;
+    }
+
+    save();
+    setMeta(`LINKS LOADED · +${add} · ${keep} EXISTING`);
+    toast(`+${add}`);
+    renderControls();
+  }
+
+  // modal
+  let modalMode="load";
+  function openModal(mode, title, sub, value, hint){
+    modalMode=mode;
+    $mt.textContent=title||"LOAD";
+    $ms.textContent=sub||"LINKS";
+    $pt.value=value||"";
+    $mh.textContent=hint||"—";
+    $modal.classList.add("show");
+    $pt.focus();
+    $pt.select();
+  }
+  function closeModal(){ $modal.classList.remove("show"); }
+
+  // export/import
+  function exportState(){
+    return JSON.stringify({ ...state, updatedAt: nowISO() }, null, 2);
+  }
+  function importState(raw){
+    const obj=JSON.parse(raw||"");
+    state=normalize(obj);
+    save();
+    renderControls();
+    toast("IMPORTED");
+    setMeta("IMPORTED");
+  }
+  function downloadText(name, mime, text){
+    const blob=new Blob([text||""],{type:mime||"text/plain"});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement("a");
+    a.href=url; a.download=name||"export.txt";
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url), 800);
+  }
+
+  // interaction: hover + multi-select + drag + pan
+  let hoverId="";
+  let draggingNode=false;
+  let draggingZone=false;
+  let dragOffX=0, dragOffY=0;
+  let panning=false, panSX=0, panSY=0, camSX=0, camSY=0;
+
+  function toggleSelect(id, on){
+    const n=state.nodes[id]; if(!n) return;
+    n.selected = (on===undefined) ? !n.selected : !!on;
+  }
+
+  canvas.addEventListener("mousedown",(e)=>{
+    if(e.button!==0) return;
+    const rect=canvas.getBoundingClientRect();
+    const sx=e.clientX-rect.left, sy=e.clientY-rect.top;
+    const w=screenToWorld(sx,sy);
+
+    const hit = nodeAt(w.x,w.y);
+    if(hit){
+      // selection logic:
+      // - click: single select (clears others) unless SHIFT
+      // - SHIFT+click: toggle
+      if(e.shiftKey){
+        toggleSelect(hit);
+      }else{
+        // if clicking already-selected node and there are multiple selected, keep selection
+        const sel = selectedIds();
+        if(!(state.nodes[hit].selected && sel.length>1)){
+          for(const n of Object.values(state.nodes)) n.selected=false;
+          state.nodes[hit].selected=true;
+        }
+      }
+      save();
+      renderControls();
+
+      // drag: if node is selected, drag all selected as a group
+      draggingNode=true;
+      dragOffX=w.x; dragOffY=w.y; // store last world point for group delta
+      for(const n of Object.values(state.nodes)) n._drag = !!n.selected;
+      return;
+    }
+
+    // zones drag if zones on and ALT held (keeps node gestures clean)
+    if(state.ui.zonesOn && e.altKey){
+      const zid = zoneAt(w.x,w.y);
+      if(zid){
+        draggingZone=true;
+        state.ui._dragZoneId=zid;
+        const z=state.zones[zid];
+        dragOffX = w.x - z.x;
+        dragOffY = w.y - z.y;
+        save();
+        return;
+      }
+    }
+
+    // empty click clears selection unless SHIFT
+    if(!e.shiftKey){
+      for(const n of Object.values(state.nodes)) n.selected=false;
+      save(); renderControls();
+    }
+
+    // pan
+    panning=true;
+    panSX=e.clientX; panSY=e.clientY;
+    camSX=state.ui.camX; camSY=state.ui.camY;
+  });
+
+  window.addEventListener("mousemove",(e)=>{
+    const rect=canvas.getBoundingClientRect();
+    const sx=e.clientX-rect.left, sy=e.clientY-rect.top;
+    const w=screenToWorld(sx,sy);
+
+    hoverId = nodeAt(w.x,w.y);
+
+    if(draggingNode){
+      const dx = w.x - dragOffX;
+      const dy = w.y - dragOffY;
+      dragOffX = w.x;
+      dragOffY = w.y;
+
+      for(const n of Object.values(state.nodes)){
+        if(!n._drag) continue;
+        n.x += dx;
+        n.y += dy;
+        n.vx=0; n.vy=0;
+      }
+
+      // zone assignment on move (soft)
+      if(state.ui.zonesOn){
+        for(const n of Object.values(state.nodes)){
+          if(!n._drag) continue;
+          const zid = zoneAt(n.x,n.y);
+          if(zid) n.zoneId = zid;
+        }
+      }
+
+      save();
+      return;
+    }
+
+    if(draggingZone && state.ui._dragZoneId){
+      const z=state.zones[state.ui._dragZoneId];
+      z.x = w.x - dragOffX;
+      z.y = w.y - dragOffY;
+      save();
+      return;
+    }
+
+    if(panning){
+      const dx=e.clientX-panSX;
+      const dy=e.clientY-panSY;
+      const z=state.ui.zoom;
+      state.ui.camX = camSX - dx / z;
+      state.ui.camY = camSY - dy / z;
+      save();
+      return;
+    }
+  }, {passive:true});
+
+  window.addEventListener("mouseup",()=>{
+    if(draggingNode){
+      for(const n of Object.values(state.nodes)) delete n._drag;
+    }
+    draggingNode=false;
+    draggingZone=false;
+    state.ui._dragZoneId="";
+    panning=false;
+    save();
+  });
+
+  canvas.addEventListener("dblclick",(e)=>{
+    const rect=canvas.getBoundingClientRect();
+    const sx=e.clientX-rect.left, sy=e.clientY-rect.top;
+    const w=screenToWorld(sx,sy);
+    const hit=nodeAt(w.x,w.y);
+    if(hit){
+      const n=state.nodes[hit];
+      navigator.clipboard?.writeText(fname(n.path)).catch(()=>{});
+      toast("COPIED NAME");
+    }
+  });
+
+  // wheel zoom
+  canvas.addEventListener("wheel",(e)=>{
+    e.preventDefault();
+    const dir = e.deltaY>0 ? 1 : -1;
+    const mul = dir>0 ? 1/1.08 : 1.08;
+    state.ui.zoom = clamp(state.ui.zoom*mul, 0.45, 2.2);
+    renderControls();
+  }, {passive:false});
+
+  // controls
+  function renderControls(){
+    $search.value = state.ui.search||"";
+
+    $btnZones.classList.toggle("on", !!state.ui.zonesOn);
+    $btnZones.textContent = state.ui.zonesOn ? "ZONES: ON" : "ZONES: OFF";
+
+    $btnLinks.classList.toggle("on", !!state.ui.linksOn);
+    $btnLinks.textContent = state.ui.linksOn ? "LINKS: ON" : "LINKS: OFF";
+
+    $btnFreeze.classList.toggle("on", !!state.ui.freeze);
+    $btnFreeze.textContent = state.ui.freeze ? "FREEZE: ON" : "FREEZE: OFF";
+
+    $btnRun.classList.toggle("on", !!state.ui.run);
+    $btnRun.textContent = state.ui.run ? "RUN: ON" : "RUN: OFF";
+
+    const lm=state.ui.labelsMode;
+    $btnLabels.classList.toggle("on", lm!=="all");
+    $btnLabels.textContent = lm==="all" ? "LABELS: ALL" : (lm==="hover" ? "LABELS: HOVER" : "LABELS: OFF");
+
+    $zoom.value = String(state.ui.zoom);
+    $dot.value = String(state.ui.dot);
+    $lop.value = String(state.ui.labelOpacity);
+    $repel.value = String(state.ui.repel);
+    $damp.value = String(state.ui.damp);
+    $jit.value = String(state.ui.jitter);
+    $snap.value = String(state.ui.snap);
+    $linkD.value = String(state.ui.linkDist);
+
+    $zoomV.textContent = Number(state.ui.zoom).toFixed(2);
+    $dotV.textContent = String(state.ui.dot);
+    $lopV.textContent = Number(state.ui.labelOpacity).toFixed(2);
+    $repelV.textContent = Number(state.ui.repel).toFixed(2);
+    $dampV.textContent = Number(state.ui.damp).toFixed(2);
+    $jitV.textContent = Number(state.ui.jitter).toFixed(2);
+    $snapV.textContent = String(state.ui.snap);
+    $linkDV.textContent = String(state.ui.linkDist);
+
+    const total = Object.values(state.nodes).length;
+    const vis = Object.values(state.nodes).filter(passes).length;
+    const sel = selectedIds().length;
+
+    setMeta(`READY · ${vis}/${total} NODES · SEL ${sel} · ZONES ${Object.keys(state.zones).length} · FILE_ID ${state.fileId}`);
+    save();
+  }
+
+  function bindRange($el, key){
+    $el.addEventListener("input",()=>{
+      state.ui[key]=Number($el.value);
+      renderControls();
+    });
+  }
+
+  $search.addEventListener("input",()=>{ state.ui.search=$search.value||""; renderControls(); });
+
+  $btnLoad.addEventListener("click",()=>{
+    openModal("load","LOAD","LINKS","", "PASTE LINKS (one per line). SHIFT+CLICK multi-select. ALT+DRAG moves zones.");
+  });
+
+  $btnExport.addEventListener("click",()=>{
+    openModal("export","EXPORT","STATE", exportState(), "STATE INCLUDES POSITIONS / ZONES / EDGES.");
+  });
+
+  $btnImport.addEventListener("click",()=>{
+    openModal("import","IMPORT","STATE","", "PASTE JSON THEN APPLY.");
+  });
+
+  $btnLabels.addEventListener("click",()=>{
+    const m=state.ui.labelsMode;
+    state.ui.labelsMode = (m==="all") ? "hover" : (m==="hover" ? "off" : "all");
+    renderControls();
+  });
+
+  $btnZones.addEventListener("click",()=>{
+    state.ui.zonesOn = !state.ui.zonesOn;
+    if(state.ui.zonesOn && Object.keys(state.zones).length===0) makeZoneAtCamera();
+    renderControls();
+  });
+
+  $btnLinks.addEventListener("click",()=>{
+    state.ui.linksOn = !state.ui.linksOn;
+    renderControls();
+  });
+
+  $btnMakeZone.addEventListener("click",()=>{
+    makeZoneAtCamera();
+  });
+
+  $btnUnion.addEventListener("click",()=>{
+    unionSelectedToZone();
+  });
+
+  $btnClearSel.addEventListener("click", clearSelection);
+
+  $btnCenter.addEventListener("click",()=>{
+    state.ui.camX=0; state.ui.camY=0; state.ui.zoom=1.0;
+    renderControls();
+    toast("CENTER");
+  });
+
+  $btnScatter.addEventListener("click",()=>{
+    const nodes=Object.values(state.nodes);
+    const r = Math.max(260, Math.sqrt(nodes.length)*40);
+    for(const n of nodes){
+      n.x = rnd(-r,r);
+      n.y = rnd(-r,r);
+      n.vx=0; n.vy=0;
+      n.zoneId="";
+      n.selected=false;
+    }
+    renderControls();
+    toast("SCATTER");
+  });
+
+  $btnFreeze.addEventListener("click",()=>{
+    state.ui.freeze=!state.ui.freeze;
+    renderControls();
+  });
+
+  $btnTick.addEventListener("click",()=>{
+    step();
+    draw();
+    toast("STEP");
+  });
+
+  $btnRun.addEventListener("click",()=>{
+    state.ui.run=!state.ui.run;
+    renderControls();
+  });
+
+  bindRange($zoom,"zoom");
+  bindRange($dot,"dot");
+  bindRange($lop,"labelOpacity");
+  bindRange($repel,"repel");
+  bindRange($damp,"damp");
+  bindRange($jit,"jitter");
+  bindRange($snap,"snap");
+  bindRange($linkD,"linkDist");
+
+  // modal buttons
+  $mClose.addEventListener("click", closeModal);
+  $modal.addEventListener("click",(e)=>{ if(e.target===$modal) closeModal(); });
+
+  $mApply.addEventListener("click",()=>{
+    try{
+      if(modalMode==="load"){
+        applyLinks($pt.value||"");
+        $mh.textContent="APPLIED";
+        closeModal();
+      }else if(modalMode==="import"){
+        importState($pt.value||"");
+        closeModal();
+      }else{
+        closeModal();
+      }
+    }catch(e){
+      $mh.textContent="FAILED";
+      toast("FAIL");
+    }
+  });
+
+  $mCopy.addEventListener("click", async ()=>{
+    try{ await navigator.clipboard.writeText($pt.value||""); toast("COPIED"); }
+    catch{ toast("COPY FAIL"); }
+  });
+
+  $mDown.addEventListener("click",()=>{
+    const name = (modalMode==="export") ? `KETADATA_LINK_GRAPH_ULTRALIGHT_${FILE_ID}_${nowISO().slice(0,10)}.json`
+      : `KETADATA_LINK_GRAPH_ULTRALIGHT_${FILE_ID}_TEXT_${nowISO().slice(0,10)}.txt`;
+    const mime = (modalMode==="export") ? "application/json" : "text/plain";
+    downloadText(name, mime, $pt.value||"");
+    toast("DOWNLOADED");
+  });
+
+  function applyLinks(text){
+    const lines = String(text||"").split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
+    const uniq = Array.from(new Set(lines)).filter(isHtml);
+
+    const byPath = new Map();
+    for(const n of Object.values(state.nodes)) byPath.set(n.path, n);
+
+    let add=0, keep=0;
+    for(const p of uniq){
+      if(byPath.has(p)){ keep++; continue; }
+      const id="N-"+uid();
+      state.nodes[id]={
+        id, path:p,
+        x: state.ui.camX + rnd(-240,240),
+        y: state.ui.camY + rnd(-240,240),
+        vx:0, vy:0,
+        zoneId:"",
+        selected:false
+      };
+      add++;
+    }
+
+    // auto-seed a zone if zones on and none exist
+    if(state.ui.zonesOn && Object.keys(state.zones).length===0) makeZoneAtCamera();
+
+    save();
+    setMeta(`LINKS LOADED · +${add} · ${keep} EXISTING`);
+    toast(`+${add}`);
+    renderControls();
+  }
+
+  // boot
+  function boot(){
+    resize();
+    // default: labels all + zones on (as requested)
+    if(Object.keys(state.zones).length===0) makeZoneAtCamera();
+    renderControls();
+    if(!raf) tick();
+    toast("SHIFT+CLICK select · UNION → ZONE · ALT+DRAG zone");
+  }
+  boot();
+
+  // -----------------------------------------
+  // AE/EE/WB SERIALIZATION STAMP (MANDATORY)
+  // -----------------------------------------
+  /*
+  AE: ultralight obsidian-ish canvas graph; black/white; labels all-mode; zones + networks
+  EE: shift multi-select; drag group; union → zone; edges stored; optional proximity links; alt-drag zones
+  WB: localStorage isolated by FILE_ID; export/import; link loading via paste (no prefill)
+
+  FILE_ID: (runtime) KLGU-*
+  ROOM_ID: LINK_GRAPH_ULTRALIGHT
+  VERSION: KETADATA_LINK_GRAPH_ULTRALIGHT_v2
+  UPDATED_AT: (runtime) now
+  CHANGELOG:
+  - v2: LABELS default ALL; ZONES default ON
+  - v2: SHIFT multi-select + drag group
+  - v2: UNION → ZONE (assign + build network edges)
+  - v2: optional LINKS overlay + proximity links + stored edges
+  - v2: MAKE ZONE button + CLEAR SEL
+  */
+})();
+</script>
+</body>
+</html>
