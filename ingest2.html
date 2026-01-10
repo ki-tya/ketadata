@@ -1,0 +1,536 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>KETADATA_INGEST // WALL (8x4)</title>
+<style>
+:root{
+  --bg:#000;
+  --ink:rgba(255,255,255,.86);
+  --muted:rgba(255,255,255,.52);
+  --line:rgba(255,255,255,.14);
+  --line2:rgba(255,255,255,.24);
+
+  --mono: ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace;
+  --sans: Arial, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+
+  --t:44px;
+  --pad:10px;
+  --gap:10px;
+
+  /* tuned for 8 slots on a 4-column wall */
+  --slotH: 360px;
+  --sideW: 280px;
+
+  --radius:0px;
+}
+*{box-sizing:border-box}
+html,body{height:100%; margin:0}
+body{
+  background:var(--bg);
+  color:var(--ink);
+  font-family:var(--sans);
+  overflow:hidden;
+  font-size:14px; /* uniform size law */
+  letter-spacing:.2px;
+}
+a{color:inherit; text-decoration:none}
+button,input,textarea{font:inherit; color:inherit; background:transparent; border-radius:var(--radius)}
+textarea{resize:none}
+
+/* top bar */
+#top{
+  position:fixed; inset:0 0 auto 0; height:var(--t);
+  display:flex; align-items:center; justify-content:space-between;
+  padding:0 var(--pad);
+  border-bottom:1px solid var(--line);
+  background:rgba(0,0,0,.82);
+  backdrop-filter: blur(8px);
+  z-index:50;
+}
+#top .left, #top .right{display:flex; align-items:center; gap:8px; min-width:0}
+.badge{
+  padding:4px 8px;
+  border:1px solid var(--line2);
+  opacity:.92;
+  white-space:nowrap;
+}
+.small{opacity:.72}
+.sep{width:1px; height:18px; background:var(--line); margin:0 4px}
+.btn{
+  padding:6px 10px;
+  border:1px solid var(--line2);
+  cursor:pointer;
+  user-select:none;
+}
+.btn:hover{border-color:rgba(255,255,255,.46)}
+.btn:active{transform: translateY(1px)}
+.btn.danger{border-color:rgba(255,255,255,.32); opacity:.92}
+.btn.danger:hover{border-color:rgba(255,255,255,.62)}
+#count{opacity:.72}
+
+/* layout */
+#wrap{
+  position:fixed; inset:var(--t) 0 0 0;
+  overflow:auto;
+  padding:var(--gap);
+}
+
+/* 4-column wall (collapses as needed) */
+#grid{
+  display:grid;
+  grid-template-columns: repeat(4, minmax(360px, 1fr));
+  gap:var(--gap);
+  align-items:start;
+}
+@media (max-width: 1680px){
+  #grid{ grid-template-columns: repeat(3, minmax(360px, 1fr)); }
+}
+@media (max-width: 1280px){
+  #grid{ grid-template-columns: repeat(2, minmax(360px, 1fr)); }
+}
+@media (max-width: 860px){
+  #grid{ grid-template-columns: 1fr; }
+}
+
+/* slot */
+.slot{
+  border:1px solid var(--line);
+  background:rgba(255,255,255,.02);
+}
+.slotHead{
+  display:flex; align-items:center; justify-content:space-between;
+  gap:8px;
+  padding:8px 10px;
+  border-bottom:1px solid var(--line);
+}
+.slotHead .titleWrap{display:flex; align-items:center; gap:8px; min-width:0; flex:1}
+.slotHead .title{
+  border:1px solid transparent;
+  padding:4px 6px;
+  min-width: 120px;
+  max-width: 260px;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.slotHead .title[contenteditable="true"]{border-color:var(--line2); outline:none}
+.slotHead .meta{opacity:.62; white-space:nowrap}
+.slotHead .tools{display:flex; gap:6px; align-items:center}
+
+/* body split */
+.slotBody{
+  display:grid;
+  grid-template-columns: var(--sideW) 1fr;
+  min-height: var(--slotH);
+}
+.side{
+  border-right:1px solid var(--line);
+  display:flex;
+  flex-direction:column;
+  min-height: var(--slotH);
+}
+.side .miniBar{
+  display:flex;
+  gap:6px;
+  padding:8px 10px;
+  border-bottom:1px solid var(--line);
+  align-items:center;
+  justify-content:space-between;
+}
+.side .miniBar .hint{opacity:.62}
+.editor{
+  position:relative;
+  flex:1;
+}
+.editor textarea{
+  position:absolute; inset:0;
+  width:100%; height:100%;
+  padding:10px;
+  border:0;
+  outline:none;
+  line-height:1.25;
+  background:rgba(0,0,0,.22);
+}
+.preview{
+  position:relative;
+  min-height: var(--slotH);
+}
+.preview iframe{
+  position:absolute; inset:0;
+  width:100%; height:100%;
+  border:0;
+  background:#000;
+}
+
+/* full overlay */
+#overlay{
+  position:fixed; inset:0;
+  background:rgba(0,0,0,.92);
+  display:none;
+  z-index:80;
+}
+#overlay.open{display:block}
+#ovTop{
+  position:absolute; inset:0 0 auto 0; height:var(--t);
+  display:flex; align-items:center; justify-content:space-between;
+  padding:0 var(--pad);
+  border-bottom:1px solid var(--line);
+  background:rgba(0,0,0,.82);
+}
+#ovFrame{
+  position:absolute; inset:var(--t) 0 0 0;
+  border:0;
+  width:100%; height:calc(100% - var(--t));
+  background:#000;
+}
+
+/* footer */
+.footerNote{
+  opacity:.52;
+  padding:8px 10px;
+  border-top:1px solid var(--line);
+}
+
+/* utility */
+.hidden{display:none !important}
+</style>
+</head>
+<body>
+
+<div id="top">
+  <div class="left">
+    <div class="badge">KETADATA_INGEST</div>
+    <div class="badge small" id="sig">LOCAL</div>
+    <div class="sep"></div>
+    <div class="small">PASTE HTML → AUTO RENDER · WALL=4 COL</div>
+  </div>
+  <div class="right">
+    <div class="small" id="count">SLOTS: 0</div>
+    <button class="btn" id="addBtn" title="Add slot (A)">ADD</button>
+    <button class="btn" id="exportBtn" title="Export wall JSON">EXPORT</button>
+    <button class="btn" id="importBtn" title="Import wall JSON">IMPORT</button>
+    <button class="btn danger" id="wipeBtn" title="Wipe all slots">WIPE</button>
+  </div>
+</div>
+
+<div id="wrap">
+  <div id="grid"></div>
+</div>
+
+<div id="overlay">
+  <div id="ovTop">
+    <div class="left">
+      <div class="badge" id="ovTitle">FULL</div>
+      <div class="badge small" id="ovMeta">—</div>
+    </div>
+    <div class="right">
+      <button class="btn" id="ovClose" title="Close (ESC)">CLOSE</button>
+    </div>
+  </div>
+  <iframe id="ovFrame"></iframe>
+</div>
+
+<script>
+/* KETADATA_INGEST // WALL (4 COL)
+   One tab. Eight slots. Paste-to-render. Dense wall view.
+*/
+
+const KEY = "KETADATA_INGEST_WALL_V1";
+const DEFAULT_SLOTS = 8;
+
+const $ = (id)=>document.getElementById(id);
+
+function nowISO(){
+  const d=new Date();
+  const z=(n)=>String(n).padStart(2,"0");
+  return `${d.getFullYear()}-${z(d.getMonth()+1)}-${z(d.getDate())} ${z(d.getHours())}:${z(d.getMinutes())}:${z(d.getSeconds())}`;
+}
+function uid(){
+  return Math.random().toString(16).slice(2)+Math.random().toString(16).slice(2);
+}
+let STATE = { version: 1, updatedAt: nowISO(), slots: [] };
+
+function mkSlot(name){
+  return {
+    id: uid(),
+    name: name || "SLOT",
+    createdAt: nowISO(),
+    updatedAt: nowISO(),
+    html: "",
+    locked: false
+  };
+}
+
+function load(){
+  try{
+    const raw = localStorage.getItem(KEY);
+    if(raw){
+      const j = JSON.parse(raw);
+      if(j && typeof j === "object" && Array.isArray(j.slots)){
+        STATE = j;
+      }
+    }
+  }catch(e){}
+  if(!STATE.slots.length){
+    for(let i=1;i<=DEFAULT_SLOTS;i++){
+      STATE.slots.push(mkSlot("SLOT "+String(i).padStart(2,"0")));
+    }
+  }
+  save(false);
+}
+
+function save(doRender=true){
+  STATE.updatedAt = nowISO();
+  try{ localStorage.setItem(KEY, JSON.stringify(STATE)); }catch(e){}
+  if(doRender) render();
+}
+
+function escapeHtml(s){
+  return (s||"")
+    .replaceAll("&","&amp;")
+    .replaceAll("<","&lt;")
+    .replaceAll(">","&gt;");
+}
+
+function blobURLFromHTML(html){
+  const blob = new Blob([html||""], {type:"text/html;charset=utf-8"});
+  return URL.createObjectURL(blob);
+}
+
+function updateSlot(id, patch){
+  const idx = STATE.slots.findIndex(s=>s.id===id);
+  if(idx<0) return;
+  STATE.slots[idx] = {...STATE.slots[idx], ...patch, updatedAt: nowISO()};
+  save();
+}
+
+function removeSlot(id){
+  const idx = STATE.slots.findIndex(s=>s.id===id);
+  if(idx<0) return;
+  STATE.slots.splice(idx,1);
+  save();
+}
+
+function moveSlot(id, dir){
+  const i = STATE.slots.findIndex(s=>s.id===id);
+  if(i<0) return;
+  const j = i + dir;
+  if(j<0 || j>=STATE.slots.length) return;
+  const tmp = STATE.slots[i];
+  STATE.slots[i] = STATE.slots[j];
+  STATE.slots[j] = tmp;
+  save();
+}
+
+function download(filename, text){
+  const blob = new Blob([text], {type:"application/json;charset=utf-8"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); }, 0);
+}
+
+function promptImport(){
+  const raw = prompt("PASTE JSON EXPORT HERE:");
+  if(!raw) return;
+  try{
+    const j = JSON.parse(raw);
+    if(!j || !Array.isArray(j.slots)) throw new Error("bad");
+    STATE = {
+      version: Number(j.version)||1,
+      updatedAt: nowISO(),
+      slots: j.slots.map(s=>({
+        id: s.id || uid(),
+        name: (s.name||"SLOT").slice(0,120),
+        createdAt: s.createdAt || nowISO(),
+        updatedAt: nowISO(),
+        html: String(s.html||""),
+        locked: !!s.locked
+      }))
+    };
+    save();
+  }catch(e){
+    alert("IMPORT FAILED");
+  }
+}
+
+/* overlay */
+function openOverlay(slot){
+  $("overlay").classList.add("open");
+  $("ovTitle").textContent = slot.name || "FULL";
+  $("ovMeta").textContent = slot.updatedAt || "—";
+  const url = blobURLFromHTML(slot.html || "<!doctype html><title>EMPTY</title><body style='margin:0;background:#000;color:#fff;font-family:Arial;display:flex;align-items:center;justify-content:center'>EMPTY</body>");
+  $("ovFrame").dataset.url = url;
+  $("ovFrame").src = url;
+}
+function closeOverlay(){
+  const fr = $("ovFrame");
+  const url = fr.dataset.url;
+  fr.src = "about:blank";
+  if(url) URL.revokeObjectURL(url);
+  fr.dataset.url = "";
+  $("overlay").classList.remove("open");
+}
+
+/* render */
+function render(){
+  $("sig").textContent = `LOCAL // ${STATE.updatedAt}`;
+  $("count").textContent = `SLOTS: ${STATE.slots.length}`;
+
+  const grid = $("grid");
+  grid.innerHTML = "";
+
+  STATE.slots.forEach((slot, n)=>{
+    const el = document.createElement("div");
+    el.className = "slot";
+    el.dataset.id = slot.id;
+
+    el.innerHTML = `
+      <div class="slotHead">
+        <div class="titleWrap">
+          <div class="title" contenteditable="true" spellcheck="false" title="Click to rename">${escapeHtml(slot.name || ("SLOT "+String(n+1).padStart(2,"0")))}</div>
+          <div class="meta">#${String(n+1).padStart(2,"0")}</div>
+        </div>
+        <div class="tools">
+          <button class="btn" data-act="full" title="Fullscreen">FULL</button>
+          <button class="btn" data-act="up" title="Move up">UP</button>
+          <button class="btn" data-act="down" title="Move down">DOWN</button>
+          <button class="btn" data-act="clear" title="Clear HTML">CLR</button>
+          <button class="btn danger" data-act="del" title="Delete slot">DEL</button>
+        </div>
+      </div>
+
+      <div class="slotBody">
+        <div class="side">
+          <div class="miniBar">
+            <div class="hint">PASTE</div>
+            <div class="small">
+              <span class="small">LEN:</span>
+              <span data-k="len">${(slot.html||"").length}</span>
+            </div>
+          </div>
+          <div class="editor">
+            <textarea spellcheck="false" placeholder="PASTE FULL SINGLE-FILE HTML HERE">${escapeHtml(slot.html||"")}</textarea>
+          </div>
+        </div>
+
+        <div class="preview">
+          <iframe sandbox="allow-scripts allow-forms allow-popups allow-modals allow-downloads allow-pointer-lock" loading="lazy"></iframe>
+        </div>
+      </div>
+
+      <div class="footerNote">A add · ESC close</div>
+    `;
+
+    /* rename */
+    const title = el.querySelector(".title");
+    title.addEventListener("blur", ()=>{
+      const name = title.textContent.trim() || `SLOT ${String(n+1).padStart(2,"0")}`;
+      updateSlot(slot.id, {name});
+    });
+
+    /* textarea -> save */
+    const ta = el.querySelector("textarea");
+    let debounce = null;
+    ta.addEventListener("input", ()=>{
+      if(debounce) clearTimeout(debounce);
+      debounce = setTimeout(()=> updateSlot(slot.id, {html: ta.value}), 140);
+    });
+
+    /* iframe paint */
+    const lenEl = el.querySelector('[data-k="len"]');
+    const fr = el.querySelector("iframe");
+    let curURL = "";
+
+    function paint(html){
+      try{ if(curURL) URL.revokeObjectURL(curURL); }catch(e){}
+      curURL = blobURLFromHTML(html || "<!doctype html><title>EMPTY</title><body style='margin:0;background:#000;color:#fff;font-family:Arial;display:flex;align-items:center;justify-content:center'>EMPTY</body>");
+      fr.src = curURL;
+      lenEl.textContent = String((html||"").length);
+    }
+    paint(slot.html||"");
+
+    /* tools */
+    el.querySelectorAll("button[data-act]").forEach(btn=>{
+      btn.addEventListener("click", ()=>{
+        const act = btn.dataset.act;
+        if(act==="up") return moveSlot(slot.id, -1);
+        if(act==="down") return moveSlot(slot.id, +1);
+        if(act==="full") return openOverlay(slot);
+        if(act==="clear"){
+          if(confirm("CLEAR HTML IN THIS SLOT?")) updateSlot(slot.id, {html:""});
+          return;
+        }
+        if(act==="del"){
+          if(confirm("DELETE THIS SLOT?")) removeSlot(slot.id);
+          return;
+        }
+      });
+    });
+
+    grid.appendChild(el);
+  });
+}
+
+/* top controls */
+document.getElementById("addBtn").addEventListener("click", ()=>{
+  STATE.slots.push(mkSlot(`SLOT ${String(STATE.slots.length+1).padStart(2,"0")}`));
+  save();
+});
+document.getElementById("exportBtn").addEventListener("click", ()=>{
+  download(`KETADATA_INGEST_EXPORT_${new Date().toISOString().slice(0,10)}.json`, JSON.stringify(STATE));
+});
+document.getElementById("importBtn").addEventListener("click", ()=>{
+  promptImport();
+});
+document.getElementById("wipeBtn").addEventListener("click", ()=>{
+  if(confirm("WIPE ALL SLOTS?")){
+    STATE.slots = [];
+    for(let i=1;i<=DEFAULT_SLOTS;i++){
+      STATE.slots.push(mkSlot("SLOT "+String(i).padStart(2,"0")));
+    }
+    save();
+  }
+});
+
+/* overlay controls */
+document.getElementById("ovClose").addEventListener("click", closeOverlay);
+document.getElementById("overlay").addEventListener("click", (e)=>{
+  if(e.target.id==="overlay") closeOverlay();
+});
+window.addEventListener("keydown", (e)=>{
+  if(e.key==="Escape"){
+    if(document.getElementById("overlay").classList.contains("open")){ e.preventDefault(); closeOverlay(); }
+  }
+  if((e.key==="a" || e.key==="A") && !e.metaKey && !e.ctrlKey && !e.altKey){
+    const tag = (document.activeElement && document.activeElement.tagName || "").toLowerCase();
+    if(tag!=="textarea" && tag!=="input"){
+      e.preventDefault();
+      document.getElementById("addBtn").click();
+    }
+  }
+});
+
+/* boot */
+load();
+render();
+</script>
+
+<!--
+AE: KETA_MONO
+EE: INGEST_WALL_V1 (4-col wall; 8 default; paste→render; overlay; reorder; export/import; localStorage)
+WB: DOM_BINDINGS
+
+FILE_ID: KETADATA_INGEST_WALL.html
+ROOM_ID: BASE_UTIL
+VERSION: 3
+UPDATED_AT: 2026-01-10
+CHANGELOG:
+- v3: 4-column wall layout, denser slot geometry, responsive collapse to 3/2/1 columns.
+-->
+</body>
+</html>
