@@ -1,0 +1,499 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>KETA_RED // TARGET_FIELD (REFINED)</title>
+<style>
+  :root{
+    color-scheme: dark;
+    --bg:#000;
+    --ink:rgba(255,255,255,.86);
+    --muted:rgba(255,255,255,.52);
+    --line:rgba(255,255,255,.14);
+
+    /* palette */
+    --red: 230;            /* 0..255 */
+    --paper: rgba(255,255,255,.94);
+
+    /* intensity (subtle by default) */
+    --motion: 1;           /* 0/1 */
+    --speed: 0.58;         /* 0..2 */
+    --drift: 0.22;         /* 0..1 */
+    --breathe:0.26;        /* 0..1 */
+    --phase: 0.28;         /* 0..1 (desync) */
+    --scan:  0.18;         /* 0..1 */
+    --grain: 0.12;         /* 0..1 */
+
+    --top:44px;
+    --bot:34px;
+    --pad:10px;
+    --r:0px;
+    --drawerW: 320px;
+
+    --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace;
+    --sans: Arial, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+  }
+
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0}
+  body{background:var(--bg);color:var(--ink);font:12px/1.35 var(--sans);overflow:hidden}
+  #root{position:fixed;inset:0}
+
+  /* bars */
+  .bar{
+    position:fixed;left:0;right:0;height:var(--top);
+    display:flex;align-items:center;gap:8px;
+    padding:0 var(--pad);
+    background:rgba(0,0,0,.78);
+    border-bottom:1px solid var(--line);
+    z-index:80;
+  }
+  .bar.bot{
+    top:auto;bottom:0;height:var(--bot);
+    border-bottom:0;border-top:1px solid var(--line);
+  }
+  .brand{font-family:var(--mono);letter-spacing:.06em;opacity:.9;white-space:nowrap}
+  .tiny{opacity:.65}
+  .sp{flex:1}
+  .chip{
+    font-family:var(--mono);
+    padding:4px 8px;
+    border:1px solid var(--line);
+    background:rgba(0,0,0,.35);
+    border-radius:var(--r);
+    cursor:pointer;user-select:none;
+    opacity:.9;
+  }
+  .chip:active{transform:translateY(1px)}
+  .chip.on{opacity:1;border-color:rgba(255,255,255,.28)}
+
+  /* canvas */
+  .canvas{
+    position:fixed;left:0;right:0;top:var(--top);bottom:var(--bot);
+    overflow:hidden;
+    display:flex;align-items:center;justify-content:center;
+  }
+
+  /* plate */
+  #plate{
+    width:min(820px,94vw);
+    height:min(640px,78vh);
+    border:1px solid var(--line);
+    background:rgba(0,0,0,.20);
+    position:relative;
+    overflow:hidden;
+  }
+
+  /* 2x2 grid */
+  #grid{
+    position:absolute;inset:0;
+    display:grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: 1fr 1fr;
+  }
+  .cell{
+    position:relative;
+    overflow:hidden;
+    border-right:1px solid rgba(255,255,255,.08);
+    border-bottom:1px solid rgba(255,255,255,.08);
+  }
+  .cell:nth-child(2), .cell:nth-child(4){border-right:0}
+  .cell:nth-child(3), .cell:nth-child(4){border-bottom:0}
+
+  /* braces (more restrained) */
+  .braces{position:absolute;inset:0;pointer-events:none}
+  .braces:before{
+    content:"";
+    position:absolute;inset:14px;
+    background:
+      linear-gradient(rgba(var(--red),0,0,.95), rgba(var(--red),0,0,.95)) left top/28px 4px no-repeat,
+      linear-gradient(rgba(var(--red),0,0,.95), rgba(var(--red),0,0,.95)) left top/4px 28px no-repeat,
+
+      linear-gradient(rgba(var(--red),0,0,.95), rgba(var(--red),0,0,.95)) right top/28px 4px no-repeat,
+      linear-gradient(rgba(var(--red),0,0,.95), rgba(var(--red),0,0,.95)) right top/4px 28px no-repeat,
+
+      linear-gradient(rgba(var(--red),0,0,.95), rgba(var(--red),0,0,.95)) left bottom/28px 4px no-repeat,
+      linear-gradient(rgba(var(--red),0,0,.95), rgba(var(--red),0,0,.95)) left bottom/4px 28px no-repeat,
+
+      linear-gradient(rgba(var(--red),0,0,.95), rgba(var(--red),0,0,.95)) right bottom/28px 4px no-repeat,
+      linear-gradient(rgba(var(--red),0,0,.95), rgba(var(--red),0,0,.95)) right bottom/4px 28px no-repeat;
+    opacity:.86;
+    mix-blend-mode:screen;
+  }
+
+  /* target: crisp, minimal, “ink on paper” */
+  .target{
+    position:absolute;left:50%;top:50%;
+    width:min(340px, 42vmin);
+    aspect-ratio:1/1;
+    transform:translate(-50%,-50%);
+    border-radius:50%;
+    background:
+      radial-gradient(circle at 50% 50%,
+        var(--paper) 0 11%,
+        rgba(var(--red),0,0,.98) 11% 21%,
+        var(--paper) 21% 31%,
+        rgba(var(--red),0,0,.98) 31% 41%,
+        var(--paper) 41% 51%,
+        rgba(var(--red),0,0,.98) 51% 61%,
+        var(--paper) 61% 71%,
+        rgba(var(--red),0,0,.98) 71% 81%,
+        var(--paper) 81% 91%,
+        rgba(var(--red),0,0,.98) 91% 100%
+      );
+    box-shadow:
+      0 0 0 1px rgba(255,255,255,.10) inset,
+      0 0 0 1px rgba(var(--red),0,0,.14),
+      0 0 18px rgba(var(--red),0,0,.14);
+    filter: contrast(1.06) saturate(1.02);
+    will-change: transform, filter;
+  }
+
+  /* restrained overlays */
+  .layer{position:absolute;inset:0;pointer-events:none}
+  #scan{
+    background:
+      repeating-linear-gradient(
+        to bottom,
+        rgba(255,255,255,0) 0px,
+        rgba(255,255,255,0) 11px,
+        rgba(255,255,255,calc(.02 + var(--scan)*.06)) 12px
+      );
+    mix-blend-mode:overlay;
+    opacity:calc(.05 + var(--scan)*.38);
+    animation: scanMove calc(1400ms / max(.35, var(--speed))) linear infinite;
+  }
+  @keyframes scanMove{
+    0%{transform:translateY(-16px)}
+    100%{transform:translateY(16px)}
+  }
+  #grain{
+    opacity:calc(.03 + var(--grain)*.40);
+    mix-blend-mode:overlay;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.7' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='240' height='240' filter='url(%23n)' opacity='.28'/%3E%3C/svg%3E");
+    background-size:240px 240px;
+    animation: grainDrift 920ms steps(2,end) infinite;
+  }
+  @keyframes grainDrift{
+    0%{transform:translate3d(0,0,0)}
+    25%{transform:translate3d(-1px,0,0)}
+    50%{transform:translate3d(1px,1px,0)}
+    75%{transform:translate3d(0,-1px,0)}
+    100%{transform:translate3d(0,0,0)}
+  }
+  #vignette{
+    background: radial-gradient(ellipse at 50% 50%, rgba(0,0,0,0) 0%, rgba(0,0,0,.45) 68%, rgba(0,0,0,.88) 100%);
+  }
+
+  /* NULL + STILL */
+  #root.null .bar, #root.null .bar.bot{display:none}
+  #root.null .canvas{top:0;bottom:0}
+  #root.null #drawer{top:0;bottom:0}
+  #root.still #scan, #root.still #grain{animation:none !important}
+
+  /* drawer */
+  #drawer{
+    position:fixed;top:var(--top);bottom:var(--bot);right:0;
+    width:var(--drawerW);
+    background:rgba(0,0,0,.92);
+    border-left:1px solid var(--line);
+    transform:translateX(102%);
+    transition:transform 160ms linear;
+    z-index:90;
+    padding:10px;
+    overflow:auto;
+  }
+  #drawer.open{transform:translateX(0)}
+  .hr{height:1px;background:var(--line);margin:8px 0}
+  .ctl{display:grid;grid-template-columns:120px 1fr 54px;gap:8px;align-items:center;margin:6px 0}
+  input[type="range"]{width:100%}
+  .val{font-family:var(--mono);opacity:.8;text-align:right}
+
+  #sig{font-family:var(--mono);opacity:.7;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:70vw}
+</style>
+</head>
+<body>
+<div id="root">
+  <div class="bar">
+    <div class="brand">KETA_RED</div>
+    <div class="brand tiny">TARGET_FIELD</div>
+    <div class="sp"></div>
+    <div id="motionBtn" class="chip on">MOTION</div>
+    <div id="nullBtn" class="chip">NULL</div>
+    <div id="sysBtn" class="chip">SYSTEM</div>
+  </div>
+
+  <div class="canvas">
+    <div id="plate" title="CLICK = reseed phase • SPACE = motion • N = NULL • S = SYSTEM">
+      <div id="grid">
+        <div class="cell"><div class="braces"></div><div class="target" data-i="0"></div></div>
+        <div class="cell"><div class="braces"></div><div class="target" data-i="1"></div></div>
+        <div class="cell"><div class="braces"></div><div class="target" data-i="2"></div></div>
+        <div class="cell"><div class="braces"></div><div class="target" data-i="3"></div></div>
+      </div>
+      <div id="scan" class="layer"></div>
+      <div id="grain" class="layer"></div>
+      <div id="vignette" class="layer"></div>
+    </div>
+  </div>
+
+  <div class="bar bot">
+    <div id="sig">CLICK = RESEED • SPACE = MOTION • N = NULL • S = SYSTEM</div>
+    <div class="sp"></div>
+    <div class="brand tiny">LOCAL</div>
+  </div>
+
+  <div id="drawer" role="dialog" aria-label="system drawer">
+    <div class="brand">SYSTEM</div>
+    <div class="hr"></div>
+
+    <div class="ctl">
+      <div class="brand tiny">SPEED</div>
+      <input id="speed" type="range" min="0" max="200" value="58"/>
+      <div class="val" id="speedV">58</div>
+    </div>
+    <div class="ctl">
+      <div class="brand tiny">DRIFT</div>
+      <input id="drift" type="range" min="0" max="100" value="22"/>
+      <div class="val" id="driftV">22</div>
+    </div>
+    <div class="ctl">
+      <div class="brand tiny">BREATHE</div>
+      <input id="breathe" type="range" min="0" max="100" value="26"/>
+      <div class="val" id="breatheV">26</div>
+    </div>
+    <div class="ctl">
+      <div class="brand tiny">PHASE</div>
+      <input id="phase" type="range" min="0" max="100" value="28"/>
+      <div class="val" id="phaseV">28</div>
+    </div>
+    <div class="ctl">
+      <div class="brand tiny">SCAN</div>
+      <input id="scanCtl" type="range" min="0" max="100" value="18"/>
+      <div class="val" id="scanV">18</div>
+    </div>
+    <div class="ctl">
+      <div class="brand tiny">GRAIN</div>
+      <input id="grainCtl" type="range" min="0" max="100" value="12"/>
+      <div class="val" id="grainV">12</div>
+    </div>
+
+    <div class="hr"></div>
+    <div class="brand tiny">HOTKEYS: SPACE MOTION • N NULL • S SYSTEM • R RESEED</div>
+  </div>
+</div>
+
+<script>
+(() => {
+  "use strict";
+  const $ = (id)=>document.getElementById(id);
+  const root = $("root");
+  const plate = $("plate");
+  const drawer = $("drawer");
+
+  const FILE_ID = "KETA_RED_TARGET_FIELD_REFINED_v1";
+  const LS_KEY = "KETA_RED_TARGET_FIELD_REFINED_STATE::" + FILE_ID;
+
+  const DEFAULT = {
+    motion: 1,
+    null: 0,
+    drawer: 0,
+    seed: rand(8),
+    speed: 58,
+    drift: 22,
+    breathe: 26,
+    phase: 28,
+    scan: 18,
+    grain: 12
+  };
+
+  let S = {...DEFAULT};
+
+  function rand(n){
+    const a = new Uint8Array(n);
+    crypto.getRandomValues(a);
+    return Array.from(a).map(b => (b%36).toString(36)).join("");
+  }
+  function clamp(v,min,max){ return Math.max(min, Math.min(max, v)); }
+
+  function load(){
+    try{
+      const raw = localStorage.getItem(LS_KEY);
+      if(!raw) return false;
+      const o = JSON.parse(raw);
+      if(!o) return false;
+      S = { ...DEFAULT, ...o };
+      return true;
+    }catch(e){ return false; }
+  }
+  function save(){
+    try{ localStorage.setItem(LS_KEY, JSON.stringify(S)); }catch(e){}
+    renderSig();
+  }
+  function css(name, val){
+    document.documentElement.style.setProperty(name, String(val));
+  }
+
+  let styleEl=null;
+
+  function render(){
+    root.classList.toggle("null", !!S.null);
+    drawer.classList.toggle("open", !!S.drawer);
+    root.classList.toggle("still", !S.motion);
+
+    $("motionBtn").classList.toggle("on", !!S.motion);
+    $("nullBtn").classList.toggle("on", !!S.null);
+
+    css("--speed", (clamp(S.speed,0,200)/100).toFixed(2));
+    css("--drift", (clamp(S.drift,0,100)/100).toFixed(2));
+    css("--breathe",(clamp(S.breathe,0,100)/100).toFixed(2));
+    css("--phase", (clamp(S.phase,0,100)/100).toFixed(2));
+    css("--scan",  (clamp(S.scan,0,100)/100).toFixed(2));
+    css("--grain", (clamp(S.grain,0,100)/100).toFixed(2));
+
+    setCtl("speed", S.speed);
+    setCtl("drift", S.drift);
+    setCtl("breathe", S.breathe);
+    setCtl("phase", S.phase);
+    setCtl("scanCtl", S.scan);
+    setCtl("grainCtl", S.grain);
+
+    seedMotion(S.seed);
+    renderSig();
+  }
+
+  function setCtl(id, v){
+    const el = $(id);
+    if(el && String(el.value) !== String(v)) el.value = String(v);
+    const ve = $(id.replace("Ctl","") + "V");
+    if(ve) ve.textContent = String(v);
+  }
+
+  function renderSig(){
+    $("sig").textContent =
+      "FILE_ID=" + FILE_ID +
+      " | SEED=" + S.seed +
+      " | SPEED=" + S.speed +
+      " | DRIFT=" + S.drift +
+      " | BREATHE=" + S.breathe +
+      " | PHASE=" + S.phase;
+  }
+
+  function hash(str){
+    let h = 2166136261 >>> 0;
+    for(let i=0;i<str.length;i++){
+      h ^= str.charCodeAt(i);
+      h = Math.imul(h, 16777619);
+    }
+    return h >>> 0;
+  }
+  function mulberry32(a){
+    return function(){
+      let t = a += 0x6D2B79F5;
+      t = Math.imul(t ^ (t >>> 15), t | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  function seedMotion(seed){
+    const sp = Math.max(0.25, clamp(S.speed,0,200)/100);
+    const drift = clamp(S.drift,0,100)/100;
+    const breathe = clamp(S.breathe,0,100)/100;
+    const phase = clamp(S.phase,0,100)/100;
+
+    const r = mulberry32(hash(seed));
+    const targets = document.querySelectorAll(".target");
+
+    if(styleEl) styleEl.remove();
+    styleEl = document.createElement("style");
+
+    let cssText = "";
+
+    targets.forEach((t, i) => {
+      const a = r()*Math.PI*2;
+      const b = r()*Math.PI*2;
+
+      const px = (3 + r()*10) * drift;      // subtle
+      const py = (3 + r()*10) * drift;
+      const sc = (0.010 + r()*0.035) * breathe;
+      const rot = (0.15 + r()*0.75) * drift;
+
+      const d1 = (2200 + r()*2200) / sp;
+      const d2 = (2600 + r()*2600) / sp;
+
+      const off = (r()*phase*1.2);
+
+      const k1 = `kf_ref_drift_${i}`;
+      const k2 = `kf_ref_breathe_${i}`;
+
+      cssText += `
+@keyframes ${k1}{
+  0%   { transform: translate(-50%,-50%) translate(${(Math.cos(a)*px).toFixed(2)}px, ${(Math.sin(a)*py).toFixed(2)}px) rotate(${(Math.cos(b)*rot).toFixed(3)}deg) }
+  50%  { transform: translate(-50%,-50%) translate(${(Math.cos(a+2.2)*px).toFixed(2)}px, ${(Math.sin(a+2.2)*py).toFixed(2)}px) rotate(${(Math.cos(b+2.0)*rot).toFixed(3)}deg) }
+  100% { transform: translate(-50%,-50%) translate(${(Math.cos(a+4.4)*px).toFixed(2)}px, ${(Math.sin(a+4.4)*py).toFixed(2)}px) rotate(${(Math.cos(b+4.0)*rot).toFixed(3)}deg) }
+}
+@keyframes ${k2}{
+  0%,100% { filter: contrast(1.05) saturate(1.02) brightness(1.02) }
+  50%     { filter: contrast(${(1.06 + breathe*0.10).toFixed(3)}) saturate(${(1.02 + breathe*0.10).toFixed(3)}) brightness(${(1.03 + breathe*0.06).toFixed(3)}) }
+}
+      `.trim() + "\n";
+
+      t.style.animation = (S.motion
+        ? `${k1} ${Math.round(d1)}ms ease-in-out infinite ${Math.round(off*1000)}ms, ${k2} ${Math.round(d2)}ms ease-in-out infinite ${Math.round(off*1200)}ms`
+        : "none");
+    });
+
+    styleEl.textContent = cssText;
+    document.head.appendChild(styleEl);
+  }
+
+  function reseed(){
+    S.seed = rand(8);
+    save();
+    render();
+  }
+
+  // wiring
+  $("sysBtn").addEventListener("click", () => { S.drawer = !S.drawer; save(); render(); });
+  $("motionBtn").addEventListener("click", () => { S.motion = S.motion ? 0 : 1; save(); render(); });
+  $("nullBtn").addEventListener("click", () => { S.null = S.null ? 0 : 1; save(); render(); });
+
+  $("speed").addEventListener("input", e=>{ S.speed = +e.target.value; save(); render(); });
+  $("drift").addEventListener("input", e=>{ S.drift = +e.target.value; save(); render(); });
+  $("breathe").addEventListener("input", e=>{ S.breathe = +e.target.value; save(); render(); });
+  $("phase").addEventListener("input", e=>{ S.phase = +e.target.value; save(); render(); });
+  $("scanCtl").addEventListener("input", e=>{ S.scan = +e.target.value; save(); render(); });
+  $("grainCtl").addEventListener("input", e=>{ S.grain = +e.target.value; save(); render(); });
+
+  plate.addEventListener("click", reseed);
+
+  window.addEventListener("keydown", (e) => {
+    const k = e.key;
+    if(k === " "){ e.preventDefault(); S.motion = S.motion ? 0 : 1; save(); render(); }
+    if(k === "n" || k === "N"){ S.null = S.null ? 0 : 1; save(); render(); }
+    if(k === "s" || k === "S"){ S.drawer = !S.drawer; save(); render(); }
+    if(k === "r" || k === "R"){ reseed(); }
+    if(k === "Escape" && S.drawer){ S.drawer = 0; save(); render(); }
+  }, {passive:false});
+
+  // boot
+  load();
+  if(!localStorage.getItem(LS_KEY)) save();
+  render();
+})();
+</script>
+
+<!--
+AE::KETA_RED
+EE::TARGET_FIELD_2x2_REFINED + SUBTLE_MOTION + NULL_MODE + LOCAL_FIRST_STATE
+WB::NO_NETWORK / NO_EXTERNAL_DEPS
+FILE_ID::KETA_RED_TARGET_FIELD_REFINED
+ROOM_ID::KETA_RED
+VERSION::v1
+UPDATED_AT::2026-01-09
+CHANGELOG::refined motion; reduced effects; restrained braces; cleaner “ink on paper” target
+-->
+</body>
+</html>
