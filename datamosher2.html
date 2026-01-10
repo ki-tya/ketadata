@@ -1,0 +1,865 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>KETADATA // LIVE MOSH (LIGHT UI)</title>
+<style>
+:root{
+  --bg:#000;
+  --fg:rgba(255,255,255,.86);
+  --muted:rgba(255,255,255,.52);
+  --line:rgba(255,255,255,.10);
+  --line2:rgba(255,255,255,.18);
+  --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace;
+
+  --top:40px;
+  --bot:28px;
+  --ctlH:24px;
+  --padX:10px;
+  --gap:8px;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0;background:var(--bg);color:var(--fg);font-family:var(--mono);overflow:hidden}
+#root{position:fixed;inset:0;background:var(--bg)}
+#root.invert{filter:invert(1)}
+#root.null #top,#root.null #bot,#root.null #drawer{display:none !important;}
+#root.null #view{top:0;bottom:0;}
+
+#top{
+  position:fixed;left:0;right:0;top:0;height:var(--top);
+  display:grid;grid-template-columns:auto 1fr auto;
+  align-items:center;padding:0 var(--padX);
+  border-bottom:1px solid var(--line);
+  background:rgba(0,0,0,.38);
+  backdrop-filter: blur(6px);
+  user-select:none;z-index:50;gap:var(--gap);
+}
+#brand{letter-spacing:.14em;white-space:nowrap;opacity:.88}
+
+#mid{
+  display:flex;align-items:center;gap:var(--gap);min-width:0;
+}
+.pill{
+  height:var(--ctlH);
+  display:flex;align-items:center;gap:var(--gap);
+  padding:0 8px;
+  border:1px solid var(--line);
+  background:rgba(255,255,255,.02);
+}
+#modeName{color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:44ch}
+#btnRow{display:flex;align-items:center;gap:var(--gap);justify-content:flex-end;flex-wrap:nowrap}
+
+button,select{
+  font:inherit;height:var(--ctlH);padding:0 8px;
+  color:var(--fg);background:transparent;border:1px solid var(--line);
+}
+button{cursor:pointer}
+button:hover,select:hover{border-color:var(--line2)}
+select{cursor:pointer}
+option{background:#000;color:#fff}
+
+#view{position:fixed;left:0;right:0;top:var(--top);bottom:var(--bot);background:#000}
+canvas{width:100%;height:100%;display:block}
+
+#bot{
+  position:fixed;left:0;right:0;bottom:0;height:var(--bot);
+  display:grid;grid-template-columns:1fr auto;
+  align-items:center;padding:0 var(--padX);
+  border-top:1px solid var(--line);
+  background:rgba(0,0,0,.28);
+  backdrop-filter: blur(6px);
+  user-select:none;z-index:50;gap:var(--gap);
+}
+#hint{color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;opacity:.85}
+#sig{color:var(--muted);opacity:.70;white-space:nowrap}
+
+#drawer{
+  position:fixed;left:var(--padX);top:calc(var(--top) + var(--padX));
+  width:min(560px, calc(100vw - (2*var(--padX))));
+  border:1px solid var(--line);
+  background:rgba(0,0,0,.42);
+  backdrop-filter: blur(8px);
+  padding:10px;z-index:60;display:none;
+}
+#drawer.open{display:block}
+.row{
+  display:grid;grid-template-columns:128px 1fr 72px;
+  gap:var(--gap);align-items:center;margin:8px 0;
+}
+.row label{opacity:.80}
+input[type="range"]{width:100%}
+.val{text-align:right;opacity:.76}
+.thin{color:var(--muted);line-height:1.35;opacity:.85}
+</style>
+</head>
+<body>
+<div id="root">
+  <div id="top">
+    <div id="brand">KETADATA // LIVE MOSH</div>
+
+    <div id="mid">
+      <button id="startBtn">START</button>
+      <div class="pill"><span>MODE</span><span id="modeName">codec hell</span></div>
+      <select id="modeSel" aria-label="Mode">
+        <option value="codec">codec hell</option>
+        <option value="brutal">brutal</option>
+        <option value="liquid">liquid</option>
+        <option value="ghost">ghost smear</option>
+        <option value="vhs">vhs</option>
+        <option value="cyber">cyber</option>
+        <option value="pure">pure hold</option>
+      </select>
+      <button id="drawerBtn">SYS</button>
+    </div>
+
+    <div id="btnRow">
+      <button id="keyBtn">KEY</button>
+      <button id="moshBtn">MOSH <span id="moshLabel">ON</span></button>
+      <button id="recBtn">REC <span id="recLabel">OFF</span></button>
+      <button id="fsBtn">FULL</button>
+      <button id="nullBtn">NULL</button>
+    </div>
+  </div>
+
+  <div id="drawer">
+    <div class="row"><label>KEY Hz</label><input id="keyHz" type="range" min="0" max="4" step="0.01"/><div class="val" id="keyHzV"></div></div>
+    <div class="row"><label>FDBK</label><input id="feedback" type="range" min="0.80" max="0.999" step="0.001"/><div class="val" id="feedbackV"></div></div>
+    <div class="row"><label>DISP</label><input id="disp" type="range" min="0" max="180" step="1"/><div class="val" id="dispV"></div></div>
+    <div class="row"><label>GLCH</label><input id="glitch" type="range" min="0" max="1" step="0.01"/><div class="val" id="glitchV"></div></div>
+
+    <div class="row"><label>BLK</label><input id="block" type="range" min="4" max="56" step="1"/><div class="val" id="blockV"></div></div>
+    <div class="row"><label>RFRSH</label><input id="refresh" type="range" min="0" max="1" step="0.01"/><div class="val" id="refreshV"></div></div>
+    <div class="row"><label>JIT</label><input id="jitter" type="range" min="0" max="1" step="0.01"/><div class="val" id="jitterV"></div></div>
+
+    <div class="row"><label>MBIAS</label><input id="mbias" type="range" min="0" max="1" step="0.01"/><div class="val" id="mbiasV"></div></div>
+    <div class="row"><label>MTHR</label><input id="mthr" type="range" min="0" max="1" step="0.01"/><div class="val" id="mthrV"></div></div>
+
+    <div class="row"><label>C420</label><input id="c420" type="range" min="0" max="1" step="1"/><div class="val" id="c420V"></div></div>
+    <div class="row"><label>CHRM</label><input id="chroma" type="range" min="0" max="1" step="0.01"/><div class="val" id="chromaV"></div></div>
+
+    <div class="row"><label>QNT</label><input id="quant" type="range" min="0" max="1" step="0.01"/><div class="val" id="quantV"></div></div>
+    <div class="row"><label>PSTR</label><input id="poster" type="range" min="0" max="1" step="0.01"/><div class="val" id="posterV"></div></div>
+    <div class="row"><label>GRN</label><input id="grain" type="range" min="0" max="1" step="0.01"/><div class="val" id="grainV"></div></div>
+
+    <div class="row"><label>SCN</label><input id="scan" type="range" min="0" max="1" step="0.01"/><div class="val" id="scanV"></div></div>
+    <div class="row"><label>WRP</label><input id="warp" type="range" min="0" max="1" step="0.01"/><div class="val" id="warpV"></div></div>
+    <div class="row"><label>EDGE</label><input id="edge" type="range" min="0" max="1" step="0.01"/><div class="val" id="edgeV"></div></div>
+
+    <div class="row"><label>INV</label><button id="invBtn">TOG</button><div class="val">SHIFT+I</div></div>
+    <div class="row"><label>RESET</label><button id="resetBtn">APPLY</button><div class="val">R</div></div>
+
+    <div class="thin">UI is lighter: reduced alpha, thinner lines, shorter bars, smaller controls.</div>
+  </div>
+
+  <div id="view"><canvas id="c"></canvas></div>
+
+  <div id="bot">
+    <div id="hint">SPACE toggles MOSH · D system · K key · R reset · SHIFT+F full · SHIFT+N null</div>
+    <div id="sig"></div>
+  </div>
+
+  <video id="v" playsinline muted autoplay style="display:none"></video>
+</div>
+
+<script>
+(() => {
+  const $=id=>document.getElementById(id);
+  const root=$("root");
+  const canvas=$("c");
+  const out=canvas.getContext("2d",{alpha:false,desynchronized:true});
+  const v=$("v");
+
+  const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
+  const now=()=>performance.now();
+
+  const STATE={
+    ui:{
+      drawer:false,null:false,invert:false,
+      started:false,
+      mode:"codec",
+      mosh:true,
+
+      keyHz:0.25,
+      feedback:0.993,
+      disp:38,
+      glitch:0.70,
+
+      block:16,
+      refresh:0.16,
+      jitter:0.20,
+
+      mbias:0.85,
+      mthr:0.18,
+
+      c420:1,
+      chroma:0.32,
+      quant:0.55,
+      poster:0.16,
+      grain:0.14,
+
+      scan:0.10,
+      warp:0.00,
+      edge:0.00,
+
+      texEvery:2
+    },
+    internal:{
+      ready:false,
+      lastKeyAt:0,
+      frame:0,
+      srcC:null,srcX:null,
+      prevC:null,prevX:null,
+      pbC:null,pbX:null,
+      wts:null,wtsSum:0,blocksX:0,blocksY:0,
+      rec:null, recChunks:[], recOn:false
+    }
+  };
+
+  const MODES={
+    codec:{ keyHz:0.25, feedback:0.993, glitch:0.70, disp:38, block:16, refresh:0.16, jitter:0.20, mbias:0.85, mthr:0.18, c420:1, chroma:0.30, quant:0.55, poster:0.16, grain:0.14, scan:0.10, warp:0.00, edge:0.00, texEvery:2 },
+    brutal:{ keyHz:0.18, feedback:0.996, glitch:0.82, disp:70, block:20, refresh:0.10, jitter:0.28, mbias:0.92, mthr:0.14, c420:1, chroma:0.20, quant:0.72, poster:0.26, grain:0.18, scan:0.14, warp:0.00, edge:0.10, texEvery:2 },
+    liquid:{ keyHz:0.32, feedback:0.990, glitch:0.55, disp:28, block:12, refresh:0.22, jitter:0.35, mbias:0.70, mthr:0.12, c420:1, chroma:0.18, quant:0.35, poster:0.10, grain:0.10, scan:0.06, warp:0.22, edge:0.00, texEvery:3 },
+    ghost:{ keyHz:0.10, feedback:0.997, glitch:0.35, disp:18, block:24, refresh:0.06, jitter:0.10, mbias:0.95, mthr:0.22, c420:1, chroma:0.08, quant:0.30, poster:0.06, grain:0.08, scan:0.04, warp:0.06, edge:0.00, texEvery:3 },
+    vhs:{ keyHz:0.22, feedback:0.994, glitch:0.62, disp:42, block:18, refresh:0.14, jitter:0.18, mbias:0.78, mthr:0.18, c420:1, chroma:0.22, quant:0.48, poster:0.12, grain:0.22, scan:0.22, warp:0.40, edge:0.06, texEvery:2 },
+    cyber:{ keyHz:0.30, feedback:0.992, glitch:0.58, disp:34, block:14, refresh:0.20, jitter:0.22, mbias:0.88, mthr:0.14, c420:0, chroma:0.55, quant:0.22, poster:0.18, grain:0.08, scan:0.08, warp:0.08, edge:0.55, texEvery:2 },
+    pure:{ keyHz:0.00, feedback:0.999, glitch:0.00, disp:0, block:28, refresh:0.04, jitter:0.00, mbias:0.95, mthr:0.22, c420:1, chroma:0.00, quant:0.10, poster:0.00, grain:0.00, scan:0.00, warp:0.00, edge:0.00, texEvery:4 }
+  };
+
+  function modeLabel(name){
+    return ({codec:"codec hell", brutal:"brutal", liquid:"liquid", ghost:"ghost smear", vhs:"vhs", cyber:"cyber", pure:"pure hold"})[name] || "codec hell";
+  }
+
+  function applyMode(name){
+    const m=MODES[name]||MODES.codec;
+    STATE.ui.mode=name;
+    for(const k in m) STATE.ui[k]=m[k];
+    $("modeName").textContent = modeLabel(name);
+    rebuildMotionGrid();
+    render();
+  }
+
+  function allocOffscreens(w,h){
+    const I=STATE.internal;
+    I.srcC=new OffscreenCanvas(w,h);   I.srcX=I.srcC.getContext("2d",{alpha:false});
+    I.prevC=new OffscreenCanvas(w,h); I.prevX=I.prevC.getContext("2d",{alpha:false});
+    I.pbC=new OffscreenCanvas(w,h);   I.pbX=I.pbC.getContext("2d",{alpha:false});
+    for(const cx of [I.srcX,I.prevX,I.pbX]){
+      cx.globalCompositeOperation="source-over"; cx.globalAlpha=1;
+      cx.fillStyle="#000"; cx.fillRect(0,0,w,h);
+    }
+  }
+
+  function fitCanvas(){
+    const dpr=Math.max(1,Math.min(2,window.devicePixelRatio||1));
+    const r=canvas.getBoundingClientRect();
+    const w=Math.max(2,Math.floor(r.width*dpr));
+    const h=Math.max(2,Math.floor(r.height*dpr));
+    if(canvas.width!==w||canvas.height!==h){
+      canvas.width=w; canvas.height=h;
+      allocOffscreens(w,h);
+      rebuildMotionGrid();
+    }
+  }
+
+  function rebuildMotionGrid(){
+    const W=canvas.width,H=canvas.height;
+    const bs=Math.max(2,STATE.ui.block|0);
+    const bx=Math.ceil(W/bs), by=Math.ceil(H/bs);
+    const n=bx*by;
+    STATE.internal.blocksX=bx; STATE.internal.blocksY=by;
+    STATE.internal.wts=new Float32Array(n);
+    STATE.internal.wtsSum=0;
+  }
+
+  function drawCamCover(ctx){
+    const W=canvas.width,H=canvas.height;
+    const vw=v.videoWidth||1,vh=v.videoHeight||1;
+    const s=Math.max(W/vw,H/vh);
+    const w=vw*s,h=vh*s;
+    ctx.drawImage(v,(W-w)/2,(H-h)/2,w,h);
+  }
+
+  function renderSrc(){
+    const I=STATE.internal;
+    I.prevX.globalCompositeOperation="source-over"; I.prevX.globalAlpha=1;
+    I.prevX.drawImage(I.srcC,0,0);
+
+    I.srcX.setTransform(1,0,0,1,0,0);
+    I.srcX.globalAlpha=1; I.srcX.globalCompositeOperation="source-over";
+    I.srcX.fillStyle="#000"; I.srcX.fillRect(0,0,canvas.width,canvas.height);
+    drawCamCover(I.srcX);
+  }
+
+  function keyframeNow(){
+    STATE.internal.lastKeyAt=now();
+    renderSrc();
+    const pb=STATE.internal.pbX;
+    pb.setTransform(1,0,0,1,0,0);
+    pb.globalAlpha=1; pb.globalCompositeOperation="source-over";
+    pb.drawImage(STATE.internal.srcC,0,0);
+  }
+
+  function computeMotionWeights(){
+    const W=canvas.width,H=canvas.height;
+    const bs=Math.max(2,STATE.ui.block|0);
+    const bxN=Math.ceil(W/bs), byN=Math.ceil(H/bs);
+    const n=bxN*byN;
+    if(!STATE.internal.wts || STATE.internal.wts.length!==n) rebuildMotionGrid();
+
+    const thr=clamp(STATE.ui.mthr,0,1);
+    const thrAbs=thr*64;
+
+    const a=STATE.internal.srcX.getImageData(0,0,W,H).data;
+    const b=STATE.internal.prevX.getImageData(0,0,W,H).data;
+
+    let sum=0, idx=0;
+    const offs=[[0.25,0.25],[0.75,0.25],[0.25,0.75],[0.75,0.75],[0.50,0.50]];
+    for(let by=0;by<byN;by++){
+      const y0=by*bs;
+      for(let bx=0;bx<bxN;bx++){
+        const x0=bx*bs;
+        let e=0;
+        for(let s=0;s<5;s++){
+          const sx=Math.min(W-1,Math.max(0,(x0+offs[s][0]*bs)|0));
+          const sy=Math.min(H-1,Math.max(0,(y0+offs[s][1]*bs)|0));
+          const p=(sy*W+sx)*4;
+          const r1=a[p],g1=a[p+1],b1=a[p+2];
+          const r0=b[p],g0=b[p+1],b0=b[p+2];
+          const y1=(r1*3+g1*4+b1)>>3;
+          const y0l=(r0*3+g0*4+b0)>>3;
+          e+=Math.abs(y1-y0l);
+        }
+        e/=5;
+        let w = e<=thrAbs ? 0.0005 : (e-thrAbs);
+        w = w*w + 0.0005;
+        STATE.internal.wts[idx++]=w;
+        sum+=w;
+      }
+    }
+    STATE.internal.wtsSum=sum;
+  }
+
+  function pickMotionBlock(){
+    const wts=STATE.internal.wts;
+    const sum=STATE.internal.wtsSum;
+    if(!wts || sum<=0) return (Math.random()*wts.length)|0;
+    let r=Math.random()*sum;
+    for(let i=0;i<wts.length;i++){ r-=wts[i]; if(r<=0) return i; }
+    return wts.length-1;
+  }
+
+  function selectiveRefreshPB(){
+    const W=canvas.width,H=canvas.height;
+    const pb=STATE.internal.pbX;
+    const src=STATE.internal.srcC;
+
+    const bs=Math.max(2,STATE.ui.block|0);
+    const refresh=clamp(STATE.ui.refresh,0,1);
+    const jitter=clamp(STATE.ui.jitter,0,1);
+
+    const blocksX=Math.ceil(W/bs), blocksY=Math.ceil(H/bs);
+    const total=blocksX*blocksY;
+    const cap=900;
+    const count=Math.min(cap, Math.floor(total*refresh));
+    if(count<=0) return;
+
+    const mbias=clamp(STATE.ui.mbias,0,1);
+    if(mbias>0 && STATE.ui.mosh) computeMotionWeights();
+
+    pb.globalAlpha=1; pb.globalCompositeOperation="source-over";
+    for(let i=0;i<count;i++){
+      let idx;
+      if(mbias<=0 || !STATE.ui.mosh || Math.random()>mbias){
+        idx=(Math.random()*total)|0;
+      }else{
+        idx=pickMotionBlock();
+      }
+      const bx=idx%blocksX, by=(idx/blocksX)|0;
+      const x=bx*bs, y=by*bs;
+      const w=Math.min(bs,W-x), h=Math.min(bs,H-y);
+
+      const j=jitter*(bs*0.80);
+      const sx=clamp(((x + (Math.random()*2-1)*j)|0), 0, W-w);
+      const sy=clamp(((y + (Math.random()*2-1)*j)|0), 0, H-h);
+
+      pb.drawImage(src, sx,sy,w,h, x,y,w,h);
+    }
+  }
+
+  function applyChroma420(pb,W,H){
+    const id=pb.getImageData(0,0,W,H);
+    const d=id.data;
+    for(let y=0;y<H;y+=2){
+      for(let x=0;x<W;x+=2){
+        let sumU=0,sumV=0,n=0;
+        const pts=[[x,y],[x+1,y],[x,y+1],[x+1,y+1]];
+        for(const [px,py] of pts){
+          if(px>=W||py>=H) continue;
+          const i=(py*W+px)*4;
+          const r=d[i],g=d[i+1],b=d[i+2];
+          const yv=(r*3+g*4+b)>>3;
+          sumU+=(b-yv); sumV+=(r-yv); n++;
+        }
+        sumU/=n; sumV/=n;
+        for(const [px,py] of pts){
+          if(px>=W||py>=H) continue;
+          const i=(py*W+px)*4;
+          const r=d[i],g=d[i+1],b=d[i+2];
+          const yv=(r*3+g*4+b)>>3;
+          let nr=yv+sumV, nb=yv+sumU;
+          let ng=((yv<<3)-(3*nr)-(1*nb))/4;
+          d[i]=clamp(nr,0,255);
+          d[i+1]=clamp(ng,0,255);
+          d[i+2]=clamp(nb,0,255);
+        }
+      }
+    }
+    pb.putImageData(id,0,0);
+  }
+
+  function applyTexture(pb,W,H){
+    const bs=Math.max(2,STATE.ui.block|0);
+    const q=clamp(STATE.ui.quant,0,1);
+    const chr=clamp(STATE.ui.chroma,0,1);
+    const poster=clamp(STATE.ui.poster,0,1);
+    const grain=clamp(STATE.ui.grain,0,1);
+    const edge=clamp(STATE.ui.edge,0,1);
+
+    if(q<=0 && chr<=0 && poster<=0 && grain<=0 && edge<=0) return;
+
+    const id=pb.getImageData(0,0,W,H);
+    const data=id.data;
+
+    const step=Math.max(1,Math.floor(1+q*63));
+    const posterStep=poster<=0?0:Math.max(2,Math.floor(2+poster*30));
+
+    if(q>0 || posterStep>0){
+      for(let by=0;by<H;by+=bs){
+        for(let bx=0;bx<W;bx+=bs){
+          const x2=Math.min(W,bx+bs), y2=Math.min(H,by+bs);
+          let sum=0,n=0;
+          for(let y=by;y<y2;y++){
+            let p=(y*W+bx)*4;
+            for(let x=bx;x<x2;x++){
+              const r=data[p],g=data[p+1],b=data[p+2];
+              sum+=(r*3+g*4+b)>>3; n++; p+=4;
+            }
+          }
+          const avg=n?(sum/n):0;
+          const base=Math.round(avg/step)*step;
+          const k=q*0.85;
+          for(let y=by;y<y2;y++){
+            let p=(y*W+bx)*4;
+            for(let x=bx;x<x2;x++){
+              let r=data[p],g=data[p+1],b=data[p+2];
+              const lum=(r*3+g*4+b)>>3;
+              const dl=base-lum;
+              r=clamp(r+dl*k,0,255);
+              g=clamp(g+dl*k,0,255);
+              b=clamp(b+dl*k,0,255);
+              if(posterStep>0){
+                r=Math.round(r/posterStep)*posterStep;
+                g=Math.round(g/posterStep)*posterStep;
+                b=Math.round(b/posterStep)*posterStep;
+              }
+              data[p]=r; data[p+1]=g; data[p+2]=b;
+              p+=4;
+            }
+          }
+        }
+      }
+    }
+
+    if(chr>0){
+      const cShift=Math.floor(chr*(2+bs*0.35));
+      const cShiftY=Math.floor(chr*(1+bs*0.20));
+      if(cShift||cShiftY){
+        const tmp=new Uint8ClampedArray(data);
+        for(let y=0;y<H;y++){
+          for(let x=0;x<W;x++){
+            const i=(y*W+x)*4;
+            const xr=clamp(x+cShift,0,W-1);
+            const yr=clamp(y-cShiftY,0,H-1);
+            const ir=(yr*W+xr)*4;
+            const xb=clamp(x-cShift,0,W-1);
+            const yb=clamp(y+cShiftY,0,H-1);
+            const ib=(yb*W+xb)*4;
+            data[i]=tmp[ir];
+            data[i+2]=tmp[ib+2];
+          }
+        }
+      }
+    }
+
+    if(edge>0){
+      const tmp=new Uint8ClampedArray(data);
+      const a=edge*1.2;
+      for(let y=1;y<H-1;y++){
+        for(let x=1;x<W-1;x++){
+          const i=(y*W+x)*4;
+          const pR=i+4, pD=i+(W*4);
+          const lum =(tmp[i]*3 + tmp[i+1]*4 + tmp[i+2])>>3;
+          const lumR=(tmp[pR]*3+tmp[pR+1]*4+tmp[pR+2])>>3;
+          const lumD=(tmp[pD]*3+tmp[pD+1]*4+tmp[pD+2])>>3;
+          const e=Math.abs(lum-lumR)+Math.abs(lum-lumD);
+          if(e>36){
+            data[i]=clamp(data[i]+e*a,0,255);
+            data[i+1]=clamp(data[i+1]+e*a,0,255);
+            data[i+2]=clamp(data[i+2]+e*a,0,255);
+          }
+        }
+      }
+    }
+
+    if(grain>0){
+      const amp=28*grain;
+      for(let i=0;i<data.length;i+=4){
+        const n=((i*1103515245+12345)>>>16)&255;
+        const g=(n-128)*(amp/128);
+        data[i]=clamp(data[i]+g,0,255);
+        data[i+1]=clamp(data[i+1]+g,0,255);
+        data[i+2]=clamp(data[i+2]+g,0,255);
+      }
+    }
+
+    pb.putImageData(id,0,0);
+  }
+
+  function scanTearOverlay(){
+    const scan=clamp(STATE.ui.scan,0,1);
+    if(scan<=0) return;
+    const W=canvas.width,H=canvas.height;
+    out.globalCompositeOperation="source-over";
+    const lines=4+Math.floor(scan*40);
+    for(let i=0;i<lines;i++){
+      const y=(Math.random()*H)|0;
+      const h=1+((Math.random()*(2+scan*8))|0);
+      const a=0.02+Math.random()*0.10*scan;
+      out.globalAlpha=a;
+      out.fillStyle="rgba(255,255,255,1)";
+      out.fillRect(0,y,W,h);
+      if(Math.random()<scan*0.60){
+        const sh=8+((Math.random()*54)|0);
+        const sy=(Math.random()*Math.max(1,H-sh))|0;
+        const dx=((Math.random()*2-1)*(10+scan*60))|0;
+        out.globalAlpha=0.16*scan;
+        out.drawImage(canvas, 0,sy,W,sh, dx,sy,W,sh);
+      }
+    }
+    out.globalAlpha=1;
+  }
+
+  function applyVHSWarpToOutput(){
+    const warp=clamp(STATE.ui.warp,0,1);
+    if(warp<=0) return;
+    const W=canvas.width,H=canvas.height;
+    const strips=36+((warp*96)|0);
+    const sh=Math.max(2,(H/strips)|0);
+    out.globalCompositeOperation="source-over";
+    out.globalAlpha=1;
+    for(let y=0;y<H;y+=sh){
+      const amp=(2+warp*26);
+      const dx=Math.sin((y/H)*Math.PI*2 + (STATE.internal.frame*0.02))*amp
+             + Math.sin((y/H)*Math.PI*8 + (STATE.internal.frame*0.06))*amp*0.30;
+      out.drawImage(canvas,0,y,W,sh, dx,y,W,sh);
+    }
+  }
+
+  function updateSig(){
+    const d=new Date();
+    const iso=d.toISOString().slice(0,19).replace("T"," ");
+    $("sig").textContent =
+      `AE/EE/WB :: FILE_ID=KETADATA_LIVE_MOSH_LIGHT • ROOM_ID=BASE_SURFACE • VERSION=1 • UPDATED_AT=${iso}Z • MODE=${STATE.ui.mode}`;
+  }
+
+  function render(){
+    root.classList.toggle("invert",!!STATE.ui.invert);
+    root.classList.toggle("null",!!STATE.ui.null);
+    $("drawer").classList.toggle("open",!!STATE.ui.drawer);
+
+    $("moshLabel").textContent = STATE.ui.mosh ? "ON":"OFF";
+    $("recLabel").textContent  = STATE.internal.recOn ? "ON":"OFF";
+
+    const bind=(id,key,fmt)=>{ $(id).value=STATE.ui[key]; $(id+"V").textContent=fmt(STATE.ui[key]); };
+    bind("keyHz","keyHz",(x)=>x.toFixed(2));
+    bind("feedback","feedback",(x)=>x.toFixed(3));
+    bind("disp","disp",(x)=>String(x|0));
+    bind("glitch","glitch",(x)=>x.toFixed(2));
+
+    bind("block","block",(x)=>String(x|0));
+    bind("refresh","refresh",(x)=>x.toFixed(2));
+    bind("jitter","jitter",(x)=>x.toFixed(2));
+
+    bind("mbias","mbias",(x)=>x.toFixed(2));
+    bind("mthr","mthr",(x)=>x.toFixed(2));
+
+    bind("c420","c420",(x)=>String(x|0));
+    bind("chroma","chroma",(x)=>x.toFixed(2));
+    bind("quant","quant",(x)=>x.toFixed(2));
+    bind("poster","poster",(x)=>x.toFixed(2));
+    bind("grain","grain",(x)=>x.toFixed(2));
+
+    bind("scan","scan",(x)=>x.toFixed(2));
+    bind("warp","warp",(x)=>x.toFixed(2));
+    bind("edge","edge",(x)=>x.toFixed(2));
+
+    updateSig();
+  }
+
+  function tick(){
+    fitCanvas();
+
+    if(!STATE.internal.ready){
+      out.setTransform(1,0,0,1,0,0);
+      out.globalAlpha=1; out.globalCompositeOperation="source-over";
+      out.fillStyle="#000"; out.fillRect(0,0,canvas.width,canvas.height);
+      out.fillStyle="rgba(255,255,255,0.70)";
+      out.font="14px " + getComputedStyle(document.documentElement).getPropertyValue("--mono");
+      out.fillText("START", 14, 22);
+      requestAnimationFrame(tick);
+      return;
+    }
+
+    const hz=clamp(STATE.ui.keyHz,0,10);
+    const interval= hz<=0 ? Infinity : (1000/hz);
+    if(now()-STATE.internal.lastKeyAt>interval) keyframeNow();
+
+    renderSrc();
+
+    const pb=STATE.internal.pbX;
+    const W=canvas.width,H=canvas.height;
+
+    if(STATE.ui.mosh){
+      const fb=clamp(STATE.ui.feedback,0,0.9999);
+      pb.setTransform(1,0,0,1,0,0);
+      pb.globalCompositeOperation="source-over";
+      pb.globalAlpha=fb;
+      pb.drawImage(STATE.internal.pbC,0,0);
+
+      const g=clamp(STATE.ui.glitch,0,1);
+      const maxDisp=Math.max(0,STATE.ui.disp|0);
+      if(Math.random()<g){
+        const blocks=12+((Math.random()*46)|0);
+        for(let i=0;i<blocks;i++){
+          const bw=24+((Math.random()*Math.min(520,W*0.60))|0);
+          const bh=12+((Math.random()*Math.min(360,H*0.50))|0);
+          const sx=(Math.random()*Math.max(1,W-bw))|0;
+          const sy=(Math.random()*Math.max(1,H-bh))|0;
+          const dx=sx+((Math.random()*2-1)*maxDisp)|0;
+          const dy=sy+((Math.random()*2-1)*maxDisp)|0;
+          pb.globalAlpha=1;
+          pb.globalCompositeOperation="source-over";
+          pb.drawImage(STATE.internal.pbC, sx,sy,bw,bh, dx,dy,bw,bh);
+        }
+      }
+
+      selectiveRefreshPB();
+    } else {
+      pb.setTransform(1,0,0,1,0,0);
+      pb.globalAlpha=1; pb.globalCompositeOperation="source-over";
+      pb.drawImage(STATE.internal.srcC,0,0);
+    }
+
+    STATE.internal.frame++;
+    const N=Math.max(1,STATE.ui.texEvery|0);
+    if((STATE.internal.frame%N)===0){
+      if((STATE.ui.c420|0)===1) applyChroma420(pb,W,H);
+      applyTexture(pb,W,H);
+    }
+
+    out.setTransform(1,0,0,1,0,0);
+    out.globalAlpha=1; out.globalCompositeOperation="source-over";
+    out.drawImage(STATE.internal.pbC,0,0);
+
+    if(STATE.ui.warp>0) applyVHSWarpToOutput();
+    scanTearOverlay();
+
+    updateSig();
+    requestAnimationFrame(tick);
+  }
+
+  async function startCam(){
+    if(STATE.ui.started) return;
+    try{
+      const stream=await navigator.mediaDevices.getUserMedia({
+        video:{ width:{ideal:1280}, height:{ideal:720}, facingMode:"user" },
+        audio:false
+      });
+      v.srcObject=stream;
+      await v.play();
+      STATE.ui.started=true;
+      STATE.internal.ready=true;
+      fitCanvas();
+      rebuildMotionGrid();
+      keyframeNow();
+      requestAnimationFrame(tick);
+    }catch(e){
+      console.error(e);
+      alert("Camera permission denied or unavailable.");
+    }
+  }
+
+  function toggleRec(){
+    if(!STATE.internal.recOn){
+      const stream=canvas.captureStream(60);
+      let rec;
+      try{
+        rec=new MediaRecorder(stream,{mimeType:"video/webm;codecs=vp9"});
+      }catch(e){
+        rec=new MediaRecorder(stream); // fallback
+      }
+      STATE.internal.rec=rec;
+      STATE.internal.recChunks=[];
+      rec.ondataavailable=(ev)=>{ if(ev.data&&ev.data.size) STATE.internal.recChunks.push(ev.data); };
+      rec.onstop=()=>{
+        const blob=new Blob(STATE.internal.recChunks,{type:"video/webm"});
+        const url=URL.createObjectURL(blob);
+        const a=document.createElement("a");
+        a.href=url;
+        a.download=`KETADATA_LIVE_MOSH_${STATE.ui.mode}_${new Date().toISOString().replace(/[:.]/g,"-")}.webm`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(()=>URL.revokeObjectURL(url),2000);
+      };
+      rec.start(250);
+      STATE.internal.recOn=true;
+    } else {
+      STATE.internal.rec.stop();
+      STATE.internal.recOn=false;
+    }
+    render();
+  }
+
+  // bindings
+  function bindRange(id,key,parseFn,post){
+    const el=$(id);
+    el.addEventListener("input", ()=>{
+      STATE.ui[key]=parseFn(el.value);
+      if(post) post();
+      render();
+    });
+  }
+
+  $("startBtn").onclick=startCam;
+  $("drawerBtn").onclick=()=>{ STATE.ui.drawer=!STATE.ui.drawer; render(); };
+  $("keyBtn").onclick=keyframeNow;
+  $("moshBtn").onclick=()=>{ STATE.ui.mosh=!STATE.ui.mosh; render(); };
+  $("recBtn").onclick=toggleRec;
+  $("fsBtn").onclick=()=>{
+    if(!document.fullscreenElement) document.documentElement.requestFullscreen?.();
+    else document.exitFullscreen?.();
+  };
+  $("nullBtn").onclick=()=>{ STATE.ui.null=!STATE.ui.null; render(); };
+  $("invBtn").onclick=()=>{ STATE.ui.invert=!STATE.ui.invert; render(); };
+  $("resetBtn").onclick=()=>applyMode(STATE.ui.mode);
+  $("modeSel").addEventListener("change",(e)=>applyMode(e.target.value));
+
+  bindRange("keyHz","keyHz",(x)=>+x);
+  bindRange("feedback","feedback",(x)=>+x);
+  bindRange("disp","disp",(x)=>parseInt(x,10));
+  bindRange("glitch","glitch",(x)=>+x);
+
+  bindRange("block","block",(x)=>parseInt(x,10), rebuildMotionGrid);
+  bindRange("refresh","refresh",(x)=>+x);
+  bindRange("jitter","jitter",(x)=>+x);
+
+  bindRange("mbias","mbias",(x)=>+x);
+  bindRange("mthr","mthr",(x)=>+x);
+
+  bindRange("c420","c420",(x)=>parseInt(x,10));
+  bindRange("chroma","chroma",(x)=>+x);
+  bindRange("quant","quant",(x)=>+x);
+  bindRange("poster","poster",(x)=>+x);
+  bindRange("grain","grain",(x)=>+x);
+
+  bindRange("scan","scan",(x)=>+x);
+  bindRange("warp","warp",(x)=>+x);
+  bindRange("edge","edge",(x)=>+x);
+
+  window.addEventListener("resize", ()=>{ fitCanvas(); rebuildMotionGrid(); });
+
+  window.addEventListener("keydown",(e)=>{
+    const k=e.key.toLowerCase();
+    const shift=e.shiftKey;
+    if(k===" "){ e.preventDefault(); STATE.ui.mosh=!STATE.ui.mosh; render(); return; }
+    if(k==="d"){ e.preventDefault(); STATE.ui.drawer=!STATE.ui.drawer; render(); return; }
+    if(k==="k"){ e.preventDefault(); keyframeNow(); return; }
+    if(k==="r"){ e.preventDefault(); applyMode(STATE.ui.mode); return; }
+    if(shift && k==="n"){ e.preventDefault(); STATE.ui.null=!STATE.ui.null; render(); return; }
+    if(shift && k==="i"){ e.preventDefault(); STATE.ui.invert=!STATE.ui.invert; render(); return; }
+    if(shift && k==="f"){ e.preventDefault();
+      if(!document.fullscreenElement) document.documentElement.requestFullscreen?.();
+      else document.exitFullscreen?.();
+      return;
+    }
+  });
+
+  function updateSig(){
+    const d=new Date();
+    const iso=d.toISOString().slice(0,19).replace("T"," ");
+    $("sig").textContent =
+      `AE/EE/WB :: FILE_ID=KETADATA_LIVE_MOSH_LIGHT • ROOM_ID=BASE_SURFACE • VERSION=1 • UPDATED_AT=${iso}Z • MODE=${STATE.ui.mode}`;
+  }
+
+  function renderLabels(){
+    $("modeName").textContent = ({codec:"codec hell", brutal:"brutal", liquid:"liquid", ghost:"ghost smear", vhs:"vhs", cyber:"cyber", pure:"pure hold"})[STATE.ui.mode] || "codec hell";
+    $("moshLabel").textContent = STATE.ui.mosh ? "ON":"OFF";
+    $("recLabel").textContent = STATE.internal.recOn ? "ON":"OFF";
+  }
+
+  function renderAll(){
+    renderLabels();
+    render();
+  }
+
+  // drawer values (kept minimal)
+  function renderDrawerValues(){
+    const bind=(id,key,fmt)=>{ $(id).value=STATE.ui[key]; $(id+"V").textContent=fmt(STATE.ui[key]); };
+    bind("keyHz","keyHz",(x)=>x.toFixed(2));
+    bind("feedback","feedback",(x)=>x.toFixed(3));
+    bind("disp","disp",(x)=>String(x|0));
+    bind("glitch","glitch",(x)=>x.toFixed(2));
+    bind("block","block",(x)=>String(x|0));
+    bind("refresh","refresh",(x)=>x.toFixed(2));
+    bind("jitter","jitter",(x)=>x.toFixed(2));
+    bind("mbias","mbias",(x)=>x.toFixed(2));
+    bind("mthr","mthr",(x)=>x.toFixed(2));
+    bind("c420","c420",(x)=>String(x|0));
+    bind("chroma","chroma",(x)=>x.toFixed(2));
+    bind("quant","quant",(x)=>x.toFixed(2));
+    bind("poster","poster",(x)=>x.toFixed(2));
+    bind("grain","grain",(x)=>x.toFixed(2));
+    bind("scan","scan",(x)=>x.toFixed(2));
+    bind("warp","warp",(x)=>x.toFixed(2));
+    bind("edge","edge",(x)=>x.toFixed(2));
+  }
+
+  // patch render to also update drawer values without extra churn
+  const _render=render;
+  render=function(){
+    root.classList.toggle("invert",!!STATE.ui.invert);
+    root.classList.toggle("null",!!STATE.ui.null);
+    $("drawer").classList.toggle("open",!!STATE.ui.drawer);
+    renderLabels();
+    renderDrawerValues();
+    updateSig();
+  };
+
+  // init
+  fitCanvas();
+  applyMode("codec");
+  _render();
+})();
+</script>
+
+<!--
+AE/EE/WB :: FILE_ID=KETADATA_LIVE_MOSH_LIGHT
+ROOM_ID=BASE_SURFACE
+VERSION=1
+UPDATED_AT=2026-01-10
+CHANGELOG=lighter_bars_thinner_lines_lower_alpha_same_engine_modes_recording
+-->
+</body>
+</html>
