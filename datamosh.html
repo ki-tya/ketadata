@@ -1,0 +1,540 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>KETADATA // DATAMOSH (SINGLE FILE)</title>
+<style>
+  :root{
+    --bg:#000;
+    --fg:rgba(255,255,255,.86);
+    --muted:rgba(255,255,255,.52);
+    --line:rgba(255,255,255,.14);
+    --line2:rgba(255,255,255,.26);
+    --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace;
+    --sans: Arial, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+
+    --top:44px;
+    --bot:34px;
+
+    /* MOSH PARAMS (UI writes these) */
+    --mosh: 1;          /* 0/1 */
+    --feedback: 0.965;  /* 0..0.999 */
+    --disp: 14;         /* px */
+    --glitch: 0.28;     /* 0..1 */
+    --scan: 0.12;       /* 0..1 */
+    --keyHz: 0.45;      /* keyframe refresh rate (per sec) */
+    --invert: 0;        /* 0/1 */
+    --null: 0;          /* 0/1 */
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%; margin:0}
+  body{
+    background:var(--bg);
+    color:var(--fg);
+    font-family:var(--sans);
+    overflow:hidden;
+  }
+
+  /* stage */
+  #root{
+    position:fixed; inset:0;
+    background:var(--bg);
+  }
+
+  /* top bar */
+  #top{
+    position:fixed; left:0; right:0; top:0; height:var(--top);
+    display:flex; align-items:center; gap:10px;
+    padding:0 10px;
+    border-bottom:1px solid var(--line);
+    background:rgba(0,0,0,.72);
+    backdrop-filter: blur(8px);
+    font-family:var(--mono);
+    user-select:none;
+    z-index:50;
+  }
+  #top .brand{letter-spacing:.14em; opacity:.92; white-space:nowrap}
+  #top .pill{
+    display:inline-flex; align-items:center; gap:8px;
+    padding:6px 8px;
+    border:1px solid var(--line);
+    background:rgba(255,255,255,.03);
+    white-space:nowrap;
+  }
+  #top button, #bot button{
+    font:inherit;
+    color:var(--fg);
+    background:transparent;
+    border:1px solid var(--line);
+    padding:6px 8px;
+    cursor:pointer;
+  }
+  #top button:hover, #bot button:hover{border-color:var(--line2)}
+  #top input[type="file"]{display:none}
+  .muted{color:var(--muted)}
+  .sep{opacity:.35}
+
+  /* bottom bar */
+  #bot{
+    position:fixed; left:0; right:0; bottom:0; height:var(--bot);
+    display:flex; align-items:center; justify-content:space-between;
+    padding:0 10px;
+    border-top:1px solid var(--line);
+    background:rgba(0,0,0,.72);
+    backdrop-filter: blur(8px);
+    font-family:var(--mono);
+    user-select:none;
+    z-index:50;
+  }
+  #sig{opacity:.78}
+
+  /* canvas viewport */
+  #view{
+    position:fixed;
+    left:0; right:0;
+    top:var(--top);
+    bottom:var(--bot);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+  }
+  canvas{
+    width:100%;
+    height:100%;
+    display:block;
+    image-rendering:auto;
+  }
+
+  /* drawer */
+  #drawer{
+    position:fixed;
+    left:10px;
+    top:calc(var(--top) + 10px);
+    width:min(520px, calc(100vw - 20px));
+    border:1px solid var(--line);
+    background:rgba(0,0,0,.78);
+    backdrop-filter: blur(10px);
+    padding:10px;
+    font-family:var(--mono);
+    z-index:60;
+    display:none;
+  }
+  #drawer.open{display:block}
+  .row{display:flex; align-items:center; gap:10px; margin:8px 0}
+  .row label{min-width:130px; opacity:.85}
+  .row input[type="range"]{flex:1}
+  .row .val{min-width:70px; text-align:right; opacity:.85}
+
+  /* modes */
+  #root.invert{filter:invert(1)}
+  #root.null #top, #root.null #bot, #root.null #drawer{display:none !important;}
+  #root.null #view{top:0; bottom:0;}
+</style>
+</head>
+<body>
+<div id="root">
+  <div id="top">
+    <div class="brand">KETADATA // DATAMOSH</div>
+    <div class="sep">|</div>
+
+    <label class="pill" for="file">
+      <span>LOAD VIDEO</span>
+      <span class="muted" id="fileName">none</span>
+    </label>
+    <input id="file" type="file" accept="video/*"/>
+
+    <button id="playBtn">PLAY</button>
+    <button id="pauseBtn">PAUSE</button>
+    <button id="moshBtn">MOSH: <span id="moshLabel">ON</span></button>
+    <button id="drawerBtn">SYSTEM</button>
+    <button id="fsBtn">FULL</button>
+    <button id="nullBtn">NULL</button>
+  </div>
+
+  <div id="drawer">
+    <div class="row">
+      <label>KEYFRAME Hz</label>
+      <input id="keyHz" type="range" min="0" max="2.5" step="0.01"/>
+      <div class="val" id="keyHzV"></div>
+    </div>
+    <div class="row">
+      <label>FEEDBACK</label>
+      <input id="feedback" type="range" min="0.80" max="0.999" step="0.001"/>
+      <div class="val" id="feedbackV"></div>
+    </div>
+    <div class="row">
+      <label>DISP px</label>
+      <input id="disp" type="range" min="0" max="60" step="1"/>
+      <div class="val" id="dispV"></div>
+    </div>
+    <div class="row">
+      <label>GLITCH RATE</label>
+      <input id="glitch" type="range" min="0" max="1" step="0.01"/>
+      <div class="val" id="glitchV"></div>
+    </div>
+    <div class="row">
+      <label>SCAN</label>
+      <input id="scan" type="range" min="0" max="1" step="0.01"/>
+      <div class="val" id="scanV"></div>
+    </div>
+    <div class="row">
+      <label>INVERT</label>
+      <button id="invBtn">TOGGLE</button>
+      <div class="val muted">SHIFT+I</div>
+    </div>
+    <div class="row">
+      <label>HARD RESET</label>
+      <button id="resetBtn">KEYFRAME NOW</button>
+      <div class="val muted">K</div>
+    </div>
+    <div class="row muted" style="line-height:1.35">
+      Datamosh simulation: frame feedback + random block displacement + periodic keyframe refresh.
+      Increase FEEDBACK, DISP, GLITCH. Lower KEYFRAME Hz to “hold” motion longer.
+    </div>
+  </div>
+
+  <div id="view">
+    <canvas id="c"></canvas>
+  </div>
+
+  <div id="bot">
+    <div class="muted">SPACE play/pause · D system · SHIFT+F full · SHIFT+N null · K keyframe</div>
+    <div id="sig">AE/EE/WB STAMP</div>
+  </div>
+
+  <!-- hidden media -->
+  <video id="v" playsinline muted loop style="display:none"></video>
+</div>
+
+<script>
+(() => {
+  const $ = (id)=>document.getElementById(id);
+
+  const root = $("root");
+  const canvas = $("c");
+  const ctx = canvas.getContext("2d", { alpha:false, desynchronized:true });
+
+  const v = $("v");
+  const file = $("file");
+
+  const STATE = {
+    ui:{
+      drawer:false,
+      fullscreen:false,
+      null:false,
+      invert:false,
+      mosh:true,
+      keyHz: 0.45,
+      feedback: 0.965,
+      disp: 14,
+      glitch: 0.28,
+      scan: 0.12
+    },
+    internal:{
+      lastKeyframeAt: 0,
+      w: 0, h: 0,
+      ready:false
+    }
+  };
+
+  /* ---------- helpers ---------- */
+  function now(){ return performance.now(); }
+  function clamp(x,a,b){ return Math.max(a, Math.min(b,x)); }
+  function setCSSVars(){
+    root.style.setProperty("--mosh", STATE.ui.mosh ? "1":"0");
+    root.style.setProperty("--keyHz", String(STATE.ui.keyHz));
+    root.style.setProperty("--feedback", String(STATE.ui.feedback));
+    root.style.setProperty("--disp", String(STATE.ui.disp));
+    root.style.setProperty("--glitch", String(STATE.ui.glitch));
+    root.style.setProperty("--scan", String(STATE.ui.scan));
+    root.style.setProperty("--invert", STATE.ui.invert ? "1":"0");
+    root.style.setProperty("--null", STATE.ui.null ? "1":"0");
+  }
+
+  function fitCanvas(){
+    const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+    const rect = canvas.getBoundingClientRect();
+    const w = Math.max(2, Math.floor(rect.width * dpr));
+    const h = Math.max(2, Math.floor(rect.height * dpr));
+    if (canvas.width !== w || canvas.height !== h){
+      canvas.width = w; canvas.height = h;
+    }
+    STATE.internal.w = w;
+    STATE.internal.h = h;
+  }
+
+  function keyframeNow(){
+    // A “keyframe” here means: stop using feedback briefly; redraw a clean frame.
+    STATE.internal.lastKeyframeAt = now();
+    // Clear to avoid ghosting
+    ctx.setTransform(1,0,0,1,0,0);
+    ctx.globalAlpha = 1;
+    ctx.globalCompositeOperation = "source-over";
+    ctx.fillStyle = "#000";
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+    drawCleanFrame();
+  }
+
+  function drawCleanFrame(){
+    if (!STATE.internal.ready) return;
+    // cover draw video to canvas
+    const W = canvas.width, H = canvas.height;
+    const vw = v.videoWidth || 1;
+    const vh = v.videoHeight || 1;
+    const s = Math.max(W/vw, H/vh);
+    const dw = vw*s, dh = vh*s;
+    const dx = (W - dw)/2, dy = (H - dh)/2;
+
+    ctx.setTransform(1,0,0,1,0,0);
+    ctx.globalAlpha = 1;
+    ctx.globalCompositeOperation = "source-over";
+    ctx.drawImage(v, dx, dy, dw, dh);
+  }
+
+  /* ---------- mosh core ---------- */
+  function tick(){
+    fitCanvas();
+
+    const W = canvas.width, H = canvas.height;
+
+    // if no video, do a minimal idle pattern (so you see something)
+    if (!STATE.internal.ready){
+      ctx.setTransform(1,0,0,1,0,0);
+      ctx.globalCompositeOperation = "source-over";
+      ctx.fillStyle = "#000";
+      ctx.fillRect(0,0,W,H);
+
+      // idle: thin raster + text
+      const t = now()*0.001;
+      ctx.globalAlpha = 0.85;
+      ctx.fillStyle = "rgba(255,255,255,0.10)";
+      const y = Math.floor((Math.sin(t*1.2)*0.5+0.5)*H);
+      ctx.fillRect(0,y,W,1);
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = "rgba(255,255,255,0.72)";
+      ctx.font = "14px " + getComputedStyle(document.documentElement).getPropertyValue("--mono");
+      ctx.fillText("LOAD A VIDEO TO MOSH", 14, 22);
+      requestAnimationFrame(tick);
+      return;
+    }
+
+    // periodic keyframe refresh based on Hz
+    const hz = clamp(STATE.ui.keyHz, 0, 10);
+    const interval = hz <= 0 ? Infinity : (1000 / hz);
+    if (now() - STATE.internal.lastKeyframeAt > interval){
+      keyframeNow();
+    }
+
+    // MOSH OFF = just clean draw
+    if (!STATE.ui.mosh){
+      drawCleanFrame();
+      requestAnimationFrame(tick);
+      return;
+    }
+
+    // MOSH ON:
+    // 1) feedback: re-draw canvas onto itself (holds motion / smears)
+    const fb = clamp(STATE.ui.feedback, 0.0, 0.9999);
+    ctx.setTransform(1,0,0,1,0,0);
+    ctx.globalCompositeOperation = "source-over";
+    ctx.globalAlpha = fb;
+    ctx.drawImage(canvas, 0, 0);
+
+    // 2) occasional “block displacement” to emulate compression break
+    const g = clamp(STATE.ui.glitch, 0, 1);
+    if (Math.random() < g){
+      const blocks = 10 + Math.floor(Math.random()*30);
+      const maxDisp = Math.max(0, STATE.ui.disp|0);
+      for (let i=0;i<blocks;i++){
+        const bw = 20 + Math.floor(Math.random()*Math.min(260, W*0.35));
+        const bh = 10 + Math.floor(Math.random()*Math.min(160, H*0.25));
+        const sx = Math.floor(Math.random()*(W-bw));
+        const sy = Math.floor(Math.random()*(H-bh));
+        const dx = sx + Math.floor((Math.random()*2-1)*maxDisp);
+        const dy = sy + Math.floor((Math.random()*2-1)*maxDisp);
+
+        // copy block from current canvas and paste offset
+        // (fast path: drawImage with source rect)
+        ctx.globalAlpha = 1;
+        ctx.globalCompositeOperation = "source-over";
+        ctx.drawImage(canvas, sx, sy, bw, bh, dx, dy, bw, bh);
+      }
+    }
+
+    // 3) inject fresh video on top, but not always fully opaque
+    // Holding motion vectors vibe comes from not fully refreshing.
+    const freshness = 0.18 + (1 - fb) * 0.9; // if feedback is high, reduce fresh injection
+    ctx.globalAlpha = clamp(freshness, 0.05, 0.55);
+    ctx.globalCompositeOperation = "lighter";
+    drawCleanFrame();
+
+    // 4) scanlines / tearing
+    const scan = clamp(STATE.ui.scan, 0, 1);
+    if (scan > 0){
+      ctx.globalCompositeOperation = "source-over";
+      const lines = 6 + Math.floor(scan * 46);
+      for (let i=0;i<lines;i++){
+        const y = Math.floor(Math.random()*H);
+        const h = 1 + Math.floor(Math.random()*(2 + scan*6));
+        const a = 0.04 + Math.random()*0.12*scan;
+        ctx.globalAlpha = a;
+        ctx.fillStyle = "rgba(255,255,255,1)";
+        ctx.fillRect(0,y,W,h);
+
+        // small horizontal shear
+        if (Math.random() < scan*0.55){
+          const sh = 6 + Math.floor(Math.random()*40);
+          const sy = Math.floor(Math.random()*(H-sh));
+          const sx = 0;
+          const bw = W;
+          const dx = Math.floor((Math.random()*2-1)*(6 + scan*44));
+          ctx.globalAlpha = 0.20*scan;
+          ctx.drawImage(canvas, sx, sy, bw, sh, dx, sy, bw, sh);
+        }
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    requestAnimationFrame(tick);
+  }
+
+  /* ---------- UI ---------- */
+  function render(){
+    root.classList.toggle("invert", !!STATE.ui.invert);
+    root.classList.toggle("null", !!STATE.ui.null);
+
+    $("drawer").classList.toggle("open", !!STATE.ui.drawer);
+    $("moshLabel").textContent = STATE.ui.mosh ? "ON":"OFF";
+
+    // sliders -> values
+    $("keyHz").value = STATE.ui.keyHz;
+    $("feedback").value = STATE.ui.feedback;
+    $("disp").value = STATE.ui.disp;
+    $("glitch").value = STATE.ui.glitch;
+    $("scan").value = STATE.ui.scan;
+
+    $("keyHzV").textContent = STATE.ui.keyHz.toFixed(2);
+    $("feedbackV").textContent = STATE.ui.feedback.toFixed(3);
+    $("dispV").textContent = String(STATE.ui.disp|0);
+    $("glitchV").textContent = STATE.ui.glitch.toFixed(2);
+    $("scanV").textContent = STATE.ui.scan.toFixed(2);
+
+    setCSSVars();
+    updateSig();
+  }
+
+  function updateSig(){
+    const d = new Date();
+    const iso = d.toISOString().slice(0,19).replace("T"," ");
+    const stamp =
+`AE/EE/WB :: FILE_ID=KETADATA_DATAMOSH_01
+ROOM_ID=BASE_SURFACE
+VERSION=1
+UPDATED_AT=${iso}Z
+CHANGELOG=init_datamosh_singlefile_local_only`;
+    $("sig").textContent = stamp.replace(/\n/g,"  •  ");
+  }
+
+  function toggleFullscreen(){
+    if (!document.fullscreenElement){
+      document.documentElement.requestFullscreen?.();
+    } else {
+      document.exitFullscreen?.();
+    }
+  }
+
+  /* ---------- events ---------- */
+  $("drawerBtn").onclick = () => { STATE.ui.drawer = !STATE.ui.drawer; render(); };
+  $("moshBtn").onclick = () => { STATE.ui.mosh = !STATE.ui.mosh; render(); };
+  $("fsBtn").onclick = () => toggleFullscreen();
+
+  $("nullBtn").onclick = () => {
+    STATE.ui.null = !STATE.ui.null;
+    // NULL means: no chrome. keep playback and mosh running.
+    render();
+  };
+
+  $("invBtn").onclick = () => { STATE.ui.invert = !STATE.ui.invert; render(); };
+  $("resetBtn").onclick = () => keyframeNow();
+
+  $("playBtn").onclick = async () => {
+    try{ v.muted = false; await v.play(); }catch(e){}
+  };
+  $("pauseBtn").onclick = () => v.pause();
+
+  // sliders
+  function bindRange(id, key, parseFn){
+    const el = $(id);
+    el.addEventListener("input", () => {
+      STATE.ui[key] = parseFn(el.value);
+      render();
+    });
+  }
+  bindRange("keyHz","keyHz",(x)=>+x);
+  bindRange("feedback","feedback",(x)=>+x);
+  bindRange("disp","disp",(x)=>parseInt(x,10));
+  bindRange("glitch","glitch",(x)=>+x);
+  bindRange("scan","scan",(x)=>+x);
+
+  // file load
+  file.addEventListener("change", async () => {
+    const f = file.files && file.files[0];
+    if (!f) return;
+    $("fileName").textContent = f.name;
+
+    const url = URL.createObjectURL(f);
+    v.src = url;
+    v.loop = true;
+    v.playsInline = true;
+
+    // ensure video is ready
+    await new Promise((res) => {
+      const on = () => { v.removeEventListener("loadeddata", on); res(); };
+      v.addEventListener("loadeddata", on);
+    });
+
+    STATE.internal.ready = true;
+    STATE.internal.lastKeyframeAt = now();
+    keyframeNow();
+
+    try{ await v.play(); }catch(e){}
+  });
+
+  // keyboard
+  window.addEventListener("keydown", (e) => {
+    const k = e.key.toLowerCase();
+    const shift = e.shiftKey;
+
+    if (k === " "){
+      e.preventDefault();
+      if (v.paused) v.play().catch(()=>{});
+      else v.pause();
+      return;
+    }
+    if (shift && k === "f"){ e.preventDefault(); toggleFullscreen(); return; }
+    if (shift && k === "n"){ e.preventDefault(); STATE.ui.null = !STATE.ui.null; render(); return; }
+    if (shift && k === "i"){ e.preventDefault(); STATE.ui.invert = !STATE.ui.invert; render(); return; }
+
+    if (k === "d"){ e.preventDefault(); STATE.ui.drawer = !STATE.ui.drawer; render(); return; }
+    if (k === "k"){ e.preventDefault(); keyframeNow(); return; }
+  });
+
+  window.addEventListener("resize", () => { fitCanvas(); });
+
+  // init
+  render();
+  fitCanvas();
+  requestAnimationFrame(tick);
+})();
+</script>
+
+<!--
+AE/EE/WB :: FILE_ID=KETADATA_DATAMOSH_01
+ROOM_ID=BASE_SURFACE
+VERSION=1
+UPDATED_AT=2026-01-10
+CHANGELOG=init_datamosh_singlefile_local_only_datamosh_sim
+-->
+</body>
+</html>
