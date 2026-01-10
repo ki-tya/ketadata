@@ -1,0 +1,867 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>KETADATA // DATAMOSH v5 (P-BUFFER + MOTION + CHROMA420)</title>
+<style>
+  :root{
+    --bg:#000;
+    --fg:rgba(255,255,255,.86);
+    --muted:rgba(255,255,255,.52);
+    --line:rgba(255,255,255,.14);
+    --line2:rgba(255,255,255,.26);
+    --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace;
+    --sans: Arial, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+
+    --top:44px;
+    --bot:34px;
+
+    --ctlH:28px;
+    --padX:10px;
+    --gap:8px;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%; margin:0}
+  body{background:var(--bg); color:var(--fg); font-family:var(--sans); overflow:hidden}
+
+  #root{position:fixed; inset:0; background:var(--bg)}
+  #root.invert{filter:invert(1)}
+  #root.null #top,#root.null #bot,#root.null #drawer{display:none !important;}
+  #root.null #view{top:0; bottom:0;}
+
+  #top{
+    position:fixed; left:0; right:0; top:0; height:var(--top);
+    display:grid;
+    grid-template-columns: auto 1fr auto;
+    align-items:center;
+    padding:0 var(--padX);
+    border-bottom:1px solid var(--line);
+    background:rgba(0,0,0,.78);
+    backdrop-filter: blur(8px);
+    font-family:var(--mono);
+    user-select:none;
+    z-index:50;
+    gap:var(--gap);
+  }
+  #brand{letter-spacing:.14em; white-space:nowrap; opacity:.92}
+  #fileRow{display:flex; align-items:center; gap:var(--gap); min-width:0;}
+  #filePill{
+    display:flex; align-items:center; gap:var(--gap);
+    height:var(--ctlH);
+    padding:0 8px;
+    border:1px solid var(--line);
+    background:rgba(255,255,255,.03);
+    min-width:0;
+  }
+  #filePill span{white-space:nowrap}
+  #fileName{
+    color:var(--muted);
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+    max-width:52ch;
+  }
+  #btnRow{
+    display:flex; align-items:center; gap:var(--gap);
+    justify-content:flex-end;
+    flex-wrap:nowrap;
+  }
+  button{
+    font:inherit;
+    height:var(--ctlH);
+    padding:0 8px;
+    color:var(--fg);
+    background:transparent;
+    border:1px solid var(--line);
+    cursor:pointer;
+    white-space:nowrap;
+  }
+  button:hover{border-color:var(--line2)}
+  #file{display:none}
+
+  #view{
+    position:fixed;
+    left:0; right:0;
+    top:var(--top);
+    bottom:var(--bot);
+    background:#000;
+  }
+  canvas{width:100%; height:100%; display:block}
+
+  #bot{
+    position:fixed; left:0; right:0; bottom:0; height:var(--bot);
+    display:grid;
+    grid-template-columns: 1fr auto;
+    align-items:center;
+    padding:0 var(--padX);
+    border-top:1px solid var(--line);
+    background:rgba(0,0,0,.78);
+    backdrop-filter: blur(8px);
+    font-family:var(--mono);
+    user-select:none;
+    z-index:50;
+    gap:var(--gap);
+  }
+  #hint{color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+  #sig{color:var(--muted); opacity:.82; white-space:nowrap}
+
+  #drawer{
+    position:fixed;
+    left:var(--padX);
+    top:calc(var(--top) + var(--padX));
+    width:min(560px, calc(100vw - (2*var(--padX))));
+    border:1px solid var(--line);
+    background:rgba(0,0,0,.82);
+    backdrop-filter: blur(10px);
+    padding:10px;
+    font-family:var(--mono);
+    z-index:60;
+    display:none;
+  }
+  #drawer.open{display:block}
+  .row{
+    display:grid;
+    grid-template-columns: 140px 1fr 72px;
+    gap:var(--gap);
+    align-items:center;
+    margin:8px 0;
+  }
+  .row label{opacity:.86}
+  input[type="range"]{width:100%}
+  .val{text-align:right; opacity:.86}
+  .thin{color:var(--muted); line-height:1.35}
+</style>
+</head>
+<body>
+<div id="root">
+  <div id="top">
+    <div id="brand">KETADATA // DATAMOSH</div>
+
+    <div id="fileRow">
+      <label id="filePill" for="file">
+        <span>LOAD VIDEO</span>
+        <span id="fileName">none</span>
+      </label>
+      <input id="file" type="file" accept="video/*"/>
+      <button id="drawerBtn">SYSTEM</button>
+    </div>
+
+    <div id="btnRow">
+      <button id="playBtn">PLAY</button>
+      <button id="pauseBtn">PAUSE</button>
+      <button id="moshBtn">MOSH: <span id="moshLabel">ON</span></button>
+      <button id="pBtn">PBUF: <span id="pLabel">ON</span></button>
+      <button id="motionBtn">MOTION: <span id="motionLabel">ON</span></button>
+      <button id="c420Btn">C420: <span id="c420Label">ON</span></button>
+      <button id="texBtn">TEX: <span id="texLabel">ON</span></button>
+      <button id="fsBtn">FULL</button>
+      <button id="nullBtn">NULL</button>
+    </div>
+  </div>
+
+  <div id="drawer">
+    <div class="row"><label>KEYFRAME Hz</label><input id="keyHz" type="range" min="0" max="3" step="0.01"/><div class="val" id="keyHzV"></div></div>
+    <div class="row"><label>FEEDBACK</label><input id="feedback" type="range" min="0.80" max="0.999" step="0.001"/><div class="val" id="feedbackV"></div></div>
+    <div class="row"><label>DISP px</label><input id="disp" type="range" min="0" max="140" step="1"/><div class="val" id="dispV"></div></div>
+    <div class="row"><label>GLITCH</label><input id="glitch" type="range" min="0" max="1" step="0.01"/><div class="val" id="glitchV"></div></div>
+
+    <div class="row"><label>BLOCK px</label><input id="block" type="range" min="4" max="48" step="1"/><div class="val" id="blockV"></div></div>
+    <div class="row"><label>REFRESH</label><input id="refresh" type="range" min="0" max="1" step="0.01"/><div class="val" id="refreshV"></div></div>
+    <div class="row"><label>JITTER</label><input id="jitter" type="range" min="0" max="1" step="0.01"/><div class="val" id="jitterV"></div></div>
+
+    <div class="row"><label>MOTION BIAS</label><input id="mbias" type="range" min="0" max="1" step="0.01"/><div class="val" id="mbiasV"></div></div>
+    <div class="row"><label>MOTION THR</label><input id="mthr" type="range" min="0" max="1" step="0.01"/><div class="val" id="mthrV"></div></div>
+
+    <div class="row"><label>QUANT</label><input id="quant" type="range" min="0" max="1" step="0.01"/><div class="val" id="quantV"></div></div>
+    <div class="row"><label>CHROMA</label><input id="chroma" type="range" min="0" max="1" step="0.01"/><div class="val" id="chromaV"></div></div>
+    <div class="row"><label>POSTER</label><input id="poster" type="range" min="0" max="1" step="0.01"/><div class="val" id="posterV"></div></div>
+    <div class="row"><label>GRAIN</label><input id="grain" type="range" min="0" max="1" step="0.01"/><div class="val" id="grainV"></div></div>
+
+    <div class="row"><label>SCAN</label><input id="scan" type="range" min="0" max="1" step="0.01"/><div class="val" id="scanV"></div></div>
+
+    <div class="row"><label>INVERT</label><button id="invBtn">TOGGLE</button><div class="val">SHIFT+I</div></div>
+    <div class="row"><label>KEYFRAME NOW</label><button id="keyBtn">PUNCH</button><div class="val">K</div></div>
+
+    <div class="thin">
+      Preset: KEYFRAME 0.25 · FEEDBACK 0.993 · GLITCH 0.70 · DISP 38 · BLOCK 16 · REFRESH 0.16 · JITTER 0.20 · MOTION BIAS 0.85 · THR 0.18 · QUANT 0.55 · CHROMA 0.32 · POSTER 0.16 · GRAIN 0.14 · C420 ON
+    </div>
+  </div>
+
+  <div id="view"><canvas id="c"></canvas></div>
+
+  <div id="bot">
+    <div id="hint">SPACE play/pause · D system · SHIFT+F full · SHIFT+N null · K keyframe</div>
+    <div id="sig"></div>
+  </div>
+
+  <video id="v" playsinline muted loop style="display:none"></video>
+</div>
+
+<script>
+(() => {
+  const $ = (id)=>document.getElementById(id);
+  const root = $("root");
+  const canvas = $("c");
+  const out = canvas.getContext("2d", { alpha:false, desynchronized:true });
+
+  const v = $("v");
+  const file = $("file");
+
+  const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
+  const now=()=>performance.now();
+
+  const STATE = {
+    ui:{
+      drawer:false, null:false, invert:false,
+      mosh:true, pbuf:true, motion:true, c420:true, tex:true,
+
+      keyHz:0.25,
+      feedback:0.993,
+      disp:38,
+      glitch:0.70,
+
+      block:16,
+      refresh:0.16,
+      jitter:0.20,
+
+      // motion selection controls
+      mbias:0.85,   // 0=random, 1=mostly motion-weighted
+      mthr:0.18,    // ignore small motion
+
+      quant:0.55,
+      chroma:0.32,
+      poster:0.16,
+      grain:0.14,
+
+      scan:0.10
+    },
+    internal:{
+      ready:false,
+      lastKeyAt:0,
+      lastURL:null,
+      frame:0,
+
+      srcC:null, srcX:null,
+      prevC:null, prevX:null,
+      pbC:null, pbX:null,
+
+      // motion weights per macroblock
+      wts:null,
+      wtsSum:0,
+      blocksX:0,
+      blocksY:0
+    }
+  };
+
+  function allocOffscreens(w,h){
+    STATE.internal.srcC  = new OffscreenCanvas(w,h);
+    STATE.internal.srcX  = STATE.internal.srcC.getContext("2d", { alpha:false });
+
+    STATE.internal.prevC = new OffscreenCanvas(w,h);
+    STATE.internal.prevX = STATE.internal.prevC.getContext("2d", { alpha:false });
+
+    STATE.internal.pbC   = new OffscreenCanvas(w,h);
+    STATE.internal.pbX   = STATE.internal.pbC.getContext("2d", { alpha:false });
+
+    // init all black
+    for (const cx of [STATE.internal.srcX, STATE.internal.prevX, STATE.internal.pbX]){
+      cx.globalCompositeOperation="source-over";
+      cx.globalAlpha=1;
+      cx.fillStyle="#000";
+      cx.fillRect(0,0,w,h);
+    }
+  }
+
+  function fitCanvas(){
+    const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+    const r = canvas.getBoundingClientRect();
+    const w = Math.max(2, Math.floor(r.width * dpr));
+    const h = Math.max(2, Math.floor(r.height * dpr));
+    if (canvas.width!==w || canvas.height!==h){
+      canvas.width=w; canvas.height=h;
+      allocOffscreens(w,h);
+      rebuildMotionGrid();
+    }
+  }
+
+  function rebuildMotionGrid(){
+    const W = canvas.width, H = canvas.height;
+    const bs = Math.max(2, STATE.ui.block|0);
+    STATE.internal.blocksX = Math.ceil(W/bs);
+    STATE.internal.blocksY = Math.ceil(H/bs);
+    const n = STATE.internal.blocksX * STATE.internal.blocksY;
+    STATE.internal.wts = new Float32Array(n);
+    STATE.internal.wtsSum = 0;
+  }
+
+  function drawVideoCover(ctx){
+    const W=canvas.width, H=canvas.height;
+    const vw=v.videoWidth||1, vh=v.videoHeight||1;
+    const s=Math.max(W/vw,H/vh);
+    const dw=vw*s, dh=vh*s;
+    const dx=(W-dw)/2, dy=(H-dh)/2;
+    ctx.drawImage(v,dx,dy,dw,dh);
+  }
+
+  function renderSrc(){
+    // shift src -> prev
+    STATE.internal.prevX.globalCompositeOperation="source-over";
+    STATE.internal.prevX.globalAlpha=1;
+    STATE.internal.prevX.drawImage(STATE.internal.srcC,0,0);
+
+    // draw new src
+    const sx = STATE.internal.srcX;
+    sx.setTransform(1,0,0,1,0,0);
+    sx.globalAlpha=1;
+    sx.globalCompositeOperation="source-over";
+    sx.fillStyle="#000";
+    sx.fillRect(0,0,canvas.width,canvas.height);
+    drawVideoCover(sx);
+  }
+
+  function keyframeNow(){
+    STATE.internal.lastKeyAt = now();
+    renderSrc();
+    const pb = STATE.internal.pbX;
+    pb.setTransform(1,0,0,1,0,0);
+    pb.globalAlpha=1;
+    pb.globalCompositeOperation="source-over";
+    pb.drawImage(STATE.internal.srcC,0,0);
+  }
+
+  function updateSig(){
+    const d=new Date();
+    const iso=d.toISOString().slice(0,19).replace("T"," ");
+    $("sig").textContent =
+      `AE/EE/WB :: FILE_ID=KETADATA_DATAMOSH_05 • ROOM_ID=BASE_SURFACE • VERSION=5 • UPDATED_AT=${iso}Z • CHANGELOG=pbuf_motion_weighted_refresh_chroma420_clean_bars`;
+  }
+
+  function render(){
+    root.classList.toggle("invert", !!STATE.ui.invert);
+    root.classList.toggle("null", !!STATE.ui.null);
+    $("drawer").classList.toggle("open", !!STATE.ui.drawer);
+
+    $("moshLabel").textContent   = STATE.ui.mosh ? "ON":"OFF";
+    $("pLabel").textContent      = STATE.ui.pbuf ? "ON":"OFF";
+    $("motionLabel").textContent = STATE.ui.motion ? "ON":"OFF";
+    $("c420Label").textContent   = STATE.ui.c420 ? "ON":"OFF";
+    $("texLabel").textContent    = STATE.ui.tex ? "ON":"OFF";
+
+    const bind = (id,key,fmt)=>{ $(id).value=STATE.ui[key]; $(id+"V").textContent=fmt(STATE.ui[key]); };
+    bind("keyHz","keyHz",(x)=>x.toFixed(2));
+    bind("feedback","feedback",(x)=>x.toFixed(3));
+    bind("disp","disp",(x)=>String(x|0));
+    bind("glitch","glitch",(x)=>x.toFixed(2));
+
+    bind("block","block",(x)=>String(x|0));
+    bind("refresh","refresh",(x)=>x.toFixed(2));
+    bind("jitter","jitter",(x)=>x.toFixed(2));
+
+    bind("mbias","mbias",(x)=>x.toFixed(2));
+    bind("mthr","mthr",(x)=>x.toFixed(2));
+
+    bind("quant","quant",(x)=>x.toFixed(2));
+    bind("chroma","chroma",(x)=>x.toFixed(2));
+    bind("poster","poster",(x)=>x.toFixed(2));
+    bind("grain","grain",(x)=>x.toFixed(2));
+
+    bind("scan","scan",(x)=>x.toFixed(2));
+
+    updateSig();
+  }
+
+  function toggleFullscreen(){
+    if (!document.fullscreenElement) document.documentElement.requestFullscreen?.();
+    else document.exitFullscreen?.();
+  }
+
+  // ----- motion map (block-wise energy), computed cheaply by sampling pixels
+  function computeMotionWeights(){
+    const W = canvas.width, H = canvas.height;
+    const bs = Math.max(2, STATE.ui.block|0);
+    const bxN = Math.ceil(W/bs), byN = Math.ceil(H/bs);
+    const n = bxN*byN;
+
+    if (!STATE.internal.wts || STATE.internal.wts.length !== n){
+      rebuildMotionGrid();
+    }
+
+    const thr = clamp(STATE.ui.mthr,0,1);
+    const thrAbs = thr * 64; // luma delta threshold
+
+    // read pixels once
+    const srcId  = STATE.internal.srcX.getImageData(0,0,W,H).data;
+    const prevId = STATE.internal.prevX.getImageData(0,0,W,H).data;
+
+    let sum=0;
+    let idx=0;
+
+    // sample a small set of points per block for speed
+    const samples = 5;
+    const offs = [
+      [0.25,0.25],
+      [0.75,0.25],
+      [0.25,0.75],
+      [0.75,0.75],
+      [0.50,0.50]
+    ];
+
+    for (let by=0; by<byN; by++){
+      const y0 = by*bs;
+      for (let bx=0; bx<bxN; bx++){
+        const x0 = bx*bs;
+        let e=0;
+
+        for (let s=0; s<samples; s++){
+          const sx = Math.min(W-1, Math.max(0, (x0 + offs[s][0]*bs)|0));
+          const sy = Math.min(H-1, Math.max(0, (y0 + offs[s][1]*bs)|0));
+          const p = (sy*W + sx)*4;
+
+          const r1=srcId[p], g1=srcId[p+1], b1=srcId[p+2];
+          const r0=prevId[p], g0=prevId[p+1], b0=prevId[p+2];
+
+          const y1 = (r1*3 + g1*4 + b1) >> 3;
+          const y0l= (r0*3 + g0*4 + b0) >> 3;
+
+          e += Math.abs(y1 - y0l);
+        }
+
+        e /= samples;
+
+        // threshold + nonlinearity
+        let w = e <= thrAbs ? 0.0005 : (e - thrAbs);
+        w = w*w + 0.0005; // emphasize motion
+
+        STATE.internal.wts[idx++] = w;
+        sum += w;
+      }
+    }
+
+    STATE.internal.wtsSum = sum;
+  }
+
+  // weighted choice of block index
+  function pickMotionBlock(){
+    const wts = STATE.internal.wts;
+    const sum = STATE.internal.wtsSum;
+    if (!wts || sum <= 0) return (Math.random()*wts.length)|0;
+
+    // roulette selection
+    let r = Math.random() * sum;
+    for (let i=0;i<wts.length;i++){
+      r -= wts[i];
+      if (r <= 0) return i;
+    }
+    return wts.length-1;
+  }
+
+  // chroma 4:2:0-ish subsample on P-buffer
+  function applyChroma420(pb, W, H){
+    // simple: average chroma over 2x2, then write back (keeps luma)
+    const id = pb.getImageData(0,0,W,H);
+    const d = id.data;
+
+    for (let y=0; y<H; y+=2){
+      for (let x=0; x<W; x+=2){
+        let sumU=0, sumV=0, n=0;
+        const pts = [
+          [x,y],[x+1,y],[x,y+1],[x+1,y+1]
+        ];
+        for (const [px,py] of pts){
+          if (px>=W || py>=H) continue;
+          const i = (py*W+px)*4;
+          const r=d[i], g=d[i+1], b=d[i+2];
+          // crude YUV-ish: U ~ (b - y), V ~ (r - y)
+          const yv = (r*3 + g*4 + b) >> 3;
+          sumU += (b - yv);
+          sumV += (r - yv);
+          n++;
+        }
+        sumU /= n; sumV /= n;
+
+        // write back: keep Y, reconstruct R/B with averaged chroma
+        for (const [px,py] of pts){
+          if (px>=W || py>=H) continue;
+          const i = (py*W+px)*4;
+          const r=d[i], g=d[i+1], b=d[i+2];
+          const yv = (r*3 + g*4 + b) >> 3;
+
+          let nr = yv + sumV;
+          let nb = yv + sumU;
+          // keep G by solving approx from Y = (3R+4G+B)/8
+          let ng = ((yv<<3) - (3*nr) - (1*nb)) / 4;
+
+          d[i]   = clamp(nr,0,255);
+          d[i+1] = clamp(ng,0,255);
+          d[i+2] = clamp(nb,0,255);
+        }
+      }
+    }
+
+    pb.putImageData(id,0,0);
+  }
+
+  // texture pass (quant/poster/grain + optional chroma shift)
+  function applyTexture(pb, W, H){
+    const bs = Math.max(2, STATE.ui.block|0);
+    const q = clamp(STATE.ui.quant,0,1);
+    const chr = clamp(STATE.ui.chroma,0,1);
+    const poster = clamp(STATE.ui.poster,0,1);
+    const grain = clamp(STATE.ui.grain,0,1);
+
+    if (q<=0 && chr<=0 && poster<=0 && grain<=0) return;
+
+    const id = pb.getImageData(0,0,W,H);
+    const data = id.data;
+
+    const step = Math.max(1, Math.floor(1 + q*63));
+    const posterStep = poster<=0 ? 0 : Math.max(2, Math.floor(2 + poster*30));
+
+    // macroblock luma contour + quant
+    if (q>0 || posterStep>0){
+      for (let by=0; by<H; by+=bs){
+        for (let bx=0; bx<W; bx+=bs){
+          const x2 = Math.min(W, bx+bs);
+          const y2 = Math.min(H, by+bs);
+
+          let sum=0, n=0;
+          for (let y=by; y<y2; y++){
+            let p=(y*W+bx)*4;
+            for (let x=bx; x<x2; x++){
+              const r=data[p], g=data[p+1], b=data[p+2];
+              sum += (r*3 + g*4 + b) >> 3;
+              n++;
+              p+=4;
+            }
+          }
+          const avg = n? (sum/n) : 0;
+          const base = Math.round(avg/step)*step;
+
+          const k = q*0.85;
+          for (let y=by; y<y2; y++){
+            let p=(y*W+bx)*4;
+            for (let x=bx; x<x2; x++){
+              let r=data[p], g=data[p+1], b=data[p+2];
+              const lum = (r*3 + g*4 + b) >> 3;
+              const dl = base - lum;
+
+              r = clamp((r + dl*k), 0, 255);
+              g = clamp((g + dl*k), 0, 255);
+              b = clamp((b + dl*k), 0, 255);
+
+              if (posterStep>0){
+                r = Math.round(r/posterStep)*posterStep;
+                g = Math.round(g/posterStep)*posterStep;
+                b = Math.round(b/posterStep)*posterStep;
+              }
+
+              data[p]=r; data[p+1]=g; data[p+2]=b;
+              p+=4;
+            }
+          }
+        }
+      }
+    }
+
+    // chroma shift (optional, milder now that we have C420)
+    if (chr>0){
+      const cShift = Math.floor(chr * (2 + bs*0.35));
+      const cShiftY = Math.floor(chr * (1 + bs*0.20));
+      if (cShift!==0 || cShiftY!==0){
+        const tmp = new Uint8ClampedArray(data);
+        for (let y=0; y<H; y++){
+          for (let x=0; x<W; x++){
+            const i=(y*W+x)*4;
+            const xr = clamp(x + cShift, 0, W-1);
+            const yr = clamp(y - cShiftY, 0, H-1);
+            const ir=(yr*W+xr)*4;
+
+            const xb = clamp(x - cShift, 0, W-1);
+            const yb = clamp(y + cShiftY, 0, H-1);
+            const ib=(yb*W+xb)*4;
+
+            data[i]   = tmp[ir];
+            data[i+2] = tmp[ib+2];
+          }
+        }
+      }
+    }
+
+    // grain
+    if (grain>0){
+      const amp = 28*grain;
+      for (let i=0;i<data.length;i+=4){
+        const n = ((i*1103515245 + 12345) >>> 16) & 255;
+        const g = (n-128) * (amp/128);
+        data[i]   = clamp(data[i]   + g, 0, 255);
+        data[i+1] = clamp(data[i+1] + g, 0, 255);
+        data[i+2] = clamp(data[i+2] + g, 0, 255);
+      }
+    }
+
+    pb.putImageData(id,0,0);
+  }
+
+  function selectiveRefreshPB(){
+    const W = canvas.width, H = canvas.height;
+    const pb = STATE.internal.pbX;
+    const src = STATE.internal.srcC;
+
+    const bs = Math.max(2, STATE.ui.block|0);
+    const refresh = clamp(STATE.ui.refresh,0,1);
+    const jitter = clamp(STATE.ui.jitter,0,1);
+
+    const blocksX = Math.ceil(W/bs);
+    const blocksY = Math.ceil(H/bs);
+    const totalBlocks = blocksX * blocksY;
+
+    const cap = 1000;
+    const refreshCount = Math.min(cap, Math.floor(totalBlocks * refresh));
+    if (refreshCount <= 0) return;
+
+    // compute motion weights once per frame (if enabled)
+    if (STATE.ui.motion){
+      computeMotionWeights();
+    }
+
+    const mbias = clamp(STATE.ui.mbias,0,1);
+    pb.globalAlpha = 1;
+    pb.globalCompositeOperation = "source-over";
+
+    for (let i=0;i<refreshCount;i++){
+      // choose block index:
+      // mbias=0 => random, mbias=1 => motion-weighted
+      let idx;
+      if (!STATE.ui.motion || Math.random() > mbias){
+        idx = (Math.random()*totalBlocks)|0;
+      } else {
+        idx = pickMotionBlock();
+      }
+
+      const bx = idx % blocksX;
+      const by = (idx / blocksX) | 0;
+
+      const x = bx*bs, y = by*bs;
+      const w = Math.min(bs, W-x);
+      const h = Math.min(bs, H-y);
+
+      const j = jitter * (bs*0.80);
+      const sx = clamp(Math.floor(x + (Math.random()*2-1)*j), 0, W-w);
+      const sy = clamp(Math.floor(y + (Math.random()*2-1)*j), 0, H-h);
+
+      pb.drawImage(src, sx,sy,w,h, x,y,w,h);
+    }
+  }
+
+  function tick(){
+    fitCanvas();
+
+    if (!STATE.internal.ready){
+      out.setTransform(1,0,0,1,0,0);
+      out.globalAlpha=1;
+      out.globalCompositeOperation="source-over";
+      out.fillStyle="#000";
+      out.fillRect(0,0,canvas.width,canvas.height);
+      out.fillStyle="rgba(255,255,255,0.72)";
+      out.font="14px " + getComputedStyle(document.documentElement).getPropertyValue("--mono");
+      out.fillText("LOAD A VIDEO TO MOSH", 14, 22);
+      requestAnimationFrame(tick);
+      return;
+    }
+
+    const hz = clamp(STATE.ui.keyHz,0,10);
+    const interval = hz<=0 ? Infinity : (1000/hz);
+    if (now() - STATE.internal.lastKeyAt > interval) keyframeNow();
+
+    // update src and prev
+    renderSrc();
+
+    const pb = STATE.internal.pbX;
+    const W = canvas.width, H = canvas.height;
+
+    if (!STATE.ui.pbuf){
+      pb.setTransform(1,0,0,1,0,0);
+      pb.globalAlpha=1;
+      pb.globalCompositeOperation="source-over";
+      pb.drawImage(STATE.internal.srcC,0,0);
+    } else {
+      if (STATE.ui.mosh){
+        // feedback hold
+        const fb = clamp(STATE.ui.feedback,0,0.9999);
+        pb.setTransform(1,0,0,1,0,0);
+        pb.globalCompositeOperation="source-over";
+        pb.globalAlpha=fb;
+        pb.drawImage(STATE.internal.pbC,0,0);
+
+        // displacement corruption
+        const g = clamp(STATE.ui.glitch,0,1);
+        const maxDisp = Math.max(0, STATE.ui.disp|0);
+        if (Math.random() < g){
+          const blocks = 16 + ((Math.random()*58)|0);
+          for (let i=0;i<blocks;i++){
+            const bw = 24 + ((Math.random()*Math.min(460, W*0.55))|0);
+            const bh = 12 + ((Math.random()*Math.min(320, H*0.45))|0);
+            const sx = (Math.random()*Math.max(1,W-bw))|0;
+            const sy = (Math.random()*Math.max(1,H-bh))|0;
+            const dx = sx + ((Math.random()*2-1)*maxDisp)|0;
+            const dy = sy + ((Math.random()*2-1)*maxDisp)|0;
+            pb.globalAlpha=1;
+            pb.globalCompositeOperation="source-over";
+            pb.drawImage(STATE.internal.pbC, sx,sy,bw,bh, dx,dy,bw,bh);
+          }
+        }
+
+        // selective refresh
+        selectiveRefreshPB();
+      } else {
+        selectiveRefreshPB();
+      }
+    }
+
+    // texture chain: chroma420 then quant/etc (every other frame for perf)
+    if (STATE.ui.tex){
+      STATE.internal.frame++;
+      if ((STATE.internal.frame & 1) === 0){
+        if (STATE.ui.c420) applyChroma420(pb, W, H);
+        applyTexture(pb, W, H);
+      }
+    } else {
+      if (STATE.ui.c420){
+        STATE.internal.frame++;
+        if ((STATE.internal.frame & 1) === 0) applyChroma420(pb, W, H);
+      }
+    }
+
+    // output pb to screen
+    out.setTransform(1,0,0,1,0,0);
+    out.globalAlpha=1;
+    out.globalCompositeOperation="source-over";
+    out.drawImage(STATE.internal.pbC,0,0);
+
+    // scan/tear overlay
+    const scan = clamp(STATE.ui.scan,0,1);
+    if (scan>0){
+      out.globalCompositeOperation="source-over";
+      const lines = 6 + Math.floor(scan*56);
+      for (let i=0;i<lines;i++){
+        const y = (Math.random()*H)|0;
+        const h = 1 + ((Math.random()*(2 + scan*9))|0);
+        const a = 0.03 + Math.random()*0.12*scan;
+        out.globalAlpha=a;
+        out.fillStyle="rgba(255,255,255,1)";
+        out.fillRect(0,y,W,h);
+
+        if (Math.random() < scan*0.62){
+          const sh = 8 + ((Math.random()*58)|0);
+          const sy = (Math.random()*Math.max(1,H-sh))|0;
+          const dx = ((Math.random()*2-1)*(10 + scan*70))|0;
+          out.globalAlpha=0.18*scan;
+          out.drawImage(canvas, 0,sy,W,sh, dx,sy,W,sh);
+        }
+      }
+      out.globalAlpha=1;
+    }
+
+    requestAnimationFrame(tick);
+  }
+
+  // --- UI wiring
+  function bindRange(id,key,parseFn,post){
+    const el=$(id);
+    el.addEventListener("input", ()=>{
+      STATE.ui[key]=parseFn(el.value);
+      if (post) post();
+      render();
+    });
+  }
+
+  $("drawerBtn").onclick=()=>{ STATE.ui.drawer=!STATE.ui.drawer; render(); };
+  $("moshBtn").onclick=()=>{ STATE.ui.mosh=!STATE.ui.mosh; render(); };
+  $("pBtn").onclick=()=>{ STATE.ui.pbuf=!STATE.ui.pbuf; render(); };
+  $("motionBtn").onclick=()=>{ STATE.ui.motion=!STATE.ui.motion; render(); };
+  $("c420Btn").onclick=()=>{ STATE.ui.c420=!STATE.ui.c420; render(); };
+  $("texBtn").onclick=()=>{ STATE.ui.tex=!STATE.ui.tex; render(); };
+
+  $("fsBtn").onclick=()=>toggleFullscreen();
+  $("nullBtn").onclick=()=>{ STATE.ui.null=!STATE.ui.null; render(); };
+  $("invBtn").onclick=()=>{ STATE.ui.invert=!STATE.ui.invert; render(); };
+  $("keyBtn").onclick=()=>keyframeNow();
+
+  $("playBtn").onclick=async()=>{ try{ v.muted=false; await v.play(); }catch(e){} };
+  $("pauseBtn").onclick=()=>v.pause();
+
+  bindRange("keyHz","keyHz",(x)=>+x);
+  bindRange("feedback","feedback",(x)=>+x);
+  bindRange("disp","disp",(x)=>parseInt(x,10));
+  bindRange("glitch","glitch",(x)=>+x);
+
+  bindRange("block","block",(x)=>parseInt(x,10), rebuildMotionGrid);
+  bindRange("refresh","refresh",(x)=>+x);
+  bindRange("jitter","jitter",(x)=>+x);
+
+  bindRange("mbias","mbias",(x)=>+x);
+  bindRange("mthr","mthr",(x)=>+x);
+
+  bindRange("quant","quant",(x)=>+x);
+  bindRange("chroma","chroma",(x)=>+x);
+  bindRange("poster","poster",(x)=>+x);
+  bindRange("grain","grain",(x)=>+x);
+
+  bindRange("scan","scan",(x)=>+x);
+
+  file.addEventListener("change", async ()=>{
+    const f=file.files && file.files[0];
+    if (!f) return;
+
+    $("fileName").textContent=f.name;
+
+    if (STATE.internal.lastURL) URL.revokeObjectURL(STATE.internal.lastURL);
+    const url=URL.createObjectURL(f);
+    STATE.internal.lastURL=url;
+
+    v.src=url;
+    v.loop=true;
+    v.playsInline=true;
+
+    await new Promise((res)=>{
+      const on=()=>{ v.removeEventListener("loadeddata",on); res(); };
+      v.addEventListener("loadeddata",on);
+    });
+
+    STATE.internal.ready=true;
+    keyframeNow();
+    try{ await v.play(); }catch(e){}
+  });
+
+  window.addEventListener("keydown",(e)=>{
+    const k=e.key.toLowerCase();
+    const shift=e.shiftKey;
+
+    if (k===" "){ e.preventDefault(); (v.paused? v.play(): v.pause()); return; }
+    if (k==="d"){ e.preventDefault(); STATE.ui.drawer=!STATE.ui.drawer; render(); return; }
+    if (k==="k"){ e.preventDefault(); keyframeNow(); return; }
+    if (shift && k==="f"){ e.preventDefault(); toggleFullscreen(); return; }
+    if (shift && k==="n"){ e.preventDefault(); STATE.ui.null=!STATE.ui.null; render(); return; }
+    if (shift && k==="i"){ e.preventDefault(); STATE.ui.invert=!STATE.ui.invert; render(); return; }
+  });
+
+  window.addEventListener("resize", ()=>{ fitCanvas(); rebuildMotionGrid(); });
+
+  // init
+  render();
+  fitCanvas();
+  rebuildMotionGrid();
+  requestAnimationFrame(tick);
+})();
+</script>
+
+<!--
+AE/EE/WB :: FILE_ID=KETADATA_DATAMOSH_05
+ROOM_ID=BASE_SURFACE
+VERSION=5
+UPDATED_AT=2026-01-10
+CHANGELOG=pbuf_motion_weighted_refresh_chroma420_real_texture_clean_bars
+-->
+</body>
+</html>
