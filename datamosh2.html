@@ -1,0 +1,612 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>KETADATA // DATAMOSH v3 (MACROBLOCK)</title>
+<style>
+  :root{
+    --bg:#000;
+    --fg:rgba(255,255,255,.86);
+    --muted:rgba(255,255,255,.52);
+    --line:rgba(255,255,255,.14);
+    --line2:rgba(255,255,255,.26);
+    --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace;
+    --sans: Arial, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+
+    --top:44px;
+    --bot:34px;
+
+    --ctlH:28px;
+    --padX:10px;
+    --gap:8px;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%; margin:0}
+  body{background:var(--bg); color:var(--fg); font-family:var(--sans); overflow:hidden}
+
+  #root{position:fixed; inset:0; background:var(--bg)}
+  #root.invert{filter:invert(1)}
+  #root.null #top,#root.null #bot,#root.null #drawer{display:none !important;}
+  #root.null #view{top:0; bottom:0;}
+
+  #top{
+    position:fixed; left:0; right:0; top:0; height:var(--top);
+    display:grid;
+    grid-template-columns: auto 1fr auto;
+    align-items:center;
+    padding:0 var(--padX);
+    border-bottom:1px solid var(--line);
+    background:rgba(0,0,0,.78);
+    backdrop-filter: blur(8px);
+    font-family:var(--mono);
+    user-select:none;
+    z-index:50;
+    gap:var(--gap);
+  }
+  #brand{letter-spacing:.14em; white-space:nowrap; opacity:.92}
+  #fileRow{
+    display:flex; align-items:center; gap:var(--gap);
+    min-width:0;
+  }
+  #filePill{
+    display:flex; align-items:center; gap:var(--gap);
+    height:var(--ctlH);
+    padding:0 8px;
+    border:1px solid var(--line);
+    background:rgba(255,255,255,.03);
+    min-width:0;
+  }
+  #filePill span{white-space:nowrap}
+  #fileName{
+    color:var(--muted);
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+    max-width:52ch;
+  }
+  #btnRow{
+    display:flex; align-items:center; gap:var(--gap);
+    justify-content:flex-end;
+    flex-wrap:nowrap;
+  }
+  button{
+    font:inherit;
+    height:var(--ctlH);
+    padding:0 8px;
+    color:var(--fg);
+    background:transparent;
+    border:1px solid var(--line);
+    cursor:pointer;
+    white-space:nowrap;
+  }
+  button:hover{border-color:var(--line2)}
+  #file{display:none}
+
+  #view{
+    position:fixed;
+    left:0; right:0;
+    top:var(--top);
+    bottom:var(--bot);
+    background:#000;
+  }
+  canvas{width:100%; height:100%; display:block}
+
+  #bot{
+    position:fixed; left:0; right:0; bottom:0; height:var(--bot);
+    display:grid;
+    grid-template-columns: 1fr auto;
+    align-items:center;
+    padding:0 var(--padX);
+    border-top:1px solid var(--line);
+    background:rgba(0,0,0,.78);
+    backdrop-filter: blur(8px);
+    font-family:var(--mono);
+    user-select:none;
+    z-index:50;
+    gap:var(--gap);
+  }
+  #hint{color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+  #sig{color:var(--muted); opacity:.82; white-space:nowrap}
+
+  #drawer{
+    position:fixed;
+    left:var(--padX);
+    top:calc(var(--top) + var(--padX));
+    width:min(560px, calc(100vw - (2*var(--padX))));
+    border:1px solid var(--line);
+    background:rgba(0,0,0,.82);
+    backdrop-filter: blur(10px);
+    padding:10px;
+    font-family:var(--mono);
+    z-index:60;
+    display:none;
+  }
+  #drawer.open{display:block}
+
+  .row{
+    display:grid;
+    grid-template-columns: 140px 1fr 72px;
+    gap:var(--gap);
+    align-items:center;
+    margin:8px 0;
+  }
+  .row label{opacity:.86}
+  input[type="range"]{width:100%}
+  .val{text-align:right; opacity:.86}
+  .thin{color:var(--muted); line-height:1.35}
+</style>
+</head>
+<body>
+<div id="root">
+  <div id="top">
+    <div id="brand">KETADATA // DATAMOSH</div>
+
+    <div id="fileRow">
+      <label id="filePill" for="file">
+        <span>LOAD VIDEO</span>
+        <span id="fileName">none</span>
+      </label>
+      <input id="file" type="file" accept="video/*"/>
+      <button id="drawerBtn">SYSTEM</button>
+    </div>
+
+    <div id="btnRow">
+      <button id="playBtn">PLAY</button>
+      <button id="pauseBtn">PAUSE</button>
+      <button id="moshBtn">MOSH: <span id="moshLabel">ON</span></button>
+      <button id="macroBtn">MACRO: <span id="macroLabel">ON</span></button>
+      <button id="fsBtn">FULL</button>
+      <button id="nullBtn">NULL</button>
+    </div>
+  </div>
+
+  <div id="drawer">
+    <div class="row"><label>KEYFRAME Hz</label><input id="keyHz" type="range" min="0" max="2.5" step="0.01"/><div class="val" id="keyHzV"></div></div>
+    <div class="row"><label>FEEDBACK</label><input id="feedback" type="range" min="0.80" max="0.999" step="0.001"/><div class="val" id="feedbackV"></div></div>
+    <div class="row"><label>DISP px</label><input id="disp" type="range" min="0" max="90" step="1"/><div class="val" id="dispV"></div></div>
+    <div class="row"><label>GLITCH</label><input id="glitch" type="range" min="0" max="1" step="0.01"/><div class="val" id="glitchV"></div></div>
+    <div class="row"><label>INJECT</label><input id="inject" type="range" min="0" max="1" step="0.01"/><div class="val" id="injectV"></div></div>
+
+    <div class="row"><label>BLOCK px</label><input id="block" type="range" min="4" max="48" step="1"/><div class="val" id="blockV"></div></div>
+    <div class="row"><label>QUANT</label><input id="quant" type="range" min="0" max="1" step="0.01"/><div class="val" id="quantV"></div></div>
+    <div class="row"><label>CHROMA</label><input id="chroma" type="range" min="0" max="1" step="0.01"/><div class="val" id="chromaV"></div></div>
+    <div class="row"><label>POSTER</label><input id="poster" type="range" min="0" max="1" step="0.01"/><div class="val" id="posterV"></div></div>
+    <div class="row"><label>GRAIN</label><input id="grain" type="range" min="0" max="1" step="0.01"/><div class="val" id="grainV"></div></div>
+
+    <div class="row"><label>SCAN</label><input id="scan" type="range" min="0" max="1" step="0.01"/><div class="val" id="scanV"></div></div>
+
+    <div class="row"><label>INVERT</label><button id="invBtn">TOGGLE</button><div class="val">SHIFT+I</div></div>
+    <div class="row"><label>KEYFRAME NOW</label><button id="keyBtn">PUNCH</button><div class="val">K</div></div>
+
+    <div class="thin">
+      Start preset: FEEDBACK 0.990 · INJECT 0.18 · KEYFRAME Hz 0.30 · GLITCH 0.55 · DISP 28 · BLOCK 16 · QUANT 0.55 · CHROMA 0.35 · POSTER 0.20 · GRAIN 0.18
+    </div>
+  </div>
+
+  <div id="view"><canvas id="c"></canvas></div>
+
+  <div id="bot">
+    <div id="hint">SPACE play/pause · D system · SHIFT+F full · SHIFT+N null · K keyframe</div>
+    <div id="sig"></div>
+  </div>
+
+  <video id="v" playsinline muted loop style="display:none"></video>
+</div>
+
+<script>
+(() => {
+  const $ = (id)=>document.getElementById(id);
+  const root = $("root");
+  const canvas = $("c");
+  const ctx = canvas.getContext("2d", { alpha:false, desynchronized:true });
+
+  const v = $("v");
+  const file = $("file");
+
+  const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
+  const now=()=>performance.now();
+
+  const STATE = {
+    ui:{
+      drawer:false, null:false, invert:false,
+      mosh:true, macro:true,
+
+      keyHz:0.30,
+      feedback:0.990,
+      disp:28,
+      glitch:0.55,
+      inject:0.18,
+
+      block:16,
+      quant:0.55,
+      chroma:0.35,
+      poster:0.20,
+      grain:0.18,
+
+      scan:0.10
+    },
+    internal:{
+      ready:false,
+      lastKeyAt:0,
+      img:null,
+      buf:null,
+      imgW:0, imgH:0,
+      lastURL:null
+    }
+  };
+
+  function fitCanvas(){
+    const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+    const r = canvas.getBoundingClientRect();
+    const w = Math.max(2, Math.floor(r.width * dpr));
+    const h = Math.max(2, Math.floor(r.height * dpr));
+    if (canvas.width!==w || canvas.height!==h){
+      canvas.width=w; canvas.height=h;
+      // reallocate buffers
+      STATE.internal.buf = new OffscreenCanvas(w,h);
+      STATE.internal.img = new ImageData(w,h);
+      STATE.internal.imgW=w; STATE.internal.imgH=h;
+    }
+  }
+
+  function drawVideoCover(){
+    const W=canvas.width, H=canvas.height;
+    const vw=v.videoWidth||1, vh=v.videoHeight||1;
+    const s=Math.max(W/vw,H/vh);
+    const dw=vw*s, dh=vh*s;
+    const dx=(W-dw)/2, dy=(H-dh)/2;
+    ctx.drawImage(v,dx,dy,dw,dh);
+  }
+
+  function cleanFrame(){
+    ctx.setTransform(1,0,0,1,0,0);
+    ctx.globalAlpha=1;
+    ctx.globalCompositeOperation="source-over";
+    ctx.fillStyle="#000";
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+    if (STATE.internal.ready) drawVideoCover();
+  }
+
+  function keyframeNow(){
+    STATE.internal.lastKeyAt = now();
+    cleanFrame();
+  }
+
+  function updateSig(){
+    const d=new Date();
+    const iso=d.toISOString().slice(0,19).replace("T"," ");
+    $("sig").textContent =
+      `AE/EE/WB :: FILE_ID=KETADATA_DATAMOSH_03 • ROOM_ID=BASE_SURFACE • VERSION=3 • UPDATED_AT=${iso}Z • CHANGELOG=macroblock_quant_chroma_bleed_clean_ui_bars`;
+  }
+
+  function render(){
+    root.classList.toggle("invert", !!STATE.ui.invert);
+    root.classList.toggle("null", !!STATE.ui.null);
+    $("drawer").classList.toggle("open", !!STATE.ui.drawer);
+
+    $("moshLabel").textContent = STATE.ui.mosh ? "ON":"OFF";
+    $("macroLabel").textContent = STATE.ui.macro ? "ON":"OFF";
+
+    const bind = (id,key,fmt)=>{
+      $(id).value = STATE.ui[key];
+      $(id+"V").textContent = fmt(STATE.ui[key]);
+    };
+    bind("keyHz","keyHz",(x)=>x.toFixed(2));
+    bind("feedback","feedback",(x)=>x.toFixed(3));
+    bind("disp","disp",(x)=>String(x|0));
+    bind("glitch","glitch",(x)=>x.toFixed(2));
+    bind("inject","inject",(x)=>x.toFixed(2));
+
+    bind("block","block",(x)=>String(x|0));
+    bind("quant","quant",(x)=>x.toFixed(2));
+    bind("chroma","chroma",(x)=>x.toFixed(2));
+    bind("poster","poster",(x)=>x.toFixed(2));
+    bind("grain","grain",(x)=>x.toFixed(2));
+
+    bind("scan","scan",(x)=>x.toFixed(2));
+
+    updateSig();
+  }
+
+  function toggleFullscreen(){
+    if (!document.fullscreenElement) document.documentElement.requestFullscreen?.();
+    else document.exitFullscreen?.();
+  }
+
+  // ----- macroblock pass (fast, “real texture”)
+  function applyMacroblock(){
+    if (!STATE.internal.img) return;
+
+    // pull current canvas pixels
+    const W=canvas.width, H=canvas.height;
+    const id = ctx.getImageData(0,0,W,H);
+    const data = id.data;
+
+    const bs = Math.max(2, STATE.ui.block|0);
+    const q = clamp(STATE.ui.quant,0,1);
+    const chr = clamp(STATE.ui.chroma,0,1);
+    const poster = clamp(STATE.ui.poster,0,1);
+    const grain = clamp(STATE.ui.grain,0,1);
+
+    // quant steps: higher q => harsher banding (lower effective precision)
+    // luma snap step in [1..64]
+    const step = Math.max(1, Math.floor(1 + q*63));
+    const posterStep = poster<=0 ? 0 : Math.max(2, Math.floor(2 + poster*30));
+
+    // chroma offset in pixels
+    const cShift = Math.floor(chr * (2 + bs*0.35));
+    const cShiftY = Math.floor(chr * (1 + bs*0.20));
+
+    // per-block: snap block to its own average luma then quantize
+    for (let by=0; by<H; by+=bs){
+      for (let bx=0; bx<W; bx+=bs){
+        const x2 = Math.min(W, bx+bs);
+        const y2 = Math.min(H, by+bs);
+
+        // avg luma
+        let sum=0, n=0;
+        for (let y=by; y<y2; y++){
+          let p=(y*W+bx)*4;
+          for (let x=bx; x<x2; x++){
+            const r=data[p], g=data[p+1], b=data[p+2];
+            // integer luma approx
+            sum += (r*3 + g*4 + b*1) >> 3;
+            n++;
+            p+=4;
+          }
+        }
+        const avg = n? (sum/n) : 0;
+        // snapped base luma (block contour)
+        const base = Math.round(avg/step)*step;
+
+        // write back block with quantization + slight contour bias
+        for (let y=by; y<y2; y++){
+          let p=(y*W+bx)*4;
+          for (let x=bx; x<x2; x++){
+            let r=data[p], g=data[p+1], b=data[p+2];
+
+            // blend toward block base (stronger with q)
+            // q=0 -> minimal, q=1 -> heavy
+            const k = q*0.85;
+            const lum = (r*3 + g*4 + b*1) >> 3;
+            const dl = base - lum;
+
+            r = clamp((r + dl*k), 0, 255);
+            g = clamp((g + dl*k), 0, 255);
+            b = clamp((b + dl*k), 0, 255);
+
+            // posterize
+            if (posterStep>0){
+              r = Math.round(r/posterStep)*posterStep;
+              g = Math.round(g/posterStep)*posterStep;
+              b = Math.round(b/posterStep)*posterStep;
+            }
+
+            data[p]=r; data[p+1]=g; data[p+2]=b;
+            p+=4;
+          }
+        }
+      }
+    }
+
+    // chroma bleed: offset R/B channels (simple but effective)
+    if (chr>0 && (cShift!==0 || cShiftY!==0)){
+      // copy current into a temp array
+      const tmp = new Uint8ClampedArray(data);
+      for (let y=0; y<H; y++){
+        for (let x=0; x<W; x++){
+          const i=(y*W+x)*4;
+
+          const xr = clamp(x + cShift, 0, W-1);
+          const yr = clamp(y - cShiftY, 0, H-1);
+          const ir=(yr*W+xr)*4;
+
+          const xb = clamp(x - cShift, 0, W-1);
+          const yb = clamp(y + cShiftY, 0, H-1);
+          const ib=(yb*W+xb)*4;
+
+          // keep G mostly stable; shift R/B
+          data[i]   = tmp[ir];      // R from shifted sample
+          data[i+2] = tmp[ib+2];    // B from shifted sample
+        }
+      }
+    }
+
+    // grain (additive; tied to luma)
+    if (grain>0){
+      const amp = 28*grain; // 0..28
+      for (let i=0;i<data.length;i+=4){
+        // deterministic-ish noise using pixel index
+        const n = ((i*1103515245 + 12345) >>> 16) & 255;
+        const g = (n-128) * (amp/128);
+        data[i]   = clamp(data[i]   + g, 0, 255);
+        data[i+1] = clamp(data[i+1] + g, 0, 255);
+        data[i+2] = clamp(data[i+2] + g, 0, 255);
+      }
+    }
+
+    ctx.putImageData(id,0,0);
+  }
+
+  function tick(){
+    fitCanvas();
+
+    if (!STATE.internal.ready){
+      ctx.setTransform(1,0,0,1,0,0);
+      ctx.globalAlpha=1;
+      ctx.globalCompositeOperation="source-over";
+      ctx.fillStyle="#000";
+      ctx.fillRect(0,0,canvas.width,canvas.height);
+      ctx.fillStyle="rgba(255,255,255,0.72)";
+      ctx.font="14px " + getComputedStyle(document.documentElement).getPropertyValue("--mono");
+      ctx.fillText("LOAD A VIDEO TO MOSH", 14, 22);
+      requestAnimationFrame(tick);
+      return;
+    }
+
+    // keyframe refresh
+    const hz = clamp(STATE.ui.keyHz,0,10);
+    const interval = hz<=0 ? Infinity : (1000/hz);
+    if (now() - STATE.internal.lastKeyAt > interval) keyframeNow();
+
+    if (!STATE.ui.mosh){
+      cleanFrame();
+      if (STATE.ui.macro) applyMacroblock();
+      requestAnimationFrame(tick);
+      return;
+    }
+
+    const W=canvas.width, H=canvas.height;
+
+    // 1) feedback smear
+    const fb = clamp(STATE.ui.feedback,0,0.9999);
+    ctx.setTransform(1,0,0,1,0,0);
+    ctx.globalCompositeOperation="source-over";
+    ctx.globalAlpha=fb;
+    ctx.drawImage(canvas,0,0);
+
+    // 2) block displacement (mosh corruption)
+    const g = clamp(STATE.ui.glitch,0,1);
+    const maxDisp = Math.max(0, STATE.ui.disp|0);
+    if (Math.random() < g){
+      const blocks = 16 + Math.floor(Math.random()*52);
+      for (let i=0;i<blocks;i++){
+        const bw = 24 + Math.floor(Math.random()*Math.min(360, W*0.45));
+        const bh = 12 + Math.floor(Math.random()*Math.min(260, H*0.35));
+        const sx = Math.floor(Math.random()*Math.max(1,W-bw));
+        const sy = Math.floor(Math.random()*Math.max(1,H-bh));
+        const dx = sx + Math.floor((Math.random()*2-1)*maxDisp);
+        const dy = sy + Math.floor((Math.random()*2-1)*maxDisp);
+        ctx.globalAlpha=1;
+        ctx.globalCompositeOperation="source-over";
+        ctx.drawImage(canvas, sx,sy,bw,bh, dx,dy,bw,bh);
+      }
+    }
+
+    // 3) partial injection of new frame (held motion texture)
+    const inj = clamp(STATE.ui.inject,0,1);
+    ctx.globalCompositeOperation="source-over";
+    ctx.globalAlpha=inj;
+    drawVideoCover();
+
+    // 4) macroblock/codec texture pass
+    if (STATE.ui.macro) applyMacroblock();
+
+    // 5) scan/tear
+    const scan = clamp(STATE.ui.scan,0,1);
+    if (scan>0){
+      ctx.globalCompositeOperation="source-over";
+      const lines = 6 + Math.floor(scan*56);
+      for (let i=0;i<lines;i++){
+        const y = Math.floor(Math.random()*H);
+        const h = 1 + Math.floor(Math.random()*(2 + scan*9));
+        const a = 0.03 + Math.random()*0.12*scan;
+        ctx.globalAlpha=a;
+        ctx.fillStyle="rgba(255,255,255,1)";
+        ctx.fillRect(0,y,W,h);
+
+        if (Math.random() < scan*0.62){
+          const sh = 8 + Math.floor(Math.random()*58);
+          const sy = Math.floor(Math.random()*Math.max(1,H-sh));
+          const dx = Math.floor((Math.random()*2-1)*(10 + scan*70));
+          ctx.globalAlpha=0.18*scan;
+          ctx.drawImage(canvas, 0,sy,W,sh, dx,sy,W,sh);
+        }
+      }
+      ctx.globalAlpha=1;
+    }
+
+    requestAnimationFrame(tick);
+  }
+
+  // ----- UI wiring (clean, no slop)
+  function bindRange(id,key,parseFn){
+    const el=$(id);
+    el.addEventListener("input", ()=>{ STATE.ui[key]=parseFn(el.value); render(); });
+  }
+
+  $("drawerBtn").onclick=()=>{ STATE.ui.drawer=!STATE.ui.drawer; render(); };
+  $("moshBtn").onclick=()=>{ STATE.ui.mosh=!STATE.ui.mosh; render(); };
+  $("macroBtn").onclick=()=>{ STATE.ui.macro=!STATE.ui.macro; render(); };
+  $("fsBtn").onclick=()=>toggleFullscreen();
+  $("nullBtn").onclick=()=>{ STATE.ui.null=!STATE.ui.null; render(); };
+  $("invBtn").onclick=()=>{ STATE.ui.invert=!STATE.ui.invert; render(); };
+  $("keyBtn").onclick=()=>keyframeNow();
+
+  $("playBtn").onclick=async()=>{ try{ v.muted=false; await v.play(); }catch(e){} };
+  $("pauseBtn").onclick=()=>v.pause();
+
+  bindRange("keyHz","keyHz",(x)=>+x);
+  bindRange("feedback","feedback",(x)=>+x);
+  bindRange("disp","disp",(x)=>parseInt(x,10));
+  bindRange("glitch","glitch",(x)=>+x);
+  bindRange("inject","inject",(x)=>+x);
+
+  bindRange("block","block",(x)=>parseInt(x,10));
+  bindRange("quant","quant",(x)=>+x);
+  bindRange("chroma","chroma",(x)=>+x);
+  bindRange("poster","poster",(x)=>+x);
+  bindRange("grain","grain",(x)=>+x);
+
+  bindRange("scan","scan",(x)=>+x);
+
+  function toggleFullscreen(){
+    if (!document.fullscreenElement) document.documentElement.requestFullscreen?.();
+    else document.exitFullscreen?.();
+  }
+
+  file.addEventListener("change", async ()=>{
+    const f=file.files && file.files[0];
+    if (!f) return;
+
+    $("fileName").textContent=f.name;
+
+    if (STATE.internal.lastURL) URL.revokeObjectURL(STATE.internal.lastURL);
+    const url=URL.createObjectURL(f);
+    STATE.internal.lastURL=url;
+
+    v.src=url;
+    v.loop=true;
+    v.playsInline=true;
+
+    await new Promise((res)=>{
+      const on=()=>{ v.removeEventListener("loadeddata",on); res(); };
+      v.addEventListener("loadeddata",on);
+    });
+
+    STATE.internal.ready=true;
+    keyframeNow();
+    try{ await v.play(); }catch(e){}
+  });
+
+  window.addEventListener("keydown",(e)=>{
+    const k=e.key.toLowerCase();
+    const shift=e.shiftKey;
+
+    if (k===" "){ e.preventDefault(); (v.paused? v.play(): v.pause()); return; }
+    if (k==="d"){ e.preventDefault(); STATE.ui.drawer=!STATE.ui.drawer; render(); return; }
+    if (k==="k"){ e.preventDefault(); keyframeNow(); return; }
+    if (shift && k==="f"){ e.preventDefault(); toggleFullscreen(); return; }
+    if (shift && k==="n"){ e.preventDefault(); STATE.ui.null=!STATE.ui.null; render(); return; }
+    if (shift && k==="i"){ e.preventDefault(); STATE.ui.invert=!STATE.ui.invert; render(); return; }
+  });
+
+  window.addEventListener("resize", fitCanvas);
+
+  // init
+  render();
+  fitCanvas();
+  requestAnimationFrame(tick);
+})();
+</script>
+
+<!--
+AE/EE/WB :: FILE_ID=KETADATA_DATAMOSH_03
+ROOM_ID=BASE_SURFACE
+VERSION=3
+UPDATED_AT=2026-01-10
+CHANGELOG=macroblock_quant_chroma_bleed_poster_grain_clean_bars_no_overlap
+-->
+</body>
+</html>
