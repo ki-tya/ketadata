@@ -1,0 +1,1391 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>KETADATA // LINK GRAPH (LIGHT / OBSIDIAN-ISH)</title>
+<style>
+:root{
+  --bg:#000;
+  --fg:rgba(255,255,255,.86);
+  --muted:rgba(255,255,255,.50);
+  --line:rgba(255,255,255,.12);
+  --line2:rgba(255,255,255,.22);
+  --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace;
+  --sans: Arial, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+
+  --top:40px;
+  --zoom:1.0;
+
+  --dot:7px;
+  --labelW: 220px;
+
+  /* stimuli */
+  --pulse:0.0;     /* 0..1 */
+  --magnet:0.0;    /* 0..1 */
+  --halo:0.7;      /* 0..1 */
+  --field:0.10;    /* 0..0.3 */
+}
+
+*{box-sizing:border-box}
+html,body{height:100%;margin:0;background:var(--bg);color:var(--fg);font:12px/1.2 var(--sans);overflow:hidden}
+button,input{font:inherit;color:inherit}
+a{color:inherit;text-decoration:none}
+
+#top{
+  position:fixed; inset:0 0 auto 0; height:var(--top);
+  display:flex; align-items:center; gap:8px;
+  padding:6px 10px;
+  border-bottom:1px solid var(--line);
+  background:#000;
+  z-index:50;
+}
+#brand{font-weight:700;letter-spacing:.14em;opacity:.92;white-space:nowrap}
+#meta{opacity:.62;letter-spacing:.08em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:42vw}
+.sp{flex:1}
+
+.btn{
+  border:1px solid var(--line2);
+  background:transparent;
+  padding:5px 7px;
+  letter-spacing:.08em;
+  cursor:pointer;
+  opacity:.9;
+  white-space:nowrap;
+}
+.btn:hover{border-color:rgba(255,255,255,.55);opacity:1}
+.btn.on{border-color:rgba(255,255,255,.66);opacity:1}
+.inp{
+  border:1px solid var(--line2);
+  background:#000;
+  padding:5px 7px;
+  outline:none;
+  min-width:160px;
+  letter-spacing:.02em;
+}
+.inp:focus{border-color:rgba(255,255,255,.66)}
+.small{min-width:120px}
+
+#wrap{
+  position:fixed; inset:var(--top) 0 0 0;
+  overflow:hidden;
+}
+#stage{
+  position:absolute; inset:0;
+  background:
+    radial-gradient(circle at 20% 15%, rgba(255,255,255,.035), rgba(0,0,0,0) 42%),
+    radial-gradient(circle at 75% 80%, rgba(255,255,255,.025), rgba(0,0,0,0) 45%);
+}
+#world{
+  position:absolute; left:50%; top:50%;
+  width:1px; height:1px;
+  transform-origin: 0 0;
+  will-change: transform;
+}
+#fields{position:absolute; left:0; top:0}
+.field{
+  position:absolute;
+  width:460px; height:300px;
+  border:1px solid rgba(255,255,255,.18);
+  background:rgba(255,255,255,var(--field));
+  user-select:none;
+}
+.field .h{
+  position:absolute; left:0; top:0; right:0; height:22px;
+  display:flex; align-items:center; justify-content:space-between;
+  padding:0 8px;
+  border-bottom:1px solid rgba(255,255,255,.14);
+  background:rgba(0,0,0,.18);
+  font-family:var(--mono);
+  letter-spacing:.08em;
+  opacity:.9;
+}
+.field .h .r{display:flex; gap:6px; align-items:center}
+.fbtn{
+  border:1px solid rgba(255,255,255,.18);
+  background:transparent;
+  padding:1px 6px;
+  cursor:pointer;
+  opacity:.85;
+}
+.fbtn:hover{opacity:1;border-color:rgba(255,255,255,.55)}
+.field.sel{border-color:rgba(255,255,255,.55)}
+
+#nodes{position:absolute; left:0; top:0}
+
+.node{
+  position:absolute;
+  width: var(--labelW);
+  display:flex; align-items:center; gap:8px;
+  padding:3px 6px;
+  border:1px solid rgba(255,255,255,.10);
+  background: rgba(0,0,0,.35);
+  user-select:none;
+  cursor:grab;
+  font-family:var(--mono);
+  letter-spacing:.02em;
+  opacity:.88;
+  will-change: transform;
+}
+.node:active{cursor:grabbing}
+.node:hover{
+  border-color: rgba(255,255,255,.28);
+  box-shadow: 0 0 18px rgba(255,255,255,.08);
+  opacity: .98;
+}
+.dot{
+  width:var(--dot); height:var(--dot);
+  border:1px solid rgba(255,255,255,.62);
+  background:rgba(255,255,255,.08);
+  flex:0 0 auto;
+}
+.name{
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  flex:1 1 auto;
+}
+.node.sel{
+  border-color: rgba(255,255,255,.62);
+  box-shadow: 0 0 0 1px rgba(255,255,255, calc(var(--halo)*.12)) inset,
+              0 0 38px rgba(255,255,255, calc(var(--halo)*.14));
+}
+.node.new{border-style:dashed}
+
+#hud{
+  position:fixed; right:10px; bottom:10px;
+  border:1px solid var(--line);
+  background:rgba(0,0,0,.55);
+  padding:7px 8px;
+  font-family:var(--mono);
+  letter-spacing:.08em;
+  opacity:.82;
+  max-width:58vw;
+  z-index:80;
+}
+#toast{
+  position:fixed; left:10px; bottom:10px;
+  border:1px solid var(--line);
+  background:rgba(0,0,0,.55);
+  padding:7px 8px;
+  font-family:var(--mono);
+  letter-spacing:.08em;
+  opacity:0;
+  transform: translateY(6px);
+  transition: opacity .16s ease, transform .16s ease;
+  z-index:80;
+}
+#toast.show{opacity:.92;transform:translateY(0)}
+
+@keyframes pulse {
+  0%,100%{filter:brightness(1)}
+  50%{filter:brightness(calc(1 + var(--pulse)*0.20))}
+}
+.pulsing #stage{animation:pulse 2.4s ease-in-out infinite}
+
+/* very light modal */
+#modal{
+  position:fixed; inset:0; background:rgba(0,0,0,.78);
+  display:none; align-items:center; justify-content:center;
+  padding:12px; z-index:200;
+}
+#modal.show{display:flex}
+#panel{
+  width:min(920px,100%);
+  border:1px solid rgba(255,255,255,.16);
+  background:#000;
+  padding:10px;
+}
+#ph{
+  display:flex; align-items:baseline; gap:10px; flex-wrap:wrap;
+  font-family:var(--mono); letter-spacing:.08em;
+}
+#ph .t{font-weight:700}
+#ph .s{opacity:.62}
+#pact{display:flex; gap:8px; flex-wrap:wrap; margin-top:8px}
+#pt{
+  width:100%;
+  min-height:260px;
+  border:1px solid rgba(255,255,255,.16);
+  background:#000;
+  color:var(--fg);
+  padding:8px;
+  outline:none;
+  font-family:var(--mono);
+  letter-spacing:.02em;
+  resize:vertical;
+}
+</style>
+</head>
+<body>
+  <div id="top">
+    <div id="brand">KETADATA // LINK GRAPH</div>
+    <div id="meta">READY</div>
+    <div class="sp"></div>
+
+    <input id="q" class="inp" placeholder="SEARCH (type)" />
+    <input id="add" class="inp small" placeholder="ADD (file.html)" />
+    <button class="btn" id="btnAdd">ADD</button>
+
+    <button class="btn" id="btnFields">FIELDS: OFF</button>
+    <button class="btn" id="btnPulse">PULSE: OFF</button>
+
+    <button class="btn" id="btnSync">SYNC NEW</button>
+    <button class="btn" id="btnAuto">AUTO: OFF</button>
+
+    <button class="btn" id="btnExp">EXPORT</button>
+    <button class="btn" id="btnImp">IMPORT</button>
+  </div>
+
+  <div id="wrap">
+    <div id="stage"></div>
+    <div id="world">
+      <div id="fields"></div>
+      <div id="nodes"></div>
+    </div>
+  </div>
+
+  <div id="hud">—</div>
+  <div id="toast">—</div>
+
+  <div id="modal">
+    <div id="panel">
+      <div id="ph">
+        <div class="t" id="mt">EXPORT</div>
+        <div class="s" id="ms">STATE</div>
+        <div class="sp"></div>
+        <button class="btn" id="mClose">CLOSE</button>
+      </div>
+      <div style="height:8px"></div>
+      <textarea id="pt" placeholder="PASTE STATE JSON HERE"></textarea>
+      <div id="pact">
+        <button class="btn" id="mCopy">COPY</button>
+        <button class="btn" id="mDown">DOWNLOAD</button>
+        <button class="btn" id="mApply">APPLY</button>
+      </div>
+      <div style="height:8px"></div>
+      <div id="mh" style="opacity:.62;font-family:var(--mono);letter-spacing:.08em">—</div>
+    </div>
+  </div>
+
+<script>
+(() => {
+  const nowISO=()=>new Date().toISOString();
+  const uid=()=>Math.random().toString(16).slice(2)+"-"+Date.now().toString(16);
+  const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+  const normBase=(s)=>{let x=(s||"").trim(); if(x && !x.endsWith("/")) x+="/"; return x;};
+  const isHtml=(p)=>String(p||"").toLowerCase().endsWith(".html");
+  const fname=(p)=>String(p||"").split("/").pop()||String(p||"");
+
+  const FILE_ID = (() => {
+    const k="KETADATA_LINK_GRAPH_LIGHT__FILE_ID";
+    let v=localStorage.getItem(k);
+    if(!v){ v="KLG-"+uid(); localStorage.setItem(k,v); }
+    return v;
+  })();
+  const LS_KEY="KETADATA_LINK_GRAPH_LIGHT__STATE__"+FILE_ID;
+
+  const SEED_LIST = `
+67.html
+aniversary1111.html
+anniversary1.html
+anniversary11.html
+anniversary111.html
+artaud.html
+artifact.html
+backend.html
+ball.html
+bataille1.html
+beatball.html
+blacklotus2.html
+bleak.html
+board.html
+board1.html
+board2.html
+board3.html
+borges.html
+burroughs.html
+calendar1.html
+capture.html
+capturegpt.html
+capturegpt2.html
+capturegpt3.html
+capturegpt4.html
+capturegpt5.html
+capturegpt6.html
+capturegpt7.html
+capturegpt8.html
+cashapp1.html
+cashapp3.html
+cctv1.html
+chakra.html
+christmas25.html
+circle.html
+classifier.html
+classifier1.html
+color1.html
+color3.html
+color5.html
+compiler.html
+contextifier.html
+contract.html
+controller.html
+controller1.html
+controller2.html
+controller3.html
+cp.html
+cp1.html
+crunch1.html
+cube.html
+cube1.html
+darkroom.html
+debord.html
+deleuze.html
+depth.html
+display1.html
+diva.html
+dmt.html
+dmt2.html
+dmt3.html
+dmt4.html
+dmtzoom.html
+doc2.html
+editor.html
+elevator3.html
+etal.html
+fivethirtysix.html
+font.html
+forge3.html
+forge4.html
+forge5.html
+forge7.html
+funding.html
+funnel.html
+funnel1.html
+funnel2.html
+funnel3.html
+funnel4.html
+goffman.html
+gptsubject.html
+holzer.html
+html.html
+hyperstition.html
+hyperstition1.html
+hyperstition2.html
+hyperstition3.html
+hyperstition5.html
+index_copy.html
+index.html
+index11.html
+infinity.html
+interfacer.html
+interfacer1.html
+interfacer2.html
+jung.html
+kdtv1.html
+kitty.html
+kmas.html
+lab.html
+lab1.html
+lab3.html
+lab9.html
+labyrinth.html
+land.html
+libra.html
+linklist.html
+linkorg4.html
+main2.html
+main3.html
+mandala.html
+mandala2.html
+mandala3.html
+mandalagpt.html
+mandalagpt2.html
+mandalagpt3.html
+mandalagpt4.html
+manifest.html
+manifest5.html
+map.html
+mcluhan.html
+mdma.html
+mdma2.html
+mdmagpt.html
+mdmagpt2.html
+memofesto.html
+metadata.html
+metadata1.html
+misc.html
+misc2.html
+misc3.html
+misc4.html
+misc5.html
+misc6.html
+misc7.html
+misc8.html
+modern.html
+nav.html
+newtrap.html
+newtrap2.html
+newtrap3.html
+pads.html
+page.html
+page2.html
+pdf2jpeg7.html
+pdf2jpeg8.html
+pool.html
+pool3.html
+pool4.html
+pool5.html
+pool6.html
+primitive.html
+primitive1.html
+primitive2.html
+primitive3.html
+prompt.html
+prompt1.html
+prompt3.html
+prompter.html
+release.html
+release2.html
+release3.html
+release4.html
+ripple.html
+ripple2.html
+ripple3.html
+ripplegpt.html
+room.html
+screenplane.html
+screenplane1.html
+sensory3.html
+sg.html
+sg1.html
+shop.html
+slopstream2.html
+slopstream3.html
+slopstream4.html
+slopstream6.html
+snakes.html
+sovereignty.html
+studio.html
+studiofront.html
+studiov1.html
+studiov2.html
+studiov3.html
+subgpt2.html
+subgpt3.html
+subgpt4.html
+subgpt5.html
+submit.html
+system6.html
+system8.html
+temple.html
+temple1.html
+tester3.html
+tester31.html
+to-do.html
+unifier.html
+vape-drive.html
+vault.html
+version.html
+video.html
+video2.html
+videomanager.html
+003.html
+acid_doc.html
+index0.html
+index001.html
+index002.html
+index003.html
+index004.html
+index005.html
+index006.html
+index007.html
+index008.html
+index009.html
+index01.html
+index011.html
+index012.html
+index013.html
+index014.html
+index015.html
+index02.html
+index03.html
+index04.html
+index05.html
+index06.html
+index07.html
+index08.html
+index09.html
+memofesto1.html
+intra.html
+polka1.html
+polka2.html
+polkadot.html
+2812.html
+drugprotocol.html
+widefield.html
+diagnostic.html
+d2.html
+mandala88.html
+reading.html
+teleo.html
+teleo1.html
+matryoshka.html
+substrate.html
+substrate1.html
+substrate3.html
+sublime.html
+substance.html
+design1.html
+chroma.html
+arranger.html
+mockups.html
+mockups1.html
+mockups2.html
+based_diva3.html
+based_diva8.html
+based_diva9.html
+deprecated.html
+backbone.html
+claude.html
+backbone1.html
+backbone2.html
+memofesto2.html
+sheets.html
+pulse.html
+systemkill.html
+based_diva98.html
+storagemanager.html
+based_diva98x.html
+bugtest.html
+debug.html
+quota.html
+obscura.html
+lib_cl.html
+lib_gpt.html
+to-do1.html
+darkroom1.html
+redroom.html
+to-do2.html
+linksv3.html
+molecule.html
+coffee.html
+coffee1.html
+matrix.html
+doc5.html
+master.html
+master1.html
+master2.html
+mastergpt.html
+reg.html
+regv3.html
+regv4.html
+surface.html
+surface1.html
+kdtv1a.html
+kdtv1b.html
+kdtv3.html
+vidlist.html
+kdtv1_prev.html
+liminal.html
+confidential.html
+liminal1.html
+liminal2.html
+liminal3.html
+liminal5.html
+liminal6.html
+liminal7.html
+liminal10.html
+liminal11.html
+doc6.html
+serpentine.html
+socials.html
+lizard.html
+serp1.html
+socials1.html
+popsplit.html
+socials2.html
+splitview.html
+popsplit1.html
+socials3.html
+research.html
+wordbank.html
+wordbowl.html
+thing.html
+router.html
+router1.html
+sur_based.html
+sur_based1.html
+sur_based2.html
+sur_based_diva9.html
+sur_based_diva91.html
+sur_based_diva911.html
+based_diva9x.html
+diva9_sur_based.html
+fishtank.html
+leopard.html
+octopus.html
+sur_base_li.html
+sur_base1.html
+sur_base2.html
+mockupsbase.html
+sur_base3.html
+pad1.html
+memofest0.html
+memofesto11.html
+memofesto22.html
+butterfly.html
+butterfly1.html
+butterfly2.html
+butterfly3.html
+trace.html
+growth.html
+kittycat.html
+grace.html
+growth1.html
+growth2.html
+grace1.html
+underwater.html
+ashtray.html
+catface.html
+grace3.html
+kittycat1.html
+kittycat2.html
+underwater1.html
+ashtray1.html
+catface1.html
+catface2.html
+matchbook.html
+pigface.html
+turbulence.html
+eye.html
+eyes.html
+sur_base91.html
+sur_base911.html
+sure_base9.html
+sur_base9_11.html
+sur_base911a.html
+jan6.html
+jan61.html
+sur_base9111.html
+screen6.html
+sur_base9111a.html
+sur_9ase.html
+borromean.html
+catball.html
+catball1.html
+crow.html
+finder.html
+grotto.html
+grotto1.html
+grotto2.html
+indesign.html
+indesign1.html
+ktball.html
+ktball1.html
+mirror.html
+mirror1.html
+motion.html
+motion1.html
+motion10.html
+motion11.html
+motion2.html
+motion3.html
+motion4.html
+motion5.html
+motion6.html
+motion7.html
+motion8.html
+motion9.html
+orthodox.html
+orthodox1.html
+orthodox2.html
+pdfreader.html
+pdfreader1.html
+pdfreader10.html
+pdfreader11.html
+pdfreader12.html
+pdfreader13.html
+pdfreader2.html
+pdfreader3.html
+pdfreader4.html
+pdfreader6.html
+pdfreader7.html
+pdfreader8.html
+pdfreader9.html
+ppl_list.html
+serve.html
+serve1.html
+serve2.html
+tball.html
+tball1.html
+tball2.html
+tball3.html
+tball4.html
+tball5.html
+tball6.html
+tball7.html
+tennis.html
+tennisball.html
+tennisball0.html
+tennisball10.html
+tennisball11.html
+tennisball12.html
+tennisball13.html
+tennisball14.html
+tennisball15.html
+tennisball16.html
+tennisball2.html
+tennisball3.html
+tennisball4.html
+tennisball5.html
+tennisball6.html
+tennisball666.html
+tennisball7.html
+tennisball8.html
+tennisball9.html
+tennisball91.html
+tenniscourt.html
+trans.html
+trans1.html
+orthodox3.html
+triage_cal.html
+triage_cal1.html
+triage_cal2.html
+triage_cal3.html
+triage_cal4.html
+triage.html
+triage2.html
+red.html
+red1.html
+triage_cal5.html
+triage_cal6.html
+triage_cal7.html
+target.html
+`.trim();
+
+  const DEFAULT = () => ({
+    version:"KETADATA_LINK_GRAPH_LIGHT_v1",
+    fileId: FILE_ID,
+    createdAt: nowISO(),
+    updatedAt: nowISO(),
+    repo:{ owner:"ki-tya", repo:"ketadata", branch:"main", pagesBase:"https://ki-tya.github.io/ketadata/" },
+    auth:{ token:"" },
+    ui:{
+      q:"",
+      zoom:1.0,
+      camX:0, camY:0,
+      pulseOn:false,
+      fieldsOn:false,
+      autoMin:0,
+      pulse:0.0,
+      magnet:0.0,
+      halo:0.7,
+      field:0.10,
+      selKind:"",
+      selId:""
+    },
+    fields:{}, // id -> {id,name,x,y,w,h}
+    nodes:{}   // id -> {id,path,url,x,y,fieldId,isNew}
+  });
+
+  function load(){
+    try{
+      const raw=localStorage.getItem(LS_KEY);
+      return raw? JSON.parse(raw): null;
+    }catch{ return null; }
+  }
+  function merge(a,b){
+    const out = Array.isArray(a)? a.slice(): {...a};
+    for(const [k,v] of Object.entries(b||{})){
+      if(v && typeof v==="object" && !Array.isArray(v)) out[k]=merge(a[k] && typeof a[k]==="object" ? a[k] : {}, v);
+      else out[k]=v;
+    }
+    return out;
+  }
+  function normalize(s){
+    let st = merge(DEFAULT(), s||{});
+    st.fileId = FILE_ID;
+    st.repo.pagesBase = normBase(st.repo.pagesBase);
+    st.ui.zoom = clamp(Number(st.ui.zoom||1), 0.45, 2.2);
+    st.ui.pulse = clamp(Number(st.ui.pulse||0), 0, 1);
+    st.ui.magnet = clamp(Number(st.ui.magnet||0), 0, 1);
+    st.ui.halo = clamp(Number(st.ui.halo||0.7), 0, 1);
+    st.ui.field = clamp(Number(st.ui.field||0.10), 0, 0.30);
+    st.fields = st.fields && typeof st.fields==="object" ? st.fields : {};
+    st.nodes = st.nodes && typeof st.nodes==="object" ? st.nodes : {};
+    st.updatedAt = nowISO();
+    return st;
+  }
+
+  let state = normalize(load());
+  const $meta = document.getElementById("meta");
+  const $world = document.getElementById("world");
+  const $fields = document.getElementById("fields");
+  const $nodes = document.getElementById("nodes");
+  const $hud = document.getElementById("hud");
+  const $toast = document.getElementById("toast");
+
+  const $q = document.getElementById("q");
+  const $add = document.getElementById("add");
+  const $btnAdd = document.getElementById("btnAdd");
+  const $btnFields = document.getElementById("btnFields");
+  const $btnPulse = document.getElementById("btnPulse");
+  const $btnSync = document.getElementById("btnSync");
+  const $btnAuto = document.getElementById("btnAuto");
+  const $btnExp = document.getElementById("btnExp");
+  const $btnImp = document.getElementById("btnImp");
+
+  const $modal = document.getElementById("modal");
+  const $mt = document.getElementById("mt");
+  const $ms = document.getElementById("ms");
+  const $pt = document.getElementById("pt");
+  const $mh = document.getElementById("mh");
+  const $mClose = document.getElementById("mClose");
+  const $mCopy = document.getElementById("mCopy");
+  const $mDown = document.getElementById("mDown");
+  const $mApply = document.getElementById("mApply");
+
+  function toast(msg){
+    $toast.textContent = msg;
+    $toast.classList.add("show");
+    setTimeout(()=> $toast.classList.remove("show"), 1100);
+  }
+  function save(){
+    state.updatedAt=nowISO();
+    localStorage.setItem(LS_KEY, JSON.stringify(state));
+  }
+
+  function applyTransform(){
+    document.documentElement.style.setProperty("--zoom", String(state.ui.zoom));
+    document.documentElement.style.setProperty("--pulse", String(state.ui.pulse));
+    document.documentElement.style.setProperty("--magnet", String(state.ui.magnet));
+    document.documentElement.style.setProperty("--halo", String(state.ui.halo));
+    document.documentElement.style.setProperty("--field", String(state.ui.field));
+    document.body.classList.toggle("pulsing", !!state.ui.pulseOn && state.ui.pulse>0.01);
+
+    $world.style.transform = `translate(calc(-50% + ${-state.ui.camX}px), calc(-50% + ${-state.ui.camY}px)) scale(${state.ui.zoom})`;
+  }
+
+  function seedIfEmpty(){
+    if(Object.keys(state.nodes).length) return;
+    const base = normBase(state.repo.pagesBase);
+    const list = SEED_LIST.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
+
+    // light scatter near origin
+    const r = Math.max(420, Math.sqrt(list.length)*58);
+    list.forEach((p,i)=>{
+      const id="N-"+uid();
+      const ang=(i/list.length)*Math.PI*2;
+      const rr=r + (Math.sin(i*0.77)*120);
+      state.nodes[id]={
+        id,
+        path:p,
+        url: base + p.replace(/^\/+/,""),
+        x: Math.cos(ang)*rr + (Math.random()-0.5)*120,
+        y: Math.sin(ang)*rr + (Math.random()-0.5)*120,
+        fieldId:"",
+        isNew:false
+      };
+    });
+    save();
+  }
+
+  function select(kind,id){
+    state.ui.selKind = kind||"";
+    state.ui.selId = id||"";
+    save();
+    render();
+  }
+
+  function passes(n){
+    const q=(state.ui.q||"").trim().toLowerCase();
+    if(!q) return true;
+    const blob=(fname(n.path)+" "+(n.path||"")).toLowerCase();
+    return blob.includes(q);
+  }
+
+  function render(){
+    $q.value = state.ui.q || "";
+    $btnFields.classList.toggle("on", !!state.ui.fieldsOn);
+    $btnFields.textContent = state.ui.fieldsOn ? "FIELDS: ON" : "FIELDS: OFF";
+    $btnPulse.classList.toggle("on", !!state.ui.pulseOn);
+    $btnPulse.textContent = state.ui.pulseOn ? "PULSE: ON" : "PULSE: OFF";
+    $btnAuto.classList.toggle("on", !!state.ui.autoMin);
+    $btnAuto.textContent = state.ui.autoMin ? `AUTO: ${state.ui.autoMin}m` : "AUTO: OFF";
+
+    applyTransform();
+
+    const all = Object.values(state.nodes);
+    const vis = all.filter(passes);
+
+    $hud.textContent = `NODES ${vis.length}/${all.length} · ZOOM ${state.ui.zoom.toFixed(2)} · FILE_ID ${state.fileId}`;
+
+    // fields
+    $fields.style.display = state.ui.fieldsOn ? "block" : "none";
+    $fields.innerHTML = "";
+    if(state.ui.fieldsOn){
+      for(const f of Object.values(state.fields)){
+        const el=document.createElement("div");
+        el.className="field"+((state.ui.selKind==="field" && state.ui.selId===f.id)?" sel":"");
+        el.style.left=f.x+"px"; el.style.top=f.y+"px";
+        el.style.width=f.w+"px"; el.style.height=f.h+"px";
+        el.dataset.id=f.id;
+
+        const h=document.createElement("div");
+        h.className="h";
+        const t=document.createElement("div");
+        t.textContent=f.name||"FIELD";
+
+        const r=document.createElement("div");
+        r.className="r";
+        const rn=document.createElement("button");
+        rn.className="fbtn"; rn.textContent="RENAME";
+        rn.onclick=(e)=>{
+          e.stopPropagation();
+          const nn=prompt("FIELD NAME:", f.name||"FIELD");
+          if(nn===null) return;
+          f.name=(nn||"").trim()||f.name;
+          save(); render(); toast("RENAMED");
+        };
+        const del=document.createElement("button");
+        del.className="fbtn"; del.textContent="DEL";
+        del.onclick=(e)=>{
+          e.stopPropagation();
+          if(!confirm("DELETE FIELD? (nodes remain unassigned)")) return;
+          for(const n of Object.values(state.nodes)) if(n.fieldId===f.id) n.fieldId="";
+          delete state.fields[f.id];
+          if(state.ui.selKind==="field" && state.ui.selId===f.id){ state.ui.selKind=""; state.ui.selId=""; }
+          save(); render(); toast("DELETED");
+        };
+        r.appendChild(rn); r.appendChild(del);
+
+        h.appendChild(t); h.appendChild(r);
+        el.appendChild(h);
+
+        el.addEventListener("mousedown",(e)=>{
+          if(e.button!==0) return;
+          select("field", f.id);
+        });
+
+        // drag field by header
+        drag(h, {
+          move:(dx,dy)=>{
+            f.x += dx; f.y += dy;
+            el.style.left=f.x+"px"; el.style.top=f.y+"px";
+          },
+          up:()=>{ save(); }
+        });
+
+        $fields.appendChild(el);
+      }
+    }
+
+    // nodes
+    $nodes.innerHTML="";
+    for(const n of vis){
+      const el=document.createElement("div");
+      el.className="node"+(n.isNew?" new":"")+((state.ui.selKind==="node" && state.ui.selId===n.id)?" sel":"");
+      el.style.left=n.x+"px"; el.style.top=n.y+"px";
+      el.dataset.id=n.id;
+
+      const d=document.createElement("div"); d.className="dot";
+      const nm=document.createElement("div"); nm.className="name"; nm.textContent=fname(n.path);
+
+      el.appendChild(d);
+      el.appendChild(nm);
+
+      el.addEventListener("mousedown",(e)=>{
+        if(e.button!==0) return;
+        select("node", n.id);
+        if(n.isNew){ n.isNew=false; save(); }
+      });
+
+      el.addEventListener("dblclick",()=>{
+        if(n.url) window.open(n.url, "_blank", "noopener");
+      });
+
+      // right click: assign to field (if fields on)
+      el.addEventListener("contextmenu",(e)=>{
+        e.preventDefault();
+        select("node", n.id);
+        if(!state.ui.fieldsOn || !Object.keys(state.fields).length){
+          toast("FIELDS OFF / NONE");
+          return;
+        }
+        const fs=Object.values(state.fields);
+        const names=fs.map(x=>x.name).join("\n");
+        const nn=prompt("ASSIGN TO FIELD (exact name):\n"+names, (n.fieldId && state.fields[n.fieldId])?state.fields[n.fieldId].name:"");
+        if(nn===null) return;
+        const hit=fs.find(x=>x.name===nn);
+        if(hit){ n.fieldId=hit.id; save(); render(); toast("ASSIGNED"); }
+        else toast("NO MATCH");
+      });
+
+      // drag node
+      drag(el,{
+        move:(dx,dy)=>{
+          n.x += dx; n.y += dy;
+          el.style.left=n.x+"px"; el.style.top=n.y+"px";
+        },
+        up:()=>{
+          // soft magnet to field if intersecting
+          if(state.ui.fieldsOn && state.ui.magnet>0.01){
+            const hit = fieldHit(n.x, n.y);
+            if(hit){
+              n.fieldId = hit.id;
+              const cx = hit.x + hit.w*0.5;
+              const cy = hit.y + hit.h*0.5;
+              n.x = n.x + (cx - n.x) * (0.10*state.ui.magnet);
+              n.y = n.y + (cy - n.y) * (0.10*state.ui.magnet);
+            } else n.fieldId="";
+          }
+          save();
+          render();
+        }
+      });
+
+      $nodes.appendChild(el);
+    }
+
+    $meta.textContent = `READY · ${vis.length}/${all.length}`;
+    save();
+  }
+
+  function fieldHit(x,y){
+    for(const f of Object.values(state.fields)){
+      if(x>=f.x && x<=f.x+f.w && y>=f.y && y<=f.y+f.h) return f;
+    }
+    return null;
+  }
+
+  // world pan/zoom
+  function screenToWorld(dx,dy){
+    const z=state.ui.zoom||1;
+    return {dx: dx/z, dy: dy/z};
+  }
+
+  function drag(handle, hooks){
+    let on=false, sx=0, sy=0;
+    const down=(e)=>{
+      if(e.button!==0) return;
+      on=true; sx=e.clientX; sy=e.clientY;
+      e.preventDefault();
+      window.addEventListener("mousemove", move, {passive:false});
+      window.addEventListener("mouseup", up, {passive:false});
+    };
+    const move=(e)=>{
+      if(!on) return;
+      const mx=e.clientX, my=e.clientY;
+      const d=screenToWorld(mx-sx, my-sy);
+      sx=mx; sy=my;
+      hooks.move && hooks.move(d.dx, d.dy, e);
+      e.preventDefault();
+    };
+    const up=(e)=>{
+      if(!on) return;
+      on=false;
+      window.removeEventListener("mousemove", move);
+      window.removeEventListener("mouseup", up);
+      hooks.up && hooks.up(e);
+      e.preventDefault();
+    };
+    handle.addEventListener("mousedown", down, {passive:false});
+  }
+
+  // pan by background drag
+  (function bindPan(){
+    const wrap=document.getElementById("wrap");
+    let on=false, sx=0, sy=0;
+    wrap.addEventListener("mousedown",(e)=>{
+      if(e.button!==0) return;
+      if(e.target.closest && (e.target.closest(".node") || e.target.closest(".field"))) return;
+      on=true; sx=e.clientX; sy=e.clientY;
+      window.addEventListener("mousemove", mm, {passive:false});
+      window.addEventListener("mouseup", uu, {passive:false});
+      e.preventDefault();
+    },{passive:false});
+    function mm(e){
+      if(!on) return;
+      const mx=e.clientX, my=e.clientY;
+      const d=screenToWorld(mx-sx, my-sy);
+      sx=mx; sy=my;
+      state.ui.camX -= d.dx;
+      state.ui.camY -= d.dy;
+      applyTransform();
+      save();
+      e.preventDefault();
+    }
+    function uu(e){
+      on=false;
+      window.removeEventListener("mousemove", mm);
+      window.removeEventListener("mouseup", uu);
+      e.preventDefault();
+    }
+  })();
+
+  // add node
+  function addNode(path){
+    const p=(path||"").trim();
+    if(!p) return;
+    if(!isHtml(p)){ toast("NEED .html"); return; }
+    // avoid duplicates by path
+    const exists = Object.values(state.nodes).some(n=>n.path===p);
+    if(exists){ toast("ALREADY"); return; }
+
+    const base=normBase(state.repo.pagesBase);
+    const id="N-"+uid();
+    state.nodes[id]={
+      id, path:p,
+      url: base + p.replace(/^\/+/,""),
+      x: state.ui.camX + (Math.random()-0.5)*220,
+      y: state.ui.camY + (Math.random()-0.5)*220,
+      fieldId:"",
+      isNew:true
+    };
+    save(); render(); toast("ADDED");
+  }
+
+  // fields
+  function addField(){
+    const id="F-"+uid();
+    state.fields[id]={ id, name:"FIELD", x: state.ui.camX-240, y: state.ui.camY-160, w:520, h:320 };
+    save(); render(); toast("FIELD+");
+  }
+
+  // export/import
+  function downloadText(name, mime, text){
+    const blob=new Blob([text||""],{type:mime||"text/plain"});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement("a");
+    a.href=url; a.download=name||"export.txt";
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url), 800);
+  }
+  async function copyText(text){
+    try{ await navigator.clipboard.writeText(text||""); return true; }
+    catch{ return false; }
+  }
+  let modalMode="export";
+  function openModal(mode){
+    modalMode=mode;
+    $modal.classList.add("show");
+    $mh.textContent="—";
+    if(mode==="export"){
+      $mt.textContent="EXPORT";
+      $ms.textContent="STATE";
+      $pt.value=JSON.stringify(state,null,2);
+      $mApply.style.display="none";
+    }else{
+      $mt.textContent="IMPORT";
+      $ms.textContent="STATE";
+      $pt.value="";
+      $mApply.style.display="inline-block";
+      $mh.textContent="PASTE JSON THEN APPLY";
+    }
+    $pt.focus(); $pt.select();
+  }
+  function closeModal(){ $modal.classList.remove("show"); }
+
+  // github sync new-only
+  function ghHeaders(){
+    const h={"Accept":"application/vnd.github+json"};
+    const tok=(state.auth.token||"").trim();
+    if(tok) h["Authorization"]="Bearer "+tok;
+    return h;
+  }
+  async function ghJSON(url){
+    const res=await fetch(url,{headers:ghHeaders()});
+    if(!res.ok){
+      const txt=await res.text().catch(()=> "");
+      throw new Error(`GITHUB ${res.status} ${res.statusText}\n${url}\n${txt}`);
+    }
+    return res.json();
+  }
+  async function syncNew(){
+    $meta.textContent="SYNCING...";
+    const o=state.repo.owner, r=state.repo.repo, b=state.repo.branch;
+    const url=`https://api.github.com/repos/${encodeURIComponent(o)}/${encodeURIComponent(r)}/git/trees/${encodeURIComponent(b)}?recursive=1`;
+    const tree=await ghJSON(url);
+    const list=(tree && Array.isArray(tree.tree))? tree.tree: [];
+    const html=list
+      .filter(x=>x && x.type==="blob" && typeof x.path==="string")
+      .map(x=>x.path)
+      .filter(isHtml);
+
+    const known=new Set(Object.values(state.nodes).map(n=>n.path));
+    const fresh=html.filter(p=>!known.has(p));
+    if(!fresh.length){ $meta.textContent="SYNC OK · NO NEW"; toast("NO NEW"); return; }
+
+    const base=normBase(state.repo.pagesBase);
+    fresh.forEach(p=>{
+      const id="N-"+uid();
+      state.nodes[id]={
+        id, path:p,
+        url: base + p.replace(/^\/+/,""),
+        x: state.ui.camX + (Math.random()-0.5)*260,
+        y: state.ui.camY + (Math.random()-0.5)*260,
+        fieldId:"",
+        isNew:true
+      };
+    });
+
+    save(); render();
+    $meta.textContent=`SYNC OK · +${fresh.length}`;
+    toast("+"+fresh.length);
+  }
+
+  // auto
+  let autoT=null;
+  function stopAuto(){ if(autoT){ clearInterval(autoT); autoT=null; } }
+  function startAuto(min){
+    stopAuto();
+    const m=Number(min||0);
+    if(!m) return;
+    autoT=setInterval(()=>syncNew().catch(()=>{}), m*60*1000);
+  }
+
+  // wire
+  function bind(){
+    $q.addEventListener("input", ()=>{ state.ui.q=$q.value; save(); render(); });
+    $btnAdd.addEventListener("click", ()=>{ addNode($add.value); $add.value=""; });
+    $add.addEventListener("keydown",(e)=>{ if(e.key==="Enter"){ addNode($add.value); $add.value=""; } });
+
+    $btnFields.addEventListener("click", ()=>{
+      state.ui.fieldsOn=!state.ui.fieldsOn;
+      if(state.ui.fieldsOn && !Object.keys(state.fields).length){
+        // create one field fast, but keep it light
+        const id="F-"+uid();
+        state.fields[id]={ id, name:"INBOX", x: state.ui.camX-240, y: state.ui.camY-160, w:520, h:320 };
+      }
+      save(); render();
+    });
+
+    $btnPulse.addEventListener("click", ()=>{
+      state.ui.pulseOn=!state.ui.pulseOn;
+      state.ui.pulse = state.ui.pulseOn ? 0.35 : 0.0;
+      save(); render();
+    });
+
+    $btnSync.addEventListener("click", ()=>syncNew().catch(e=>{
+      $meta.textContent="SYNC FAIL";
+      openModal("export");
+      $pt.value=String(e && e.message ? e.message : e);
+      $mh.textContent="SYNC ERROR (see text)";
+    }));
+
+    $btnAuto.addEventListener("click", ()=>{
+      if(state.ui.autoMin){
+        state.ui.autoMin=0; stopAuto(); save(); render(); toast("AUTO OFF");
+      }else{
+        state.ui.autoMin=5; startAuto(5); save(); render(); toast("AUTO 5m");
+      }
+    });
+
+    $btnExp.addEventListener("click", ()=>openModal("export"));
+    $btnImp.addEventListener("click", ()=>openModal("import"));
+
+    $mClose.addEventListener("click", closeModal);
+    $modal.addEventListener("click",(e)=>{ if(e.target===$modal) closeModal(); });
+
+    $mCopy.addEventListener("click", async ()=>{
+      const ok=await copyText($pt.value||"");
+      toast(ok?"COPIED":"COPY FAIL");
+    });
+    $mDown.addEventListener("click", ()=>{
+      downloadText(`KETADATA_LINK_GRAPH_LIGHT_${FILE_ID}_${nowISO().slice(0,10)}.json`, "application/json", $pt.value||"");
+      toast("DOWNLOADED");
+    });
+    $mApply.addEventListener("click", ()=>{
+      try{
+        const obj=JSON.parse($pt.value||"");
+        state=normalize(obj);
+        save(); render(); closeModal(); toast("IMPORTED");
+      }catch{
+        $mh.textContent="INVALID JSON";
+        toast("IMPORT FAIL");
+      }
+    });
+
+    // keybinds
+    window.addEventListener("keydown",(e)=>{
+      if($modal.classList.contains("show")) return;
+
+      // zoom
+      if(e.key==="=" || (e.key==="+" && e.shiftKey)){
+        state.ui.zoom = clamp(state.ui.zoom*1.08, 0.45, 2.2);
+        save(); render();
+      }
+      if(e.key==="-" ){
+        state.ui.zoom = clamp(state.ui.zoom/1.08, 0.45, 2.2);
+        save(); render();
+      }
+      if(e.shiftKey && (e.key==="Z"||e.key==="z")){
+        state.ui.zoom=1.0; state.ui.camX=0; state.ui.camY=0;
+        save(); render(); toast("RESET");
+      }
+
+      // open selected
+      if(e.key==="Enter" && state.ui.selKind==="node"){
+        const n=state.nodes[state.ui.selId];
+        if(n && n.url) window.open(n.url,"_blank","noopener");
+      }
+
+      // delete selected field (only)
+      if(e.key==="Delete" && state.ui.selKind==="field"){
+        const f=state.fields[state.ui.selId];
+        if(f && confirm("DELETE FIELD?")){
+          for(const n of Object.values(state.nodes)) if(n.fieldId===f.id) n.fieldId="";
+          delete state.fields[f.id];
+          state.ui.selKind=""; state.ui.selId="";
+          save(); render(); toast("FIELD DEL");
+        }
+      }
+
+      // quick add field
+      if(e.shiftKey && (e.key==="F"||e.key==="f")){
+        state.ui.fieldsOn=true;
+        addField();
+      }
+
+      // quick stimuli knobs
+      if(e.shiftKey && (e.key==="P"||e.key==="p")){
+        state.ui.pulseOn=!state.ui.pulseOn;
+        state.ui.pulse = state.ui.pulseOn ? 0.35 : 0.0;
+        save(); render();
+      }
+    }, {passive:true});
+
+    // wheel zoom (ctrl/meta)
+    document.getElementById("wrap").addEventListener("wheel",(e)=>{
+      if(!(e.ctrlKey || e.metaKey)) return;
+      e.preventDefault();
+      const dir = (e.deltaY>0) ? 1 : -1;
+      const mul = dir>0 ? 1/1.08 : 1.08;
+      state.ui.zoom = clamp(state.ui.zoom*mul, 0.45, 2.2);
+      save(); render();
+    }, {passive:false});
+  }
+
+  // boot
+  seedIfEmpty();
+  bind();
+  render();
+
+  /* ===========================
+     AE/EE/WB SERIALIZATION STAMP
+  ============================ */
+  /*
+  AE: obsidian-ish graph minimalism; labels only; subtle halo; optional pulse; optional fields
+  EE: pan/zoom; drag nodes; dblclick open; search filter; add node; export/import
+  WB: GitHub tree sync (new-only); auto sync; localStorage isolated by FILE_ID
+
+  FILE_ID: ${FILE_ID}
+  ROOM_ID: LINK_GRAPH_LIGHT
+  VERSION: 1.0.0
+  UPDATED_AT: ${new Date().toISOString()}
+  CHANGELOG:
+  - v1: lightweight node labels + pan/zoom + new-only github sync
+  */
+})();
+</script>
+</body>
+</html>
