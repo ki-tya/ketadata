@@ -1,0 +1,1099 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
+<title>SHELL8 // MOB_BASE</title>
+
+<style>
+:root{
+  --bg:#000; --fg:#fff; --muted:rgba(255,255,255,.55); --line:rgba(255,255,255,.14); --line2:rgba(255,255,255,.22);
+  --mono: ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace;
+  --sans: Arial,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;
+
+  --safeT: env(safe-area-inset-top, 0px);
+  --safeB: env(safe-area-inset-bottom, 0px);
+
+  --topH: 44px;
+  --botH: 44px;
+
+  --sq: 16px; /* all squares = keta_note square size */
+  --pad: 10px;
+  --light: 1;
+
+  --sheetBg: rgba(0,0,0,.92);
+}
+*{box-sizing:border-box}
+html,body{height:100%; margin:0}
+body{
+  background:var(--bg);
+  color:var(--fg);
+  font-family:var(--sans);
+  overflow:hidden;
+  -webkit-user-select:none;
+  user-select:none;
+  -webkit-tap-highlight-color:transparent;
+}
+#root{
+  position:fixed; inset:0;
+  background:#000;
+  touch-action:manipulation;
+}
+#root.invert{filter:invert(1)}
+/* NULL/BLACKOUT = fullscreen quiet */
+#root.null .topbar,
+#root.null .bottombar,
+#root.null .dock,
+#root.null .sheet,
+#root.null .toast{display:none !important}
+#root.null #surfaceFrame{display:none !important}
+#root.null #stage{display:block !important; background:#000 !important; filter:none !important}
+#root.null #nullExit{display:block !important}
+
+/* stage */
+#stage{position:absolute; inset:0; background:#000; pointer-events:none; z-index:0}
+#stage::before{
+  content:"";
+  position:absolute; inset:0; pointer-events:none;
+  background:
+    radial-gradient(circle at 60% 40%,
+      rgba(255,255,255, calc(0.02 * var(--light))) 0%,
+      rgba(255,255,255, calc(0.01 * var(--light))) 28%,
+      rgba(0,0,0,0) 62%);
+  mix-blend-mode:screen;
+}
+
+/* surface */
+#surfaceFrame{
+  position:absolute; inset:0;
+  width:100%; height:100%;
+  border:0; background:#000;
+  z-index:1;
+  display:none;
+}
+#surfaceFrame.on{display:block}
+
+/* top/bottom bars */
+.topbar{
+  position:absolute; left:0; right:0; top:0;
+  height:calc(var(--topH) + var(--safeT));
+  padding-top:var(--safeT);
+  border-bottom:1px solid var(--line);
+  background:linear-gradient(180deg,#070707,#000);
+  display:flex; align-items:center; justify-content:space-between;
+  padding-left:var(--pad); padding-right:var(--pad);
+  z-index:10;
+}
+.bottombar{
+  position:absolute; left:0; right:0; bottom:0;
+  height:calc(var(--botH) + var(--safeB));
+  padding-bottom:var(--safeB);
+  border-top:1px solid var(--line);
+  background:linear-gradient(0deg,#070707,#000);
+  display:flex; align-items:center; justify-content:space-between;
+  padding-left:var(--pad); padding-right:var(--pad);
+  z-index:10;
+  font-family:var(--mono);
+  font-size:11px;
+  color:var(--muted);
+  letter-spacing:.06em;
+  text-transform:uppercase;
+  white-space:nowrap;
+  overflow:hidden;
+}
+.brand{
+  display:flex; align-items:center; gap:10px;
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:.10em;
+  text-transform:uppercase;
+  white-space:nowrap;
+  min-width:0;
+}
+.brand .sq{width:var(--sq); height:var(--sq); border:1px solid rgba(255,255,255,.75); background:#000}
+.brand .txt{min-width:0; overflow:hidden; text-overflow:ellipsis}
+.badge{
+  display:flex; align-items:center; gap:8px;
+  border:1px solid var(--line2);
+  padding:4px 8px;
+  font-family:var(--mono);
+  font-size:11px;
+  letter-spacing:.10em;
+  text-transform:uppercase;
+  color:var(--muted);
+}
+.badge .v{color:var(--fg)}
+
+/* universal square button */
+.sqbtn{
+  width:var(--sq);
+  height:var(--sq);
+  border:1px solid rgba(255,255,255,.75);
+  background:#fff;
+  cursor:pointer;
+  padding:0;
+  display:inline-block;
+}
+.sqbtn.off{background:#000}
+.sqbtn:active{transform:translateY(1px)}
+/* thin long button for invert (touch target) */
+.longbtn{
+  height:28px;
+  border:1px solid var(--line2);
+  background:#000;
+  color:#fff;
+  font-family:var(--mono);
+  font-size:11px;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  padding:0 10px;
+  cursor:pointer;
+}
+.longbtn:active{transform:translateY(1px)}
+.longbtn.on{border-color:rgba(255,255,255,.65)}
+
+/* dock (mobile buttons) */
+.dock{
+  position:absolute;
+  left:var(--pad);
+  right:var(--pad);
+  bottom:calc(var(--botH) + var(--safeB) + var(--pad));
+  z-index:11;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+}
+.dock .left,
+.dock .mid,
+.dock .right{
+  display:flex; align-items:center; gap:10px;
+  min-width:0;
+}
+.dock .mid{flex:1; justify-content:center; gap:8px}
+.dock .right{justify-content:flex-end}
+.lightStrip{
+  display:flex; gap:8px; align-items:center;
+}
+.lightStrip .sqbtn{background:#000}
+.lightStrip .sqbtn.on{background:#fff}
+
+/* sheets (full-screen overlays) */
+.sheet{
+  position:absolute; inset:0;
+  background:var(--sheetBg);
+  z-index:30;
+  display:none;
+}
+.sheet.open{display:flex; flex-direction:column}
+.sheetHead{
+  height:calc(var(--topH) + var(--safeT));
+  padding-top:var(--safeT);
+  display:flex; align-items:center; justify-content:space-between;
+  padding-left:var(--pad); padding-right:var(--pad);
+  border-bottom:1px solid var(--line);
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:.10em;
+  text-transform:uppercase;
+}
+.sheetBody{
+  flex:1; min-height:0;
+  overflow:auto;
+  padding:var(--pad);
+}
+.sheetFoot{
+  height:calc(var(--botH) + var(--safeB));
+  padding-bottom:var(--safeB);
+  display:flex; align-items:center; justify-content:space-between;
+  padding-left:var(--pad); padding-right:var(--pad);
+  border-top:1px solid var(--line);
+  font-family:var(--mono);
+  font-size:11px;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  color:var(--muted);
+}
+
+/* note = apple-note full page */
+.noteArea{
+  width:100%;
+  height:100%;
+  min-height:360px;
+  border:1px solid var(--line2);
+  background:#000;
+  color:#fff;
+  font-family:var(--mono);
+  font-size:13px;
+  line-height:1.35;
+  padding:10px;
+  outline:none;
+  resize:none;
+}
+
+/* player list */
+.section{
+  border:1px solid var(--line2);
+  padding:10px;
+  margin-bottom:10px;
+  background:rgba(0,0,0,.35);
+}
+.sectionTitle{
+  font-family:var(--mono);
+  font-size:11px;
+  letter-spacing:.10em;
+  text-transform:uppercase;
+  color:var(--muted);
+  margin-bottom:8px;
+}
+.row{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  border:1px solid rgba(255,255,255,.18);
+  padding:8px 10px;
+  font-family:var(--mono);
+  font-size:11px;
+  letter-spacing:.06em;
+  text-transform:uppercase;
+  cursor:pointer;
+  user-select:none;
+}
+.row:active{transform:translateY(1px)}
+.row .name{
+  flex:1; min-width:0;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+.row .meta{color:var(--muted); font-size:10px}
+.row .sqbtn{flex:0 0 auto}
+.smallInput{
+  width:100%;
+  border:1px solid var(--line2);
+  background:#000;
+  color:#fff;
+  font-family:var(--mono);
+  font-size:12px;
+  padding:10px;
+  outline:none;
+}
+.smallBtn{
+  height:32px;
+  border:1px solid var(--line2);
+  background:#000;
+  color:#fff;
+  font-family:var(--mono);
+  font-size:11px;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  padding:0 10px;
+  cursor:pointer;
+}
+.smallBtn:active{transform:translateY(1px)}
+.smallBtn.primary{border-color:rgba(255,255,255,.65)}
+.smallBtn.danger{border-color:rgba(255,255,255,.35)}
+
+/* toast */
+.toast{
+  position:absolute;
+  left:var(--pad);
+  top:calc(var(--topH) + var(--safeT) + var(--pad));
+  z-index:40;
+  border:1px solid var(--line2);
+  background:rgba(0,0,0,.82);
+  padding:8px 10px;
+  font-family:var(--mono);
+  font-size:11px;
+  letter-spacing:.06em;
+  text-transform:uppercase;
+  color:#fff;
+  display:none;
+}
+
+/* null exit square (bottom-right) */
+#nullExit{
+  position:absolute;
+  right:var(--pad);
+  bottom:var(--pad);
+  width:var(--sq);
+  height:var(--sq);
+  border:1px solid rgba(255,255,255,.75);
+  background:#000;
+  z-index:999;
+  display:none;
+}
+</style>
+</head>
+
+<body>
+<div id="root">
+
+  <div id="stage"></div>
+  <iframe id="surfaceFrame" title="SURFACE"></iframe>
+
+  <div class="topbar">
+    <div class="brand">
+      <span class="sq"></span>
+      <span class="txt">SHELL8 // MOB_BASE</span>
+    </div>
+    <div class="badge"><span>LIGHT</span><span class="v" id="lightLabel">1</span></div>
+  </div>
+
+  <!-- MOBILE DOCK: all critical controls, phone-friendly -->
+  <div class="dock" id="dock">
+    <div class="left">
+      <button class="longbtn" id="btnInvert">INVERT</button>
+      <button class="longbtn" id="btnPlayer">PLAYER</button>
+      <button class="longbtn" id="btnSystem">SYSTEM</button>
+    </div>
+
+    <div class="mid">
+      <div class="lightStrip" id="lightStrip"></div>
+    </div>
+
+    <div class="right">
+      <!-- keta_note square -->
+      <button class="sqbtn off" id="btnNote" title="KETA_NOTE"></button>
+      <!-- null square bottom-right is also required; this is the “arm” to enter NULL -->
+      <button class="sqbtn off" id="btnNull" title="NULL"></button>
+    </div>
+  </div>
+
+  <div class="bottombar">
+    <div style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap" id="statusLine">
+      SURFACE: <span id="surfaceLabel">—</span>
+    </div>
+    <div id="runLine">RUN: <span id="runLabel">OFF</span></div>
+  </div>
+
+  <!-- PLAYER SHEET -->
+  <div class="sheet" id="playerSheet" aria-hidden="true">
+    <div class="sheetHead">
+      <div>PLAYER</div>
+      <button class="longbtn" id="playerClose">CLOSE</button>
+    </div>
+    <div class="sheetBody">
+
+      <div class="section">
+        <div class="sectionTitle">PRESETS</div>
+        <div id="presetList"></div>
+      </div>
+
+      <div class="section">
+        <div class="sectionTitle">QUEUE</div>
+        <div id="queueList"></div>
+        <div style="display:flex; gap:10px; margin-top:10px; flex-wrap:wrap">
+          <button class="smallBtn primary" id="btnPlayNow">PLAY</button>
+          <button class="smallBtn" id="btnNext">NEXT</button>
+          <button class="smallBtn" id="btnStop">STOP</button>
+          <button class="smallBtn danger" id="btnClearQueue">CLEAR</button>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="sectionTitle">ADD</div>
+        <input class="smallInput" id="addInput" placeholder="FILENAME OR URL (e.g. tennisball91.html)" spellcheck="false" autocomplete="off" />
+        <div style="display:flex; gap:10px; margin-top:10px; flex-wrap:wrap">
+          <button class="smallBtn" id="btnAddToQueue">ADD TO QUEUE</button>
+          <button class="smallBtn" id="btnSurfaceNow">SURFACE NOW</button>
+        </div>
+      </div>
+
+    </div>
+    <div class="sheetFoot">
+      <div>DOUBLE TAP = RUN</div>
+      <div>LIGHT 1–6</div>
+    </div>
+  </div>
+
+  <!-- SYSTEM SHEET -->
+  <div class="sheet" id="systemSheet" aria-hidden="true">
+    <div class="sheetHead">
+      <div>SYSTEM</div>
+      <button class="longbtn" id="systemClose">CLOSE</button>
+    </div>
+    <div class="sheetBody">
+      <div class="section">
+        <div class="sectionTitle">IMPORT / EXPORT (LOCAL FILE)</div>
+        <div style="display:flex; gap:10px; flex-wrap:wrap">
+          <button class="smallBtn primary" id="btnExport">EXPORT</button>
+          <button class="smallBtn" id="btnImport">IMPORT</button>
+          <button class="smallBtn" id="btnCopyState">COPY</button>
+        </div>
+        <div style="margin-top:10px; color:var(--muted); font-family:var(--mono); font-size:11px; letter-spacing:.06em; text-transform:uppercase">
+          STORAGE KEY: <span id="storageKey">—</span>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="sectionTitle">UNIVERSALS</div>
+        <textarea class="noteArea" id="universals" placeholder="LAWS / REFERENCES" style="min-height:220px"></textarea>
+      </div>
+    </div>
+    <div class="sheetFoot">
+      <div>INVERT + NULL ARE UNIVERSALS</div>
+      <div>STATE IS LITERAL UI</div>
+    </div>
+  </div>
+
+  <!-- NOTE SHEET (full-page, apple-note style) -->
+  <div class="sheet" id="noteSheet" aria-hidden="true">
+    <div class="sheetHead">
+      <div>KETA_NOTE</div>
+      <button class="longbtn" id="noteClose">CLOSE</button>
+    </div>
+    <div class="sheetBody">
+      <textarea class="noteArea" id="ketaNote" placeholder="NOTE" spellcheck="false"></textarea>
+    </div>
+    <div class="sheetFoot">
+      <div>LOCAL-FIRST</div>
+      <div>NO BACKFLOW</div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+  <div id="nullExit" title="EXIT NULL"></div>
+  <input id="file" type="file" accept="application/json" style="display:none" />
+
+</div>
+
+<script>
+/* =======================
+   EE: MOB BASE (PLAYER)
+   - phone-fit, no draggable panels
+   - all squares are same size (var(--sq))
+   - double tap anywhere (not on controls) toggles RUN
+   ======================= */
+
+const $=(id)=>document.getElementById(id);
+const root=$("root");
+const stage=$("stage");
+const surfaceFrame=$("surfaceFrame");
+
+const STORAGE_KEY = "KDT::MOB_BASE::PLAYER::STATE::" + (location.pathname||"/").replace(/[^a-z0-9]/gi,"_");
+$("storageKey").textContent = STORAGE_KEY;
+
+function nowISO(){ return new Date().toISOString(); }
+function clamp(n,min,max){ return Math.max(min, Math.min(max, n)); }
+function hash8(str){
+  const s=String(str||"");
+  let h=2166136261;
+  for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619);}
+  return (h>>>0).toString(16).slice(0,8);
+}
+function deriveName(url){
+  try{
+    const u=new URL(String(url||""), location.href);
+    const p=(u.pathname||"").split("/").filter(Boolean);
+    const last=p.length?p[p.length-1]:(u.hostname||"LINK");
+    return String(last).replace(/\.(html?)$/i,"").replace(/[-_]+/g," ").trim().toUpperCase()||"LINK";
+  }catch(e){
+    return String(url||"LINK").trim().toUpperCase()||"LINK";
+  }
+}
+function normalizeUrl(raw){
+  const u=String(raw||"").trim();
+  if(!u) return "";
+  if(/^(https?:|about:|data:|blob:)/i.test(u)) return u;
+  // relative filename -> site root (works on ketadata.com)
+  try{
+    if(location.protocol !== "file:") return new URL(u, location.href).href;
+  }catch(e){}
+  return "https://ketadata.com/" + u.replace(/^\/+/,"");
+}
+let toastTimer=null;
+function toast(msg){
+  const t=$("toast");
+  t.textContent=String(msg||"");
+  t.style.display="block";
+  clearTimeout(toastTimer);
+  toastTimer=setTimeout(()=>{t.style.display="none";}, 850);
+}
+async function copy(text){
+  try{ await navigator.clipboard.writeText(String(text||"")); toast("COPIED"); }
+  catch(e){ toast("COPY FAIL"); }
+}
+function downloadJson(filename, text){
+  const blob=new Blob([String(text||"")], {type:"application/json"});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement("a");
+  a.href=url; a.download=filename||"STATE.json";
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url), 250);
+}
+
+/* ===== Presets (keta_mono, keta_chroma, toys) ===== */
+const PRESETS = [
+  // KETA-MONO
+  {group:"KETA_MONO", label:"KETA_MONO / INDEX", url:"kitty.html"},
+  {group:"KETA_MONO", label:"KETA_MONO / OCTOPUS", url:"octopus.html"},
+  {group:"KETA_MONO", label:"KETA_MONO / FISHTANK", url:"fishtank.html"},
+  {group:"KETA_MONO", label:"KETA_MONO / SERPENTINE", url:"serpentine.html"},
+
+  // KETA-CHROMA
+  {group:"KETA_CHROMA", label:"KETA_CHROMA / POOL", url:"pool.html"},
+  {group:"KETA_CHROMA", label:"KETA_CHROMA / INFINITY", url:"infinity.html"},
+  {group:"KETA_CHROMA", label:"KETA_CHROMA / SLOPSTREAM2", url:"slopstream2.html"},
+  {group:"KETA_CHROMA", label:"KETA_CHROMA / MANDALA", url:"mandalagpt.html"},
+
+  // TOYS (Tennis & Catball)
+  {group:"TOYS", label:"TOY / CATBALL", url:"catball.html"},
+  {group:"TOYS", label:"TOY / CATBALL 1", url:"catball1.html"},
+  {group:"TOYS", label:"TOY / TENNISBALL 91", url:"tennisball91.html"},
+  {group:"TOYS", label:"TOY / TENNISBALL 666", url:"tennisball666.html"},
+  {group:"TOYS", label:"TOY / TENNISCOURT", url:"tenniscourt.html"},
+  {group:"TOYS", label:"TOY / TBALL 7", url:"tball7.html"},
+];
+
+/* ===== State ===== */
+const DEFAULT={
+  v:"SHELL8_MOB_BASE",
+  updatedAt: nowISO(),
+  ui:{
+    invert:false,
+    null:false,
+    lightPreset:1,
+    lightRunning:false,
+    playerOpen:false,
+    systemOpen:false,
+    noteOpen:false
+  },
+  data:{
+    note:"",
+    universals:"",
+    surfaceUrl:"",
+    surfaceLabel:"",
+    queue:[], // {label,url}
+    queueIndex:0
+  }
+};
+function load(){
+  try{
+    const raw=localStorage.getItem(STORAGE_KEY);
+    if(!raw) return structuredClone(DEFAULT);
+    const s=JSON.parse(raw);
+    return deepFill(s);
+  }catch(e){
+    return structuredClone(DEFAULT);
+  }
+}
+function deepFill(s){
+  if(!s || typeof s!=="object") return structuredClone(DEFAULT);
+  if(!s.ui) s.ui={};
+  if(!s.data) s.data={};
+  for(const k of Object.keys(DEFAULT.ui)) if(s.ui[k]===undefined) s.ui[k]=DEFAULT.ui[k];
+  for(const k of Object.keys(DEFAULT.data)) if(s.data[k]===undefined) s.data[k]=structuredClone(DEFAULT.data[k]);
+  if(!Array.isArray(s.data.queue)) s.data.queue=[];
+  if(typeof s.data.queueIndex!=="number") s.data.queueIndex=0;
+  return s;
+}
+let STATE=load();
+
+function persist(){
+  STATE.updatedAt=nowISO();
+  try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(STATE)); }catch(e){}
+  render();
+}
+
+/* ===== Lights ===== */
+let lightInterval=null;
+let lightAuxA=0, lightAuxB=0, lightCount=0;
+function resetStage(){
+  stage.style.background="#000";
+  stage.style.filter="none";
+  lightAuxA=0; lightAuxB=0; lightCount=0;
+}
+function stopLight(){
+  if(lightInterval){ clearInterval(lightInterval); lightInterval=null; }
+  STATE.ui.lightRunning=false;
+  $("runLabel").textContent="OFF";
+  resetStage();
+}
+function startLight(preset){
+  stopLight();
+  STATE.ui.lightPreset=clamp(Number(preset)||1,1,6);
+  STATE.ui.lightRunning=true;
+  $("runLabel").textContent="ON";
+  resetStage();
+
+  const p=STATE.ui.lightPreset;
+
+  if(p===1){
+    lightInterval=setInterval(()=>{
+      const curr=stage.style.backgroundColor||"black";
+      stage.style.backgroundColor=(curr==="black"||curr==="rgb(0, 0, 0)")?"white":"black";
+      stage.style.filter="none";
+    },60);
+  }else if(p===2){
+    lightInterval=setInterval(()=>{
+      lightAuxA=(lightAuxA+30)%360; lightAuxB+=0.5;
+      const l=50+Math.sin(lightAuxB)*40;
+      stage.style.backgroundColor=`hsl(${lightAuxA},100%,${l}%)`;
+      stage.style.filter="none";
+    },14);
+  }else if(p===3){
+    lightInterval=setInterval(()=>{
+      lightCount++;
+      const beat=lightCount%16;
+      if(beat===0||beat===1){stage.style.backgroundColor="#fff";stage.style.filter="invert(1) contrast(3) brightness(2)";}
+      else if(beat===2){stage.style.backgroundColor="#000";stage.style.filter="invert(1) contrast(2)";}
+      else if(beat===3){stage.style.backgroundColor="#0f0";stage.style.filter="contrast(2) saturate(3)";}
+      else if(beat===4){stage.style.backgroundColor="#f0f";stage.style.filter="invert(1) hue-rotate(90deg)";}
+      else if(beat===5||beat===6){stage.style.backgroundColor="#0ff";stage.style.filter="invert(0.7) contrast(2)";}
+      else if(beat===7){stage.style.backgroundColor="#fff";stage.style.filter="invert(1) brightness(3)";}
+      else if(beat===8){stage.style.backgroundColor="#000";stage.style.filter="invert(1) contrast(3)";}
+      else if(beat===9||beat===10){stage.style.backgroundColor="#0f0";stage.style.filter="saturate(5) contrast(2)";}
+      else if(beat===11){stage.style.backgroundColor="#f0f";stage.style.filter="invert(1) saturate(3)";}
+      else {stage.style.backgroundColor="#08f";stage.style.filter="contrast(1.5) brightness(1.2)";}
+    },32);
+  }else if(p===4){
+    lightInterval=setInterval(()=>{
+      lightAuxA+=0.08; lightCount++;
+      const red=Math.abs(Math.sin(lightAuxA))*255;
+      const pulse=Math.abs(Math.sin(lightAuxA*0.5));
+      const contrast=2+pulse*2;
+      const saturation=4+pulse*2;
+      if(lightCount%8===0){stage.style.backgroundColor="#000";stage.style.filter="brightness(3) contrast(3)";}
+      else{
+        stage.style.backgroundColor=`rgb(${red},0,0)`;
+        stage.style.filter=`contrast(${contrast}) saturate(${saturation}) brightness(${1.2+pulse*0.5})`;
+      }
+    },22);
+  }else if(p===5){
+    lightInterval=setInterval(()=>{
+      lightAuxA+=15; lightAuxB=(lightAuxB+2)%100;
+      const hue=260+Math.sin(lightAuxA*0.1)*40;
+      const saturation=80+Math.cos(lightAuxA*0.05)*20;
+      const lightness=30+Math.sin(lightAuxB*0.1)*30;
+      const br=1+Math.abs(Math.sin(lightAuxA*0.05))*0.8;
+      const ct=1.5+Math.abs(Math.cos(lightAuxA*0.08))*1;
+      stage.style.backgroundColor=`hsl(${hue},${saturation}%,${lightness}%)`;
+      stage.style.filter=`contrast(${ct}) saturate(2) brightness(${br}) hue-rotate(${lightAuxA*0.5}deg)`;
+    },26);
+  }else if(p===6){
+    lightInterval=setInterval(()=>{
+      lightCount++;
+      if(lightCount%50===0||lightCount%50===2){stage.style.backgroundColor="#fff";stage.style.filter="brightness(5) contrast(5)";}
+      else{stage.style.backgroundColor="#000";stage.style.filter="none";}
+    },34);
+  }
+
+  persist();
+}
+function toggleRun(){
+  if(STATE.ui.null) return;
+  if(STATE.ui.lightRunning) { stopLight(); persist(); }
+  else startLight(STATE.ui.lightPreset||1);
+}
+function setLight(n){
+  const p=clamp(Number(n)||1,1,6);
+  STATE.ui.lightPreset=p;
+  document.documentElement.style.setProperty("--light", String(p));
+  $("lightLabel").textContent=String(p);
+  // update strip UI
+  renderLightStrip();
+  if(STATE.ui.lightRunning) startLight(p);
+  else persist();
+}
+
+/* ===== Surface playback ===== */
+function applySurface(url,label){
+  const u=normalizeUrl(url);
+  if(!u){ clearSurface(); return; }
+  const lab=(label||deriveName(u)).toUpperCase();
+  STATE.data.surfaceUrl=u;
+  STATE.data.surfaceLabel=lab;
+  $("surfaceLabel").textContent=lab;
+  surfaceFrame.classList.add("on");
+  surfaceFrame.src=u;
+  persist();
+}
+function clearSurface(){
+  STATE.data.surfaceUrl="";
+  STATE.data.surfaceLabel="";
+  $("surfaceLabel").textContent="—";
+  surfaceFrame.classList.remove("on");
+  surfaceFrame.removeAttribute("src");
+  persist();
+}
+
+/* ===== Queue ===== */
+function queueSetIndex(i){
+  const q=STATE.data.queue;
+  if(!q.length){ STATE.data.queueIndex=0; return; }
+  STATE.data.queueIndex=clamp(i,0,q.length-1);
+}
+function queueNow(){
+  const q=STATE.data.queue;
+  if(!q.length) return null;
+  queueSetIndex(STATE.data.queueIndex||0);
+  return q[STATE.data.queueIndex];
+}
+function queuePlay(){
+  const cur=queueNow();
+  if(!cur){ toast("EMPTY"); return; }
+  applySurface(cur.url, cur.label);
+}
+function queueNext(){
+  if(!STATE.data.queue.length){ toast("EMPTY"); return; }
+  queueSetIndex((STATE.data.queueIndex||0)+1);
+  queuePlay();
+}
+function queueStop(){
+  clearSurface();
+}
+function queueClear(){
+  STATE.data.queue=[];
+  STATE.data.queueIndex=0;
+  persist();
+}
+function queueAdd(label,url){
+  const u=normalizeUrl(url);
+  if(!u){ toast("NO URL"); return; }
+  const lab=(label||deriveName(u)).toUpperCase();
+  STATE.data.queue.push({label:lab, url:u});
+  STATE.data.queueIndex=STATE.data.queue.length-1;
+  persist();
+}
+
+/* ===== Sheets ===== */
+function openSheet(id){
+  $("playerSheet").classList.toggle("open", id==="player");
+  $("systemSheet").classList.toggle("open", id==="system");
+  $("noteSheet").classList.toggle("open", id==="note");
+  STATE.ui.playerOpen = (id==="player");
+  STATE.ui.systemOpen = (id==="system");
+  STATE.ui.noteOpen   = (id==="note");
+  persist();
+}
+function closeSheets(){
+  $("playerSheet").classList.remove("open");
+  $("systemSheet").classList.remove("open");
+  $("noteSheet").classList.remove("open");
+  STATE.ui.playerOpen=false;
+  STATE.ui.systemOpen=false;
+  STATE.ui.noteOpen=false;
+  persist();
+}
+
+/* ===== Import/Export (real download) ===== */
+function exportState(){
+  return JSON.stringify({ STORAGE_KEY, STATE }, null, 2);
+}
+function exportFilename(){
+  const sig=hash8(JSON.stringify(STATE.data.queue) + "|" + (STATE.data.surfaceUrl||"") + "|" + (STATE.ui.lightPreset||1));
+  const stamp=new Date().toISOString().replace(/[:.]/g,"-");
+  return `SHELL8_MOB_BASE_${sig}_${stamp}.json`;
+}
+function importState(text){
+  const parsed=JSON.parse(text);
+  const incoming=(parsed && parsed.STATE) ? parsed.STATE : parsed;
+  STATE=deepFill(incoming);
+  // restore UI
+  if(STATE.ui.lightRunning) startLight(STATE.ui.lightPreset||1);
+  else stopLight();
+  if(STATE.data.surfaceUrl) applySurface(STATE.data.surfaceUrl, STATE.data.surfaceLabel);
+  else clearSurface();
+  render();
+  persist();
+}
+
+/* ===== Double tap (RUN) ===== */
+const DT_MS=280, DT_DIST=24;
+let _tapT=0,_tapX=0,_tapY=0;
+function installDoubleTap(){
+  root.addEventListener("pointerdown",(ev)=>{
+    const t=ev.target;
+    if(t && t.closest && t.closest("button,input,textarea,select,a,label")) return;
+    const now=Date.now();
+    const x=ev.clientX, y=ev.clientY;
+    const dt=now-_tapT;
+    const dx=Math.abs(x-_tapX), dy=Math.abs(y-_tapY);
+    if(dt>0 && dt<DT_MS && dx<DT_DIST && dy<DT_DIST){
+      _tapT=0;
+      toggleRun();
+      toast(STATE.ui.lightRunning ? "RUN" : "STOP");
+      return;
+    }
+    _tapT=now; _tapX=x; _tapY=y;
+  }, {passive:true});
+}
+
+/* ===== UI render ===== */
+function renderLightStrip(){
+  const strip=$("lightStrip");
+  strip.innerHTML="";
+  for(let i=1;i<=6;i++){
+    const b=document.createElement("button");
+    b.className="sqbtn " + (STATE.ui.lightPreset===i ? "on":"off");
+    b.title="LIGHT "+i;
+    b.addEventListener("click",()=>setLight(i));
+    strip.appendChild(b);
+  }
+}
+function renderPresetList(){
+  const el=$("presetList");
+  el.innerHTML="";
+  const groups=[...new Set(PRESETS.map(p=>p.group))];
+  groups.forEach(g=>{
+    const box=document.createElement("div");
+    box.style.marginBottom="10px";
+    const t=document.createElement("div");
+    t.className="sectionTitle";
+    t.textContent=g;
+    t.style.marginBottom="8px";
+    box.appendChild(t);
+
+    PRESETS.filter(p=>p.group===g).forEach(p=>{
+      const row=document.createElement("div");
+      row.className="row";
+      const left=document.createElement("button");
+      left.className="sqbtn off";
+      left.title="ADD TO QUEUE";
+      left.addEventListener("click",(e)=>{ e.stopPropagation(); queueAdd(p.label, p.url); toast("ADDED"); });
+      const name=document.createElement("div");
+      name.className="name";
+      name.textContent=p.label;
+      const play=document.createElement("button");
+      play.className="sqbtn off";
+      play.title="SURFACE NOW";
+      play.addEventListener("click",(e)=>{ e.stopPropagation(); applySurface(p.url, p.label); toast("SURFACE"); });
+
+      row.appendChild(left);
+      row.appendChild(name);
+      row.appendChild(play);
+      row.addEventListener("click",()=>{ applySurface(p.url, p.label); });
+      box.appendChild(row);
+    });
+
+    el.appendChild(box);
+  });
+}
+function renderQueue(){
+  const el=$("queueList");
+  el.innerHTML="";
+  const q=STATE.data.queue;
+  if(!q.length){
+    const empty=document.createElement("div");
+    empty.style.cssText="color:var(--muted); font-family:var(--mono); font-size:11px; letter-spacing:.06em; text-transform:uppercase";
+    empty.textContent="EMPTY";
+    el.appendChild(empty);
+    return;
+  }
+  q.forEach((it, idx)=>{
+    const row=document.createElement("div");
+    row.className="row";
+    if(idx===STATE.data.queueIndex) row.style.borderColor="rgba(255,255,255,.75)";
+
+    const del=document.createElement("button");
+    del.className="sqbtn off";
+    del.title="DELETE";
+    del.addEventListener("click",(e)=>{
+      e.stopPropagation();
+      STATE.data.queue.splice(idx,1);
+      if(STATE.data.queueIndex>=STATE.data.queue.length) STATE.data.queueIndex=Math.max(0,STATE.data.queue.length-1);
+      persist();
+    });
+
+    const name=document.createElement("div");
+    name.className="name";
+    name.textContent=it.label||deriveName(it.url);
+
+    const go=document.createElement("button");
+    go.className="sqbtn off";
+    go.title="PLAY";
+    go.addEventListener("click",(e)=>{ e.stopPropagation(); STATE.data.queueIndex=idx; queuePlay(); });
+
+    row.appendChild(del);
+    row.appendChild(name);
+    row.appendChild(go);
+
+    row.addEventListener("click",()=>{
+      STATE.data.queueIndex=idx;
+      persist();
+    });
+
+    el.appendChild(row);
+  });
+}
+function render(){
+  root.classList.toggle("invert", !!STATE.ui.invert);
+  root.classList.toggle("null", !!STATE.ui.null);
+
+  $("lightLabel").textContent=String(STATE.ui.lightPreset||1);
+  $("runLabel").textContent=STATE.ui.lightRunning ? "ON":"OFF";
+
+  document.documentElement.style.setProperty("--light", String(STATE.ui.lightPreset||1));
+
+  // dock squares match rule (same size; state reflection)
+  $("btnNote").classList.toggle("off", !STATE.ui.noteOpen);
+  $("btnNull").classList.toggle("off", !STATE.ui.null);
+  $("btnInvert").classList.toggle("on", !!STATE.ui.invert);
+
+  // surface label
+  $("surfaceLabel").textContent = STATE.data.surfaceLabel || (STATE.data.surfaceUrl ? deriveName(STATE.data.surfaceUrl) : "—");
+
+  // sheet state
+  $("playerSheet").classList.toggle("open", !!STATE.ui.playerOpen);
+  $("systemSheet").classList.toggle("open", !!STATE.ui.systemOpen);
+  $("noteSheet").classList.toggle("open", !!STATE.ui.noteOpen);
+
+  // note/universals
+  $("ketaNote").value = STATE.data.note || "";
+  $("universals").value = STATE.data.universals || "";
+
+  // surface frame
+  if(STATE.data.surfaceUrl){
+    surfaceFrame.classList.add("on");
+    if(surfaceFrame.getAttribute("src")!==STATE.data.surfaceUrl) surfaceFrame.setAttribute("src", STATE.data.surfaceUrl);
+  }else{
+    surfaceFrame.classList.remove("on");
+    surfaceFrame.removeAttribute("src");
+  }
+
+  renderLightStrip();
+  renderPresetList();
+  renderQueue();
+}
+
+/* ===== Bindings ===== */
+function bind(){
+  // dock buttons
+  $("btnInvert").addEventListener("click",()=>{
+    STATE.ui.invert=!STATE.ui.invert;
+    persist();
+  });
+
+  $("btnPlayer").addEventListener("click",()=>{
+    if(STATE.ui.playerOpen) closeSheets();
+    else openSheet("player");
+  });
+
+  $("btnSystem").addEventListener("click",()=>{
+    if(STATE.ui.systemOpen) closeSheets();
+    else openSheet("system");
+  });
+
+  $("btnNote").addEventListener("click",()=>{
+    if(STATE.ui.noteOpen) closeSheets();
+    else openSheet("note");
+  });
+
+  // NULL: tap enters NULL; exit is the bottom-right square in NULL mode
+  $("btnNull").addEventListener("click",()=>{
+    STATE.ui.null=true;
+    stopLight();
+    closeSheets();
+    persist();
+  });
+  $("nullExit").addEventListener("click",()=>{
+    STATE.ui.null=false;
+    persist();
+  });
+
+  // player sheet
+  $("playerClose").addEventListener("click",closeSheets);
+  $("btnPlayNow").addEventListener("click",queuePlay);
+  $("btnNext").addEventListener("click",queueNext);
+  $("btnStop").addEventListener("click",queueStop);
+  $("btnClearQueue").addEventListener("click",queueClear);
+
+  $("btnAddToQueue").addEventListener("click",()=>{
+    const raw=$("addInput").value.trim();
+    if(!raw) return toast("EMPTY");
+    queueAdd(deriveName(raw), raw);
+    $("addInput").value="";
+    toast("ADDED");
+  });
+  $("btnSurfaceNow").addEventListener("click",()=>{
+    const raw=$("addInput").value.trim();
+    if(!raw) return toast("EMPTY");
+    applySurface(raw, deriveName(raw));
+    toast("SURFACE");
+  });
+
+  // system sheet
+  $("systemClose").addEventListener("click",closeSheets);
+  $("universals").addEventListener("input",()=>{
+    STATE.data.universals=$("universals").value;
+    persist();
+  });
+
+  $("btnExport").addEventListener("click",()=>{
+    downloadJson(exportFilename(), exportState());
+    toast("EXPORTED");
+  });
+  $("btnImport").addEventListener("click",()=>$("file").click());
+  $("btnCopyState").addEventListener("click",()=>copy(exportState()));
+
+  $("file").addEventListener("change",(e)=>{
+    const f=e.target.files && e.target.files[0];
+    if(!f) return;
+    const r=new FileReader();
+    r.onload=()=>{ try{ importState(r.result); toast("IMPORTED"); }catch(err){ toast("IMPORT FAIL"); } };
+    r.readAsText(f);
+    e.target.value="";
+  });
+
+  // note sheet
+  $("noteClose").addEventListener("click",closeSheets);
+  $("ketaNote").addEventListener("input",()=>{
+    STATE.data.note=$("ketaNote").value;
+    persist();
+  });
+
+  // keyboard (optional; harmless on desktop)
+  window.addEventListener("keydown",(ev)=>{
+    if(ev.repeat) return;
+    if(ev.shiftKey && (ev.key==="I"||ev.key==="i")){ STATE.ui.invert=!STATE.ui.invert; persist(); }
+    if(ev.shiftKey && (ev.key==="0")){ STATE.ui.null=!STATE.ui.null; if(STATE.ui.null) stopLight(); closeSheets(); persist(); }
+    if(/^[1-6]$/.test(ev.key)){ setLight(Number(ev.key)); }
+    if(ev.key===" "){
+      const a=document.activeElement;
+      if(a && (a.tagName==="INPUT"||a.tagName==="TEXTAREA")) return;
+      ev.preventDefault();
+      toggleRun();
+    }
+  });
+
+  installDoubleTap();
+}
+
+/* ===== Boot ===== */
+(function boot(){
+  bind();
+
+  // seed toy-first queue (only if empty)
+  if(!STATE.data.queue.length){
+    const toyDefaults = PRESETS.filter(p=>p.group==="TOYS").slice(0,6);
+    toyDefaults.forEach(p=>STATE.data.queue.push({label:p.label, url: normalizeUrl(p.url)}));
+    STATE.data.queueIndex=0;
+  }
+
+  // restore
+  document.documentElement.style.setProperty("--light", String(STATE.ui.lightPreset||1));
+  if(STATE.ui.lightRunning && !STATE.ui.null) startLight(STATE.ui.lightPreset||1);
+  else stopLight();
+
+  if(STATE.data.surfaceUrl) applySurface(STATE.data.surfaceUrl, STATE.data.surfaceLabel);
+  render();
+  persist();
+})();
+</script>
+
+<!--
+AE: SHELL8 / MOBILE FIT / UNIFORM TEXT
+EE: PLAYER-FIRST PRESETS (KETA_MONO / KETA_CHROMA / TOYS) + DOUBLE TAP RUN
+WB: LOCAL-FIRST STATE (EXPORT = DOWNLOAD FILE)
+FILE_ID: SHELL8_MOB_BASE
+ROOM_ID: MOB_BASE
+VERSION: v3
+UPDATED_AT: 2026-01-15T00:00:00.000Z
+CHANGELOG:
+- Fit: phone-first, no draggable panels; sheets are full-screen overlays.
+- Presets: KETA_MONO + KETA_CHROMA + TOYS included as playable presets.
+- Squares: all square buttons share one size var(--sq) (keta_note square standard).
+- NULL: tap NULL square to enter; bottom-right square exits.
+- Lights: 1–6 as squares; double tap toggles RUN.
+-->
+</body>
+</html>
