@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
+<title>KETADATA</title>
+
+<meta name="theme-color" content="#000000"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<meta name="apple-mobile-web-app-title" content="KETADATA"/>
+
+<!-- Replace these with real hosted assets when you wire PWA -->
+<link rel="icon" href="icon.png"/>
+<link rel="apple-touch-icon" href="apple-touch-icon.png"/>
+<link rel="manifest" href="manifest.webmanifest"/>
+
+<style>
+  :root{
+    --bg:#000;
+    --fg:rgba(255,255,255,.92);
+    --muted:rgba(255,255,255,.52);
+    --line:rgba(255,255,255,.12);
+    --fs:14px;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace;
+    --sans: Arial, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%; margin:0; background:var(--bg); color:var(--fg)}
+  body{font-family:var(--sans); overflow:hidden}
+  .fs{font-size:var(--fs); line-height:1.25; letter-spacing:.08em}
+  #root{
+    position:fixed; inset:0;
+    padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right))
+             max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+    display:flex; align-items:center; justify-content:center;
+    user-select:none; -webkit-user-select:none;
+    touch-action:manipulation;
+    cursor:pointer;
+  }
+
+  /* Center stack */
+  #stack{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    gap:14px;
+    transform: translateY(-4px);
+  }
+
+  /* K mark */
+  #kmark{
+    width:min(70vw, 420px);
+    aspect-ratio: 1 / 1;
+    filter: drop-shadow(0 0 24px rgba(255,255,255,.06));
+    opacity:.98;
+  }
+  #kmark .plate{fill: rgba(255,255,255,.06)}
+  #kmark .ink{fill: rgba(255,255,255,.95)}
+
+  /* Word reveal */
+  #word{
+    display:flex; gap:.08em;
+    font-family:var(--mono);
+  }
+  .ch{
+    opacity:0;
+    transform: translateY(2px);
+    transition: opacity 420ms ease, transform 420ms ease;
+    will-change: opacity, transform;
+  }
+  #word.on .ch{
+    opacity:1;
+    transform: translateY(0);
+  }
+
+  /* Sub lines (same size, different opacity/weight only) */
+  #sub{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:8px;
+    color:var(--muted);
+  }
+  .pill{
+    border:1px solid var(--line);
+    padding:10px 12px;
+    min-width:min(92vw, 520px);
+    text-align:center;
+    background: rgba(0,0,0,.35);
+  }
+
+  /* A2HS hint */
+  #a2hs{display:none}
+  #a2hs.show{display:block}
+
+  /* Gentle breathing (no strobe) */
+  @media (prefers-reduced-motion: no-preference){
+    #kmark{ animation: breathe 3.2s ease-in-out infinite; }
+    @keyframes breathe{
+      0%,100%{ transform: scale(1); opacity:.98 }
+      50%{ transform: scale(1.01); opacity:.94 }
+    }
+  }
+  @media (prefers-reduced-motion: reduce){
+    #kmark{ animation:none }
+    .ch{ transition:none }
+  }
+</style>
+</head>
+<body>
+  <div id="root" aria-label="KETADATA landing">
+    <div id="stack">
+      <!-- Big K as SVG (not text) -->
+      <svg id="kmark" viewBox="0 0 512 512" role="img" aria-label="K">
+        <!-- soft plate -->
+        <rect class="plate" x="20" y="20" width="472" height="472" rx="22" ry="22"/>
+        <!-- geometric K -->
+        <path class="ink" d="M126 118h62v118l108-118h78L252 250l128 144h-82L188 272v122h-62V118z"/>
+      </svg>
+
+      <!-- KETADATA spelled one letter at a time -->
+      <div id="word" class="fs" aria-label="KETADATA">
+        <span class="ch">K</span><span class="ch">E</span><span class="ch">T</span><span class="ch">A</span><span class="ch">D</span><span class="ch">A</span><span class="ch">T</span><span class="ch">A</span>
+      </div>
+
+      <div id="sub" class="fs">
+        <div class="pill" id="hint">TAP TO ENTER</div>
+        <div class="pill" id="a2hs">ADD TO HOME SCREEN</div>
+      </div>
+    </div>
+  </div>
+
+<script>
+(() => {
+  /* ===== config ===== */
+  const BASE_URL = "base_mobile.html"; // <- set this to your mobile base file
+
+  const word = document.getElementById("word");
+  const letters = [...word.querySelectorAll(".ch")];
+  const a2hs = document.getElementById("a2hs");
+
+  function isStandalone(){
+    // iOS Safari
+    if (window.navigator.standalone) return true;
+    // modern display-mode
+    return window.matchMedia && window.matchMedia("(display-mode: standalone)").matches;
+  }
+
+  function reveal(){
+    word.classList.add("on");
+    // stagger reveal without flashing
+    letters.forEach((el, i) => {
+      el.style.transitionDelay = (i * 80) + "ms";
+    });
+  }
+
+  function go(){
+    // fast, deterministic routing
+    window.location.href = BASE_URL;
+  }
+
+  // show A2HS hint only when not installed
+  if (!isStandalone()){
+    a2hs.classList.add("show");
+  }
+
+  // init
+  reveal();
+
+  // tap anywhere to enter (no scrolling)
+  const root = document.getElementById("root");
+  root.addEventListener("click", go, {passive:true});
+  root.addEventListener("touchend", (e) => { e.preventDefault(); go(); }, {passive:false});
+
+  // optional: long-press to re-seed (does nothing yet)
+  // keep landing dumb; you can add seed logic later if you want it.
+})();
+</script>
+</body>
+</html>
