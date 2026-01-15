@@ -1,0 +1,450 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
+<title>KETADATA // MOB7</title>
+
+<style>
+  :root{
+    --bg:#000;
+    --fg:rgba(255,255,255,.92);
+    --muted:rgba(255,255,255,.32);
+    --muted2:rgba(255,255,255,.16);
+    --sans: Arial, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+
+    /* lanes */
+    --lanePad: 6px;
+    --tickerH: 22px;    /* visual lane height; ticker content can overflow hidden */
+    --warnH: 26px;      /* warning lane height (2 lines packed) */
+  }
+
+  *{box-sizing:border-box}
+  html,body{height:100%; margin:0}
+  body{
+    background:var(--bg);
+    color:var(--fg);
+    font-family:var(--sans);
+    overflow:hidden;
+    -webkit-tap-highlight-color: transparent;
+    user-select:none; -webkit-user-select:none;
+    touch-action: manipulation;
+  }
+
+  /* center rig occupies the safe middle between top/bottom lanes */
+  #root{
+    position:fixed;
+    left:0; right:0;
+    top: calc(env(safe-area-inset-top) + var(--lanePad) + var(--tickerH));
+    bottom: calc(env(safe-area-inset-bottom) + var(--lanePad) + var(--tickerH) + var(--warnH));
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding: 10px 14px;
+  }
+
+  #wordWrap{
+    width:min(96vw, 860px);
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    gap:10px;
+  }
+
+  /* word */
+  #ketaWord{
+    width:100%;
+    display:inline-flex;
+    align-items:baseline;
+    justify-content:center;
+    font-weight:800;
+    letter-spacing:0.02em;
+    line-height:1;
+    font-size:clamp(2.05rem, 12vw, 4.8rem);
+    cursor:pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  #ketaWord .cell{
+    flex:1 1 0;
+    min-width:0;
+    display:flex;
+    justify-content:center;
+    align-items:baseline;
+  }
+  #ketaWord .ch{
+    width:1ch;
+    display:inline-block;
+    text-align:center;
+    line-height:1;
+  }
+
+  /* subtitle single line */
+  .subtitle{
+    width:100%;
+    text-align:center;
+    white-space:nowrap;
+    font-weight:600;
+    letter-spacing:0.28em;
+    text-transform:uppercase;
+    color:var(--muted);
+    font-size:clamp(0.52rem, 2.5vw, 0.86rem);
+    line-height:1;
+  }
+
+  /* Isolated slash */
+  #isolatedSlash{
+    position:fixed;
+    left:50%;
+    top:50%;
+    transform:translate(-50%,-50%);
+    color:#fff;
+    font-family:var(--sans);
+    font-weight:800;
+    line-height:1;
+    opacity:0;
+    z-index:999;
+    pointer-events:none;
+  }
+
+  /* blackout */
+  #blackout{
+    position:fixed; inset:0;
+    background:#000;
+    opacity:0;
+    z-index:998;
+    pointer-events:none;
+  }
+  body.entering #wordWrap,
+  body.entering .meow-ticker,
+  body.entering #warningBottom{
+    opacity:0;
+    transition:opacity 120ms linear;
+  }
+  body.blacked #blackout{ opacity:1; transition:opacity 80ms linear; }
+
+  /* tickers (invisible baseline) */
+  .meow-ticker{
+    position:fixed;
+    left:0;
+    width:100%;
+    height: var(--tickerH);
+    overflow:hidden;
+    background:none;
+    color:transparent; /* invisible unless strobe paints it */
+    font-family: Arial, Helvetica, sans-serif;
+    font-size:13px;
+    font-weight:700;
+    letter-spacing:2px;
+    z-index:10;
+    pointer-events:none;
+  }
+  .meow-ticker.top{
+    top: calc(env(safe-area-inset-top) + var(--lanePad));
+  }
+  .meow-ticker.bottom{
+    bottom: calc(env(safe-area-inset-bottom) + var(--lanePad) + var(--warnH));
+  }
+  .meow-content{
+    display:inline-block;
+    animation:ticker 26s linear infinite;
+    padding-left:16px;
+    line-height: var(--tickerH);
+    white-space:nowrap;
+  }
+  @keyframes ticker{
+    0%{transform:translateX(0);}
+    100%{transform:translateX(-100%);}
+  }
+
+  /* warning lane at very bottom (packed) */
+  #warningBottom{
+    position:fixed;
+    left:0;
+    bottom: calc(env(safe-area-inset-bottom) + var(--lanePad));
+    width:100%;
+    height: var(--warnH);
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    text-align:center;
+    color:var(--muted2);
+    font-size:10px;
+    letter-spacing:0.22em;
+    text-transform:uppercase;
+    line-height:1.05;
+    z-index:11;
+    pointer-events:none;
+    overflow:hidden;
+  }
+  #warningBottom .l1{ white-space:nowrap; }
+  #warningBottom .l2{ white-space:nowrap; }
+
+  body.strobing .meow-ticker{ opacity:1; }
+</style>
+</head>
+
+<body>
+  <div id="blackout"></div>
+  <div id="isolatedSlash">/</div>
+
+  <!-- TOP TICKER -->
+  <div class="meow-ticker top" aria-hidden="true">
+    <div class="meow-content">
+      MEOW — MIAOU — MIAU — MIAO — MIAUW — MJAU — MJAV — MIAV — MIJAV — MIJAU — MIYAV — MIYAO — MIAAO — MIAOO — MIAOOO — МЯУ — МЯУУ — MYAU — МЬЯУ — МЯУМ — НЯВ — МИЙАУ — МИЙАВ — NIAOU — NYA — NYAA — NYAN — にゃー — ニャー — にゃお — にゃーー — 야옹 — 냐아옹 — 냥 — 喵 — 喵喵 —
+      MEOW — MIAOU — MIAU — MIAO — MIAUW — MJAU — MJAV — MIAV — MIJAV — MIJAU — MIYAV — MIYAO — MIAAO — MIAOO — MIAOOO — МЯУ — МЯУУ — MYAU — МЬЯU — МЯУМ — НЯВ — МИЙАУ — МИЙАВ — NIAOU — NYA — NYAA — NYAN — にゃー — ニャー — にゃお — にゃーー — 야옹 — 냐아옹 — 냥 — 喵 — 喵喵 —
+    </div>
+    <div class="meow-content">
+      MEOW — MIAOU — MIAU — MIAO — MIAUW — MJAU — MJAV — MIAV — MIJAV — MIJAU — MIYAV — MIYAO — MIAAO — MIAOO — MIAOOO — МЯУ — МЯУУ — MYAU — МЬЯУ — МЯУМ — НЯВ — МИЙАУ — МИЙАВ — NIAOU — NYA — NYAA — NYAN — にゃー — ニャー — にゃお — にゃーー — 야옹 — 냐아옹 — 냥 — 喵 — 喵喵 —
+      MEOW — MIAOU — MIAU — MIAO — MIAUW — MJAU — MJAV — MIAV — MIJAV — MIJAU — MIYAV — MIYAO — MIAAO — MIAOO — MIAOOO — МЯУ — МЯУУ — MYAU — МЬЯU — МЯУМ — НЯВ — МИЙАУ — МИЙАВ — NIAOU — NYA — NYAA — NYAN — にゃー — ニャー — にゃお — にゃーー — 야옹 — 냐아옹 — 냥 — 喵 — 喵喵 —
+    </div>
+  </div>
+
+  <!-- CENTER -->
+  <div id="root">
+    <div id="wordWrap">
+      <div id="ketaWord" aria-label="KETADATA"></div>
+      <div class="subtitle">ENDLESS INTER /// FACE ASSEMBLAGE</div>
+    </div>
+  </div>
+
+  <!-- BOTTOM TICKER -->
+  <div class="meow-ticker bottom" aria-hidden="true">
+    <div class="meow-content">
+      MEOW — MIAOU — MIAU — MIAO — MIAUW — MJAU — MJAV — MIAV — MIJAV — MIJAU — MIYAV — MIYAO — MIAAO — MIAOO — MIAOOO — МЯУ — МЯУУ — MYAU — МЬЯУ — МЯУМ — НЯВ — МИЙАУ — МИЙАВ — NIAOU — NYA — NYAA — NYAN — にゃー — ニャー — にゃお — にゃーー — 야옹 — 냐아옹 — 냥 — 喵 — 喵喵 —
+      MEOW — MIAOU — MIAU — MIAO — MIAUW — MJAU — MJAV — MIAV — MIJAV — MIJAU — MIYAV — MIYAO — MIAAO — MIAOO — MIAOOO — МЯУ — МЯУУ — MYAU — МЬЯU — МЯУМ — НЯВ — МИЙАУ — МИЙАВ — NIAOU — NYA — NYAA — NYAN — にゃー — ニャー — にゃお — にゃーー — 야옹 — 냐아옹 — 냥 — 喵 — 喵喵 —
+    </div>
+    <div class="meow-content">
+      MEOW — MIAOU — MIAU — MIAO — MIAUW — MJAU — MJAV — MIAV — MIJAV — MIJAU — MIYAV — MIYAO — MIAAO — MIAOO — MIAOOO — МЯУ — МЯУУ — MYAU — МЬЯU — МЯУМ — НЯВ — МИЙАУ — МИЙАВ — NIAOU — NYA — NYAA — NYAN — にゃー — ニャー — にゃお — にゃーー — 야옹 — 냐아옹 — 냥 — 喵 — 喵喵 —
+    </div>
+  </div>
+
+  <!-- WARNING LANE (fully on-screen, below bottom ticker) -->
+  <div id="warningBottom">
+    <div class="l1">B A D&nbsp;&nbsp;G A T E W A Y</div>
+    <div class="l2">MAY TRIGGER SEIZURES IN PHOTOSENSITIVE INDIVIDUALS</div>
+  </div>
+
+<script>
+  const ketaWord = document.getElementById("ketaWord");
+  const isolated = document.getElementById("isolatedSlash");
+  const tickers = Array.from(document.querySelectorAll(".meow-ticker"));
+
+  const word = "KETADATA";
+  const letters = [];
+
+  const BASE_TARGET = "base_mobile.html"; // set your mobile base file
+
+  let entering = false;
+  let introDone = false;
+  let hoverIdx = Math.floor(word.length / 2);
+
+  for (let i = 0; i < word.length; i++) {
+    const cell = document.createElement("span");
+    cell.className = "cell";
+    const s = document.createElement("span");
+    s.className = "ch";
+    s.textContent = "";
+    s.dataset.orig = word[i];
+
+    s.addEventListener("mouseenter", () => {
+      if (!introDone) return;
+      if (ketaWord.dataset.locked === "1") return;
+      hoverIdx = i;
+      s.textContent = "/";
+    });
+    s.addEventListener("mouseleave", () => {
+      if (!introDone) return;
+      if (ketaWord.dataset.locked === "1") return;
+      s.textContent = s.dataset.orig;
+    });
+
+    cell.appendChild(s);
+    ketaWord.appendChild(cell);
+    letters.push(s);
+  }
+
+  function clamp(n,a,b){ return Math.max(a, Math.min(b, n)); }
+
+  function renderOneSlashAt(idx){
+    letters.forEach((s, i) => { s.textContent = (i === idx) ? "/" : s.dataset.orig; });
+  }
+
+  function setIdxFromClientX(clientX){
+    const rect = ketaWord.getBoundingClientRect();
+    const rel = (clientX - rect.left) / Math.max(1, rect.width);
+    const idx = Math.round(rel * (letters.length - 1));
+    hoverIdx = clamp(idx, 0, letters.length - 1);
+    if (!introDone) return;
+    if (ketaWord.dataset.locked === "1") return;
+    renderOneSlashAt(hoverIdx);
+  }
+
+  ketaWord.addEventListener("pointerdown", (ev) => {
+    if (entering) return;
+    if (ev.pointerType === "touch") setIdxFromClientX(ev.clientX);
+  }, {passive:true});
+
+  ketaWord.addEventListener("pointermove", (ev) => {
+    if (ev.pointerType !== "touch") return;
+    if (entering) return;
+    setIdxFromClientX(ev.clientX);
+  }, {passive:true});
+
+  function placeIsolatedAtLetter(idx){
+    const el = letters[clamp(idx, 0, letters.length - 1)];
+    const r = el.getBoundingClientRect();
+    const cx = r.left + r.width / 2;
+    const cy = r.top + r.height / 2;
+    isolated.style.left = cx + "px";
+    isolated.style.top  = cy + "px";
+    const fs = parseFloat(getComputedStyle(ketaWord).fontSize) || 72;
+    isolated.style.fontSize = Math.max(52, fs) + "px";
+  }
+
+  function enter(){
+    if (!introDone) return;
+    if (entering) return;
+    entering = true;
+
+    ketaWord.dataset.locked = "1";
+    letters.forEach(s => (s.textContent = "/"));
+
+    placeIsolatedAtLetter(hoverIdx);
+    document.body.classList.add("entering");
+    isolated.style.opacity = "1";
+
+    const SLASH_HOLD_MS = 850;
+    const BLACK_HOLD_MS = 650;
+
+    setTimeout(() => {
+      isolated.style.opacity = "0";
+      document.body.classList.add("blacked");
+    }, SLASH_HOLD_MS);
+
+    setTimeout(() => {
+      location.replace(BASE_TARGET);
+    }, SLASH_HOLD_MS + BLACK_HOLD_MS);
+  }
+
+  ketaWord.addEventListener("click", enter);
+
+  function intro(){
+    const STEP_MS = 70;
+    const HOLD_WORD_MS = 220;
+    const HOLD_SLASH_MS = 220;
+    const END_SETTLE_MS = 120;
+
+    letters.forEach(s => (s.textContent = ""));
+
+    let i = 0;
+    let active = 0;
+
+    const tick = () => {
+      if (i >= letters.length){
+        letters.forEach(s => (s.textContent = s.dataset.orig));
+
+        setTimeout(() => {
+          letters.forEach(s => (s.textContent = "/"));
+
+          setTimeout(() => {
+            letters.forEach(s => (s.textContent = s.dataset.orig));
+
+            setTimeout(() => {
+              introDone = true;
+              hoverIdx = Math.floor(letters.length / 2);
+            }, END_SETTLE_MS);
+
+          }, HOLD_SLASH_MS);
+
+        }, HOLD_WORD_MS);
+
+        return;
+      }
+
+      letters.forEach((s, j) => {
+        s.textContent = (j === active) ? word[i] : "";
+      });
+
+      i++;
+      active = (active + 1) % letters.length;
+      setTimeout(tick, STEP_MS);
+    };
+
+    tick();
+  }
+  intro();
+
+  let isFlashing = false;
+  let flashInterval = null;
+
+  function applyStrobeFrame(isWhite){
+    document.body.style.backgroundColor = isWhite ? "white" : "black";
+    const c = isWhite ? "black" : "white";
+    tickers.forEach(t => { t.style.color = c; });
+  }
+
+  function startStrobe(){
+    if (flashInterval) clearInterval(flashInterval);
+    document.body.classList.add("strobing");
+    let white = false;
+    applyStrobeFrame(white);
+    flashInterval = setInterval(() => {
+      white = !white;
+      applyStrobeFrame(white);
+    }, 50);
+  }
+
+  function stopStrobe(){
+    if (flashInterval) clearInterval(flashInterval);
+    flashInterval = null;
+    document.body.classList.remove("strobing");
+    document.body.style.backgroundColor = "black";
+    tickers.forEach(t => { t.style.color = "transparent"; });
+  }
+
+  function toggleStrobe(){
+    if (isFlashing) stopStrobe(); else startStrobe();
+    isFlashing = !isFlashing;
+  }
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === " " || event.code === "Space") {
+      event.preventDefault();
+      toggleStrobe();
+    }
+  });
+
+  let lastTapAt = 0;
+  const DBL_MS = 280;
+  document.addEventListener("pointerdown", (ev) => {
+    if (ev.pointerType !== "touch") return;
+    const now = performance.now();
+    if (now - lastTapAt < DBL_MS){
+      ev.preventDefault();
+      toggleStrobe();
+      lastTapAt = 0;
+    } else {
+      lastTapAt = now;
+    }
+  }, {passive:false});
+</script>
+
+<!--
+AE:
+- Hard lane layout: top ticker, center content, bottom ticker, bottom warning. Everything fits.
+- Ticklers are transparent baseline; strobe paints contrast per frame.
+- Subtitle single-line. Intro no-jitter.
+
+WB:
+FILE_ID: mob7
+ROOM_ID: ENTRY_MOBILE
+VERSION: v1.3.0
+UPDATED_AT: 2026-01-15
+CHANGELOG:
+- Implemented fixed top/bottom lane budgeting so all elements fit on screen.
+- Warning moved into a dedicated bottom lane below the bottom ticker.
+-->
+</body>
+</html>
