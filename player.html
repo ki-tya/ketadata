@@ -1,0 +1,796 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+<title>KETADATA // MOB_BASE // SURFACE_PLAYER v1</title>
+<style>
+:root{
+  --bg:#000;
+  --fg:rgba(255,255,255,.86);
+  --muted:rgba(255,255,255,.52);
+  --line:rgba(255,255,255,.12);
+  --line2:rgba(255,255,255,.22);
+
+  --top:44px;
+  --bot:40px;
+
+  --mono: ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace;
+  --sans: Arial,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;
+
+  --drawer-h: .52;
+}
+*{box-sizing:border-box}
+html,body{height:100%; margin:0}
+body{
+  background:var(--bg);
+  color:var(--fg);
+  font-family:var(--sans);
+  overflow:hidden;
+  user-select:none;
+  -webkit-user-select:none;
+  -webkit-tap-highlight-color:transparent;
+}
+#root{position:fixed; inset:0; background:#000}
+
+/* ===== SURFACE ===== */
+#surface{
+  position:absolute;
+  inset:0;
+  width:100%;
+  height:100%;
+  border:0;
+  background:#000;
+  display:none;
+  z-index:1;
+}
+#surface.on{display:block}
+
+/* ===== LIGHTS (minimal: just strobe overlay) ===== */
+#stage{position:absolute; inset:0; pointer-events:none; z-index:2}
+#stage::before{
+  content:"";
+  position:absolute; inset:0;
+  background:radial-gradient(circle at 60% 40%, rgba(255,255,255,.05) 0%, rgba(0,0,0,0) 62%);
+  mix-blend-mode:screen;
+}
+#stage.run{animation:flash 0.10s infinite}
+@keyframes flash{0%{background:#000}50%{background:#fff}100%{background:#000}}
+
+/* ===== BARS ===== */
+.topbar{
+  position:absolute; top:0; left:0; right:0; height:var(--top);
+  display:flex; align-items:center; justify-content:space-between;
+  padding:0 10px;
+  border-bottom:1px solid var(--line);
+  background:linear-gradient(180deg,#070707,#000);
+  z-index:10;
+}
+.brand{
+  display:flex; align-items:center; gap:10px;
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:.10em;
+  text-transform:uppercase;
+}
+.brand .sq{width:10px; height:10px; border:1px solid rgba(255,255,255,.86)}
+.badge{
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:.10em;
+  text-transform:uppercase;
+  color:var(--muted);
+}
+.btn{
+  border:1px solid var(--line2);
+  background:#000;
+  color:var(--fg);
+  height:28px;
+  padding:0 10px;
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  cursor:pointer;
+}
+.btn:active{transform:translateY(1px)}
+.btn:disabled{opacity:.35; cursor:default; transform:none}
+
+.bottombar{
+  position:absolute; left:0; right:0; bottom:0; height:var(--bot);
+  display:flex; align-items:center; justify-content:space-between;
+  padding:0 10px;
+  border-top:1px solid var(--line);
+  background:linear-gradient(0deg,#070707,#000);
+  z-index:10;
+}
+.pills{display:flex; gap:8px; align-items:center}
+.pill{
+  border:1px solid var(--line2);
+  background:#000;
+  color:var(--fg);
+  height:28px;
+  padding:0 10px;
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  cursor:pointer;
+}
+.pill:active{transform:translateY(1px)}
+.status{
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:.06em;
+  color:var(--muted);
+  white-space:nowrap;
+}
+
+/* ===== PLAYER PANEL (mobile-first, fixed) ===== */
+.player{
+  position:absolute;
+  left:10px;
+  right:10px;
+  top:calc(var(--top) + 10px);
+  bottom:calc(var(--bot) + 10px);
+  border:1px solid rgba(255,255,255,.22);
+  background:rgba(0,0,0,.84);
+  backdrop-filter:blur(6px);
+  z-index:15;
+  display:flex;
+  flex-direction:column;
+  overflow:hidden;
+}
+.playerHead{
+  padding:8px 10px;
+  border-bottom:1px solid rgba(255,255,255,.14);
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:.10em;
+  text-transform:uppercase;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+}
+.playerBody{padding:10px; overflow:auto; min-height:0; flex:1}
+.row{display:flex; gap:8px; align-items:center; flex-wrap:wrap}
+.label{
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  color:var(--muted);
+}
+input,textarea{
+  outline:none;
+  background:#000;
+  color:#fff;
+  border:1px solid var(--line2);
+  font-family:var(--mono);
+  font-size:12px;
+}
+input{height:28px; padding:0 8px; flex:1; min-width:0}
+textarea{width:100%; padding:8px; resize:vertical; min-height:90px; line-height:1.35}
+
+.queue{
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+  margin-top:10px;
+}
+.item{
+  border:1px solid rgba(255,255,255,.18);
+  padding:7px 8px;
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:.06em;
+  text-transform:uppercase;
+  display:flex;
+  gap:8px;
+  align-items:center;
+}
+.item .ix{width:26px; color:var(--muted)}
+.item .nm{flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.item.sel{border-color:rgba(255,255,255,.86)}
+.item:active{transform:translateY(1px)}
+
+/* ===== DRAWER (universals + presets + state) ===== */
+.drawer{
+  position:absolute;
+  left:0; right:0;
+  bottom:var(--bot);
+  height:calc((100vh - var(--top) - var(--bot)) * var(--drawer-h));
+  background:linear-gradient(180deg,#060606,#000);
+  border-top:1px solid var(--line);
+  z-index:30;
+  display:none;
+  flex-direction:column;
+}
+.drawer.open{display:flex}
+.drawerHead{
+  padding:8px 10px;
+  border-bottom:1px solid var(--line);
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:.10em;
+  text-transform:uppercase;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+}
+.drawerBody{padding:10px; overflow:auto; min-height:0; flex:1}
+.section{
+  border:1px solid rgba(255,255,255,.14);
+  background:rgba(0,0,0,.25);
+  padding:10px;
+  margin-bottom:10px;
+}
+.grid{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:8px;
+}
+@media (max-width:420px){
+  .grid{grid-template-columns:1fr}
+}
+
+/* ===== blackout anchor (exit) ===== */
+#anchor{
+  position:absolute;
+  right:10px;
+  bottom:10px;
+  width:10px;
+  height:10px;
+  border:1px solid rgba(255,255,255,.65);
+  z-index:999;
+  display:none;
+}
+
+/* ===== modes ===== */
+#root.blackout .topbar,
+#root.blackout .bottombar,
+#root.blackout .player,
+#root.blackout .drawer{display:none!important}
+#root.blackout #anchor{display:block}
+#root.invert{filter:invert(1)}
+</style>
+</head>
+
+<body>
+<div id="root">
+  <iframe id="surface" title="SURFACE"></iframe>
+  <div id="stage" aria-hidden="true"></div>
+
+  <div class="topbar">
+    <div class="brand">
+      <span class="sq"></span>
+      <span>SHELL8 // KERNEL</span>
+      <span class="badge">MOB_BASE</span>
+    </div>
+    <button class="btn" id="btnDrawer">SYSTEM</button>
+  </div>
+
+  <div class="player" id="player">
+    <div class="playerHead">
+      <div>PLAYER</div>
+      <div class="row" style="gap:6px">
+        <button class="btn" id="btnPrev">◀</button>
+        <button class="btn" id="btnPlay">PLAY</button>
+        <button class="btn" id="btnNext">▶</button>
+      </div>
+    </div>
+
+    <div class="playerBody">
+      <div class="row" style="margin-bottom:8px">
+        <span class="label">URL</span>
+        <input id="url" placeholder="https://… or file.html" spellcheck="false" autocomplete="off" />
+        <button class="btn" id="btnAdd">ADD</button>
+      </div>
+
+      <div class="row" style="margin-bottom:8px">
+        <span class="label">NOW</span>
+        <span id="now" class="label" style="flex:1; color:var(--fg); text-transform:uppercase; white-space:nowrap; overflow:hidden; text-overflow:ellipsis">—</span>
+        <button class="btn" id="btnSurface">SURFACE</button>
+      </div>
+
+      <div class="row" style="margin-bottom:8px">
+        <button class="btn" id="btnGo">GO</button>
+        <button class="btn" id="btnStop">STOP</button>
+        <button class="btn" id="btnClear">CLEAR</button>
+      </div>
+
+      <div style="border-top:1px solid var(--line); padding-top:10px">
+        <div class="row" style="justify-content:space-between; margin-bottom:8px">
+          <span class="label">QUEUE</span>
+          <span class="label" style="color:var(--muted)">TAP SELECT</span>
+        </div>
+        <div class="queue" id="queue"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="drawer" id="drawer">
+    <div class="drawerHead">
+      <div>SYSTEM</div>
+      <div class="row">
+        <button class="btn" id="btnInvert">INVERT</button>
+        <button class="btn" id="btnBlackout">NULL</button>
+        <button class="btn" id="btnCloseDrawer">CLOSE</button>
+      </div>
+    </div>
+    <div class="drawerBody">
+      <div class="section">
+        <div class="row" style="justify-content:space-between; margin-bottom:8px">
+          <span class="label">UNIVERSALS</span>
+          <button class="btn" id="btnClearUniversals">CLEAR</button>
+        </div>
+        <textarea id="universals" spellcheck="false" autocomplete="off" placeholder="LAWS / REFERENCES"></textarea>
+      </div>
+
+      <div class="section">
+        <div class="row" style="justify-content:space-between; margin-bottom:8px">
+          <span class="label">PRESETS</span>
+          <button class="btn" id="btnPresetClear">CLEAR</button>
+        </div>
+        <div class="grid" id="presetGrid"></div>
+        <div class="row" style="margin-top:10px">
+          <input id="presetName" placeholder="NAME" spellcheck="false" autocomplete="off" />
+          <input id="presetUrl" placeholder="URL" spellcheck="false" autocomplete="off" />
+          <button class="btn" id="btnPresetAdd">ADD</button>
+        </div>
+        <div class="label" style="margin-top:8px; letter-spacing:.02em; text-transform:none; color:var(--muted)">
+          PRESETS ARE FOR MOBILE. KEEP IT SMALL. TAP TO LOAD TO NOW.
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="row" style="justify-content:space-between; margin-bottom:8px">
+          <span class="label">STATE</span>
+          <div class="row">
+            <button class="btn" id="btnExport">EXPORT</button>
+            <button class="btn" id="btnImport">IMPORT</button>
+          </div>
+        </div>
+        <div class="label" style="text-transform:none; letter-spacing:.02em; color:var(--muted)">KEY:</div>
+        <div class="label" id="keyHint" style="text-transform:none; letter-spacing:.02em; color:var(--muted); word-break:break-all"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="bottombar">
+    <div class="pills">
+      <button class="pill" id="btnRun">RUN</button>
+      <button class="pill" id="btnPlayerToggle">PLAYER</button>
+    </div>
+    <div class="status">
+      <span>STATE:</span> <span id="sig">∅</span>
+    </div>
+  </div>
+
+  <div id="anchor" title="EXIT NULL"></div>
+  <input id="file" type="file" accept="application/json" style="display:none" />
+</div>
+
+<script>
+/* ===== utils ===== */
+const $=(id)=>document.getElementById(id);
+function nowISO(){return new Date().toISOString();}
+function clamp(n,a,b){return Math.max(a,Math.min(b,n));}
+function hash8(str){
+  const s=String(str||"");
+  let h=2166136261;
+  for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619);}
+  return (h>>>0).toString(16).slice(0,8);
+}
+function canon(s){return String(s||"").trim().toUpperCase();}
+function deriveNameFromUrl(url){
+  try{
+    const u=new URL(url, location.href);
+    const path=(u.pathname||"").split("/").filter(Boolean);
+    const last=path.length?path[path.length-1]:(u.hostname||"LINK");
+    return String(last).replace(/\.(html?|php|aspx|jsp)$/i,"").replace(/[-_]+/g," ").trim().toUpperCase()||"LINK";
+  }catch(e){
+    return String(url||"LINK").trim().slice(0,28).toUpperCase()||"LINK";
+  }
+}
+function normalizeUrl(raw){
+  const u=String(raw||"").trim();
+  if(!u) return "";
+  if(/^(https?:|about:|data:|blob:)/i.test(u)) return u;
+  try{ return new URL(u, location.href).href; }catch(e){ return u; }
+}
+function downloadJson(filename, text){
+  const blob=new Blob([String(text||"")], {type:"application/json"});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement("a");
+  a.href=url; a.download=filename||"KETADATA_STATE.json";
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url), 250);
+}
+
+/* ===== storage (independent) ===== */
+const PAGE_ID="KETADATA_MOB_BASE_SURFACE_PLAYER_V1";
+const STORAGE_KEY="KDT::MOB_BASE::INDEP::"+hash8(location.pathname+"|"+PAGE_ID)+"::STATE";
+$("keyHint").textContent=STORAGE_KEY;
+
+const DEFAULT={
+  version:PAGE_ID,
+  updatedAt:nowISO(),
+  universals:"",
+  ui:{
+    drawer:false,
+    invert:false,
+    blackout:false,
+    run:false,
+    player:true,
+    surfaceUrl:"",
+    surfaceLabel:""
+  },
+  queue:[],
+  idx:0,
+  playing:false,
+  presets:[
+    {name:"BASE", url:"base.html"},
+    {name:"BLACKLOTUS", url:"blacklotus2.html"},
+    {name:"KDTV1", url:"kdtv1.html"},
+    {name:"CRUNCH1", url:"crunch1.html"}
+  ]
+};
+
+function loadState(){
+  try{const raw=localStorage.getItem(STORAGE_KEY); return raw?JSON.parse(raw):null;}catch(e){return null;}
+}
+function deepFill(s){
+  if(!s||typeof s!=="object") return structuredClone(DEFAULT);
+  for(const k in DEFAULT){ if(s[k]===undefined) s[k]=structuredClone(DEFAULT[k]); }
+  if(!s.ui||typeof s.ui!=="object") s.ui=structuredClone(DEFAULT.ui);
+  for(const k in DEFAULT.ui){ if(s.ui[k]===undefined) s.ui[k]=structuredClone(DEFAULT.ui[k]); }
+  if(!Array.isArray(s.queue)) s.queue=[];
+  s.queue=s.queue.map(it=>{
+    const url=String(it&&it.url||"").trim(); if(!url) return null;
+    const label=canon(it&&it.label||"")||deriveNameFromUrl(url);
+    return {label,url};
+  }).filter(Boolean);
+  if(!Array.isArray(s.presets)) s.presets=structuredClone(DEFAULT.presets);
+  s.presets=s.presets.map(p=>{
+    const url=String(p&&p.url||"").trim(); if(!url) return null;
+    const name=canon(p&&p.name||"")||deriveNameFromUrl(url);
+    return {name,url};
+  }).filter(Boolean);
+  s.idx=clamp(Number(s.idx||0),0,Math.max(0,s.queue.length-1));
+  return s;
+}
+let STATE=deepFill(loadState());
+let _BOOTING=true;
+
+function sig(){
+  const core=JSON.stringify({
+    v:STATE.version,
+    u:STATE.ui.surfaceUrl,
+    i:STATE.ui.invert,
+    b:STATE.ui.blackout,
+    r:STATE.ui.run,
+    q:hash8(JSON.stringify(STATE.queue||[])),
+    x:STATE.idx,
+    y:STATE.playing,
+    p:hash8(JSON.stringify(STATE.presets||[]))
+  });
+  let h=2166136261;
+  for(let i=0;i<core.length;i++){h^=core.charCodeAt(i);h=Math.imul(h,16777619);}
+  return (h>>>0).toString(16).slice(0,8);
+}
+function persist(silent=false){
+  if(_BOOTING) return;
+  STATE.updatedAt=nowISO();
+  try{localStorage.setItem(STORAGE_KEY, JSON.stringify(STATE));}catch(e){}
+  if(!silent) render();
+}
+(function(){
+  const flush=()=>{ try{ persist(true); }catch(e){} };
+  window.addEventListener("pagehide", flush, {capture:true});
+  window.addEventListener("beforeunload", flush, {capture:true});
+  document.addEventListener("visibilitychange", ()=>{ if(document.visibilityState==="hidden") flush(); }, {capture:true});
+})();
+
+/* ===== surface / player ===== */
+const surface=$("surface");
+function cur(){ return (STATE.queue||[])[STATE.idx]||null; }
+function setIdx(i){
+  STATE.idx=clamp(Number(i||0),0,Math.max(0,STATE.queue.length-1));
+}
+function applySurface(url,label){
+  const u=normalizeUrl(url);
+  const lab=canon(label||"")||(u?deriveNameFromUrl(u):"");
+  STATE.ui.surfaceUrl=u;
+  STATE.ui.surfaceLabel=lab;
+  if(!u){
+    surface.classList.remove("on");
+    surface.removeAttribute("src");
+    return;
+  }
+  surface.classList.add("on");
+  surface.src=u;
+}
+function clearSurface(){
+  STATE.ui.surfaceUrl=""; STATE.ui.surfaceLabel="";
+  surface.classList.remove("on");
+  surface.removeAttribute("src");
+}
+function playerRender(){
+  $("btnPlay").textContent=STATE.playing?"PAUSE":"PLAY";
+  const c=cur();
+  $("now").textContent=c?(canon(c.label)||deriveNameFromUrl(c.url)):"—";
+  const q=$("queue");
+  q.innerHTML="";
+  STATE.queue.forEach((it,idx)=>{
+    const row=document.createElement("div");
+    row.className="item"+(idx===STATE.idx?" sel":"");
+    row.innerHTML=`<span class="ix">${String(idx+1).padStart(2,"0")}</span><span class="nm">${(canon(it.label)||deriveNameFromUrl(it.url))}</span>`;
+    row.addEventListener("click",()=>{ setIdx(idx); persist(true); playerRender(); });
+    q.appendChild(row);
+  });
+  $("btnPrev").disabled = STATE.queue.length<2;
+  $("btnNext").disabled = STATE.queue.length<2;
+  $("btnSurface").disabled = !c;
+  $("btnGo").disabled = !c;
+}
+
+/* ===== presets ===== */
+function presetsRender(){
+  const grid=$("presetGrid");
+  grid.innerHTML="";
+  (STATE.presets||[]).forEach((p,idx)=>{
+    const b=document.createElement("button");
+    b.className="btn";
+    b.style.height="34px";
+    b.style.width="100%";
+    b.textContent = canon(p.name)||("PRESET "+(idx+1));
+    b.addEventListener("click",()=>{
+      const url=String(p.url||"").trim();
+      if(!url) return;
+      // load into NOW (queue select behavior)
+      const label=canon(p.name)||deriveNameFromUrl(url);
+      // if already in queue, jump; else push
+      const existing = STATE.queue.findIndex(it=>normalizeUrl(it.url)===normalizeUrl(url));
+      if(existing>=0){ setIdx(existing); }
+      else{
+        STATE.queue.push({label, url});
+        setIdx(STATE.queue.length-1);
+      }
+      STATE.ui.drawer=false;
+      persist(true);
+      render();
+      playerRender();
+    });
+    grid.appendChild(b);
+  });
+}
+
+/* ===== lights/run ===== */
+function setRun(on){
+  STATE.ui.run=!!on;
+  $("stage").classList.toggle("run", !!STATE.ui.run && !STATE.ui.blackout);
+}
+function toggleRun(){
+  if(STATE.ui.blackout) return;
+  setRun(!STATE.ui.run);
+  persist(true);
+}
+
+/* ===== render ===== */
+const root=$("root");
+function render(){
+  root.classList.toggle("invert", !!STATE.ui.invert);
+  root.classList.toggle("blackout", !!STATE.ui.blackout);
+
+  $("drawer").classList.toggle("open", !!STATE.ui.drawer && !STATE.ui.blackout);
+  $("player").style.display = (STATE.ui.player && !STATE.ui.blackout) ? "flex" : "none";
+
+  $("universals").value = STATE.universals||"";
+  $("sig").textContent = sig();
+
+  setRun(STATE.ui.run);
+
+  if(STATE.ui.surfaceUrl){
+    surface.classList.add("on");
+    surface.src = STATE.ui.surfaceUrl;
+  }else{
+    surface.classList.remove("on");
+    surface.removeAttribute("src");
+  }
+
+  playerRender();
+  presetsRender();
+}
+
+/* ===== bindings ===== */
+function bind(){
+  $("btnDrawer").addEventListener("click",()=>{ STATE.ui.drawer=!STATE.ui.drawer; persist(true); });
+  $("btnCloseDrawer").addEventListener("click",()=>{ STATE.ui.drawer=false; persist(true); });
+
+  $("btnInvert").addEventListener("click",()=>{ STATE.ui.invert=!STATE.ui.invert; persist(true); });
+
+  $("btnBlackout").addEventListener("click",()=>{
+    STATE.ui.blackout=!STATE.ui.blackout;
+    if(STATE.ui.blackout){
+      STATE.ui.drawer=false;
+      STATE.ui.run=false;
+      STATE.ui.player=false;
+      STATE.playing=false;
+      clearSurface();
+    }else{
+      STATE.ui.player=true;
+    }
+    persist(true);
+  });
+
+  $("anchor").addEventListener("click",()=>{
+    if(!STATE.ui.blackout) return;
+    STATE.ui.blackout=false;
+    STATE.ui.player=true;
+    persist(true);
+  });
+
+  $("btnRun").addEventListener("click", toggleRun);
+
+  $("btnPlayerToggle").addEventListener("click",()=>{
+    if(STATE.ui.blackout) return;
+    STATE.ui.player=!STATE.ui.player;
+    persist(true);
+  });
+
+  $("universals").addEventListener("input",()=>{
+    STATE.universals = $("universals").value;
+    persist(true);
+  });
+  $("btnClearUniversals").addEventListener("click",()=>{
+    STATE.universals="";
+    $("universals").value="";
+    persist(true);
+  });
+
+  $("btnAdd").addEventListener("click",()=>{
+    const u=String($("url").value||"").trim();
+    if(!u) return;
+    STATE.queue.push({label:deriveNameFromUrl(u), url:u});
+    setIdx(STATE.queue.length-1);
+    $("url").value="";
+    persist(true);
+    playerRender();
+  });
+
+  $("btnPrev").addEventListener("click",()=>{
+    if(STATE.queue.length<2) return;
+    setIdx(STATE.idx-1);
+    if(STATE.playing){ const c=cur(); if(c) applySurface(c.url,c.label); }
+    persist(true); playerRender();
+  });
+
+  $("btnNext").addEventListener("click",()=>{
+    if(STATE.queue.length<2) return;
+    setIdx(STATE.idx+1);
+    if(STATE.playing){ const c=cur(); if(c) applySurface(c.url,c.label); }
+    persist(true); playerRender();
+  });
+
+  $("btnPlay").addEventListener("click",()=>{
+    STATE.playing=!STATE.playing;
+    if(STATE.playing){ const c=cur(); if(c) applySurface(c.url,c.label); }
+    persist(true); playerRender();
+  });
+
+  $("btnSurface").addEventListener("click",()=>{
+    const c=cur(); if(!c) return;
+    applySurface(c.url,c.label);
+    persist(true);
+  });
+
+  $("btnGo").addEventListener("click",()=>{
+    const c=cur(); if(!c||!c.url) return;
+    persist(true);
+    window.location.href = normalizeUrl(c.url);
+  });
+
+  $("btnStop").addEventListener("click",()=>{
+    clearSurface();
+    STATE.playing=false;
+    persist(true);
+  });
+
+  $("btnClear").addEventListener("click",()=>{
+    STATE.queue=[];
+    STATE.idx=0;
+    STATE.playing=false;
+    clearSurface();
+    persist(true);
+  });
+
+  // presets add/clear
+  $("btnPresetAdd").addEventListener("click",()=>{
+    const name=canon($("presetName").value||"");
+    const url=String($("presetUrl").value||"").trim();
+    if(!url) return;
+    STATE.presets.push({name:name||deriveNameFromUrl(url), url});
+    $("presetName").value="";
+    $("presetUrl").value="";
+    persist(true);
+  });
+  $("btnPresetClear").addEventListener("click",()=>{
+    STATE.presets=[];
+    persist(true);
+  });
+
+  // import/export (real file)
+  $("btnExport").addEventListener("click",()=>{
+    const payload=JSON.stringify({ STORAGE_KEY, STATE }, null, 2);
+    const stamp=new Date().toISOString().replace(/[:.]/g,"-");
+    downloadJson(`KETADATA_${sig()}_${stamp}.json`, payload);
+  });
+  $("btnImport").addEventListener("click",()=>$("file").click());
+  $("file").addEventListener("change",(e)=>{
+    const f=e.target.files && e.target.files[0];
+    if(!f) return;
+    const r=new FileReader();
+    r.onload=()=>{
+      try{
+        const parsed=JSON.parse(String(r.result||""));
+        const incoming=(parsed && parsed.STATE)?parsed.STATE:parsed;
+        STATE=deepFill(incoming);
+        // safety: no auto-run in blackout
+        if(STATE.ui.blackout){ STATE.ui.run=false; STATE.playing=false; clearSurface(); }
+        persist(true);
+      }catch(err){}
+    };
+    r.readAsText(f);
+    e.target.value="";
+  });
+
+  // double tap = toggle RUN (mobile fidget start)
+  let lastTap=0;
+  const DBL=280;
+  document.addEventListener("pointerdown",(ev)=>{
+    if(ev.pointerType!=="touch") return;
+    const now=performance.now();
+    if(now-lastTap<DBL){
+      ev.preventDefault();
+      toggleRun();
+      lastTap=0;
+    }else lastTap=now;
+  }, {passive:false});
+}
+
+/* ===== boot ===== */
+(function init(){
+  _BOOTING=false;
+
+  // apply saved surface (if any)
+  if(STATE.ui.surfaceUrl) applySurface(STATE.ui.surfaceUrl, STATE.ui.surfaceLabel);
+  // run state
+  setRun(STATE.ui.run);
+
+  bind();
+  render();
+})();
+</script>
+
+<!--
+AE:
+- MOBILE-FIRST BASE SURFACE PLAYER.
+- FIXED PLAYER PANEL. DRAWER HOLDS UNIVERSALS + PRESETS + STATE.
+- DOUBLE TAP TOGGLES RUN (STROBE). NO OTHER NOISE.
+
+EE:
+- QUEUE: ADD URL, TAP SELECT, PLAY (SURFACE), PREV/NEXT.
+- SURFACE button loads current into iframe. GO navigates full tab.
+- NULL toggles blackout (exit via tiny anchor).
+
+WB:
+FILE_ID: mob_base_surface_player_v1.html
+ROOM_ID: MOB_BASE
+VERSION: v1
+UPDATED_AT: 2026-01-15
+CHANGELOG:
+- Initial mobile Base + Surface Player scaffold.
+-->
+</body>
+</html>
