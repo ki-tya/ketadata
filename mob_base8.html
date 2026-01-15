@@ -1,0 +1,2156 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
+<title>SHELL8 // MOB_BASE // PLAYER</title>
+
+<style>
+:root{
+  --bg:#000; --fg:#fff; --muted:#8a8a8a; --line:#222; --line2:#333;
+
+  --top:44px; --bot:34px;
+  --safeT: env(safe-area-inset-top, 0px);
+  --safeB: env(safe-area-inset-bottom, 0px);
+
+  --mono: ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace;
+  --sans: Arial,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;
+
+  --ctl-radius:0px;
+  --ctl-alpha:0.86;
+  --ctl-bg: rgba(0,0,0,var(--ctl-alpha));
+  --note-border: rgba(255,255,255,0.78);
+  --drawer-h: 0.52;
+
+  --corner:10px;
+  --light:1;
+}
+
+*{box-sizing:border-box}
+html,body{height:100%; margin:0}
+body{
+  background:var(--bg);
+  color:var(--fg);
+  font-family:var(--sans);
+  overflow:hidden;
+  user-select:none;
+  -webkit-user-select:none;
+  -webkit-tap-highlight-color:transparent;
+}
+#root{
+  position:fixed; inset:0;
+  background:#000;
+  touch-action:manipulation; /* helps reduce iOS dbltap zoom */
+}
+#root.invert{filter:invert(1)}
+
+/* FULLSCREEN: hide chrome */
+#root.fs .topbar,
+#root.fs .bottombar,
+#root.fs .drawer,
+#root.fs .toast,
+#root.fs .ketaNote,
+#root.fs #armedBar,
+#root.fs #pinnedPanel,
+#root.fs #activeStrip,
+#root.fs #padPanel,
+#root.fs #playerPanel,
+#root.fs #ytPanel,
+#root.fs #anchor{display:none !important}
+
+/* BLACKOUT/NULL: hard black */
+#root.blackout .topbar,
+#root.blackout .bottombar,
+#root.blackout .drawer,
+#root.blackout .toast,
+#root.blackout .ketaNote,
+#root.blackout #armedBar,
+#root.blackout #pinnedPanel,
+#root.blackout #activeStrip,
+#root.blackout #padPanel,
+#root.blackout #playerPanel,
+#root.blackout #ytPanel{display:none !important}
+#root.blackout #stage{background:#000 !important; filter:none !important}
+#root.blackout #motion{display:none !important}
+#root.blackout #anchor{display:block !important}
+
+/* Stage */
+#stage{position:absolute; inset:0; background:#000; pointer-events:none}
+#stage::before{
+  content:"";
+  position:absolute; inset:0;
+  pointer-events:none;
+  background:
+    radial-gradient(circle at 60% 40%,
+      rgba(255,255,255, calc(0.02 * var(--light))) 0%,
+      rgba(255,255,255, calc(0.01 * var(--light))) 28%,
+      rgba(0,0,0,0) 62%);
+  mix-blend-mode:screen;
+}
+#motion{
+  position:absolute; inset:0; pointer-events:none; opacity:0;
+  background:repeating-linear-gradient(135deg, rgba(255,255,255,0.06) 0px, rgba(255,255,255,0.06) 1px, rgba(0,0,0,0) 12px, rgba(0,0,0,0) 22px);
+  mix-blend-mode:screen;
+  transform:translate3d(0,0,0);
+}
+#motion.run{opacity:0.12; animation:scanflow 2.2s linear infinite}
+@keyframes scanflow{0%{transform:translate3d(-80px,60px,0)}100%{transform:translate3d(80px,-60px,0)}}
+
+/* FULL SCREEN SURFACE */
+#surfaceFrame{
+  position:absolute; inset:0;
+  width:100%; height:100%;
+  border:0;
+  background:#000;
+  z-index:1;
+  display:none;
+}
+#surfaceFrame.on{display:block}
+
+/* Bars (SHELL8 aesthetic) */
+.topbar{
+  position:absolute;
+  top:0; left:0; right:0;
+  height:calc(var(--top) + var(--safeT));
+  padding-top:var(--safeT);
+
+  display:flex; align-items:center; justify-content:space-between;
+  padding-left:10px; padding-right:10px;
+  border-bottom:1px solid var(--line);
+  background:linear-gradient(180deg,#070707,#000);
+  z-index:10;
+}
+.bottombar{
+  position:absolute;
+  left:0; right:0;
+  bottom:0;
+  height:calc(var(--bot) + var(--safeB));
+  padding-bottom:var(--safeB);
+
+  display:flex; align-items:center; justify-content:space-between;
+  padding-left:10px; padding-right:10px;
+  border-top:1px solid var(--line);
+  background:linear-gradient(0deg,#070707,#000);
+  z-index:10;
+  font-family:var(--mono);
+  font-size:11px;
+  color:var(--muted);
+}
+
+/* Corner squares on bar corners */
+.cornerSq{
+  position:absolute;
+  width:var(--corner);
+  height:var(--corner);
+  border:1px solid rgba(255,255,255,0.65);
+  background:#000;
+  pointer-events:none;
+}
+.topbar .cTL{left:0; top:0}
+.topbar .cTR{right:0; top:0}
+.bottombar .cBL{left:0; bottom:0}
+.bottombar .cBR{right:0; bottom:0}
+
+/* Top content */
+.brand{
+  display:flex; align-items:center; gap:10px;
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:.10em;
+  text-transform:uppercase;
+  white-space:nowrap;
+}
+.brand .sq{width:10px; height:10px; border:1px solid var(--fg); background:#000}
+.roomBadge{
+  display:flex; gap:8px; align-items:center;
+  font-family:var(--mono);
+  font-size:11px;
+  letter-spacing:.10em;
+  text-transform:uppercase;
+  color:var(--muted);
+  border:1px solid var(--line2);
+  padding:4px 8px;
+  white-space:nowrap;
+}
+.actions{
+  display:flex; align-items:center; gap:8px;
+  font-family:var(--mono);
+  font-size:12px;
+}
+.btn{
+  background:transparent; color:var(--fg);
+  border:1px solid var(--line2);
+  padding:6px 10px;
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  cursor:pointer;
+}
+.btn:hover{border-color:var(--fg)}
+.btn:active{transform:translateY(1px)}
+.kbd{border:1px solid var(--line2); padding:2px 6px; color:var(--muted); font-size:11px}
+.ketaIcon{
+  width:16px; height:16px;
+  border:2px solid var(--fg);
+  background:var(--fg);
+  cursor:pointer;
+}
+.ketaIcon.open{background:#000}
+
+/* Bottom content */
+.toggle{
+  border:1px solid var(--line2);
+  background:transparent;
+  color:var(--fg);
+  padding:4px 8px;
+  font-family:var(--mono);
+  font-size:11px;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  cursor:pointer;
+}
+.toggle:hover{border-color:var(--fg)}
+
+/* Drawer */
+.drawer{
+  position:absolute; left:0; right:0;
+  bottom:calc(var(--bot) + var(--safeB));
+  height:calc((100vh - (var(--top) + var(--safeT)) - (var(--bot) + var(--safeB))) * var(--drawer-h));
+  min-height:220px;
+  border-top:1px solid var(--line);
+  background:linear-gradient(180deg,#060606,#000);
+  display:none;
+  z-index:20;
+}
+.drawer.open{display:flex; flex-direction:column}
+.drawerSizer{
+  height:10px;
+  cursor:ns-resize;
+  border-bottom:1px solid var(--line);
+  background:linear-gradient(180deg,#0a0a0a,#050505);
+  touch-action:none;
+}
+.drawerHead{
+  padding:8px 10px;
+  border-bottom:1px solid var(--line);
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:.10em;
+  text-transform:uppercase;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:10px;
+}
+.drawerBody{padding:10px; min-height:0; flex:1; overflow:auto}
+textarea{
+  width:100%;
+  border:1px solid var(--line2);
+  background:#050505;
+  color:var(--fg);
+  font-family:var(--mono);
+  font-size:12px;
+  padding:10px;
+  line-height:1.35;
+  outline:none;
+  resize:vertical;
+  min-height:120px;
+}
+input{outline:none}
+
+/* KETA NOTE */
+.ketaNote{
+  position:absolute; top:76px; right:16px; left:auto;
+  width:340px; height:220px;
+  display:none;
+  z-index:30;
+  resize:both;
+  overflow:hidden;
+  border-radius:var(--ctl-radius);
+  background:var(--ctl-bg);
+  border:1px solid var(--note-border);
+  backdrop-filter:blur(6px);
+}
+.ketaNote.open{display:flex; flex-direction:column}
+.ketaHead{
+  padding:8px 10px;
+  border-bottom:1px solid rgba(255,255,255,0.14);
+  font-family:var(--mono);
+  font-size:11px;
+  letter-spacing:.14em;
+  text-transform:uppercase;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  cursor:move;
+  touch-action:none;
+}
+.ketaBody{padding:10px; min-height:0; flex:1}
+.ketaNote textarea{
+  background:#000;
+  color:#fff;
+  border:1px solid rgba(255,255,255,0.22);
+  width:100%;
+  height:100%;
+  resize:none;
+  padding:10px;
+  outline:none;
+}
+.headBtn{
+  background:transparent;
+  color:var(--fg);
+  border:1px solid rgba(255,255,255,0.18);
+  padding:2px 8px;
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  cursor:pointer;
+}
+.headBtn:hover{border-color:rgba(255,255,255,0.6)}
+.headBtn:active{transform:translateY(1px)}
+
+/* Armed bar */
+#armedBar{
+  position:absolute; left:10px;
+  top:calc((var(--top) + var(--safeT)) + 10px);
+  z-index:27;
+  display:none;
+  gap:8px;
+  align-items:center;
+  flex-wrap:wrap;
+  padding:8px 10px;
+  border:1px solid var(--line2);
+  background:rgba(0,0,0,0.86);
+  font-family:var(--mono); font-size:11px; letter-spacing:.08em; text-transform:uppercase;
+}
+#armedBar .label{color:var(--muted)}
+#armedBar .val{color:var(--fg)}
+#armedBar input{
+  background:#000; color:#fff; border:1px solid var(--line2);
+  padding:6px 8px; font-family:var(--mono); font-size:11px; letter-spacing:.08em;
+  width:min(340px, calc(100vw - 40px));
+}
+
+/* Pinned panel */
+#pinnedPanel{
+  position:absolute; left:10px;
+  top:calc((var(--top) + var(--safeT)) + 64px);
+  z-index:26;
+  display:none;
+  width:min(820px, calc(100vw - 20px));
+  height:360px;
+  padding:8px 10px;
+  border:1px solid var(--line2);
+  background:rgba(0,0,0,0.86);
+  font-family:var(--mono); font-size:11px; letter-spacing:.08em; text-transform:uppercase;
+  overflow:hidden;
+}
+.pinMod{
+  position:absolute;
+  width:190px;
+  height:52px;
+  border:1px solid rgba(255,255,255,0.22);
+  background:rgba(0,0,0,0.35);
+  color:var(--fg);
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+  padding:6px 8px;
+  cursor:pointer;
+  user-select:none;
+}
+.pinMod:hover{border-color:rgba(255,255,255,0.65)}
+.pinMod .nm{white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.pinMod .sub{color:var(--muted); font-size:10px; letter-spacing:.04em; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.pinMod .grip{
+  position:absolute;
+  right:6px; top:6px;
+  width:10px; height:10px;
+  border:1px solid rgba(255,255,255,0.22);
+  background:rgba(0,0,0,0.25);
+  cursor:move;
+  touch-action:none;
+}
+
+/* Active strip */
+#activeStrip{
+  position:absolute; left:10px;
+  top:calc((var(--top) + var(--safeT)) + 434px);
+  z-index:25; display:none; gap:8px; flex-wrap:wrap; align-items:center;
+  padding:8px 10px; border:1px solid var(--line2);
+  background:rgba(0,0,0,0.86);
+  font-family:var(--mono); font-size:11px; letter-spacing:.08em; text-transform:uppercase;
+}
+#activeStrip .label{color:var(--muted)}
+.pill{
+  border:1px solid rgba(255,255,255,0.22);
+  background:rgba(0,0,0,0.25);
+  color:var(--fg);
+  font-family:var(--mono);
+  font-size:11px;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  padding:6px 8px;
+  cursor:pointer;
+}
+.pill:hover{border-color:rgba(255,255,255,0.65)}
+.pill:active{transform:translateY(1px)}
+
+/* Panels (Pad / Player / YT) */
+#padPanel,#playerPanel,#ytPanel{
+  position:absolute;
+  display:none;
+  z-index:31;
+  border:1px solid rgba(255,255,255,0.22);
+  border-radius:var(--ctl-radius);
+  background:rgba(0,0,0,0.86);
+  backdrop-filter:blur(6px);
+  overflow:hidden;
+  resize:both;
+}
+#padPanel.open,#playerPanel.open,#ytPanel.open{display:flex; flex-direction:column}
+#padPanel{left:14px; top:calc((var(--top) + var(--safeT)) + 170px); width:560px; height:420px; min-width:340px; min-height:260px}
+#playerPanel{right:14px; top:calc((var(--top) + var(--safeT)) + 64px); width:380px; height:480px; min-width:320px; min-height:220px; z-index:32}
+#playerPanel.collapsed{height:auto !important; min-height:0 !important}
+#playerPanel.collapsed #playerBody{display:none !important}
+#ytPanel{right:14px; top:calc((var(--top) + var(--safeT)) + 564px); width:360px; height:260px; min-width:300px; min-height:220px; z-index:33}
+
+#padHead,#playerHead,#ytHead{
+  padding:8px 10px;
+  border-bottom:1px solid rgba(255,255,255,0.14);
+  font-family:var(--mono);
+  font-size:11px;
+  letter-spacing:.14em;
+  text-transform:uppercase;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  cursor:move;
+  touch-action:none;
+}
+#padHead .tabs{display:flex; gap:8px}
+#padHead .tabs button{
+  height:24px;
+  padding:0 8px;
+  border:1px solid rgba(255,255,255,0.18);
+  background:#000;
+  color:#fff;
+  font-family:var(--mono);
+  font-size:11px;
+  cursor:pointer;
+}
+#padHead .tabs button.on{
+  border-color:rgba(255,255,255,0.55);
+  background:rgba(255,255,255,0.06);
+}
+#padBody,#playerBody,#ytBody{padding:10px; min-height:0; flex:1; overflow:auto}
+
+.playerRow{
+  border:1px solid rgba(255,255,255,0.18);
+  padding:8px 10px;
+  font-family:var(--mono);
+  font-size:11px;
+  letter-spacing:.06em;
+  text-transform:uppercase;
+  display:flex;
+  gap:8px;
+  align-items:center;
+  cursor:pointer;
+  user-select:none;
+  touch-action:none;
+}
+.playerRow .nm{flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.playerRow .ix{color:var(--muted); width:24px}
+.playerRow .acts{display:flex; gap:4px}
+.miniBlk{
+  background:#000 !important;
+  color:#fff !important;
+  border:1px solid rgba(255,255,255,0.22) !important;
+  font-family:var(--mono);
+  font-size:10px;
+  letter-spacing:.06em;
+  text-transform:uppercase;
+  height:22px;
+  padding:0 6px;
+  cursor:pointer;
+}
+.miniBlk:hover{border-color:rgba(255,255,255,0.65) !important}
+.miniBlk:active{transform:translateY(1px)}
+.playerRow.isDragGhost{opacity:0.55; border-style:dashed}
+.playerRow.isDropTarget{outline:1px solid rgba(255,255,255,0.7); outline-offset:1px}
+
+#ytFrame{
+  width:100%;
+  aspect-ratio:16/9;
+  border:1px solid rgba(255,255,255,0.18);
+  background:#000;
+}
+
+/* Toast */
+.toast{
+  position:absolute;
+  left:12px;
+  top:calc((var(--top) + var(--safeT)) + 12px);
+  padding:8px 10px;
+  border:1px solid var(--line2);
+  background:rgba(8,8,8,0.82);
+  font-family:var(--mono);
+  font-size:11px;
+  letter-spacing:.06em;
+  color:var(--fg);
+  display:none;
+  z-index:40;
+}
+
+/* anchor square bottom-right (ONLY visible in NULL/BLACKOUT) */
+#anchor{
+  position:absolute;
+  right:10px;
+  bottom:10px;
+  width:10px;
+  height:10px;
+  border:1px solid rgba(255,255,255,0.65);
+  background:transparent;
+  z-index:999;
+  cursor:pointer;
+  display:none;
+}
+</style>
+</head>
+
+<body>
+<div id="root">
+
+  <div id="stage"></div>
+  <div id="motion" aria-hidden="true"></div>
+
+  <iframe id="surfaceFrame" title="SURFACE"></iframe>
+
+  <div id="armedBar">
+    <span class="label">ARMED</span>
+    <span class="val" id="armedName">—</span>
+    <button class="btn" id="armedGo" style="padding:4px 8px; font-size:11px">GO</button>
+    <button class="btn" id="armedNewTab" style="padding:4px 8px; font-size:11px">NEW TAB</button>
+    <button class="btn" id="armedCopy" style="padding:4px 8px; font-size:11px">COPY URL</button>
+    <input id="armedUrl" readonly value="—" />
+  </div>
+
+  <div id="pinnedPanel"></div>
+  <div id="activeStrip"></div>
+
+  <!-- PAD -->
+  <div id="padPanel">
+    <div id="padHead">
+      <div class="tabs">
+        <button class="on" data-tab="surfaces">SURFACES</button>
+        <button data-tab="specs">SPECS</button>
+        <button data-tab="schedule">SCHEDULE</button>
+        <button data-tab="storage">STORAGE</button>
+      </div>
+      <div style="flex:1"></div>
+      <button class="headBtn" id="padClose">X</button>
+    </div>
+    <div id="padBody"></div>
+  </div>
+
+  <!-- PLAYER -->
+  <div id="playerPanel">
+    <div id="playerHead">
+      <span id="playerTitle">PLAYER</span>
+      <div style="display:flex; gap:8px; align-items:center">
+        <button class="headBtn" id="playerCollapse" title="COLLAPSE">—</button>
+        <button class="headBtn" id="playerPrev">◀</button>
+        <button class="headBtn" id="playerPlay">PLAY</button>
+        <button class="headBtn" id="playerNext">▶</button>
+        <button class="headBtn" id="playerClose">X</button>
+      </div>
+    </div>
+
+    <div id="playerBody">
+      <div style="font-family:var(--mono); font-size:11px; letter-spacing:.10em; text-transform:uppercase; color:var(--muted); margin-bottom:8px">INPUT</div>
+      <div style="display:flex; gap:8px; align-items:center">
+        <input id="playerInputUrl" spellcheck="false" autocomplete="off"
+          style="flex:1; background:#000; color:#fff; border:1px solid rgba(255,255,255,0.22); padding:6px 8px; font-family:var(--mono); font-size:11px; letter-spacing:.06em"
+          placeholder="URL OR YOUTUBE LINK" />
+        <button class="btn" id="playerAddInput" style="padding:4px 8px; font-size:11px">ADD</button>
+        <button class="btn" id="playerSurfaceInput" style="padding:4px 8px; font-size:11px">SURFACE</button>
+      </div>
+      <div style="margin-top:8px; display:flex; gap:8px; align-items:center; flex-wrap:wrap">
+        <button class="btn" id="playerInputToArmed" style="padding:4px 8px; font-size:11px">ARM INPUT</button>
+        <button class="btn" id="playerInputClear" style="padding:4px 8px; font-size:11px">CLEAR</button>
+        <button class="btn" id="playerOpenYT" style="padding:4px 8px; font-size:11px">YT</button>
+      </div>
+
+      <div style="margin-top:12px; border-top:1px solid var(--line); padding-top:10px">
+        <div style="display:flex; gap:8px; align-items:center; justify-content:space-between">
+          <div style="font-family:var(--mono); font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted)">NOW</div>
+          <div id="playerNowLabel" style="font-family:var(--mono); font-size:11px; letter-spacing:.06em; text-transform:uppercase; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:240px">—</div>
+        </div>
+
+        <div style="margin-top:8px; display:flex; gap:8px; align-items:center; flex-wrap:wrap">
+          <button class="btn" id="playerSurf" style="padding:4px 8px; font-size:11px">SURFACE</button>
+          <button class="btn" id="playerNewTabNow" style="padding:4px 8px; font-size:11px">NEW TAB</button>
+          <button class="btn" id="playerArmNow" style="padding:4px 8px; font-size:11px">ARM</button>
+          <button class="btn" id="playerAddArmed" style="padding:4px 8px; font-size:11px">ADD ARMED</button>
+        </div>
+
+        <div style="margin-top:10px; border-top:1px solid var(--line); padding-top:10px">
+          <div style="font-family:var(--mono); font-size:11px; letter-spacing:.10em; text-transform:uppercase; color:var(--muted); margin-bottom:8px">BULK IMPORT</div>
+          <textarea id="playerBulkInput" spellcheck="false" autocomplete="off"
+            style="width:100%; background:#000; color:#fff; border:1px solid rgba(255,255,255,0.22); padding:6px 8px; font-family:var(--mono); font-size:11px; letter-spacing:.06em; min-height:80px; resize:vertical"
+            placeholder="NAME | URL
+OR URL (one per line)"></textarea>
+          <div style="margin-top:8px; display:flex; gap:8px; align-items:center; flex-wrap:wrap">
+            <button class="btn" id="playerImportBulk" style="padding:4px 8px; font-size:11px">IMPORT TO QUEUE</button>
+            <button class="btn" id="playerClearBulk" style="padding:4px 8px; font-size:11px">CLEAR</button>
+          </div>
+        </div>
+
+        <div style="margin-top:10px; border-top:1px solid var(--line); padding-top:10px">
+          <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:8px">
+            <div style="font-family:var(--mono); font-size:11px; letter-spacing:.10em; text-transform:uppercase; color:var(--muted)">QUEUE</div>
+            <button class="btn" id="playerStopSurface" style="padding:4px 8px; font-size:11px">STOP</button>
+          </div>
+          <div id="playerQueue" style="display:flex; flex-direction:column; gap:6px"></div>
+          <div style="margin-top:8px; display:flex; gap:8px; align-items:center; flex-wrap:wrap">
+            <button class="btn" id="playerClear" style="padding:4px 8px; font-size:11px">CLEAR</button>
+            <button class="btn" id="playerCreateSet" style="padding:4px 8px; font-size:11px">CREATE SET</button>
+          </div>
+          <div style="margin-top:10px; color:var(--muted); font-family:var(--mono); font-size:11px">CLICK = SELECT. DRAG = REORDER.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- YT MINI SCREEN -->
+  <div id="ytPanel">
+    <div id="ytHead">
+      <span id="ytTitle">YT</span>
+      <div style="display:flex; gap:8px; align-items:center">
+        <button class="headBtn" id="ytArmed">ARMED</button>
+        <button class="headBtn" id="ytClose">X</button>
+      </div>
+    </div>
+    <div id="ytBody">
+      <div style="font-family:var(--mono); font-size:11px; letter-spacing:.10em; text-transform:uppercase; color:var(--muted); margin-bottom:8px">EMBED</div>
+
+      <div style="display:flex; gap:8px; align-items:center; margin-bottom:8px">
+        <input id="ytInput" spellcheck="false" autocomplete="off"
+          style="flex:1; background:#000; color:#fff; border:1px solid rgba(255,255,255,0.22); padding:6px 8px; font-family:var(--mono); font-size:11px; letter-spacing:.06em"
+          placeholder="YOUTUBE URL / VIDEO ID / PLAYLIST ID" />
+        <button class="btn" id="ytApply" style="padding:4px 8px; font-size:11px">APPLY</button>
+      </div>
+
+      <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; font-family:var(--mono); font-size:11px; letter-spacing:.06em; text-transform:uppercase; color:var(--muted)">
+        <label style="display:flex; gap:6px; align-items:center"><input type="checkbox" id="ytAutoplay" />AUTOPLAY</label>
+        <label style="display:flex; gap:6px; align-items:center"><input type="checkbox" id="ytMute" />MUTE</label>
+        <label style="display:flex; gap:6px; align-items:center"><input type="checkbox" id="ytLoop" />LOOP</label>
+        <label style="display:flex; gap:6px; align-items:center"><input type="checkbox" id="ytControls" checked />CONTROLS</label>
+        <label style="display:flex; gap:6px; align-items:center"><input type="checkbox" id="ytNoCookie" checked />NOCOOKIE</label>
+      </div>
+
+      <div style="margin-top:8px; display:flex; gap:8px; align-items:center; flex-wrap:wrap">
+        <button class="btn" id="ytOpenTab" style="padding:4px 8px; font-size:11px">NEW TAB</button>
+        <button class="btn" id="ytClear" style="padding:4px 8px; font-size:11px">CLEAR</button>
+      </div>
+
+      <div style="margin-top:10px">
+        <iframe id="ytFrame" title="YT"
+          referrerpolicy="strict-origin-when-cross-origin"
+          allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
+          allowfullscreen></iframe>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <!-- TOP BAR -->
+  <div class="topbar" id="topbar">
+    <div class="cornerSq cTL"></div>
+    <div class="cornerSq cTR"></div>
+
+    <div style="display:flex; gap:10px; align-items:center; min-width:0">
+      <div class="brand" style="min-width:0">
+        <span class="sq"></span>
+        <span style="min-width:0; overflow:hidden; text-overflow:ellipsis">SHELL8 // MOB_BASE</span>
+        <span style="color:var(--muted); letter-spacing:.02em; text-transform:none">v2</span>
+      </div>
+      <div class="roomBadge"><span>ROOM</span><span id="roomName">SUR_BASE</span></div>
+    </div>
+
+    <div class="actions">
+      <button class="btn" id="btnImport">IMPORT</button>
+      <button class="btn" id="btnExport">EXPORT</button>
+      <button class="btn" id="btnCopy">COPY</button>
+      <span class="kbd" id="lightQuick" title="LIGHT 1–6">L1</span>
+      <div id="ketaIcon" class="ketaIcon" title="KETA_NOTE"></div>
+    </div>
+  </div>
+
+  <!-- DRAWER -->
+  <div class="drawer" id="drawer">
+    <div class="drawerSizer" id="drawerSizer" title="DRAG"></div>
+
+    <div class="drawerHead">
+      <div>SYSTEM</div>
+      <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; justify-content:flex-end">
+        <span id="sig" style="color:var(--muted); font-family:var(--mono); font-size:11px">∅</span>
+        <button class="btn" id="btnTogglePinnedStrip">PINNED</button>
+        <button class="btn" id="btnToggleSetsStrip">SETS</button>
+        <button class="btn" id="btnToggleMotion">MOTION</button>
+        <button class="btn" id="btnCloseDrawer">CLOSE</button>
+      </div>
+    </div>
+
+    <div class="drawerBody">
+      <div style="font-family:var(--mono); font-size:11px; letter-spacing:.10em; text-transform:uppercase; color:var(--muted); margin-bottom:8px">UNIVERSALS</div>
+      <textarea id="universals" spellcheck="false" autocomplete="off" placeholder="LAWS / REFERENCES"></textarea>
+
+      <div style="margin-top:12px; border-top:1px solid var(--line); padding-top:10px">
+        <div style="display:flex; gap:8px; align-items:center; justify-content:space-between; margin-bottom:8px">
+          <div style="font-family:var(--mono); font-size:11px; letter-spacing:.10em; text-transform:uppercase; color:var(--muted)">SURFACE REGISTRY</div>
+          <button class="btn" id="btnOpenPad" style="padding:4px 8px; font-size:11px">OPEN PAD</button>
+        </div>
+
+        <div style="display:flex; gap:8px; align-items:center; margin-bottom:8px">
+          <input id="newSurfaceName" spellcheck="false" autocomplete="off"
+            style="flex:1; background:#000; color:#fff; border:1px solid var(--line2); padding:6px 8px; font-family:var(--mono); font-size:11px"
+            placeholder="NAME (OPTIONAL)" />
+          <input id="newSurfaceUrl" spellcheck="false" autocomplete="off"
+            style="flex:1; background:#000; color:#fff; border:1px solid var(--line2); padding:6px 8px; font-family:var(--mono); font-size:11px"
+            placeholder="URL" />
+          <button class="btn" id="btnAddSurface" style="padding:4px 8px; font-size:11px">ADD</button>
+        </div>
+
+        <textarea id="surfaceBulk" spellcheck="false" autocomplete="off"
+          style="min-height:64px; resize:vertical; background:#000; border:1px solid rgba(255,255,255,0.22); color:#fff; padding:8px; font-family:var(--mono); font-size:11px; letter-spacing:.06em"
+          placeholder="BULK ADD (ONE PER LINE):
+NAME | URL
+OR URL"></textarea>
+
+        <div style="margin-top:8px; display:flex; gap:8px; align-items:center; flex-wrap:wrap">
+          <button class="btn" id="btnSurfaceBulkAdd" style="padding:4px 8px; font-size:11px">BULK ADD</button>
+          <button class="btn" id="btnSurfaceBulkToQueue" style="padding:4px 8px; font-size:11px">BULK → QUEUE</button>
+          <button class="btn" id="btnSurfaceBulkClear" style="padding:4px 8px; font-size:11px">CLEAR</button>
+          <button class="btn" id="btnPinnedToQueue" style="padding:4px 8px; font-size:11px">PINNED → QUEUE</button>
+        </div>
+
+        <div id="surfaceList" style="margin-top:10px; display:flex; flex-direction:column; gap:6px; max-height:220px; overflow:auto"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- BOTTOM BAR -->
+  <div class="bottombar" id="bottombar">
+    <div class="cornerSq cBL"></div>
+    <div class="cornerSq cBR"></div>
+
+    <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap">
+      <button class="toggle" id="toggleSystem">SYSTEM</button>
+      <button class="toggle" id="toggleRun">RUN</button>
+      <button class="toggle" id="togglePlayer">PLAYER</button>
+      <button class="toggle" id="togglePad">PAD</button>
+      <span>STATE: <span id="sig2">∅</span></span>
+    </div>
+    <div style="display:flex; gap:12px; align-items:center; flex-wrap:wrap">
+      <span>LIGHT: <span id="lightLabel">1</span></span>
+      <span>RUN: <span id="runLabel">OFF</span></span>
+      <span>MOTION: <span id="motionLabel">OFF</span></span>
+      <span>SURFACE: <span id="surfaceLabel">—</span></span>
+    </div>
+  </div>
+
+  <!-- KETA NOTE -->
+  <div class="ketaNote" id="ketaNote">
+    <div class="ketaHead" id="ketaHead">
+      <div>KETA_NOTE</div>
+      <button class="headBtn" id="btnHideNote">-</button>
+    </div>
+    <div class="ketaBody">
+      <textarea id="ketaText" spellcheck="false" autocomplete="off" placeholder="GLOBAL NOTE"></textarea>
+    </div>
+  </div>
+
+  <div id="anchor" title="ANCHOR (EXIT NULL)"></div>
+  <input id="file" type="file" accept="application/json" style="display:none" />
+</div>
+
+<script>
+function nowISO(){return new Date().toISOString();}
+const $=(id)=>document.getElementById(id);
+
+const root=$("root");
+const stage=$("stage");
+const motion=$("motion");
+const surfaceFrame=$("surfaceFrame");
+const ytFrame=$("ytFrame");
+const lightQuick=$("lightQuick");
+
+/* ===== utilities ===== */
+function uid8(){
+  const a=new Uint32Array(1);
+  try{crypto.getRandomValues(a);}catch(e){a[0]=Math.floor(Math.random()*1e9);}
+  return (a[0]>>>0).toString(16).padStart(8,"0");
+}
+function hash8(str){
+  const s=String(str||"");
+  let h=2166136261;
+  for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619);}
+  return (h>>>0).toString(16).slice(0,8);
+}
+function canonName(x){return String(x||"").trim().toUpperCase();}
+function clamp(n,min,max){return Math.max(min,Math.min(max,n));}
+function escHtml(s){
+  return String(s??"").replace(/[&<>"']/g,m=>({
+    "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"
+  }[m]));
+}
+function deriveNameFromUrl(url){
+  try{
+    const u=new URL(url, location.href);
+    const path=(u.pathname||"").split("/").filter(Boolean);
+    const last=path.length?path[path.length-1]:(u.hostname||"LINK");
+    return String(last).replace(/\.(html?|php|aspx|jsp)$/i,"").replace(/[-_]+/g," ").trim().toUpperCase()||"LINK";
+  }catch(e){
+    return String(url||"LINK").trim().slice(0,28).toUpperCase()||"LINK";
+  }
+}
+function parseBulkLines(text){
+  return String(text||"").split(/\r?\n/).map(l=>l.trim()).filter(l=>l && !l.startsWith("#")).map(l=>{
+    let name="", url="";
+    if(l.includes("|")){
+      const parts=l.split("|");
+      name=(parts[0]||"").trim();
+      url=(parts.slice(1).join("|")||"").trim();
+    }else url=l.trim();
+    if(!url && name){ url=name; name=""; }
+    if(!name) name=deriveNameFromUrl(url);
+    return {name,url};
+  }).filter(x=>x.url);
+}
+
+/* ===== local-first state ===== */
+const PAGE_ID="SHELL8_MOB_BASE_PLAYER";
+const KEY_PREFIX="KDT::BASE::INDEP::"+hash8(location.pathname+"|"+PAGE_ID);
+const STORAGE_KEY_MAIN=KEY_PREFIX+"::STATE";
+const STORAGE_KEY_BACKUP=KEY_PREFIX+"::STATE::BACKUP";
+
+function loadFromKey(key){
+  try{ const raw=localStorage.getItem(key); if(!raw) return null; return JSON.parse(raw); }
+  catch(e){ return null; }
+}
+
+const DEFAULT={
+  version:PAGE_ID,
+  updatedAt:nowISO(),
+  ketaNote:"",
+  universals:"",
+  ui:{
+    invert:false,
+    blackout:false,
+    fullscreen:false,
+
+    lightPreset:1,
+    lightRunning:false,
+    motionOn:false,
+
+    drawerOpen:false,
+    noteOpen:false,
+
+    pinnedStripOn:true,
+    setsStripOn:true,
+
+    padOpen:false,
+    padTab:"surfaces",
+    padRect:{x:null,y:null,w:560,h:420},
+
+    playerOpen:true,
+    playerCollapsed:false,
+    playerRect:{x:null,y:null,w:380,h:480},
+    player:{queue:[], index:0, playing:false},
+
+    pinnedPos:{},
+    surfaceUrl:"",
+    surfaceLabel:"",
+
+    ytOpen:false,
+    ytRect:{x:null,y:null,w:360,h:260},
+    yt:{input:"", autoplay:true, mute:true, loop:false, controls:true, nocookie:true, lastEmbedSrc:""}
+  },
+  payload:{sets:[], surfaces:[]}
+};
+
+function deepFill(s){
+  if(!s || typeof s!=="object") return structuredClone(DEFAULT);
+  for(const k of Object.keys(DEFAULT)){ if(s[k]===undefined) s[k]=structuredClone(DEFAULT[k]); }
+  if(!s.ui || typeof s.ui!=="object") s.ui={};
+  for(const k of Object.keys(DEFAULT.ui)){ if(s.ui[k]===undefined) s.ui[k]=structuredClone(DEFAULT.ui[k]); }
+  if(!s.payload || typeof s.payload!=="object") s.payload={};
+  for(const k of Object.keys(DEFAULT.payload)){ if(s.payload[k]===undefined) s.payload[k]=structuredClone(DEFAULT.payload[k]); }
+
+  if(!Array.isArray(s.payload.sets)) s.payload.sets=[];
+  if(!Array.isArray(s.payload.surfaces)) s.payload.surfaces=[];
+  if(!s.ui.player || typeof s.ui.player!=="object") s.ui.player=structuredClone(DEFAULT.ui.player);
+  if(!Array.isArray(s.ui.player.queue)) s.ui.player.queue=[];
+  if(typeof s.ui.player.index!=="number") s.ui.player.index=0;
+  if(typeof s.ui.player.playing!=="boolean") s.ui.player.playing=false;
+
+  if(!s.ui.pinnedPos || typeof s.ui.pinnedPos!=="object") s.ui.pinnedPos={};
+  if(!s.ui.yt || typeof s.ui.yt!=="object") s.ui.yt=structuredClone(DEFAULT.ui.yt);
+  if(!s.ui.ytRect || typeof s.ui.ytRect!=="object") s.ui.ytRect=structuredClone(DEFAULT.ui.ytRect);
+
+  s.payload.sets = s.payload.sets.map(set=>{
+    const id=String((set&&set.id)||"").trim() || `SET_${uid8()}`;
+    const label=canonName((set&&set.label)||"SET") || "SET";
+    const items=Array.isArray(set&&set.items)?set.items:[];
+    const normItems=items.map(it=>{
+      const url=String((it&&it.url)||"").trim(); if(!url) return null;
+      const label2=canonName((it&&it.label)||"") || deriveNameFromUrl(url);
+      return {label:label2,url};
+    }).filter(Boolean);
+    return {id,label,items:normItems,createdAt:(set&&set.createdAt)||nowISO(),updatedAt:(set&&set.updatedAt)||nowISO()};
+  });
+
+  s.payload.surfaces = s.payload.surfaces.map(surf=>{
+    const id=String((surf&&surf.id)||"").trim() || `SURF_${uid8()}`;
+    const name=canonName((surf&&surf.name)||"") || "";
+    const url=String((surf&&surf.url)||"").trim();
+    const pinned=!!(surf&&surf.pinned);
+    return {id,name,url,pinned};
+  });
+
+  return s;
+}
+
+let STATE = deepFill(loadFromKey(STORAGE_KEY_MAIN) || loadFromKey(STORAGE_KEY_BACKUP) || null);
+let _BOOTING=true;
+
+/* ===== toast/copy ===== */
+let toastTimer=null;
+function toast(msg){
+  if(STATE.ui.blackout || STATE.ui.fullscreen) return;
+  const t=$("toast");
+  t.textContent=msg;
+  t.style.display="block";
+  if(toastTimer) clearTimeout(toastTimer);
+  toastTimer=setTimeout(()=>{t.style.display="none";},900);
+}
+async function copy(text){
+  try{await navigator.clipboard.writeText(String(text||"")); toast("COPIED");}
+  catch(e){toast("COPY FAILED");}
+}
+
+/* ===== signature/persist ===== */
+function stableSig(){
+  const core=JSON.stringify({
+    v:STATE.version,
+    k:hash8(STATE.ketaNote||""),
+    i:STATE.ui.invert,
+    f:STATE.ui.fullscreen,
+    b:STATE.ui.blackout,
+    p:STATE.ui.lightPreset,
+    r:STATE.ui.lightRunning,
+    m:STATE.ui.motionOn,
+    surface:STATE.ui.surfaceUrl,
+    player:hash8(JSON.stringify({q:STATE.ui.player.queue, i:STATE.ui.player.index, on:STATE.ui.player.playing, c:STATE.ui.playerCollapsed})),
+  });
+  let h=2166136261;
+  for(let i=0;i<core.length;i++){h^=core.charCodeAt(i);h=Math.imul(h,16777619);}
+  return (h>>>0).toString(16).slice(0,8);
+}
+function persist(silent=false){
+  if(_BOOTING) return;
+  STATE.updatedAt=nowISO();
+  document.documentElement.style.setProperty("--drawer-h", String(STATE.ui.drawerH || 0.52));
+  const blob=JSON.stringify(STATE);
+  try{
+    localStorage.setItem(STORAGE_KEY_MAIN, blob);
+    localStorage.setItem(STORAGE_KEY_BACKUP, blob);
+  }catch(e){}
+  if(!silent) render();
+}
+
+/* ===== ARMED ===== */
+let ARMED={name:"", url:""};
+function arm(name,url){
+  ARMED.name=canonName(name||"LINK")||"LINK";
+  ARMED.url=String(url||"").trim();
+  $("armedName").textContent=ARMED.name||"—";
+  $("armedUrl").value=ARMED.url||"—";
+  $("armedBar").style.display = (ARMED.url && !(STATE.ui.blackout||STATE.ui.fullscreen)) ? "flex":"none";
+}
+function finalizeBeforeNav(){ try{persist(true);}catch(e){} }
+function openNewTab(url){
+  const u=String(url||"").trim(); if(!u) return;
+  finalizeBeforeNav();
+  window.open(u,"_blank","noopener,noreferrer");
+}
+
+/* ===== Surface ===== */
+const DEFAULT_SURFACE_ORIGIN="https://ketadata.com/";
+function normalizeSurfaceUrl(raw){
+  const u=String(raw||"").trim();
+  if(!u) return "";
+  if(/^(https?:|about:|data:|blob:)/i.test(u)) return u;
+  try{
+    if(window.location && window.location.protocol !== "file:" && window.location.href){
+      return new URL(u, window.location.href).href;
+    }
+  }catch(e){}
+  return DEFAULT_SURFACE_ORIGIN + u.replace(/^\/+/, "");
+}
+function applySurface(url,label){
+  const raw=String(url||"").trim();
+  const u=normalizeSurfaceUrl(raw);
+  const lab=canonName(label||"") || (u?deriveNameFromUrl(u):"");
+  STATE.ui.surfaceUrl=u;
+  STATE.ui.surfaceLabel=lab;
+  $("surfaceLabel").textContent=u ? lab : "—";
+  if(!u){
+    surfaceFrame.classList.remove("on");
+    surfaceFrame.removeAttribute("src");
+    return;
+  }
+  surfaceFrame.classList.add("on");
+  surfaceFrame.src=u;
+}
+function clearSurfacePlaying(){
+  STATE.ui.surfaceUrl="";
+  STATE.ui.surfaceLabel="";
+  surfaceFrame.classList.remove("on");
+  surfaceFrame.removeAttribute("src");
+  $("surfaceLabel").textContent="—";
+}
+
+/* ===== Lights ===== */
+let lightInterval=null;
+let lightCount=0, lightAuxA=0, lightAuxB=0;
+function resetStage(){ stage.style.backgroundColor="#000"; stage.style.filter="none"; lightCount=0; lightAuxA=0; lightAuxB=0; }
+function stopLight(silent=false){
+  if(lightInterval){clearInterval(lightInterval); lightInterval=null;}
+  STATE.ui.lightRunning=false; resetStage();
+  if(!silent) persist(false);
+}
+function startLight(preset){
+  stopLight(true);
+  resetStage();
+  STATE.ui.lightPreset=preset;
+  STATE.ui.lightRunning=true;
+
+  if(preset===1){
+    lightInterval=setInterval(()=>{
+      const curr=stage.style.backgroundColor||"black";
+      stage.style.backgroundColor=(curr==="black"||curr==="rgb(0, 0, 0)")?"white":"black";
+      stage.style.filter="none";
+    },60);
+  }else if(preset===2){
+    lightInterval=setInterval(()=>{
+      lightAuxA=(lightAuxA+30)%360; lightAuxB+=0.5;
+      const l=50+Math.sin(lightAuxB)*40;
+      stage.style.backgroundColor=`hsl(${lightAuxA},100%,${l}%)`;
+      stage.style.filter="none";
+    },14);
+  }else if(preset===3){
+    lightInterval=setInterval(()=>{
+      lightCount++;
+      const beat=lightCount%16;
+      if(beat===0||beat===1){stage.style.backgroundColor="#fff";stage.style.filter="invert(1) contrast(3) brightness(2)";}
+      else if(beat===2){stage.style.backgroundColor="#000";stage.style.filter="invert(1) contrast(2)";}
+      else if(beat===3){stage.style.backgroundColor="#0f0";stage.style.filter="contrast(2) saturate(3)";}
+      else if(beat===4){stage.style.backgroundColor="#f0f";stage.style.filter="invert(1) hue-rotate(90deg)";}
+      else if(beat===5||beat===6){stage.style.backgroundColor="#0ff";stage.style.filter="invert(0.7) contrast(2)";}
+      else if(beat===7){stage.style.backgroundColor="#fff";stage.style.filter="invert(1) brightness(3)";}
+      else if(beat===8){stage.style.backgroundColor="#000";stage.style.filter="invert(1) contrast(3)";}
+      else if(beat===9||beat===10){stage.style.backgroundColor="#0f0";stage.style.filter="saturate(5) contrast(2)";}
+      else if(beat===11){stage.style.backgroundColor="#f0f";stage.style.filter="invert(1) saturate(3)";}
+      else {stage.style.backgroundColor="#08f";stage.style.filter="contrast(1.5) brightness(1.2)";}
+    },32);
+  }else if(preset===4){
+    lightInterval=setInterval(()=>{
+      lightAuxA+=0.08; lightCount++;
+      const red=Math.abs(Math.sin(lightAuxA))*255;
+      const pulse=Math.abs(Math.sin(lightAuxA*0.5));
+      const contrast=2+pulse*2;
+      const saturation=4+pulse*2;
+      if(lightCount%8===0){stage.style.backgroundColor="#000";stage.style.filter="brightness(3) contrast(3)";}
+      else{
+        stage.style.backgroundColor=`rgb(${red},0,0)`;
+        stage.style.filter=`contrast(${contrast}) saturate(${saturation}) brightness(${1.2+pulse*0.5})`;
+      }
+    },22);
+  }else if(preset===5){
+    lightInterval=setInterval(()=>{
+      lightAuxA+=15; lightAuxB=(lightAuxB+2)%100;
+      const hue=260+Math.sin(lightAuxA*0.1)*40;
+      const saturation=80+Math.cos(lightAuxA*0.05)*20;
+      const lightness=30+Math.sin(lightAuxB*0.1)*30;
+      const spiralBrightness=1+Math.abs(Math.sin(lightAuxA*0.05))*0.8;
+      const spiralContrast=1.5+Math.abs(Math.cos(lightAuxA*0.08))*1;
+      stage.style.backgroundColor=`hsl(${hue},${saturation}%,${lightness}%)`;
+      stage.style.filter=`contrast(${spiralContrast}) saturate(2) brightness(${spiralBrightness}) hue-rotate(${lightAuxA*0.5}deg)`;
+    },26);
+  }else if(preset===6){
+    lightInterval=setInterval(()=>{
+      lightCount++;
+      if(lightCount%50===0||lightCount%50===2){stage.style.backgroundColor="#fff";stage.style.filter="brightness(5) contrast(5)";}
+      else{stage.style.backgroundColor="#000";stage.style.filter="none";}
+    },34);
+  }
+
+  persist(false);
+}
+function toggleRun(){
+  if(STATE.ui.blackout) return;
+  if(STATE.ui.lightRunning) stopLight(false);
+  else startLight(STATE.ui.lightPreset||1);
+}
+function setLight(n){
+  n=clamp(Number(n)||1,1,6);
+  STATE.ui.lightPreset=n;
+  document.documentElement.style.setProperty("--light", String(n));
+  $("lightLabel").textContent=String(n);
+  if(lightQuick) lightQuick.textContent="L"+String(n);
+  persist(false);
+}
+
+/* ===== Motion / modes ===== */
+function syncMotion(){
+  if(STATE.ui.motionOn) motion.classList.add("run");
+  else motion.classList.remove("run");
+}
+function setDrawer(on){
+  STATE.ui.drawerOpen=!!on;
+  if(on) STATE.ui.blackout=false;
+  persist(false);
+}
+function setKetaNote(on){
+  STATE.ui.noteOpen=!!on;
+  if(on) STATE.ui.blackout=false;
+  persist(false);
+}
+function setInvert(on){ STATE.ui.invert=!!on; persist(false); }
+
+let BLACKOUT_CACHE=null;
+function setBlackout(on){
+  const next=!!on;
+  if(next && !STATE.ui.blackout){
+    BLACKOUT_CACHE={
+      drawerOpen:!!STATE.ui.drawerOpen,
+      noteOpen:!!STATE.ui.noteOpen,
+      motionOn:!!STATE.ui.motionOn,
+      lightRunning:!!STATE.ui.lightRunning,
+      lightPreset:Number(STATE.ui.lightPreset||1),
+      padOpen:!!STATE.ui.padOpen,
+      playerOpen:!!STATE.ui.playerOpen,
+      playerCollapsed:!!STATE.ui.playerCollapsed,
+      ytOpen:!!STATE.ui.ytOpen,
+      pinnedStripOn:!!STATE.ui.pinnedStripOn,
+      setsStripOn:!!STATE.ui.setsStripOn,
+      surfaceUrl:String(STATE.ui.surfaceUrl||""),
+      surfaceLabel:String(STATE.ui.surfaceLabel||"")
+    };
+  }
+  STATE.ui.blackout=next;
+  if(STATE.ui.blackout){
+    STATE.ui.motionOn=false;
+    stopLight(true);
+    resetStage();
+    motion.classList.remove("run");
+    STATE.ui.drawerOpen=false;
+    STATE.ui.noteOpen=false;
+    STATE.ui.padOpen=false;
+    STATE.ui.playerOpen=false;
+    STATE.ui.ytOpen=false;
+  }else{
+    if(BLACKOUT_CACHE){
+      Object.assign(STATE.ui, {
+        drawerOpen:!!BLACKOUT_CACHE.drawerOpen,
+        noteOpen:!!BLACKOUT_CACHE.noteOpen,
+        motionOn:!!BLACKOUT_CACHE.motionOn,
+        padOpen:!!BLACKOUT_CACHE.padOpen,
+        playerOpen:!!BLACKOUT_CACHE.playerOpen,
+        playerCollapsed:!!BLACKOUT_CACHE.playerCollapsed,
+        ytOpen:!!BLACKOUT_CACHE.ytOpen,
+        pinnedStripOn:!!BLACKOUT_CACHE.pinnedStripOn,
+        setsStripOn:!!BLACKOUT_CACHE.setsStripOn,
+        surfaceUrl:String(BLACKOUT_CACHE.surfaceUrl||""),
+        surfaceLabel:String(BLACKOUT_CACHE.surfaceLabel||"")
+      });
+      const wasRunning=!!BLACKOUT_CACHE.lightRunning;
+      const wasPreset=Number(BLACKOUT_CACHE.lightPreset||1);
+      STATE.ui.lightPreset=wasPreset;
+      if(wasRunning) startLight(wasPreset);
+      BLACKOUT_CACHE=null;
+    }
+  }
+  persist(false);
+}
+function setFullscreen(on){ STATE.ui.fullscreen=!!on; persist(false); }
+
+/* ===== file export/import (real download) ===== */
+function exportState(){ return JSON.stringify({ STORAGE_KEY: STORAGE_KEY_MAIN, STATE }, null, 2); }
+function exportFilename(){
+  const sig=stableSig();
+  const stamp=new Date().toISOString().replace(/[:.]/g,"-");
+  return `SHELL8_MOB_BASE_${sig}_${stamp}.json`;
+}
+function downloadJsonFile(filename, text){
+  const blob=new Blob([String(text||"")], {type:"application/json"});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement("a");
+  a.href=url; a.download=filename||"STATE.json";
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url), 250);
+}
+function importState(text){
+  const parsed=JSON.parse(text);
+  const incoming=(parsed && parsed.STATE) ? parsed.STATE : parsed;
+  STATE=deepFill(incoming);
+  stopLight(true);
+  if(STATE.ui.lightRunning && !STATE.ui.blackout) startLight(STATE.ui.lightPreset||1);
+  applySurface(STATE.ui.surfaceUrl, STATE.ui.surfaceLabel);
+  persist(false);
+}
+
+/* ===== draggable panels ===== */
+function shouldIgnoreDragStart(ev){
+  const t=ev.target;
+  if(!t) return false;
+  if(t.closest && t.closest("button,input,textarea,select,a,label")) return true;
+  return false;
+}
+function makeDragSmooth(el, handle, opts={}){
+  if(!el || !handle) return;
+  const minTop=Number(opts.minTop ?? 32);
+  const pad=Number(opts.pad ?? 8);
+  let dragging=false, startX=0, startY=0, baseX=0, baseY=0;
+
+  const onDown=(ev)=>{
+    if(STATE.ui.blackout || STATE.ui.fullscreen) return;
+    if(ev.button!==undefined && ev.button!==0) return;
+    if(shouldIgnoreDragStart(ev)) return;
+    dragging=true;
+    const rect=el.getBoundingClientRect();
+    baseX=rect.left; baseY=rect.top;
+    startX=ev.clientX; startY=ev.clientY;
+    try{ handle.setPointerCapture(ev.pointerId); }catch(e){}
+    ev.preventDefault();
+  };
+  const onMove=(ev)=>{
+    if(!dragging) return;
+    const dx=ev.clientX-startX;
+    const dy=ev.clientY-startY;
+    const vw=window.innerWidth, vh=window.innerHeight;
+    const r=el.getBoundingClientRect();
+    const maxLeft=Math.max(0, vw - r.width - pad);
+    const maxTop=Math.max(minTop, vh - r.height - pad);
+    const nx=clamp(baseX+dx, pad, maxLeft);
+    const ny=clamp(baseY+dy, minTop, maxTop);
+    el.style.left=nx+"px";
+    el.style.top=ny+"px";
+  };
+  const onUp=(ev)=>{
+    if(!dragging) return;
+    dragging=false;
+    try{ handle.releasePointerCapture(ev.pointerId); }catch(e){}
+    if(opts.onEnd){
+      const rect=el.getBoundingClientRect();
+      opts.onEnd({x:rect.left,y:rect.top,w:rect.width,h:rect.height});
+    }
+  };
+
+  handle.addEventListener("pointerdown", onDown, {passive:false});
+  window.addEventListener("pointermove", onMove, {passive:true});
+  window.addEventListener("pointerup", onUp, {passive:true});
+}
+function applyPanelRect(el, rect, fallback){
+  const vw=window.innerWidth, vh=window.innerHeight;
+  const topH=(parseInt(getComputedStyle(document.documentElement).getPropertyValue("--top"))||44) + (parseInt(getComputedStyle(document.documentElement).getPropertyValue("--safeT"))||0);
+  const pad=10;
+
+  const w=clamp(Number(rect.w ?? fallback.w), 260, vw - pad*2);
+  const h=clamp(Number(rect.h ?? fallback.h), 180, vh - topH - pad*2);
+
+  let x=(rect.x==null)? (fallback.x ?? 20) : Number(rect.x);
+  let y=(rect.y==null)? (fallback.y ?? (topH+20)) : Number(rect.y);
+
+  x=clamp(x, pad, vw - w - pad);
+  y=clamp(y, topH + pad, vh - h - pad);
+
+  el.style.width=w+"px";
+  el.style.height=h+"px";
+  el.style.left=x+"px";
+  el.style.top=y+"px";
+}
+
+/* ===== reorder list ===== */
+function installSmoothReorder(listEl, onReorder){
+  let active=null;
+  const rows=()=>[...listEl.querySelectorAll(".playerRow")];
+  const clearMarks=()=>rows().forEach(r=>r.classList.remove("isDropTarget","isDragGhost"));
+  const indexFromTarget=(t)=>{
+    const row=t && t.closest ? t.closest(".playerRow") : null;
+    if(!row) return -1;
+    return Number(row.dataset.index||-1);
+  };
+  const pickToIndex=(clientY)=>{
+    const rs=rows();
+    if(!rs.length) return 0;
+    let best=0;
+    for(let i=0;i<rs.length;i++){
+      const r=rs[i].getBoundingClientRect();
+      const mid=r.top + r.height/2;
+      if(clientY >= mid) best=i;
+    }
+    return clamp(best,0,rs.length-1);
+  };
+
+  const onDown=(ev)=>{
+    if(STATE.ui.blackout || STATE.ui.fullscreen) return;
+    if(ev.button!==undefined && ev.button!==0) return;
+    if(shouldIgnoreDragStart(ev)) return;
+
+    const from=indexFromTarget(ev.target);
+    if(from<0) return;
+
+    const r=rows()[from];
+    if(!r) return;
+
+    active={from,lastTo:from};
+
+    const rect=r.getBoundingClientRect();
+    const ghost=r.cloneNode(true);
+    ghost.classList.add("isDragGhost");
+    ghost.style.position="fixed";
+    ghost.style.left=rect.left+"px";
+    ghost.style.top=rect.top+"px";
+    ghost.style.width=rect.width+"px";
+    ghost.style.height=rect.height+"px";
+    ghost.style.zIndex="9999";
+    ghost.style.pointerEvents="none";
+    document.body.appendChild(ghost);
+    active.ghost=ghost;
+
+    try{ r.setPointerCapture(ev.pointerId); }catch(e){}
+    ev.preventDefault();
+  };
+
+  const onMove=(ev)=>{
+    if(!active) return;
+    const g=active.ghost;
+    if(g){
+      g.style.top=(ev.clientY - g.getBoundingClientRect().height/2)+"px";
+      g.style.left=(listEl.getBoundingClientRect().left)+"px";
+    }
+    const to=pickToIndex(ev.clientY);
+    active.lastTo=to;
+    clearMarks();
+    const rs=rows();
+    if(rs[to]) rs[to].classList.add("isDropTarget");
+  };
+
+  const onUp=()=>{
+    if(!active) return;
+    const from=active.from, to=active.lastTo;
+    clearMarks();
+    if(active.ghost) active.ghost.remove();
+    if(typeof onReorder==="function" && from!==to) onReorder(from,to);
+    active=null;
+  };
+
+  listEl.addEventListener("pointerdown", onDown, {passive:false});
+  window.addEventListener("pointermove", onMove, {passive:true});
+  window.addEventListener("pointerup", onUp, {passive:true});
+}
+
+/* ===== PLAYER (the base is a player, not a link list) ===== */
+function playerNow(){
+  const q=STATE.ui.player.queue||[];
+  const i=Math.max(0, Math.min(q.length-1, STATE.ui.player.index||0));
+  return q[i]||null;
+}
+function playerSetIndex(i){
+  const q=STATE.ui.player.queue||[];
+  if(!q.length){ STATE.ui.player.index=0; return; }
+  STATE.ui.player.index=Math.max(0, Math.min(q.length-1, i));
+}
+function playerRender(){
+  const panel=$("playerPanel");
+  if(!STATE.ui.playerOpen || STATE.ui.blackout || STATE.ui.fullscreen){
+    panel.classList.remove("open","collapsed");
+    panel.style.display="none";
+    return;
+  }
+  panel.style.display="";
+  panel.classList.add("open");
+  panel.classList.toggle("collapsed", !!STATE.ui.playerCollapsed);
+
+  applyPanelRect(panel, STATE.ui.playerRect, {x:(window.innerWidth-400),y:((parseInt(getComputedStyle(document.documentElement).getPropertyValue("--top"))||44)+64),w:380,h:480});
+
+  const now=playerNow();
+  $("playerNowLabel").textContent = now ? (canonName(now.label||"")||deriveNameFromUrl(now.url)) : "—";
+  $("playerPlay").textContent = STATE.ui.player.playing ? "PAUSE" : "PLAY";
+
+  const qEl=$("playerQueue");
+  qEl.innerHTML="";
+  const q=(STATE.ui.player.queue||[]);
+  q.forEach((it, idx)=>{
+    const row=document.createElement("div");
+    row.className="playerRow";
+    row.dataset.index=String(idx);
+    if(idx===STATE.ui.player.index) row.style.borderColor="var(--fg)";
+
+    row.innerHTML=`
+      <span class="ix">${String(idx+1).padStart(2,"0")}</span>
+      <span class="nm"></span>
+      <div class="acts"></div>
+    `;
+    row.querySelector(".nm").textContent = canonName(it.label||"")||deriveNameFromUrl(it.url);
+
+    const acts=row.querySelector(".acts");
+
+    const surfBtn=document.createElement("button");
+    surfBtn.textContent="S";
+    surfBtn.className="miniBlk";
+    surfBtn.title="SURFACE";
+    surfBtn.addEventListener("click",(e)=>{
+      e.stopPropagation();
+      if(it.url){ applySurface(it.url, it.label); toast("SURFACE"); persist(true); }
+    });
+
+    const delBtn=document.createElement("button");
+    delBtn.textContent="X";
+    delBtn.className="miniBlk";
+    delBtn.title="DELETE";
+    delBtn.addEventListener("click",(e)=>{
+      e.stopPropagation();
+      STATE.ui.player.queue.splice(idx,1);
+      if(STATE.ui.player.index>=STATE.ui.player.queue.length) STATE.ui.player.index=Math.max(0,STATE.ui.player.queue.length-1);
+      persist(); playerRender();
+    });
+
+    acts.appendChild(surfBtn);
+    acts.appendChild(delBtn);
+
+    row.addEventListener("click",()=>{
+      playerSetIndex(idx);
+      persist(true);
+      playerRender();
+    });
+
+    qEl.appendChild(row);
+  });
+
+  installSmoothReorder(qEl,(from,to)=>{
+    const item=STATE.ui.player.queue.splice(from,1)[0];
+    STATE.ui.player.queue.splice(to,0,item);
+    if(STATE.ui.player.index===from) STATE.ui.player.index=to;
+    else if(from<STATE.ui.player.index && to>=STATE.ui.player.index) STATE.ui.player.index--;
+    else if(from>STATE.ui.player.index && to<=STATE.ui.player.index) STATE.ui.player.index++;
+    persist(true);
+    playerRender();
+  });
+}
+function playerAddArmed(){
+  const u=String(ARMED.url||"").trim();
+  if(!u){ toast("NO ARMED"); return; }
+  const label=canonName(ARMED.name||"")||deriveNameFromUrl(u);
+  STATE.ui.player.queue.push({label,url:u});
+  STATE.ui.playerOpen=true;
+  toast("ADDED");
+  persist(true);
+  playerRender();
+}
+function playerPrev(){
+  playerSetIndex((STATE.ui.player.index||0)-1);
+  if(STATE.ui.player.playing){
+    const cur=playerNow();
+    if(cur && cur.url) applySurface(cur.url, cur.label);
+  }
+  persist(true); playerRender();
+}
+function playerNext(){
+  playerSetIndex((STATE.ui.player.index||0)+1);
+  if(STATE.ui.player.playing){
+    const cur=playerNow();
+    if(cur && cur.url) applySurface(cur.url, cur.label);
+  }
+  persist(true); playerRender();
+}
+function playerTogglePlay(){
+  STATE.ui.player.playing=!STATE.ui.player.playing;
+  if(STATE.ui.player.playing){
+    const cur=playerNow();
+    if(cur && cur.url) applySurface(cur.url, cur.label);
+    toast("PLAY");
+  }else toast("PAUSE");
+  persist(true); playerRender();
+}
+function playerSurfaceNow(){
+  const cur=playerNow();
+  if(!cur || !cur.url){ toast("NO NOW"); return; }
+  applySurface(cur.url, cur.label);
+  toast("SURFACE");
+  persist(true);
+}
+function normalizeUrlMaybe(u){
+  const raw=String(u||"").trim();
+  if(!raw) return "";
+  if(/^[a-zA-Z0-9_-]{11}$/.test(raw)) return `https://www.youtube.com/watch?v=${raw}`;
+  if(/^PL[a-zA-Z0-9_-]+$/.test(raw)) return `https://www.youtube.com/playlist?list=${raw}`;
+  return raw;
+}
+function playerAddInputUrl(toSurface=false){
+  const inp=$("playerInputUrl");
+  const raw=normalizeUrlMaybe(inp.value);
+  if(!raw){ toast("NO INPUT"); return; }
+  const label=deriveNameFromUrl(raw);
+  STATE.ui.player.queue.push({label,url:raw});
+  STATE.ui.player.index=Math.max(0, STATE.ui.player.queue.length-1);
+  if(toSurface){ applySurface(raw,label); toast("SURFACE"); }
+  inp.value="";
+  STATE.ui.playerOpen=true;
+  toast("ADDED");
+  persist(true);
+  playerRender();
+}
+function playerImportBulk(){
+  const parsed=parseBulkLines($("playerBulkInput").value||"");
+  if(!parsed.length){ toast("NO ITEMS"); return; }
+  parsed.forEach(p=>{
+    STATE.ui.player.queue.push({label:canonName(p.name||"")||deriveNameFromUrl(p.url), url:p.url});
+  });
+  $("playerBulkInput").value="";
+  STATE.ui.playerOpen=true;
+  toast("IMPORTED");
+  persist(true);
+  playerRender();
+}
+function playerCreateSetFromQueue(){
+  const id=`SET_${uid8()}`;
+  const name="QUEUE_"+nowISO().slice(0,10).replace(/-/g,"");
+  const items=(STATE.ui.player.queue||[]).map(q=>({label:q.label||deriveNameFromUrl(q.url), url:q.url}));
+  STATE.payload.sets.unshift({id,label:name,items,createdAt:nowISO(),updatedAt:nowISO()});
+  toast("SET CREATED");
+  persist(true);
+}
+
+/* ===== YT minimal ===== */
+function ytParse(input){
+  const s=String(input||"").trim();
+  if(!s) return {type:"none"};
+  if(/^[a-zA-Z0-9_-]{11}$/.test(s)) return {type:"video", id:s};
+  if(/^PL[a-zA-Z0-9_-]+$/.test(s)) return {type:"playlist", list:s};
+  try{
+    const u=new URL(s, location.href);
+    const host=(u.hostname||"").toLowerCase();
+    const path=u.pathname||"";
+    const sp=u.searchParams;
+    if(path.includes("/shorts/")) return {type:"unknown"};
+    if(host.includes("youtu.be")){
+      const id=path.split("/").filter(Boolean)[0]||"";
+      if(/^[a-zA-Z0-9_-]{11}$/.test(id)) return {type:"video", id};
+    }
+    const isYT=host.includes("youtube.com")||host.includes("youtube-nocookie.com")||host.includes("m.youtube.com")||host.includes("music.youtube.com");
+    if(isYT){
+      const v=sp.get("v");
+      const list=sp.get("list");
+      if(v && /^[a-zA-Z0-9_-]{11}$/.test(v)) return {type:"video", id:v};
+      if((path.includes("/playlist")||path.includes("/watch")) && list && /^PL[a-zA-Z0-9_-]+$/.test(list)) return {type:"playlist", list};
+      if(path.includes("/embed/")){
+        if(path.includes("/embed/videoseries")){
+          if(list && /^PL[a-zA-Z0-9_-]+$/.test(list)) return {type:"playlist", list};
+        }else{
+          const id=path.split("/embed/")[1]?.split(/[?&#]/)[0]||"";
+          if(/^[a-zA-Z0-9_-]{11}$/.test(id)) return {type:"video", id};
+        }
+      }
+    }
+  }catch(e){}
+  return {type:"unknown"};
+}
+function ytBuildEmbedSrc(){
+  const parsed=ytParse(STATE.ui.yt.input);
+  if(parsed.type==="none" || parsed.type==="unknown") return "";
+  const p=new URLSearchParams();
+  p.set("autoplay", STATE.ui.yt.autoplay ? "1":"0");
+  p.set("mute", STATE.ui.yt.mute ? "1":"0");
+  p.set("controls", STATE.ui.yt.controls ? "1":"0");
+  p.set("playsinline","1");
+  p.set("rel","0");
+  p.set("modestbranding","1");
+
+  const ORIGIN=(location.origin && location.origin!=="null") ? location.origin : "";
+  if(ORIGIN){ p.set("enablejsapi","1"); p.set("origin", ORIGIN); }
+
+  const host=STATE.ui.yt.nocookie ? "https://www.youtube-nocookie.com" : "https://www.youtube.com";
+  if(parsed.type==="video"){
+    if(STATE.ui.yt.loop){ p.set("loop","1"); p.set("playlist", parsed.id); }
+    return `${host}/embed/${parsed.id}?${p.toString()}`;
+  }
+  if(parsed.type==="playlist"){
+    p.set("list", parsed.list);
+    if(STATE.ui.yt.loop) p.set("loop","1");
+    return `${host}/embed/videoseries?${p.toString()}`;
+  }
+  return "";
+}
+function applyYTEmbedFromState(silent=false){
+  const src=ytBuildEmbedSrc();
+  STATE.ui.yt.lastEmbedSrc=src||"";
+  if(!src){
+    ytFrame.removeAttribute("src");
+    if(!silent) toast("YT CLEARED");
+    return;
+  }
+  if(ytFrame.getAttribute("src")!==src) ytFrame.setAttribute("src",src);
+  if(!silent) toast("YT APPLIED");
+}
+function syncYTUIFromState(){
+  $("ytInput").value=STATE.ui.yt.input||"";
+  $("ytAutoplay").checked=!!STATE.ui.yt.autoplay;
+  $("ytMute").checked=!!STATE.ui.yt.mute;
+  $("ytLoop").checked=!!STATE.ui.yt.loop;
+  $("ytControls").checked=!!STATE.ui.yt.controls;
+  $("ytNoCookie").checked=!!STATE.ui.yt.nocookie;
+}
+function renderYT(){
+  const panel=$("ytPanel");
+  const openOk=STATE.ui.ytOpen && !STATE.ui.blackout && !STATE.ui.fullscreen;
+  if(!openOk){
+    panel.classList.remove("open");
+    panel.style.display="none";
+    return;
+  }
+  panel.style.display="";
+  panel.classList.add("open");
+  applyPanelRect(panel, STATE.ui.ytRect, {x: window.innerWidth-390, y: 600, w:360, h:260});
+  syncYTUIFromState();
+  applyYTEmbedFromState(true);
+}
+
+/* ===== surface registry list ===== */
+function renderSurfaceList(){
+  const el=$("surfaceList");
+  el.innerHTML="";
+  const surfaces=(STATE.payload.surfaces||[]).slice().sort((a,b)=>(b.pinned|0)-(a.pinned|0));
+  surfaces.forEach(s=>{
+    const row=document.createElement("div");
+    row.style.cssText="display:flex; gap:8px; align-items:center; border:1px solid var(--line2); padding:6px 8px; font-family:var(--mono); font-size:11px";
+    const nm=document.createElement("div");
+    nm.style.cssText="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; cursor:pointer";
+    nm.textContent=(canonName(s.name)||deriveNameFromUrl(s.url))+` (${s.pinned?"P":"-"})`;
+    nm.title=s.url||"";
+    nm.addEventListener("click",()=>{
+      if(!s.url) return;
+      arm(s.name||deriveNameFromUrl(s.url), s.url);
+      toast("ARMED");
+      persist(true);
+    });
+
+    const pinBtn=document.createElement("button");
+    pinBtn.className="btn";
+    pinBtn.style.cssText="padding:4px 6px; font-size:10px";
+    pinBtn.textContent=s.pinned?"UNPIN":"PIN";
+    pinBtn.addEventListener("click",()=>{
+      s.pinned=!s.pinned;
+      persist(true);
+      renderSurfaceList();
+      renderPinnedPanel();
+    });
+
+    const toQ=document.createElement("button");
+    toQ.className="btn";
+    toQ.style.cssText="padding:4px 6px; font-size:10px";
+    toQ.textContent="Q";
+    toQ.title="ADD TO QUEUE";
+    toQ.addEventListener("click",()=>{
+      if(!s.url) return;
+      STATE.ui.player.queue.push({label:canonName(s.name||"")||deriveNameFromUrl(s.url), url:s.url});
+      STATE.ui.playerOpen=true;
+      toast("ADDED");
+      persist(true);
+      playerRender();
+    });
+
+    row.appendChild(nm);
+    row.appendChild(pinBtn);
+    row.appendChild(toQ);
+    el.appendChild(row);
+  });
+}
+
+/* ===== pinned panel + sets strip (minimal) ===== */
+function renderPinnedPanel(){
+  const el=$("pinnedPanel");
+  if(!STATE.ui.pinnedStripOn || STATE.ui.blackout || STATE.ui.fullscreen){
+    el.style.display="none"; el.innerHTML=""; return;
+  }
+  const pinned=(STATE.payload.surfaces||[]).filter(s=>s.pinned && s.url);
+  if(!pinned.length){ el.style.display="none"; el.innerHTML=""; return; }
+  el.style.display="block";
+  el.innerHTML="";
+
+  const cols=4;
+  const cellW=200, cellH=62;
+  const originX=10, originY=10;
+
+  pinned.forEach((s,i)=>{
+    const mod=document.createElement("div");
+    mod.className="pinMod";
+    mod.dataset.id=s.id;
+    const nm=canonName(s.name||"")||deriveNameFromUrl(s.url);
+    mod.innerHTML=`<div class="grip" title="DRAG"></div><div class="nm">${escHtml(nm)}</div><div class="sub">${escHtml(s.url)}</div>`;
+    const saved=STATE.ui.pinnedPos[s.id];
+    const gx=originX+(i%cols)*cellW;
+    const gy=originY+Math.floor(i/cols)*cellH;
+    const x=(saved && typeof saved.x==="number") ? saved.x : gx;
+    const y=(saved && typeof saved.y==="number") ? saved.y : gy;
+    mod.style.left=x+"px";
+    mod.style.top=y+"px";
+
+    mod.addEventListener("click",(e)=>{
+      if(e.target && e.target.classList && e.target.classList.contains("grip")) return;
+      arm(nm, s.url);
+      toast("ARMED");
+      persist(true);
+    });
+
+    makeDragSmooth(mod, mod.querySelector(".grip"), {
+      minTop: 32,
+      onEnd:(rect)=>{ STATE.ui.pinnedPos[s.id]={x:rect.x,y:rect.y}; persist(true); }
+    });
+
+    el.appendChild(mod);
+  });
+}
+function renderSetsStrip(){
+  const el=$("activeStrip");
+  if(!STATE.ui.setsStripOn || STATE.ui.blackout || STATE.ui.fullscreen){
+    el.style.display="none"; el.innerHTML=""; return;
+  }
+  const sets=(STATE.payload.sets||[]).slice();
+  if(!sets.length){ el.style.display="none"; el.innerHTML=""; return; }
+  el.style.display="flex";
+  el.innerHTML="";
+  const lab=document.createElement("span");
+  lab.className="label";
+  lab.textContent="SETS";
+  el.appendChild(lab);
+
+  sets.slice(0,18).forEach(s=>{
+    const b=document.createElement("button");
+    b.className="pill";
+    b.textContent=canonName(s.label||"SET");
+    b.title=`${(s.items||[]).length} items`;
+    b.addEventListener("click",()=>{
+      const items=(s.items||[]).map(it=>({label:canonName(it.label||"")||deriveNameFromUrl(it.url), url:String(it.url||"").trim()})).filter(x=>x.url);
+      STATE.ui.player.queue=items;
+      STATE.ui.player.index=0;
+      STATE.ui.playerOpen=true;
+      toast("SET → QUEUE");
+      persist(true);
+      playerRender();
+    });
+    el.appendChild(b);
+  });
+}
+
+/* ===== PAD (mobile: keep minimal; surfaces only) ===== */
+function openPad(tab){
+  if(tab) STATE.ui.padTab=tab;
+  STATE.ui.padOpen=true;
+  const panel=$("padPanel");
+  panel.classList.add("open");
+  panel.style.display="flex";
+  applyPanelRect(panel, STATE.ui.padRect, {x:14,y:120,w:560,h:420});
+  renderPad();
+  persist(true);
+}
+function closePad(){
+  STATE.ui.padOpen=false;
+  const panel=$("padPanel");
+  panel.classList.remove("open");
+  panel.style.display="none";
+  persist(true);
+}
+function renderPad(){
+  const panel=$("padPanel");
+  if(!STATE.ui.padOpen || STATE.ui.blackout || STATE.ui.fullscreen){
+    panel.classList.remove("open");
+    panel.style.display="none";
+    return;
+  }
+  panel.style.display="flex";
+  panel.classList.add("open");
+  const tab=STATE.ui.padTab || "surfaces";
+  $("padHead").querySelectorAll("[data-tab]").forEach(btn=>{
+    btn.classList.toggle("on", btn.getAttribute("data-tab")===tab);
+  });
+
+  const body=$("padBody");
+  body.innerHTML="";
+  if(tab!=="surfaces"){
+    const box=document.createElement("div");
+    box.style.cssText="border:1px solid rgba(255,255,255,0.18); padding:12px; background:rgba(0,0,0,0.35); font-family:var(--mono); font-size:11px; color:var(--muted)";
+    box.textContent="MOB_BASE PAD: SURFACES ONLY (FOR NOW).";
+    body.appendChild(box);
+    return;
+  }
+
+  const surfaces=(STATE.payload.surfaces||[]).slice().sort((a,b)=>(b.pinned|0)-(a.pinned|0));
+  if(!surfaces.length){
+    const hint=document.createElement("div");
+    hint.style.cssText="padding:12px; font-family:var(--mono); font-size:11px; color:var(--muted)";
+    hint.textContent="NO SURFACES YET. ADD IN SYSTEM DRAWER.";
+    body.appendChild(hint);
+    return;
+  }
+
+  surfaces.forEach(s=>{
+    const row=document.createElement("div");
+    row.style.cssText="display:flex; gap:8px; align-items:center; border:1px solid rgba(255,255,255,0.16); padding:8px; font-family:var(--mono); font-size:11px";
+    const nm=document.createElement("div");
+    nm.style.cssText="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap";
+    nm.textContent=(canonName(s.name)||deriveNameFromUrl(s.url)) + (s.pinned?" [P]":"");
+    nm.title=s.url||"";
+    nm.addEventListener("click",()=>{ if(!s.url) return; arm(s.name||deriveNameFromUrl(s.url), s.url); toast("ARMED"); persist(true); });
+
+    const surf=document.createElement("button");
+    surf.className="btn"; surf.style.cssText="padding:4px 6px; font-size:10px";
+    surf.textContent="SURF";
+    surf.addEventListener("click",()=>{ if(!s.url) return; applySurface(s.url, s.name); toast("SURFACE"); persist(true); });
+
+    const q=document.createElement("button");
+    q.className="btn"; q.style.cssText="padding:4px 6px; font-size:10px";
+    q.textContent="Q";
+    q.addEventListener("click",()=>{ if(!s.url) return; STATE.ui.player.queue.push({label:canonName(s.name||"")||deriveNameFromUrl(s.url), url:s.url}); toast("ADDED"); STATE.ui.playerOpen=true; persist(true); playerRender(); });
+
+    row.appendChild(nm); row.appendChild(surf); row.appendChild(q);
+    body.appendChild(row);
+  });
+}
+
+/* ===== double-tap to RUN lights ===== */
+const DT_MS=280;
+const DT_DIST=24;
+let _tapT=0;
+let _tapX=0;
+let _tapY=0;
+
+function onDoubleTap(candidateX, candidateY){
+  if(STATE.ui.blackout) return;
+  toggleRun();
+  toast(STATE.ui.lightRunning ? "RUN" : "STOP");
+}
+
+function installDoubleTap(){
+  // Use pointerdown; ignore if starting on controls (buttons/inputs/etc).
+  root.addEventListener("pointerdown",(ev)=>{
+    const t=ev.target;
+    if(t && t.closest && t.closest("button,input,textarea,select,a,label")) return;
+
+    const now=Date.now();
+    const x=ev.clientX, y=ev.clientY;
+
+    const dt=now-_tapT;
+    const dx=Math.abs(x-_tapX);
+    const dy=Math.abs(y-_tapY);
+
+    if(dt>0 && dt<DT_MS && dx<DT_DIST && dy<DT_DIST){
+      _tapT=0;
+      onDoubleTap(x,y);
+      return;
+    }
+
+    _tapT=now;
+    _tapX=x; _tapY=y;
+  }, {passive:true});
+}
+
+/* ===== bindings ===== */
+function bind(){
+  // top actions
+  $("ketaIcon").addEventListener("click",()=>setKetaNote(!STATE.ui.noteOpen));
+  $("btnCopy").addEventListener("click",()=>copy(exportState()));
+  $("btnExport").addEventListener("click",()=>downloadJsonFile(exportFilename(), exportState()));
+  $("btnImport").addEventListener("click",()=>$("file").click());
+  $("file").addEventListener("change",(e)=>{
+    const f=e.target.files && e.target.files[0];
+    if(!f) return;
+    const r=new FileReader();
+    r.onload=()=>{ try{ importState(r.result); toast("IMPORTED"); }catch(err){ toast("IMPORT FAIL"); } };
+    r.readAsText(f);
+    e.target.value="";
+  });
+
+  // bottom toggles
+  $("toggleSystem").addEventListener("click",()=>setDrawer(!STATE.ui.drawerOpen));
+  $("toggleRun").addEventListener("click",toggleRun);
+  $("togglePlayer").addEventListener("click",()=>{ STATE.ui.playerOpen=!STATE.ui.playerOpen; persist(true); playerRender(); });
+  $("togglePad").addEventListener("click",()=> STATE.ui.padOpen ? closePad() : openPad("surfaces"));
+
+  // drawer buttons
+  $("btnCloseDrawer").addEventListener("click",()=>setDrawer(false));
+  $("btnTogglePinnedStrip").addEventListener("click",()=>{ STATE.ui.pinnedStripOn=!STATE.ui.pinnedStripOn; persist(true); renderPinnedPanel(); });
+  $("btnToggleSetsStrip").addEventListener("click",()=>{ STATE.ui.setsStripOn=!STATE.ui.setsStripOn; persist(true); renderSetsStrip(); });
+  $("btnToggleMotion").addEventListener("click",()=>{ STATE.ui.motionOn=!STATE.ui.motionOn; persist(true); syncMotion(); });
+
+  // universals + note
+  $("universals").addEventListener("input",()=>{ STATE.universals=$("universals").value; persist(true); });
+  $("ketaText").addEventListener("input",()=>{ STATE.ketaNote=$("ketaText").value; persist(true); });
+  $("btnHideNote").addEventListener("click",()=>setKetaNote(false));
+
+  // add surface
+  $("btnAddSurface").addEventListener("click",()=>{
+    const name=$("newSurfaceName").value.trim();
+    const url=$("newSurfaceUrl").value.trim();
+    if(!url){ toast("NO URL"); return; }
+    STATE.payload.surfaces.unshift({id:`SURF_${uid8()}`, name:canonName(name), url, pinned:false});
+    $("newSurfaceName").value=""; $("newSurfaceUrl").value="";
+    toast("ADDED");
+    persist(true);
+    renderSurfaceList();
+  });
+
+  $("btnSurfaceBulkAdd").addEventListener("click",()=>{
+    const parsed=parseBulkLines($("surfaceBulk").value||"");
+    if(!parsed.length){ toast("NO ITEMS"); return; }
+    parsed.forEach(p=>{
+      STATE.payload.surfaces.unshift({id:`SURF_${uid8()}`, name:canonName(p.name), url:p.url, pinned:false});
+    });
+    $("surfaceBulk").value="";
+    toast("BULK ADDED");
+    persist(true);
+    renderSurfaceList();
+  });
+
+  $("btnSurfaceBulkToQueue").addEventListener("click",()=>{
+    const parsed=parseBulkLines($("surfaceBulk").value||"");
+    if(!parsed.length){ toast("NO ITEMS"); return; }
+    parsed.forEach(p=>STATE.ui.player.queue.push({label:canonName(p.name)||deriveNameFromUrl(p.url), url:p.url}));
+    toast("BULK → QUEUE");
+    STATE.ui.playerOpen=true;
+    persist(true);
+    playerRender();
+  });
+
+  $("btnSurfaceBulkClear").addEventListener("click",()=>{ $("surfaceBulk").value=""; toast("CLEARED"); });
+  $("btnPinnedToQueue").addEventListener("click",()=>{
+    const pinned=(STATE.payload.surfaces||[]).filter(s=>s.pinned && s.url);
+    if(!pinned.length){ toast("NO PINNED"); return; }
+    pinned.forEach(s=>STATE.ui.player.queue.push({label:canonName(s.name||"")||deriveNameFromUrl(s.url), url:s.url}));
+    toast("PINNED → QUEUE");
+    STATE.ui.playerOpen=true;
+    persist(true);
+    playerRender();
+  });
+
+  // armed actions
+  $("armedGo").addEventListener("click",()=>{ if(ARMED.url) applySurface(ARMED.url, ARMED.name); });
+  $("armedNewTab").addEventListener("click",()=>openNewTab(ARMED.url));
+  $("armedCopy").addEventListener("click",()=>copy(ARMED.url));
+
+  // player buttons
+  $("playerClose").addEventListener("click",()=>{ STATE.ui.playerOpen=false; persist(true); playerRender(); });
+  $("playerCollapse").addEventListener("click",()=>{ STATE.ui.playerCollapsed=!STATE.ui.playerCollapsed; persist(true); playerRender(); });
+  $("playerPrev").addEventListener("click",playerPrev);
+  $("playerNext").addEventListener("click",playerNext);
+  $("playerPlay").addEventListener("click",playerTogglePlay);
+  $("playerSurf").addEventListener("click",playerSurfaceNow);
+  $("playerNewTabNow").addEventListener("click",()=>{ const cur=playerNow(); if(cur&&cur.url) openNewTab(cur.url); });
+  $("playerArmNow").addEventListener("click",()=>{ const cur=playerNow(); if(cur&&cur.url) arm(cur.label||deriveNameFromUrl(cur.url), cur.url); });
+  $("playerAddArmed").addEventListener("click",playerAddArmed);
+  $("playerStopSurface").addEventListener("click",()=>{ clearSurfacePlaying(); toast("STOP"); persist(true); });
+
+  $("playerAddInput").addEventListener("click",()=>playerAddInputUrl(false));
+  $("playerSurfaceInput").addEventListener("click",()=>playerAddInputUrl(true));
+  $("playerInputToArmed").addEventListener("click",()=>{
+    const raw=normalizeUrlMaybe($("playerInputUrl").value);
+    if(!raw){ toast("NO INPUT"); return; }
+    arm(deriveNameFromUrl(raw), raw); toast("ARMED"); persist(true);
+  });
+  $("playerInputClear").addEventListener("click",()=>{ $("playerInputUrl").value=""; toast("CLEARED"); });
+  $("playerImportBulk").addEventListener("click",playerImportBulk);
+  $("playerClearBulk").addEventListener("click",()=>{ $("playerBulkInput").value=""; toast("CLEARED"); });
+  $("playerClear").addEventListener("click",()=>{ STATE.ui.player.queue=[]; STATE.ui.player.index=0; STATE.ui.player.playing=false; toast("CLEARED"); persist(true); playerRender(); });
+  $("playerCreateSet").addEventListener("click",playerCreateSetFromQueue);
+
+  $("playerOpenYT").addEventListener("click",()=>{ STATE.ui.ytOpen=!STATE.ui.ytOpen; persist(true); renderYT(); });
+
+  // YT controls
+  $("ytClose").addEventListener("click",()=>{ STATE.ui.ytOpen=false; persist(true); renderYT(); });
+  $("ytApply").addEventListener("click",()=>{
+    STATE.ui.yt.input=$("ytInput").value.trim();
+    STATE.ui.yt.autoplay=$("ytAutoplay").checked;
+    STATE.ui.yt.mute=$("ytMute").checked;
+    STATE.ui.yt.loop=$("ytLoop").checked;
+    STATE.ui.yt.controls=$("ytControls").checked;
+    STATE.ui.yt.nocookie=$("ytNoCookie").checked;
+    applyYTEmbedFromState(false);
+    persist(true);
+  });
+  $("ytClear").addEventListener("click",()=>{
+    $("ytInput").value="";
+    STATE.ui.yt.input="";
+    applyYTEmbedFromState(false);
+    persist(true);
+  });
+  $("ytOpenTab").addEventListener("click",()=>{
+    const u=String($("ytInput").value||"").trim();
+    if(!u){ toast("NO INPUT"); return; }
+    openNewTab(normalizeUrlMaybe(u));
+  });
+  $("ytArmed").addEventListener("click",()=>{
+    const u=String(ARMED.url||"").trim();
+    if(!u){ toast("NO ARMED"); return; }
+    $("ytInput").value=u;
+    STATE.ui.yt.input=u;
+    applyYTEmbedFromState(false);
+    persist(true);
+  });
+
+  // light quick: tap cycles 1..6
+  lightQuick.addEventListener("click",()=>{
+    const n=((STATE.ui.lightPreset||1)%6)+1;
+    setLight(n);
+    toast("LIGHT "+n);
+  });
+
+  // pad
+  $("padClose").addEventListener("click",closePad);
+  $("padHead").querySelectorAll("[data-tab]").forEach(btn=>{
+    btn.addEventListener("click",()=>{
+      STATE.ui.padTab=btn.getAttribute("data-tab");
+      persist(true);
+      renderPad();
+    });
+  });
+
+  // anchor (exit blackout)
+  $("anchor").addEventListener("click",()=>setBlackout(false));
+
+  // drag heads
+  makeDragSmooth($("playerPanel"), $("playerHead"), {minTop:32, onEnd:(r)=>{ STATE.ui.playerRect=r; persist(true); }});
+  makeDragSmooth($("padPanel"), $("padHead"), {minTop:32, onEnd:(r)=>{ STATE.ui.padRect=r; persist(true); }});
+  makeDragSmooth($("ytPanel"), $("ytHead"), {minTop:32, onEnd:(r)=>{ STATE.ui.ytRect=r; persist(true); }});
+  makeDragSmooth($("ketaNote"), $("ketaHead"), {minTop:32});
+
+  // double tap runs lights
+  installDoubleTap();
+
+  // keyboard
+  window.addEventListener("keydown",(ev)=>{
+    if(ev.repeat) return;
+    const k=ev.key;
+    if(ev.shiftKey && (k==="I"||k==="i")){ setInvert(!STATE.ui.invert); return; }
+    if(ev.shiftKey && (k==="0")){ setBlackout(!STATE.ui.blackout); return; }
+    if(ev.shiftKey && (k==="F"||k==="f")){ setFullscreen(!STATE.ui.fullscreen); return; }
+    if(k===" "){
+      // only when not typing
+      const t=document.activeElement;
+      if(t && (t.tagName==="INPUT"||t.tagName==="TEXTAREA")) return;
+      ev.preventDefault();
+      toggleRun();
+    }
+    if(/[1-6]/.test(k) && !ev.shiftKey && !ev.ctrlKey && !ev.metaKey){
+      const t=document.activeElement;
+      if(t && (t.tagName==="INPUT"||t.tagName==="TEXTAREA")) return;
+      setLight(Number(k));
+      toast("LIGHT "+k);
+    }
+  });
+}
+
+/* ===== render ===== */
+function render(){
+  root.classList.toggle("invert", !!STATE.ui.invert);
+  root.classList.toggle("blackout", !!STATE.ui.blackout);
+  root.classList.toggle("fs", !!STATE.ui.fullscreen);
+
+  $("sig").textContent=stableSig();
+  $("sig2").textContent=stableSig();
+
+  $("runLabel").textContent = STATE.ui.lightRunning ? "ON":"OFF";
+  $("motionLabel").textContent = STATE.ui.motionOn ? "ON":"OFF";
+  $("lightLabel").textContent = String(STATE.ui.lightPreset||1);
+  lightQuick.textContent="L"+String(STATE.ui.lightPreset||1);
+
+  $("drawer").classList.toggle("open", !!STATE.ui.drawerOpen);
+  $("ketaIcon").classList.toggle("open", !!STATE.ui.noteOpen);
+  $("ketaNote").classList.toggle("open", !!STATE.ui.noteOpen);
+
+  $("universals").value = STATE.universals || "";
+  $("ketaText").value = STATE.ketaNote || "";
+
+  document.documentElement.style.setProperty("--light", String(STATE.ui.lightPreset||1));
+
+  // surface reflect
+  if(STATE.ui.surfaceUrl){
+    surfaceFrame.classList.add("on");
+    if(surfaceFrame.getAttribute("src")!==STATE.ui.surfaceUrl) surfaceFrame.setAttribute("src", STATE.ui.surfaceUrl);
+    $("surfaceLabel").textContent = STATE.ui.surfaceLabel || deriveNameFromUrl(STATE.ui.surfaceUrl);
+  }else{
+    surfaceFrame.classList.remove("on");
+    surfaceFrame.removeAttribute("src");
+    $("surfaceLabel").textContent="—";
+  }
+
+  // armed visibility
+  $("armedBar").style.display = (ARMED.url && !(STATE.ui.blackout||STATE.ui.fullscreen)) ? "flex":"none";
+
+  syncMotion();
+  renderSurfaceList();
+  renderPinnedPanel();
+  renderSetsStrip();
+  if(STATE.ui.padOpen) renderPad();
+  else $("padPanel").style.display="none";
+  playerRender();
+  renderYT();
+}
+
+/* ===== boot ===== */
+(function boot(){
+  _BOOTING=true;
+  // seed
+  if(typeof STATE.ui.lightPreset!=="number") STATE.ui.lightPreset=1;
+  if(typeof STATE.ui.drawerH!=="number") STATE.ui.drawerH=0.52;
+
+  // apply panels
+  applyPanelRect($("playerPanel"), STATE.ui.playerRect, {x:window.innerWidth-400,y:120,w:380,h:480});
+  applyPanelRect($("padPanel"), STATE.ui.padRect, {x:14,y:160,w:560,h:420});
+  applyPanelRect($("ytPanel"), STATE.ui.ytRect, {x:window.innerWidth-390,y:600,w:360,h:260});
+
+  bind();
+
+  // restore lights if running (safe)
+  if(STATE.ui.lightRunning && !STATE.ui.blackout) startLight(STATE.ui.lightPreset||1);
+  else resetStage();
+
+  // restore surface
+  if(STATE.ui.surfaceUrl) applySurface(STATE.ui.surfaceUrl, STATE.ui.surfaceLabel);
+
+  _BOOTING=false;
+  render();
+  persist(true);
+})();
+</script>
+
+<!--
+AE: SHELL8 / MOB_BASE
+EE: PLAYER + LIGHTS_DOUBLE_TAP (RUN TOGGLE)
+WB: INDEP_LOCALSTATE (NO SOVEREIGN KEY WRITE)
+FILE_ID: SHELL8_MOB_BASE_PLAYER
+ROOM_ID: MOB_BASE
+VERSION: v2
+UPDATED_AT: 2026-01-15T00:00:00.000Z
+CHANGELOG:
+- Bars: corner squares on all bar corners (top-left/top-right/bottom-left/bottom-right)
+- Lights: RUN toggles on double-tap anywhere on substrate (not on controls)
+- Base: player-first (queue + surface playback)
+-->
+</body>
+</html>
