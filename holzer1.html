@@ -1,0 +1,1422 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>KETADATA — JENNY HOLZER INTERFACE (TEXT AS SURFACE / COMMAND DISPLAY)</title>
+  <style>
+    :root{
+      --bg:#000;
+      --fg:#fff;
+      --muted:rgba(255,255,255,.62);
+      --hair:rgba(255,255,255,.14);
+      --panel:rgba(0,0,0,.62);
+      --panel2:rgba(255,255,255,.03);
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0; overflow:hidden;
+      background:var(--bg); color:var(--fg);
+      font-family: Arial, Helvetica, sans-serif;
+    }
+    canvas{ position:fixed; inset:0; width:100vw; height:100vh; display:block; }
+
+    .hud{
+      position:fixed; left:16px; top:14px;
+      pointer-events:none; user-select:none;
+      mix-blend-mode:screen;
+    }
+    .brand{
+      font-weight:900; letter-spacing:.18em;
+      text-transform:uppercase; font-size:14px;
+      text-shadow:0 0 20px rgba(255,255,255,.14);
+    }
+    .sub{
+      margin-top:4px;
+      font-size:11px; letter-spacing:.12em;
+      text-transform:uppercase; color:var(--muted);
+      line-height:1.25; max-width: 76ch;
+    }
+
+    .dock{
+      position:fixed; left:16px; bottom:14px;
+      display:flex; flex-wrap:wrap; gap:10px; align-items:center;
+      pointer-events:auto;
+    }
+    .btn, select{
+      background:rgba(255,255,255,.05);
+      border:1px solid rgba(255,255,255,.22);
+      color:rgba(255,255,255,.86);
+      padding:10px 12px;
+      border-radius:10px;
+      letter-spacing:.14em;
+      font-size:11px;
+      text-transform:uppercase;
+      cursor:pointer;
+      backdrop-filter: blur(6px);
+      transition: transform .08s ease, background .12s ease, border-color .12s ease;
+      outline:none;
+    }
+    .btn:hover, select:hover{
+      background:rgba(255,255,255,.10);
+      border-color:rgba(255,255,255,.36);
+      transform: translateY(-1px);
+    }
+    .btn:active{ transform: translateY(0px); }
+
+    .panel{
+      position:fixed; right:16px; top:14px;
+      width:min(920px, calc(100vw - 32px));
+      max-height: calc(100vh - 28px);
+      overflow:auto;
+      border:1px solid rgba(255,255,255,.18);
+      background:var(--panel);
+      backdrop-filter: blur(10px);
+      border-radius:14px;
+      box-shadow: 0 0 0 1px rgba(255,255,255,.06) inset, 0 18px 55px rgba(0,0,0,.65);
+    }
+    .panelHeader{
+      position:sticky; top:0;
+      padding:10px 12px;
+      border-bottom:1px solid rgba(255,255,255,.12);
+      background:rgba(0,0,0,.74);
+      backdrop-filter: blur(10px);
+      display:flex; justify-content:space-between; align-items:flex-start;
+      gap:12px;
+      z-index:10;
+    }
+    .title{
+      font-weight:900;
+      letter-spacing:.14em;
+      font-size:11px;
+      text-transform:uppercase;
+      color:rgba(255,255,255,.86);
+      line-height:1.25;
+    }
+    .hint{
+      font-size:11px;
+      letter-spacing:.08em;
+      color:rgba(255,255,255,.55);
+      text-align:right;
+      line-height:1.25;
+    }
+
+    .panelBody{ padding:10px 12px 14px; display:flex; flex-direction:column; gap:10px; }
+
+    .grid2{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap:10px;
+    }
+    @media (max-width: 980px){ .grid2{ grid-template-columns:1fr; } }
+
+    .block{
+      border:1px solid rgba(255,255,255,.12);
+      border-radius:12px;
+      overflow:hidden;
+      background:var(--panel2);
+    }
+    .block h3{
+      margin:0;
+      padding:10px 10px;
+      font-size:11px;
+      letter-spacing:.14em;
+      text-transform:uppercase;
+      color:rgba(255,255,255,.75);
+      border-bottom:1px solid rgba(255,255,255,.10);
+      background:rgba(255,255,255,.03);
+      display:flex; justify-content:space-between; align-items:center; gap:10px;
+    }
+    .pill{
+      font-size:10px;
+      letter-spacing:.10em;
+      text-transform:uppercase;
+      color:rgba(255,255,255,.62);
+      border:1px solid rgba(255,255,255,.18);
+      padding:4px 8px;
+      border-radius:999px;
+      background:rgba(0,0,0,.20);
+      white-space:nowrap;
+    }
+
+    .rows{ padding:10px; display:flex; flex-direction:column; gap:10px; }
+    .row{
+      display:grid;
+      grid-template-columns: 320px 1fr 70px;
+      gap:10px;
+      align-items:center;
+    }
+    .label{
+      font-size:11px;
+      text-transform:uppercase;
+      letter-spacing:.12em;
+      color:rgba(255,255,255,.62);
+      white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+    }
+    input[type="range"]{ width:100%; accent-color: rgba(255,255,255,.92); }
+    .val{ font-variant-numeric: tabular-nums; font-size:11px; color:rgba(255,255,255,.76); text-align:right; }
+
+    .toggles{
+      padding:10px;
+      display:flex; flex-wrap:wrap; gap:8px;
+      border-top:1px solid rgba(255,255,255,.10);
+      background:rgba(0,0,0,.12);
+    }
+    .toggle{
+      display:inline-flex; align-items:center; gap:8px;
+      padding:8px 10px;
+      border-radius:10px;
+      border:1px solid rgba(255,255,255,.18);
+      background:rgba(255,255,255,.03);
+      cursor:pointer; user-select:none;
+    }
+    .toggle input{ transform: translateY(1px); }
+    .toggle span{
+      font-size:11px;
+      letter-spacing:.12em;
+      text-transform:uppercase;
+      color:rgba(255,255,255,.78);
+      white-space:nowrap;
+    }
+
+    .status{
+      padding:10px;
+      border-top:1px solid rgba(255,255,255,.10);
+      background:rgba(0,0,0,.12);
+      display:flex; flex-direction:column; gap:10px;
+    }
+    .mono{
+      font-variant-numeric: tabular-nums;
+      letter-spacing:.10em;
+      text-transform:uppercase;
+      font-size:10px;
+      color:rgba(255,255,255,.74);
+      line-height:1.35;
+    }
+    .bar{
+      height:12px;
+      border-radius:999px;
+      border:1px solid rgba(255,255,255,.16);
+      background:rgba(255,255,255,.04);
+      overflow:hidden;
+    }
+    .fill{ height:100%; width:0%; background:rgba(255,255,255,.60); }
+
+    textarea{
+      width:100%;
+      min-height:92px;
+      resize:vertical;
+      padding:10px;
+      border-radius:12px;
+      border:1px solid rgba(255,255,255,.16);
+      background:rgba(0,0,0,.55);
+      color:rgba(255,255,255,.88);
+      font-family: Arial, Helvetica, sans-serif;
+      letter-spacing:.05em;
+      line-height:1.35;
+      outline:none;
+    }
+    textarea::placeholder{ color: rgba(255,255,255,.40); }
+
+    .miniRow{
+      display:flex; gap:10px; align-items:center; flex-wrap:wrap;
+      padding:10px;
+      border-top:1px solid rgba(255,255,255,.10);
+      background:rgba(0,0,0,.12);
+    }
+    .miniRow .btn{ padding:9px 11px; }
+
+    /* ===== CONTROLLER FIX (NO OTHER CHANGES) ===== */
+    canvas{ z-index:0; }
+    .dock{ z-index:20; }
+    .panel{ z-index:30; }
+  </style>
+</head>
+<body>
+  <canvas id="c"></canvas>
+
+  <div class="hud">
+    <div class="brand">KETADATA</div>
+    <div class="sub" id="sub">
+      HOLZER INTERFACE · TEXT AS SIGNAL · INSTITUTIONAL DISPLAY · PUBLIC ADDRESS · SOFT VIOLENCE ·
+      CLICK = ISSUE LINE · DRAG = SMEAR / PROJECTION WASH · SHIFT+DRAG = GLITCH / INTERRUPT · HOLD [SPACE] = EMERGENCY LOOP · [H] PANEL · [I] INVERT · [P] PAUSE
+    </div>
+  </div>
+
+  <div class="dock">
+    <select id="mode">
+      <option value="tape">MODE: LED TAPE</option>
+      <option value="stack">MODE: STACKED MARQUEES</option>
+      <option value="projection">MODE: PROJECTION WALL</option>
+      <option value="plaza">MODE: PLAZA GRID</option>
+      <option value="sirens">MODE: SIREN TEXT</option>
+    </select>
+    <button class="btn" id="invert">INVERT</button>
+    <button class="btn" id="pause">PAUSE</button>
+    <button class="btn" id="reseed">RESEED COPY</button>
+    <button class="btn" id="clear">CLEAR SMEAR</button>
+    <button class="btn" id="reset">RESET</button>
+  </div>
+
+  <div class="panel" id="panel">
+    <div class="panelHeader">
+      <div class="title">TEXT CONSOLE / DISPLAY LOGIC</div>
+      <div class="hint">
+        CLICK: issue line + log event<br/>
+        DRAG: smear/projection wash (residual)<br/>
+        SHIFT+DRAG: interrupt/glitch (risk → noise)<br/>
+        HOLD [SPACE]: emergency loop (repeat, intensify)
+      </div>
+    </div>
+
+    <div class="panelBody">
+      <div class="grid2">
+        <div class="block">
+          <h3>Display <span class="pill">surface / optics</span></h3>
+          <div class="rows">
+            <div class="row">
+              <div class="label">time scale (ultra slow)</div>
+              <input id="timeScale" type="range" min="0.000" max="2.000" step="0.001" value="0.22">
+              <div class="val" id="timeScaleV">0.220</div>
+            </div>
+            <div class="row">
+              <div class="label">speed (scroll)</div>
+              <input id="speed" type="range" min="0.00" max="2.80" step="0.01" value="1.05">
+              <div class="val" id="speedV">1.05</div>
+            </div>
+            <div class="row">
+              <div class="label">density (dot pitch)</div>
+              <input id="density" type="range" min="0.60" max="2.40" step="0.01" value="1.30">
+              <div class="val" id="densityV">1.30</div>
+            </div>
+            <div class="row">
+              <div class="label">glow (bloom)</div>
+              <input id="glow" type="range" min="0.00" max="2.40" step="0.01" value="0.85">
+              <div class="val" id="glowV">0.85</div>
+            </div>
+            <div class="row">
+              <div class="label">noise (signal corrosion)</div>
+              <input id="noise" type="range" min="0.00" max="2.80" step="0.01" value="0.55">
+              <div class="val" id="noiseV">0.55</div>
+            </div>
+            <div class="row">
+              <div class="label">trace (smear persistence)</div>
+              <input id="trace" type="range" min="0.000" max="0.25" step="0.001" value="0.055">
+              <div class="val" id="traceV">0.055</div>
+            </div>
+            <div class="row">
+              <div class="label">zoom</div>
+              <input id="zoom" type="range" min="0.65" max="2.60" step="0.01" value="1.10">
+              <div class="val" id="zoomV">1.10</div>
+            </div>
+          </div>
+
+          <div class="toggles">
+            <label class="toggle"><input id="T_tape" type="checkbox" checked><span>tape bands</span></label>
+            <label class="toggle"><input id="T_marquees" type="checkbox" checked><span>marquees</span></label>
+            <label class="toggle"><input id="T_projection" type="checkbox" checked><span>projection wash</span></label>
+            <label class="toggle"><input id="T_grid" type="checkbox" checked><span>plaza grid</span></label>
+            <label class="toggle"><input id="T_index" type="checkbox" checked><span>index stamps</span></label>
+            <label class="toggle"><input id="T_sirens" type="checkbox" checked><span>siren arcs</span></label>
+          </div>
+        </div>
+
+        <div class="block">
+          <h3>Mind Mechanics <span class="pill">authority / drift</span></h3>
+          <div class="rows">
+            <div class="row">
+              <div class="label">authority (command weight)</div>
+              <input id="authority" type="range" min="0.00" max="2.60" step="0.01" value="1.25">
+              <div class="val" id="authorityV">1.25</div>
+            </div>
+            <div class="row">
+              <div class="label">pressure (public urgency)</div>
+              <input id="pressure" type="range" min="0.00" max="2.60" step="0.01" value="0.95">
+              <div class="val" id="pressureV">0.95</div>
+            </div>
+            <div class="row">
+              <div class="label">ambiguity (double meaning)</div>
+              <input id="ambiguity" type="range" min="0.00" max="2.60" step="0.01" value="1.05">
+              <div class="val" id="ambiguityV">1.05</div>
+            </div>
+            <div class="row">
+              <div class="label">repetition (loop compulsion)</div>
+              <input id="repeat" type="range" min="0.00" max="2.60" step="0.01" value="1.15">
+              <div class="val" id="repeatV">1.15</div>
+            </div>
+            <div class="row">
+              <div class="label">censorship (gaps / redactions)</div>
+              <input id="censor" type="range" min="0.00" max="2.60" step="0.01" value="0.55">
+              <div class="val" id="censorV">0.55</div>
+            </div>
+          </div>
+
+          <div class="status">
+            <div class="mono" id="stat">—</div>
+
+            <div class="mono">SIGNAL (LEGIBILITY)</div>
+            <div class="bar"><div class="fill" id="sigFill"></div></div>
+
+            <div class="mono">URGENCY (PRESSURE)</div>
+            <div class="bar"><div class="fill" id="urgFill"></div></div>
+
+            <div class="mono">CONTROL (AUTHORITY)</div>
+            <div class="bar"><div class="fill" id="ctlFill"></div></div>
+
+            <div class="mono">DRIFT (AMBIGUITY)</div>
+            <div class="bar"><div class="fill" id="drfFill"></div></div>
+
+            <div class="mono">REDaction (CENSORSHIP)</div>
+            <div class="bar"><div class="fill" id="redFill"></div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="block">
+        <h3>Copy Feed <span class="pill">you can overwrite</span></h3>
+        <div class="rows">
+          <div class="label" style="margin-bottom:-6px;">CUSTOM LINES (ONE PER LINE). THEY WILL ENTER THE SYSTEM. SHORT LINES READ BEST.</div>
+          <textarea id="custom" placeholder="PASTE YOUR LINES HERE
+ONE PER LINE
+UPPERCASE RECOMMENDED"></textarea>
+        </div>
+        <div class="miniRow">
+          <button class="btn" id="useCustom">USE CUSTOM</button>
+          <button class="btn" id="mixIn">MIX CUSTOM + SYSTEM</button>
+          <button class="btn" id="systemOnly">SYSTEM ONLY</button>
+          <div class="mono" id="feedInfo" style="margin-left:auto;">FEED: SYSTEM</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (() => {
+      const canvas = document.getElementById('c');
+      const ctx = canvas.getContext('2d', { alpha:false });
+
+      let W=0,H=0,DPR=Math.min(2, window.devicePixelRatio||1);
+      function resize(){
+        W=innerWidth; H=innerHeight;
+        canvas.width = Math.floor(W*DPR);
+        canvas.height = Math.floor(H*DPR);
+        canvas.style.width = W+'px';
+        canvas.style.height = H+'px';
+        ctx.setTransform(DPR,0,0,DPR,0,0);
+      }
+      addEventListener('resize', resize);
+      resize();
+
+      const $ = (id)=>document.getElementById(id);
+
+      const ui = {
+        mode: $('mode'),
+
+        timeScale: $('timeScale'),
+        speed: $('speed'),
+        density: $('density'),
+        glow: $('glow'),
+        noise: $('noise'),
+        trace: $('trace'),
+        zoom: $('zoom'),
+
+        authority: $('authority'),
+        pressure: $('pressure'),
+        ambiguity: $('ambiguity'),
+        repeat: $('repeat'),
+        censor: $('censor'),
+
+        T_tape: $('T_tape'),
+        T_marquees: $('T_marquees'),
+        T_projection: $('T_projection'),
+        T_grid: $('T_grid'),
+        T_index: $('T_index'),
+        T_sirens: $('T_sirens'),
+
+        custom: $('custom'),
+        feedInfo: $('feedInfo'),
+      };
+
+      const vv = {
+        timeScaleV: $('timeScaleV'),
+        speedV: $('speedV'),
+        densityV: $('densityV'),
+        glowV: $('glowV'),
+        noiseV: $('noiseV'),
+        traceV: $('traceV'),
+        zoomV: $('zoomV'),
+
+        authorityV: $('authorityV'),
+        pressureV: $('pressureV'),
+        ambiguityV: $('ambiguityV'),
+        repeatV: $('repeatV'),
+        censorV: $('censorV'),
+      };
+
+      function syncVals(){
+        vv.timeScaleV.textContent = (+ui.timeScale.value).toFixed(3);
+        vv.speedV.textContent = (+ui.speed.value).toFixed(2);
+        vv.densityV.textContent = (+ui.density.value).toFixed(2);
+        vv.glowV.textContent = (+ui.glow.value).toFixed(2);
+        vv.noiseV.textContent = (+ui.noise.value).toFixed(2);
+        vv.traceV.textContent = (+ui.trace.value).toFixed(3);
+        vv.zoomV.textContent = (+ui.zoom.value).toFixed(2);
+
+        vv.authorityV.textContent = (+ui.authority.value).toFixed(2);
+        vv.pressureV.textContent = (+ui.pressure.value).toFixed(2);
+        vv.ambiguityV.textContent = (+ui.ambiguity.value).toFixed(2);
+        vv.repeatV.textContent = (+ui.repeat.value).toFixed(2);
+        vv.censorV.textContent = (+ui.censor.value).toFixed(2);
+      }
+      Object.values(ui).forEach(el=>{
+        if (!el || !el.addEventListener) return;
+        el.addEventListener('input', syncVals);
+        el.addEventListener('change', syncVals);
+      });
+      syncVals();
+
+      const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+      const lerp=(a,b,t)=>a+(b-a)*t;
+      const tau=Math.PI*2;
+
+      function hash32(n){
+        n=(n^(n>>>16))>>>0; n=Math.imul(n,2246822519)>>>0;
+        n=(n^(n>>>13))>>>0; n=Math.imul(n,3266489917)>>>0;
+        n=(n^(n>>>16))>>>0; return n>>>0;
+      }
+      function rnd01(n){ return hash32(n)/4294967295; }
+
+      // IMPORTANT: avoid using Jenny Holzer's specific copyrighted Truisms verbatim.
+      // These are original "Holzer-adjacent" lines: terse, imperative, institutional, but new.
+      const SYSTEM_LINES = [
+        "THE SIGN IS THE SENTENCE THAT OWNS YOU",
+        "PUBLIC SPACE IS A SCREEN FOR PRIVATE POWER",
+        "YOUR FEAR IS A POLICY WITH A FACE",
+        "OBEDIENCE FEELS LIKE RELIEF UNTIL IT DOESN'T",
+        "INFORMATION IS A FORM OF CROWD CONTROL",
+        "THE DISPLAY IS A WEAPON THAT LOOKS NEUTRAL",
+        "CONSENT IS OFTEN A TIMING ISSUE",
+        "THE MESSAGE IS MOST VIOLENT WHEN IT SOUNDS CALM",
+        "WORDS ARE CHEAPER THAN CONSEQUENCES",
+        "YOUR ATTENTION IS THE TAX YOU PAY WITHOUT NOTICE",
+        "OFFICIAL LANGUAGE IS A COSTUME",
+        "NEUTRALITY IS A LUXURY PRODUCT",
+        "THE CROWD BECOMES A SENSOR",
+        "PANIC IS AN ADMINISTRATIVE TOOL",
+        "MORALITY IS FREQUENTLY A BRAND",
+        "YOU WERE TRAINED TO CALL THIS NORMAL",
+        "THE ANNOUNCEMENT REPLACES THE EVENT",
+        "THE FUTURE IS USED TO CANCEL THE PRESENT",
+        "THE WARNING IS ALSO AN INVITATION",
+        "A PUBLIC SECRET IS STILL A SECRET",
+        "YOUR BODY IS A DOCUMENT UNDER REVISION",
+        "THE ARCHIVE IS AN ACTIVE THREAT",
+        "THE STATE LOVES CLEAN SENTENCES",
+        "THE MARKET LOVES DIRTY PROMISES",
+        "SOME SINCERITY IS STRATEGIC",
+        "DO NOT CONFUSE VOLUME WITH TRUTH",
+        "REPEAT THE LIE UNTIL IT LOOKS LIKE WEATHER",
+        "THE CAMERA IS A SOCIAL CONTRACT YOU DID NOT SIGN",
+        "CERTAINTY IS A STYLE CHOICE",
+        "THE SYSTEM PREFERS YOU TIRED",
+        "IF YOU CAN READ IT YOU CAN BE LED",
+        "EVERY SCREEN IS A BORDER CHECK",
+        "POLITENESS CAN BE A LOCK",
+        "THE MOST IMPORTANT THINGS ARE SAID SIDEWAYS",
+        "SILENCE IS A TYPE OF ALIGNMENT",
+        "YOUR DESIRE IS EASY TO SUBSTITUTE",
+        "AN ORDER IS STILL AN ORDER IN A FRIENDLY FONT",
+        "THE CROWD LEARNS THE SCRIPT FAST",
+        "THE FACT COMES LAST",
+        "THE HEADLINE IS A SMALL ROOM",
+        "YOU ARE NOT IMMUNE TO RHYTHM",
+        "THE DISPLAY DOES NOT NEED YOUR AGREEMENT",
+        "SOME EMERGENCIES ARE SCHEDULED",
+        "DOUBT IS AN ENGINE WHEN IT IS DISCIPLINED",
+        "THE EXIT SIGN IS PART OF THE PERFORMANCE"
+      ];
+
+      // Feed selection
+      const FEED = {
+        mode: "system", // system | custom | mix
+        customLines: [],
+        lines: SYSTEM_LINES.slice(),
+      };
+
+      function normalizeLines(arr){
+        return arr.map(s=>String(s||"").trim()).filter(Boolean).slice(0, 400);
+      }
+      function refreshFeed(){
+        const custom = normalizeLines(ui.custom.value.split("\n"));
+        FEED.customLines = custom;
+
+        if (FEED.mode === "custom"){
+          FEED.lines = custom.length ? custom : SYSTEM_LINES.slice();
+          ui.feedInfo.textContent = custom.length ? "FEED: CUSTOM" : "FEED: CUSTOM (EMPTY → SYSTEM FALLBACK)";
+        } else if (FEED.mode === "mix"){
+          const mix = [];
+          const A = SYSTEM_LINES, B = custom.length ? custom : [];
+          const N = Math.max(60, Math.min(240, A.length + B.length));
+          for (let i=0;i<N;i++){
+            const pickB = (B.length && rnd01(st.seed + i*97) < 0.42);
+            mix.push(pickB ? B[i % B.length] : A[i % A.length]);
+          }
+          FEED.lines = mix;
+          ui.feedInfo.textContent = B.length ? "FEED: MIX" : "FEED: MIX (CUSTOM EMPTY → SYSTEM)";
+        } else {
+          FEED.lines = SYSTEM_LINES.slice();
+          ui.feedInfo.textContent = "FEED: SYSTEM";
+        }
+      }
+
+      $('useCustom').onclick = ()=>{ FEED.mode="custom"; refreshFeed(); };
+      $('mixIn').onclick = ()=>{ FEED.mode="mix"; refreshFeed(); };
+      $('systemOnly').onclick = ()=>{ FEED.mode="system"; refreshFeed(); };
+
+      // state: "mind mechanics" (coupled variables + phase transitions)
+      const st = {
+        t:0,
+        invert:false,
+        paused:false,
+        seed:(Math.random()*1e9)|0,
+
+        // camera/space
+        ox:0, oy:0,
+        wheel:0,
+        zoom:1.0,
+
+        // input
+        mx:0,my:0,
+        dragging:false,
+        dragType:"smear", // smear | interrupt | pan
+        lastX:0,lastY:0,
+        holding:false,
+        holdTime:0,
+
+        // mind variables (0..1.6-ish)
+        signal: 0.82,     // legibility
+        urgency: 0.35,    // public pressure
+        control: 0.55,    // authority grip
+        drift: 0.28,      // ambiguity / double meaning
+        redaction: 0.12,  // censorship / gaps
+
+        // phases
+        phase: "normal",  // normal | alert | emergency
+
+        // artifacts
+        stamps: [],       // click-issued lines
+        smears: [],       // drag projection washes
+        glitches: [],     // interrupt events
+        sirens: [],       // arcs for emergency loop
+
+        // text lanes
+        lanes: [],
+        laneTick: 0
+      };
+
+      function stageScale(){ return Math.min(W,H) * 0.62 * st.zoom; }
+      function stageCenter(){ return { x: W*0.5 + st.ox, y: H*0.5 + st.oy }; }
+      function stageToScreen(x,y){
+        const S=stageScale(), c=stageCenter();
+        return { x: c.x + x*S, y: c.y + y*S };
+      }
+      function screenToStage(sx,sy){
+        const S=stageScale(), c=stageCenter();
+        return { x: (sx-c.x)/S, y: (sy-c.y)/S };
+      }
+
+      function setFill(id, v){
+        $(id).style.width = Math.round(clamp(v,0,1)*100) + "%";
+      }
+
+      function reseed(){
+        st.seed = (Math.random()*1e9)|0;
+        st.t=0;
+
+        st.signal = 0.82;
+        st.urgency = 0.35;
+        st.control = 0.55;
+        st.drift = 0.28;
+        st.redaction = 0.12;
+        st.phase="normal";
+
+        st.stamps.length=0;
+        st.smears.length=0;
+        st.glitches.length=0;
+        st.sirens.length=0;
+
+        st.lanes.length=0;
+        st.laneTick=0;
+
+        // seed lanes
+        const laneCount = 6 + Math.floor(rnd01(st.seed+11)*8);
+        for (let i=0;i<laneCount;i++){
+          st.lanes.push(makeLane(i, laneCount));
+        }
+
+        refreshFeed();
+      }
+
+      function clearSmear(){
+        st.smears.length=0;
+        st.glitches.length=0;
+        st.sirens.length=0;
+      }
+
+      function resetAll(){
+        st.invert=false; st.paused=false;
+        st.ox=0; st.oy=0; st.wheel=0; st.zoom=1.0;
+        ui.timeScale.value=0.22;
+        ui.speed.value=1.05;
+        ui.density.value=1.30;
+        ui.glow.value=0.85;
+        ui.noise.value=0.55;
+        ui.trace.value=0.055;
+        ui.zoom.value=1.10;
+
+        ui.authority.value=1.25;
+        ui.pressure.value=0.95;
+        ui.ambiguity.value=1.05;
+        ui.repeat.value=1.15;
+        ui.censor.value=0.55;
+
+        ui.T_tape.checked=true;
+        ui.T_marquees.checked=true;
+        ui.T_projection.checked=true;
+        ui.T_grid.checked=true;
+        ui.T_index.checked=true;
+        ui.T_sirens.checked=true;
+
+        ui.mode.value="tape";
+        syncVals();
+        reseed();
+      }
+
+      $('invert').onclick = ()=> st.invert = !st.invert;
+      $('pause').onclick  = ()=> st.paused = !st.paused;
+      $('reseed').onclick = ()=> reseed();
+      $('clear').onclick  = ()=> clearSmear();
+      $('reset').onclick  = ()=> resetAll();
+
+      addEventListener('keydown', (e)=>{
+        if (e.key==='i' || e.key==='I') st.invert = !st.invert;
+        if (e.key==='p' || e.key==='P') st.paused = !st.paused;
+        if (e.key==='h' || e.key==='H'){
+          const panel = $('panel');
+          panel.style.display = (panel.style.display === 'none') ? '' : 'none';
+        }
+        if (e.code === 'Space'){
+          e.preventDefault();
+          st.holding = true;
+        }
+      });
+      addEventListener('keyup', (e)=>{
+        if (e.code === 'Space') st.holding = false;
+      });
+
+      addEventListener('wheel', (e)=>{
+        const d = Math.max(-160, Math.min(160, e.deltaY));
+        st.wheel += (-d/160) * 0.20;
+        st.wheel = clamp(st.wheel, -0.90, 1.00);
+      }, { passive:true });
+
+      /* ===== CONTROLLER FIX (NO OTHER CHANGES) ===== */
+      const PANEL = document.getElementById('panel');
+      const DOCK  = document.querySelector('.dock');
+      function isUIEventTarget(t){
+        if (!t) return false;
+        if (PANEL && PANEL.contains(t)) return true;
+        if (DOCK && DOCK.contains(t)) return true;
+        return !!t.closest('input, button, select, textarea, label, a, [role="button"], .panel, .dock');
+      }
+
+      // lane + text management
+      function pickLine(i){
+        const lines = FEED.lines.length ? FEED.lines : SYSTEM_LINES;
+        const idx = Math.floor(rnd01(st.seed + i*131 + ((st.t*1000)|0)) * lines.length);
+        return lines[idx] || "—";
+      }
+
+      function makeLane(i, n){
+        const y = lerp(0.18, 0.82, n===1?0.5:i/(n-1));
+        const dir = (i%2===0) ? 1 : -1;
+        return {
+          y, dir,
+          speedMul: 0.65 + 0.85*rnd01(st.seed + i*71),
+          phase: rnd01(st.seed + i*91)*tau,
+          text: pickLine(i),
+          x: dir>0 ? -0.35 - rnd01(st.seed+i*13)*0.25 : 1.35 + rnd01(st.seed+i*13)*0.25,
+          life: 1.0,
+          weight: 0.65 + 0.35*rnd01(st.seed+i*17)
+        };
+      }
+
+      function issueStamp(x,y, line, strength){
+        st.stamps.push({
+          x,y, line,
+          t: st.t,
+          life: 1.0,
+          strength
+        });
+        if (st.stamps.length > 140) st.stamps.shift();
+      }
+
+      function addSmear(x,y, dx,dy, power, kind){
+        st.smears.push({
+          x,y, dx,dy,
+          power,
+          kind, // 0 smear | 1 wash
+          t: st.t,
+          life: 1.0
+        });
+        if (st.smears.length > 180) st.smears.shift();
+      }
+
+      function addGlitch(x,y, mag){
+        st.glitches.push({ x,y, mag, t: st.t, life: 1.0 });
+        if (st.glitches.length > 120) st.glitches.shift();
+      }
+
+      function addSirenArc(){
+        st.sirens.push({
+          a: rnd01(st.seed + st.sirens.length*29)*tau,
+          t: st.t,
+          life: 1.0,
+          w: 0.4 + 0.6*rnd01(st.seed + st.sirens.length*31)
+        });
+        if (st.sirens.length > 60) st.sirens.shift();
+      }
+
+      function modeGates(){
+        const m = ui.mode.value;
+        // These are not on/off; they bias the system.
+        return {
+          tape:       { tape:1.0, marquees:0.6, projection:0.6, grid:0.35, sirens:0.35 },
+          stack:      { tape:0.6, marquees:1.0, projection:0.6, grid:0.35, sirens:0.45 },
+          projection: { tape:0.45, marquees:0.55, projection:1.0, grid:0.45, sirens:0.55 },
+          plaza:      { tape:0.55, marquees:0.55, projection:0.55, grid:1.0,  sirens:0.35 },
+          sirens:     { tape:0.55, marquees:0.70, projection:0.70, grid:0.40, sirens:1.0 }
+        }[m] || { tape:1, marquees:1, projection:1, grid:1, sirens:1 };
+      }
+
+      // pointer interactions
+      function insideStage(sx,sy){
+        const p = screenToStage(sx,sy);
+        return Math.abs(p.x) < 1.2 && Math.abs(p.y) < 1.2;
+      }
+
+      addEventListener('pointerdown', (e)=>{
+        if (isUIEventTarget(e.target)) return; /* controller fix */
+        st.mx=e.clientX; st.my=e.clientY;
+        st.dragging=true;
+        st.lastX=e.clientX; st.lastY=e.clientY;
+
+        const p = screenToStage(e.clientX, e.clientY);
+        if (!insideStage(e.clientX,e.clientY) || e.altKey){
+          st.dragType="pan";
+        } else if (e.shiftKey){
+          st.dragType="interrupt";
+        } else {
+          st.dragType="smear";
+        }
+
+        // CLICK = ISSUE LINE (token)
+        const A = +ui.authority.value;
+        const P = +ui.pressure.value;
+        const D = +ui.ambiguity.value;
+        const R = +ui.repeat.value;
+        const C = +ui.censor.value;
+
+        // Coupled: issuance increases control & urgency, but can reduce signal if censor/noise high.
+        const strength = clamp(0.35 + 0.25*A + 0.15*P, 0, 1.6);
+
+        // choose line with repetition tendency: sometimes repeat last issued
+        let line = pickLine(st.stamps.length + 17);
+        if (st.stamps.length && rnd01(st.seed + ((st.t*1000)|0) + st.stamps.length*41) < clamp(0.10 + 0.25*(R/2.6),0,0.60)){
+          line = st.stamps[st.stamps.length-1].line;
+        }
+        issueStamp(p.x, p.y, line, strength);
+
+        st.control = clamp(st.control + 0.04*strength, 0, 1.6);
+        st.urgency = clamp(st.urgency + 0.03*strength, 0, 1.6);
+        st.drift   = clamp(st.drift   + 0.012*(D/2.6) + 0.010*(C/2.6), 0, 1.6);
+
+        // censorship trades signal for control
+        const censorBite = 0.010 + 0.020*(C/2.6);
+        st.signal = clamp(st.signal - censorBite + 0.006*(A/2.6), 0, 1.6);
+      });
+
+      addEventListener('pointerup', ()=>{ st.dragging=false; st.dragType="smear"; });
+      addEventListener('pointercancel', ()=>{ st.dragging=false; st.dragType="smear"; });
+
+      addEventListener('pointermove', (e)=>{
+        st.mx=e.clientX; st.my=e.clientY;
+        if (!st.dragging) return;
+        if (isUIEventTarget(e.target)) return; /* controller fix */
+
+        const dx = e.clientX - st.lastX;
+        const dy = e.clientY - st.lastY;
+        st.lastX=e.clientX; st.lastY=e.clientY;
+
+        if (st.dragType === "pan"){
+          st.ox += dx; st.oy += dy;
+          st.ox = clamp(st.ox, -W*0.60, W*0.60);
+          st.oy = clamp(st.oy, -H*0.60, H*0.60);
+          return;
+        }
+
+        const p = screenToStage(e.clientX, e.clientY);
+        const v = Math.sqrt(dx*dx+dy*dy);
+
+        const noise = +ui.noise.value;
+        const censor = +ui.censor.value;
+        const ambiguity = +ui.ambiguity.value;
+
+        if (st.dragType === "smear"){
+          addSmear(p.x,p.y, dx,dy, clamp(0.25 + v/80, 0.2, 2.0), 0);
+
+          // smear increases drift and reduces signal slightly; also can raise urgency via movement
+          st.drift = clamp(st.drift + 0.0008*v*(0.6 + ambiguity/2.6), 0, 1.6);
+          st.signal = clamp(st.signal - 0.0005*v*(0.35 + (noise/2.8)), 0, 1.6);
+          st.urgency = clamp(st.urgency + 0.0004*v*(0.25 + (noise/2.8)), 0, 1.6);
+        } else {
+          // interrupt/glitch: can spike urgency, degrade signal, increase censorship response
+          addGlitch(p.x,p.y, clamp(0.20 + v/120, 0.2, 2.0));
+          addSmear(p.x,p.y, dx,dy, clamp(0.30 + v/75, 0.25, 2.2), 1);
+
+          st.urgency = clamp(st.urgency + 0.0016*v*(0.6 + noise/2.8), 0, 1.6);
+          st.signal  = clamp(st.signal  - 0.0012*v*(0.45 + noise/2.8), 0, 1.6);
+          st.redaction = clamp(st.redaction + 0.0008*v*(0.25 + censor/2.6), 0, 1.6);
+        }
+      });
+
+      // dynamics step
+      function step(dt){
+        // controls
+        const timeScale = +ui.timeScale.value;
+        const speed = +ui.speed.value;
+        const density = +ui.density.value;
+        const glow = +ui.glow.value;
+        const noise = +ui.noise.value;
+        const trace = +ui.trace.value;
+        const zoomCtl = +ui.zoom.value;
+
+        const A = +ui.authority.value;
+        const P = +ui.pressure.value;
+        const D = +ui.ambiguity.value;
+        const R = +ui.repeat.value;
+        const C = +ui.censor.value;
+
+        // zoom smoothing (plus wheel)
+        st.wheel *= 0.88;
+        st.zoom += st.wheel;
+        st.zoom = clamp(st.zoom, 0.65, 2.60);
+        st.zoom = lerp(st.zoom, zoomCtl, clamp(dt*0.9,0,1));
+
+        // hold space = emergency loop (increases urgency + repetition, reduces signal)
+        if (st.holding){
+          st.holdTime += dt;
+          const k = clamp((st.holdTime - 0.10), 0, 1.0);
+          st.urgency = clamp(st.urgency + dt*(0.08 + 0.12*k)*(0.6 + P/2.6), 0, 1.6);
+          st.control = clamp(st.control + dt*(0.02 + 0.06*k)*(0.6 + A/2.6), 0, 1.6);
+          st.signal = clamp(st.signal - dt*(0.03 + 0.07*k)*(0.4 + noise/2.8), 0, 1.6);
+
+          if (rnd01(st.seed + ((st.t*10000)|0)) < dt*(0.9 + 1.2*k)){
+            addSirenArc();
+          }
+        } else {
+          st.holdTime = Math.max(0, st.holdTime - dt*1.1);
+        }
+
+        // coupled baselines:
+        // - authority increases control; control increases redaction; redaction decreases signal
+        // - pressure increases urgency; urgency can increase signal temporarily (attention), but too high increases noise/glitch probability
+        // - ambiguity increases drift; drift lowers signal but can sometimes evade redaction (reduces effective censor)
+        const auth = clamp(A/2.6, 0, 1);
+        const pres = clamp(P/2.6, 0, 1);
+        const amb  = clamp(D/2.6, 0, 1);
+        const rep  = clamp(R/2.6, 0, 1);
+        const cen  = clamp(C/2.6, 0, 1);
+
+        const effectiveCensor = clamp(cen * (1 - 0.45*amb), 0, 1);
+
+        st.control = clamp(st.control + dt*(0.015 + 0.060*auth) - dt*(0.010 + 0.030*(1-auth))*st.drift, 0, 1.6);
+        st.urgency = clamp(st.urgency + dt*(0.010 + 0.070*pres) - dt*(0.012 + 0.030*(1-pres))*st.signal, 0, 1.6);
+
+        st.redaction = clamp(st.redaction + dt*(0.012 + 0.070*effectiveCensor)*st.control - dt*(0.010 + 0.020*amb), 0, 1.6);
+        st.drift = clamp(st.drift + dt*(0.010 + 0.060*amb) + dt*(0.010*noise/2.8) - dt*(0.008 + 0.030*auth), 0, 1.6);
+
+        // signal depends on legibility vs corrosion/redaction
+        const sigGain = dt*(0.010 + 0.040*(1-effectiveCensor))*(0.35 + 0.65*pres);
+        const sigLoss = dt*(0.012 + 0.060*(noise/2.8))*(0.25 + 0.75*st.redaction/1.6) + dt*(0.008 + 0.030*st.drift/1.6);
+        st.signal = clamp(st.signal + sigGain - sigLoss, 0, 1.6);
+
+        // phase transitions
+        if (st.urgency > 1.05 && st.signal < 0.55) st.phase = "alert";
+        if (st.urgency > 1.25 && (st.signal < 0.42 || st.redaction > 1.10)) st.phase = "emergency";
+        if (st.urgency < 0.70 && st.signal > 0.70 && st.redaction < 0.55) st.phase = "normal";
+
+        // lane evolution / text turnover
+        st.laneTick += dt*(0.35 + 1.15*speed)*(0.6 + 0.7*rep);
+        if (st.laneTick > 1.0){
+          st.laneTick = 0;
+          // occasionally change a lane line depending on drift + repetition
+          const changeProb = clamp(0.10 + 0.25*(st.drift/1.6) + 0.12*(1-rep), 0, 0.75);
+          if (rnd01(st.seed + ((st.t*1000)|0) + st.lanes.length*71) < changeProb){
+            const k = Math.floor(rnd01(st.seed + ((st.t*1000)|0))*st.lanes.length);
+            if (st.lanes[k]) st.lanes[k].text = pickLine(k + Math.floor(st.t*10));
+          }
+          // sometimes add/remove a lane to reflect density/pressure
+          const target = Math.floor(lerp(5, 14, clamp(density/2.4,0,1)) + lerp(0, 3, st.urgency/1.6));
+          if (st.lanes.length < target && st.lanes.length < 18){
+            st.lanes.push(makeLane(st.lanes.length, st.lanes.length+1));
+          } else if (st.lanes.length > target && st.lanes.length > 4){
+            st.lanes.pop();
+          }
+        }
+
+        // move lanes
+        const baseV = 0.10 + 0.45*speed;
+        for (let i=0;i<st.lanes.length;i++){
+          const L = st.lanes[i];
+          const v = baseV * L.speedMul * (0.65 + 0.65*(st.urgency/1.6)) * (0.85 + 0.35*(st.signal/1.6));
+          L.x += dt * v * L.dir;
+
+          // redaction can insert gaps (simulate by swapping to bars occasionally)
+          if (rnd01(st.seed + i*97 + ((st.t*1000)|0)) < dt*(0.20 + 0.70*effectiveCensor)*(0.15 + st.control/1.6)){
+            if (effectiveCensor > 0.35 && rnd01(st.seed + i*109 + ((st.t*1500)|0)) < 0.55){
+              L.text = "██████ █████ ████";
+            }
+          }
+          // drift can "un-redact" into ambiguous whitespace
+          if (L.text.includes("█") && rnd01(st.seed + i*113 + ((st.t*1300)|0)) < dt*(0.25 + 0.70*amb)){
+            L.text = pickLine(i + Math.floor(st.t*8));
+          }
+
+          if (L.dir>0 && L.x > 1.40){
+            L.x = -0.45 - rnd01(st.seed + i*13)*0.30;
+            if (rnd01(st.seed + i*41 + ((st.t*900)|0)) < clamp(0.35 + 0.35*(1-rep),0,0.85)){
+              L.text = pickLine(i + Math.floor(st.t*12));
+            }
+          }
+          if (L.dir<0 && L.x < -0.55){
+            L.x = 1.45 + rnd01(st.seed + i*13)*0.30;
+            if (rnd01(st.seed + i*43 + ((st.t*900)|0)) < clamp(0.35 + 0.35*(1-rep),0,0.85)){
+              L.text = pickLine(i + Math.floor(st.t*12));
+            }
+          }
+        }
+
+        // decay artifacts
+        for (let i=st.stamps.length-1;i>=0;i--){
+          const s = st.stamps[i];
+          s.life -= dt*(0.06 + 0.12*(1 - st.signal/1.6));
+          if (s.life <= 0) st.stamps.splice(i,1);
+        }
+        for (let i=st.smears.length-1;i>=0;i--){
+          const s = st.smears[i];
+          s.life -= dt*(0.06 + 0.18*(1 - st.signal/1.6));
+          if (s.life <= 0) st.smears.splice(i,1);
+        }
+        for (let i=st.glitches.length-1;i>=0;i--){
+          const g = st.glitches[i];
+          g.life -= dt*(0.10 + 0.20*(st.urgency/1.6));
+          if (g.life <= 0) st.glitches.splice(i,1);
+        }
+        for (let i=st.sirens.length-1;i>=0;i--){
+          const s = st.sirens[i];
+          s.life -= dt*(0.12 + 0.18*(st.phase==="emergency"));
+          if (s.life <= 0) st.sirens.splice(i,1);
+        }
+
+        // UI meters
+        setFill("sigFill", st.signal/1.6);
+        setFill("urgFill", st.urgency/1.6);
+        setFill("ctlFill", st.control/1.6);
+        setFill("drfFill", st.drift/1.6);
+        setFill("redFill", st.redaction/1.6);
+
+        $('stat').textContent =
+          `PHASE ${st.phase.toUpperCase()} · SIGNAL ${st.signal.toFixed(2)} · URGENCY ${st.urgency.toFixed(2)} · CONTROL ${st.control.toFixed(2)} · DRIFT ${st.drift.toFixed(2)} · REDACTION ${st.redaction.toFixed(2)} · LINES ${FEED.lines.length}`;
+      }
+
+      // draw helpers
+      function setBGFG(){
+        const inv = st.invert;
+        return {
+          bg: inv ? 255 : 0,
+          fg: inv ? 0 : 255
+        };
+      }
+
+      // Dot-matrix text rendering (cheap LED)
+      function drawLEDText(text, x, y, scale, alpha, dot, jitter, bgfg){
+        if (!text) return;
+        const fg = bgfg.fg;
+        const a = clamp(alpha,0,1);
+        ctx.save();
+        ctx.translate(x,y);
+        ctx.scale(scale, scale);
+      }
+
+      // Offscreen cache for LED sampling
+      const off = document.createElement('canvas');
+      const offCtx = off.getContext('2d', { alpha:true });
+      let offKey = "";
+      function renderOff(text, fontPx){
+        const key = text + "|" + fontPx;
+        if (key === offKey) return;
+        offKey = key;
+        offCtx.setTransform(1,0,0,1,0,0);
+        offCtx.font = `900 ${fontPx}px Arial, Helvetica, sans-serif`;
+        const m = offCtx.measureText(text);
+        const w = Math.ceil(m.width + fontPx*0.6);
+        const h = Math.ceil(fontPx*1.35);
+        off.width = w;
+        off.height = h;
+        offCtx.clearRect(0,0,w,h);
+        offCtx.font = `900 ${fontPx}px Arial, Helvetica, sans-serif`;
+        offCtx.fillStyle = "#fff";
+        offCtx.textBaseline = "middle";
+        offCtx.fillText(text, Math.floor(fontPx*0.25), Math.floor(h*0.56));
+      }
+
+      function drawLEDFromOff(x,y, dotSize, spacing, alpha, glow, noiseAmt, censorAmt, bgfg){
+        const fg = bgfg.fg;
+        const a = clamp(alpha,0,1);
+        const w = off.width, h = off.height;
+        if (!w || !h) return;
+
+        // "LED" points
+        const step = Math.max(2, spacing);
+        const r = Math.max(1.0, dotSize);
+        ctx.save();
+        ctx.translate(x,y);
+
+        // glow pass
+        if (glow > 0.01){
+          ctx.globalCompositeOperation = bgfg.fg===255 ? 'screen' : 'source-over';
+        }
+
+        for (let yy=0; yy<h; yy+=step){
+          for (let xx=0; xx<w; xx+=step){
+            const pix = offCtx.getImageData(xx,yy,1,1).data[3] / 255;
+            if (pix < 0.35) continue;
+
+            // censorship: random dropouts
+            if (censorAmt > 0 && rnd01(st.seed + ((st.t*1000)|0) + xx*17 + yy*23) < censorAmt*0.20) continue;
+
+            // noise: random dimming / jitter
+            let n = 1.0;
+            if (noiseAmt > 0){
+              const rr = rnd01(st.seed + ((st.t*1200)|0) + xx*29 + yy*31);
+              n = lerp(1.0, rr, clamp(noiseAmt*0.55,0,1));
+            }
+
+            const v = pix * a * n;
+            if (v < 0.08) continue;
+
+            ctx.fillStyle = `rgba(${fg},${fg},${fg},${clamp(v,0,1)})`;
+
+            const j = noiseAmt*0.65;
+            const jx = (rnd01(st.seed + ((st.t*900)|0) + xx*41 + yy*43)*2-1) * j;
+            const jy = (rnd01(st.seed + ((st.t*910)|0) + xx*47 + yy*53)*2-1) * j;
+
+            ctx.beginPath();
+            ctx.arc(xx + jx, yy + jy, r*(0.70 + 0.60*glow), 0, tau);
+            ctx.fill();
+          }
+        }
+
+        ctx.restore();
+      }
+
+      // main draw
+      function draw(){
+        const bgfg = setBGFG();
+        const bg = bgfg.bg, fg = bgfg.fg;
+
+        const trace = +ui.trace.value;
+
+        // background fill w/ trace
+        if (trace > 0){
+          ctx.fillStyle = `rgba(${bg},${bg},${bg},${clamp(trace,0,1)})`;
+          ctx.fillRect(0,0,W,H);
+        } else {
+          ctx.fillStyle = `rgb(${bg},${bg},${bg})`;
+          ctx.fillRect(0,0,W,H);
+        }
+
+        // composition mode
+        ctx.globalCompositeOperation = (fg===255) ? 'screen' : 'source-over';
+
+        const gates = modeGates();
+        const density = +ui.density.value;
+        const glow = +ui.glow.value;
+        const noise = +ui.noise.value;
+
+        const cen = clamp((+ui.censor.value)/2.6, 0, 1);
+        const censorAmt = clamp(0.05 + 0.35*cen + 0.25*(st.redaction/1.6), 0, 0.75);
+
+        const baseDot = lerp(1.2, 2.6, clamp(density/2.4,0,1));
+        const spacing = Math.floor(lerp(7, 3, clamp(density/2.4,0,1)));
+
+        // plaza grid (institutional coordinate system)
+        if (ui.T_grid.checked && gates.grid > 0.01){
+          const step = Math.floor(lerp(130, 52, clamp(density/2.4,0,1)));
+          const a = clamp(0.012 + 0.040*(st.control/1.6)*gates.grid, 0, 0.12);
+          ctx.strokeStyle = `rgba(${fg},${fg},${fg},${a})`;
+          ctx.lineWidth = 1.0;
+          for (let x=0;x<=W;x+=step){
+            ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke();
+          }
+          for (let y=0;y<=H;y+=step){
+            ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke();
+          }
+        }
+
+        // projection wash layer (smears)
+        if (ui.T_projection.checked && gates.projection > 0.01){
+          for (let i=0;i<st.smears.length;i++){
+            const s = st.smears[i];
+            const p = stageToScreen(s.x,s.y);
+            const power = s.power * (0.65 + 0.35*gates.projection);
+            const a = clamp((0.04 + 0.14*(st.urgency/1.6) + 0.10*(noise/2.8)) * s.life, 0, 0.22);
+            ctx.strokeStyle = `rgba(${fg},${fg},${fg},${a})`;
+            ctx.lineWidth = 1.2 + 1.2*power;
+            ctx.beginPath();
+            ctx.moveTo(p.x, p.y);
+            ctx.lineTo(p.x + s.dx*2.6, p.y + s.dy*2.6);
+            ctx.stroke();
+
+            // wash circle
+            const r = 14 + 90*power + 80*(1-s.life);
+            const aa = clamp(a*0.6,0,0.16);
+            ctx.strokeStyle = `rgba(${fg},${fg},${fg},${aa})`;
+            ctx.lineWidth = 1.2;
+            ctx.beginPath();
+            ctx.arc(p.x,p.y,r,0,tau);
+            ctx.stroke();
+          }
+        }
+
+        // siren arcs (emergency)
+        if (ui.T_sirens.checked && gates.sirens > 0.01){
+          const c = stageCenter();
+          const R = Math.min(W,H)*0.46;
+          for (let i=0;i<st.sirens.length;i++){
+            const s = st.sirens[i];
+            const a = clamp((0.03 + 0.12*(st.urgency/1.6)) * s.life * gates.sirens, 0, 0.24);
+            const span = (0.10 + 0.28*(st.phase==="emergency")) * s.w;
+            const wob = 1 + 0.05*Math.sin(st.t*1.2 + i);
+            ctx.strokeStyle = `rgba(${fg},${fg},${fg},${a})`;
+            ctx.lineWidth = 1.6;
+            ctx.beginPath();
+            ctx.arc(c.x, c.y, R*wob, s.a-span, s.a+span);
+            ctx.stroke();
+          }
+        }
+
+        // Tape bands (primary)
+        if (ui.T_tape.checked && gates.tape > 0.01){
+          const bandCount = 2 + Math.floor(lerp(1, 6, clamp(density/2.4,0,1)));
+          for (let b=0;b<bandCount;b++){
+            const y = lerp(0.25, 0.75, bandCount===1?0.5:b/(bandCount-1));
+            const h = Math.max(34, Math.floor(lerp(44, 110, clamp(density/2.4,0,1))));
+
+            // band frame
+            const aFrame = clamp(0.02 + 0.06*(st.control/1.6)*gates.tape, 0, 0.12);
+            ctx.strokeStyle = `rgba(${fg},${fg},${fg},${aFrame})`;
+            ctx.lineWidth = 1.2;
+            ctx.strokeRect(18, Math.floor(H*y - h*0.55), W-36, h);
+
+            // lane content: we reuse lanes but display multiple passes
+            const lane = st.lanes[b % st.lanes.length];
+            if (!lane) continue;
+
+            const fontPx = Math.floor(lerp(26, 52, clamp(density/2.4,0,1)));
+            renderOff(lane.text, fontPx);
+
+            // convert stage x to screen
+            const xNorm = lane.x;
+            const x = Math.floor(W * xNorm);
+            const yy = Math.floor(H*y - off.height*0.52);
+
+            // alpha depends on signal + urgency
+            const aText = clamp((0.35 + 0.55*(st.signal/1.6)) * (0.65 + 0.35*(st.urgency/1.6)) * gates.tape, 0, 1);
+
+            drawLEDFromOff(
+              x, yy,
+              baseDot*(0.85 + 0.35*gates.tape),
+              spacing,
+              aText,
+              clamp(glow*(0.55 + 0.45*(st.urgency/1.6)),0,2.4),
+              clamp(noise*(0.40 + 0.75*(st.urgency/1.6)),0,2.8),
+              censorAmt*(0.85 + 0.55*(st.control/1.6)),
+              bgfg
+            );
+
+            // second echo pass (ambiguity)
+            const amb = clamp(st.drift/1.6, 0, 1);
+            if (amb > 0.05){
+              const dx = Math.floor(lerp(0, 18, amb) * (rnd01(st.seed + b*71 + ((st.t*500)|0))*2-1));
+              const dy = Math.floor(lerp(0, 10, amb) * (rnd01(st.seed + b*73 + ((st.t*500)|0))*2-1));
+              drawLEDFromOff(
+                x+dx, yy+dy,
+                baseDot*0.80,
+                spacing,
+                aText*0.55,
+                clamp(glow*0.45,0,2.4),
+                clamp(noise*0.70,0,2.8),
+                censorAmt*0.45,
+                bgfg
+              );
+            }
+          }
+        }
+
+        // stacked marquees (secondary)
+        if (ui.T_marquees.checked && gates.marquees > 0.01){
+          const count = Math.min(12, Math.max(6, Math.floor(lerp(7, 12, clamp(density/2.4,0,1)))));
+          for (let i=0;i<count;i++){
+            const y = lerp(0.10, 0.90, i/(count-1));
+            const lane = st.lanes[i % st.lanes.length];
+            if (!lane) continue;
+
+            const fontPx = Math.floor(lerp(18, 34, clamp(density/2.4,0,1)));
+            renderOff(lane.text, fontPx);
+
+            // offset per row
+            const x = Math.floor(W * (lane.dir>0 ? lane.x : lane.x) + (i%2? -60: 60)*Math.sin(st.t*0.25+i));
+            const yy = Math.floor(H*y - off.height*0.52);
+
+            const a = clamp((0.20 + 0.55*(st.signal/1.6)) * (0.55 + 0.45*gates.marquees), 0, 1);
+
+            drawLEDFromOff(
+              x, yy,
+              baseDot*0.80,
+              spacing+1,
+              a,
+              clamp(glow*0.40,0,2.4),
+              clamp(noise*0.55,0,2.8),
+              censorAmt*0.70,
+              bgfg
+            );
+          }
+        }
+
+        // index stamps (issued tokens)
+        if (ui.T_index.checked){
+          for (let i=0;i<st.stamps.length;i++){
+            const s = st.stamps[i];
+            const p = stageToScreen(s.x, s.y);
+
+            const fontPx = Math.floor(lerp(18, 46, clamp(s.strength/1.6,0,1)));
+            renderOff(s.line, fontPx);
+
+            // stamp frame
+            const aFrame = clamp((0.03 + 0.12*(st.control/1.6)) * s.life, 0, 0.22);
+            ctx.strokeStyle = `rgba(${fg},${fg},${fg},${aFrame})`;
+            ctx.lineWidth = 1.2;
+            const pad = 10;
+            ctx.strokeRect(p.x - off.width*0.5 - pad, p.y - off.height*0.5 - pad, off.width + pad*2, off.height + pad*2);
+
+            // stamp text
+            const aText = clamp((0.30 + 0.55*(st.signal/1.6)) * s.life, 0, 1);
+            drawLEDFromOff(
+              Math.floor(p.x - off.width*0.5),
+              Math.floor(p.y - off.height*0.5),
+              baseDot*0.95,
+              spacing,
+              aText,
+              clamp(glow*0.65,0,2.4),
+              clamp(noise*0.60,0,2.8),
+              censorAmt*0.60,
+              bgfg
+            );
+          }
+        }
+
+        // glitch overlays (interrupt events)
+        for (let i=0;i<st.glitches.length;i++){
+          const g = st.glitches[i];
+          const p = stageToScreen(g.x,g.y);
+          const a = clamp((0.02 + 0.18*(st.urgency/1.6)) * g.life, 0, 0.24);
+          ctx.strokeStyle = `rgba(${fg},${fg},${fg},${a})`;
+          ctx.lineWidth = 1.2;
+          const r = 18 + 110*g.mag + 60*(1-g.life);
+          ctx.beginPath();
+          ctx.arc(p.x,p.y,r,0,tau);
+          ctx.stroke();
+
+          // scanlines around glitch
+          const lines = 6 + Math.floor(10*g.mag);
+          for (let k=0;k<lines;k++){
+            const yy = p.y + (k - lines/2)*6;
+            ctx.strokeStyle = `rgba(${fg},${fg},${fg},${a*0.65})`;
+            ctx.beginPath();
+            ctx.moveTo(p.x - r, yy);
+            ctx.lineTo(p.x + r, yy);
+            ctx.stroke();
+          }
+        }
+
+        // phase vignette (institutional atmosphere)
+        {
+          const a = (st.phase==="normal") ? 0.08 : (st.phase==="alert" ? 0.12 : 0.16);
+          const r = Math.min(W,H)*0.62;
+          const grad = ctx.createRadialGradient(W/2,H/2, r*0.35, W/2,H/2, r);
+          grad.addColorStop(0, `rgba(${bg},${bg},${bg},0)`);
+          grad.addColorStop(1, `rgba(${bg},${bg},${bg},${a})`);
+          ctx.fillStyle = grad;
+          ctx.fillRect(0,0,W,H);
+        }
+
+        ctx.globalCompositeOperation = 'source-over';
+      }
+
+      // main loop
+      let last = performance.now();
+      function frame(now){
+        const raw = Math.min(0.033, (now-last)/1000);
+        last = now;
+
+        const dt = raw * (+ui.timeScale.value) * (0.65 + 0.65*(+ui.speed.value));
+
+        if (!st.paused){
+          st.t += dt;
+          step(dt);
+        }
+        draw();
+        requestAnimationFrame(frame);
+      }
+
+      // housekeeping: make the system visibly alive immediately
+      function prime(){
+        // make a few initial stamps/smears so it doesn't look dead
+        for (let i=0;i<5;i++){
+          const x = (rnd01(st.seed+i*17)*2-1)*0.55;
+          const y = (rnd01(st.seed+i*19)*2-1)*0.35;
+          issueStamp(x,y, pickLine(i+3), 0.8 + 0.3*rnd01(st.seed+i*23));
+        }
+        for (let i=0;i<7;i++){
+          const x = (rnd01(st.seed+i*29)*2-1)*0.70;
+          const y = (rnd01(st.seed+i*31)*2-1)*0.55;
+          addSmear(x,y, (rnd01(st.seed+i*37)*2-1)*18, (rnd01(st.seed+i*41)*2-1)*12, 0.6, 0);
+        }
+      }
+
+      // init
+      reseed();
+      prime();
+      requestAnimationFrame(frame);
+
+      // update feed if user types
+      ui.custom.addEventListener('input', ()=>{
+        if (FEED.mode !== "system") refreshFeed();
+      });
+    })();
+  </script>
+</body>
+</html>
