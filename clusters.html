@@ -1,0 +1,1576 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>KETADATA // VOID CHROME // CLUSTER NETWORK MAKER</title>
+<style>
+:root{
+  --bg:#000;
+  --fg:rgba(255,255,255,.86);
+  --muted:rgba(255,255,255,.56);
+  --hair:rgba(255,255,255,.14);
+  --hair2:rgba(255,255,255,.22);
+  --panel:rgba(0,0,0,.74);
+  --panel2:rgba(255,255,255,.04);
+  --hot:rgba(255,255,255,.92);
+
+  --font: Arial, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace;
+
+  --fs: 12px;          /* uniform text size */
+  --lineH: 1.25;
+  --radius: 0px;
+
+  --nodeW: 260px;
+  --nodeMinH: 34px;
+
+  --gridA: rgba(255,255,255,.06);
+  --gridB: rgba(255,255,255,.03);
+
+  --edge: rgba(255,255,255,.55);
+  --edgeHot: rgba(255,255,255,.92);
+  --edgeMuted: rgba(255,255,255,.24);
+}
+*{box-sizing:border-box}
+html,body{height:100%; margin:0}
+body{
+  background:var(--bg);
+  color:var(--fg);
+  font-family:var(--font);
+  font-size:var(--fs);
+  line-height:var(--lineH);
+  overflow:hidden;
+  user-select:none;
+}
+#root{position:fixed; inset:0; overflow:hidden}
+
+/* subtle void grid */
+#bg{
+  position:absolute; inset:0;
+  background:
+    linear-gradient(to right, var(--gridB) 1px, transparent 1px) 0 0/48px 48px,
+    linear-gradient(to bottom, var(--gridB) 1px, transparent 1px) 0 0/48px 48px,
+    radial-gradient(ellipse at 50% 38%, rgba(255,255,255,.06), transparent 58%);
+  opacity:.85;
+  pointer-events:none;
+}
+
+/* svg edges layer */
+#edges{
+  position:absolute; inset:0;
+  width:100%; height:100%;
+  pointer-events:none;
+}
+.edgeLine{stroke:var(--edge); stroke-width:1.2; fill:none}
+.edgeLine.hot{stroke:var(--edgeHot)}
+.edgeLine.muted{stroke:var(--edgeMuted)}
+.edgeArrow{fill:var(--edge)}
+.edgeArrow.hot{fill:var(--edgeHot)}
+.edgeLabel{
+  font-family:var(--font);
+  font-size:var(--fs);
+  fill:var(--fg);
+  opacity:.78;
+}
+.edgeLabel.hot{opacity:.96; fill:var(--hot)}
+.edgeLabelBox{
+  fill:rgba(0,0,0,.68);
+  stroke:var(--hair);
+  stroke-width:1;
+}
+
+/* canvas nodes */
+#stage{
+  position:absolute; inset:0;
+  overflow:hidden;
+}
+
+/* nodes */
+.node{
+  position:absolute;
+  width:var(--nodeW);
+  min-height:var(--nodeMinH);
+  background:var(--panel);
+  border:1px solid var(--hair);
+  border-radius:var(--radius);
+  box-shadow:none;
+}
+.node.hot{border-color:var(--hair2)}
+.nodeHeader{
+  display:flex; align-items:center; gap:6px;
+  padding:6px 6px;
+  border-bottom:1px solid var(--hair);
+  background:rgba(255,255,255,.02);
+  cursor:grab;
+}
+.nodeHeader:active{cursor:grabbing}
+.nodeTitle{
+  flex:1;
+  font-weight:700;
+  color:var(--fg);
+  outline:none;
+  min-width:0;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+.nodeMeta{
+  display:flex; align-items:center; gap:6px;
+  color:var(--muted);
+  font-family:var(--mono);
+  font-size:var(--fs);
+}
+.pill{
+  padding:2px 6px;
+  border:1px solid var(--hair);
+  background:rgba(255,255,255,.03);
+  border-radius:var(--radius);
+}
+.nodeBody{padding:6px; display:block}
+.nodeBody.collapsed{display:none}
+.nodeText{
+  width:100%;
+  min-height:92px;
+  resize:vertical;
+  border:1px solid var(--hair);
+  background:rgba(0,0,0,.44);
+  color:var(--fg);
+  font-family:var(--font);
+  font-size:var(--fs);
+  line-height:var(--lineH);
+  outline:none;
+  padding:6px;
+  border-radius:var(--radius);
+}
+.row{
+  display:flex; gap:6px; align-items:center;
+  margin-top:6px;
+}
+.btn, .btnSq, .input, .select{
+  border:1px solid var(--hair);
+  background:rgba(0,0,0,.44);
+  color:var(--fg);
+  font-family:var(--font);
+  font-size:var(--fs);
+  line-height:var(--lineH);
+  padding:4px 6px;
+  border-radius:var(--radius);
+  outline:none;
+}
+.btn:hover, .btnSq:hover{border-color:var(--hair2)}
+.btn:active, .btnSq:active{transform:translateY(1px)}
+.btnSq{
+  width:26px; height:26px;
+  padding:0;
+  display:inline-flex; align-items:center; justify-content:center;
+  font-family:var(--mono);
+}
+.btnWide{padding:4px 10px}
+.input{flex:1; min-width:0}
+.select{padding:4px 6px}
+.small{color:var(--muted); font-family:var(--mono); font-size:var(--fs)}
+.kbd{font-family:var(--mono); padding:1px 4px; border:1px solid var(--hair); background:rgba(255,255,255,.03)}
+
+/* movable panels (void chrome) */
+.panel{
+  position:absolute;
+  min-width: 260px;
+  background:rgba(0,0,0,.78);
+  border:1px solid var(--hair);
+  border-radius:var(--radius);
+}
+.panelHeader{
+  display:flex; align-items:center; gap:6px;
+  padding:6px;
+  border-bottom:1px solid var(--hair);
+  background:rgba(255,255,255,.02);
+  cursor:grab;
+}
+.panelHeader:active{cursor:grabbing}
+.panelTitle{flex:1; font-weight:700}
+.panelBody{padding:6px; display:block}
+.panelBody.collapsed{display:none}
+
+/* inspector list */
+.list{
+  max-height: 240px;
+  overflow:auto;
+  border:1px solid var(--hair);
+  background:rgba(0,0,0,.44);
+}
+.item{
+  padding:6px;
+  border-bottom:1px solid rgba(255,255,255,.08);
+  display:flex;
+  gap:6px;
+  align-items:flex-start;
+}
+.item:last-child{border-bottom:none}
+.item .name{flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.item .meta{color:var(--muted); font-family:var(--mono)}
+.item:hover{background:rgba(255,255,255,.03)}
+
+/* invert mode */
+.invert{
+  filter: invert(1) hue-rotate(180deg);
+}
+.invert #bg{opacity:.55}
+
+/* selection + link mode */
+#toast{
+  position:absolute; left:12px; bottom:12px;
+  padding:6px 8px;
+  border:1px solid var(--hair);
+  background:rgba(0,0,0,.78);
+  color:var(--fg);
+  font-family:var(--mono);
+  font-size:var(--fs);
+  pointer-events:none;
+  opacity:0;
+  transform:translateY(6px);
+  transition:opacity .14s ease, transform .14s ease;
+}
+#toast.on{opacity:1; transform:translateY(0)}
+
+/* hide chrome toggle */
+.chromeOff .panel{opacity:0; pointer-events:none}
+.chromeOff #toast{opacity:0 !important}
+
+/* little crosshair for stage interaction */
+#stage{cursor:default}
+.modeLink #stage{cursor:crosshair}
+
+/* file input hidden */
+#file{display:none}
+</style>
+</head>
+<body>
+<div id="root">
+  <div id="bg"></div>
+
+  <svg id="edges" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+    <defs>
+      <marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto" markerUnits="strokeWidth">
+        <path d="M0,0 L8,4 L0,8 z" class="edgeArrow"></path>
+      </marker>
+      <marker id="arrowHot" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto" markerUnits="strokeWidth">
+        <path d="M0,0 L8,4 L0,8 z" class="edgeArrow hot"></path>
+      </marker>
+    </defs>
+  </svg>
+
+  <div id="stage"></div>
+
+  <!-- HUD (movable) -->
+  <div class="panel" id="hud" style="left:12px; top:12px; width:320px;">
+    <div class="panelHeader" data-drag="panel">
+      <div class="panelTitle">VOID CHROME</div>
+      <button class="btnSq" id="hudCollapse" title="collapse">–</button>
+      <button class="btnSq" id="hudHideChrome" title="toggle chrome (CTRL+.)">C</button>
+    </div>
+    <div class="panelBody" id="hudBody">
+      <div class="row">
+        <button class="btn btnWide" id="addNode">ADD NODE</button>
+        <button class="btn btnWide" id="addCluster">ADD CLUSTER</button>
+      </div>
+
+      <div class="row">
+        <button class="btn btnWide" id="modeMove" title="move mode (M)">MOVE</button>
+        <button class="btn btnWide" id="modeLink" title="link mode (L)">LINK</button>
+        <button class="btn btnWide" id="modeSelect" title="select mode (S)">SELECT</button>
+      </div>
+
+      <div class="row">
+        <button class="btn btnWide" id="invertBtn" title="invert (SHIFT+I)">INVERT</button>
+        <button class="btn btnWide" id="centerBtn" title="center view">CENTER</button>
+        <button class="btn btnWide" id="labelsBtn" title="toggle labels">LABELS</button>
+      </div>
+
+      <div class="row">
+        <button class="btn btnWide" id="exportBtn" title="export JSON file">EXPORT</button>
+        <button class="btn btnWide" id="importBtn" title="import JSON file">IMPORT</button>
+        <button class="btn btnWide" id="resetBtn" title="new empty graph (keeps invert)">NEW</button>
+      </div>
+
+      <div class="row">
+        <input class="input" id="search" placeholder="find node by title/text"/>
+        <button class="btnSq" id="searchGo" title="find">↵</button>
+        <button class="btnSq" id="searchClr" title="clear">×</button>
+      </div>
+
+      <div class="small">
+        link flow: in LINK mode click source then target (ESC cancels). edit edge label by clicking it in the list.
+        <span class="kbd">SHIFT+I</span> invert · <span class="kbd">CTRL+.</span> chrome · <span class="kbd">DEL</span> delete selected
+      </div>
+    </div>
+  </div>
+
+  <!-- Inspector (movable) -->
+  <div class="panel" id="inspect" style="right:12px; top:12px; width:360px;">
+    <div class="panelHeader" data-drag="panel">
+      <div class="panelTitle">INSPECTOR</div>
+      <button class="btnSq" id="inspectCollapse" title="collapse">–</button>
+    </div>
+    <div class="panelBody" id="inspectBody">
+      <div class="row">
+        <div class="pill small" id="statNodes">NODES: 0</div>
+        <div class="pill small" id="statEdges">EDGES: 0</div>
+        <div class="pill small" id="statComp">COMP: 0</div>
+      </div>
+
+      <div class="row">
+        <select class="select" id="listMode">
+          <option value="nodes">NODES</option>
+          <option value="edges">EDGES</option>
+          <option value="analysis">ANALYSIS</option>
+        </select>
+        <button class="btn btnWide" id="focusSel">FOCUS</button>
+        <button class="btn btnWide" id="deleteSel">DELETE</button>
+      </div>
+
+      <div class="list" id="list"></div>
+
+      <div class="row">
+        <button class="btn btnWide" id="snapBtn" title="tighten nodes around clusters">SNAP</button>
+        <button class="btn btnWide" id="spreadBtn" title="spread nodes">SPREAD</button>
+        <button class="btn btnWide" id="muteEdgesBtn" title="dim non-selected edges">MUTE</button>
+      </div>
+
+      <div class="small" id="selHint">selected: none</div>
+    </div>
+  </div>
+
+  <div id="toast"></div>
+  <input id="file" type="file" accept="application/json"/>
+</div>
+
+<script>
+/* =========================
+   KETADATA // VOID CHROME
+   Cluster network maker
+   single-file, local-only
+========================= */
+
+const FILE_ID = "KETADATA_VOID_CHROME_CLUSTER_NETWORK_MAKER";
+const ROOM_ID = "void_chrome";
+const VERSION = "v1.0.0";
+const LS_KEY = "KETADATA_VOID_CHROME__STATE__v1";
+
+const $ = (id)=>document.getElementById(id);
+
+const root = $("root");
+const stage = $("stage");
+const svg = $("edges");
+const toast = $("toast");
+
+let RAF = 0;
+
+const STATE = {
+  ui:{
+    invert:false,
+    chromeOff:false,
+    labelsOn:true,
+    muteNonSelected:false,
+    hud:{x:12,y:12,w:320,collapsed:false},
+    inspect:{x:null,y:null,w:360,collapsed:false},
+    listMode:"nodes"
+  },
+  graph:{
+    nodes:{}, // id -> {id,title,text,x,y,w,h,collapsed,cluster}
+    edges:{}, // id -> {id,from,to,label,dir:true}
+  },
+  sel:{
+    nodeId:null,
+    edgeId:null,
+    linkFrom:null,
+    mode:"move" // move | link | select
+  },
+  meta:{
+    updatedAt: null
+  }
+};
+
+function uid(prefix="id"){
+  return prefix + "_" + Math.random().toString(16).slice(2) + "_" + Date.now().toString(16);
+}
+
+/* ---------- persistence ---------- */
+function save(){
+  try{
+    STATE.meta.updatedAt = new Date().toISOString();
+    localStorage.setItem(LS_KEY, JSON.stringify(STATE));
+  }catch(e){}
+}
+function load(){
+  try{
+    const raw = localStorage.getItem(LS_KEY);
+    if(!raw) return false;
+    const data = JSON.parse(raw);
+    if(!data || !data.graph) return false;
+    // shallow merge to preserve defaults
+    Object.assign(STATE.ui, data.ui||{});
+    STATE.graph = data.graph || STATE.graph;
+    STATE.sel = Object.assign(STATE.sel, (data.sel||{}));
+    STATE.meta = Object.assign(STATE.meta, (data.meta||{}));
+    return true;
+  }catch(e){ return false; }
+}
+
+/* ---------- DOM helpers ---------- */
+function setToast(msg, on=true){
+  toast.textContent = msg || "";
+  toast.classList.toggle("on", !!on);
+}
+function schedule(){
+  if(RAF) return;
+  RAF = requestAnimationFrame(()=>{
+    RAF=0;
+    render();
+  });
+}
+
+/* ---------- panels drag / collapse ---------- */
+function clamp(v,a,b){ return Math.max(a, Math.min(b, v)); }
+
+function setPanelElPos(el, x,y,w){
+  if(Number.isFinite(x)) el.style.left = x+"px";
+  if(Number.isFinite(y)) el.style.top = y+"px";
+  if(Number.isFinite(w)) el.style.width = w+"px";
+}
+
+function initPanels(){
+  // hud
+  const hud = $("hud");
+  const inspect = $("inspect");
+
+  // restore positions
+  setPanelElPos(hud, STATE.ui.hud.x, STATE.ui.hud.y, STATE.ui.hud.w);
+  if(STATE.ui.inspect.x==null){
+    // default right anchored already via style; compute now
+    const rect = inspect.getBoundingClientRect();
+    STATE.ui.inspect.x = window.innerWidth - rect.width - 12;
+    STATE.ui.inspect.y = 12;
+  }
+  setPanelElPos(inspect, STATE.ui.inspect.x, STATE.ui.inspect.y, STATE.ui.inspect.w);
+
+  $("hudBody").classList.toggle("collapsed", !!STATE.ui.hud.collapsed);
+  $("inspectBody").classList.toggle("collapsed", !!STATE.ui.inspect.collapsed);
+
+  $("hudCollapse").onclick=()=>{
+    STATE.ui.hud.collapsed = !STATE.ui.hud.collapsed;
+    $("hudBody").classList.toggle("collapsed", !!STATE.ui.hud.collapsed);
+    save();
+  };
+  $("inspectCollapse").onclick=()=>{
+    STATE.ui.inspect.collapsed = !STATE.ui.inspect.collapsed;
+    $("inspectBody").classList.toggle("collapsed", !!STATE.ui.inspect.collapsed);
+    save();
+  };
+  $("hudHideChrome").onclick=toggleChrome;
+
+  makePanelDraggable(hud, (x,y)=>{ STATE.ui.hud.x=x; STATE.ui.hud.y=y; save(); });
+  makePanelDraggable(inspect, (x,y)=>{ STATE.ui.inspect.x=x; STATE.ui.inspect.y=y; save(); });
+}
+
+function makePanelDraggable(panelEl, onMove){
+  const header = panelEl.querySelector("[data-drag='panel']");
+  let dragging=false, ox=0, oy=0;
+
+  header.addEventListener("pointerdown",(ev)=>{
+    if(ev.button!==0) return;
+    // ignore clicks on buttons
+    if(ev.target && (ev.target.tagName==="BUTTON" || ev.target.closest("button"))) return;
+    dragging=true;
+    panelEl.setPointerCapture(ev.pointerId);
+    const r = panelEl.getBoundingClientRect();
+    ox = ev.clientX - r.left;
+    oy = ev.clientY - r.top;
+  });
+  header.addEventListener("pointermove",(ev)=>{
+    if(!dragging) return;
+    const x = clamp(ev.clientX - ox, 6, window.innerWidth - 60);
+    const y = clamp(ev.clientY - oy, 6, window.innerHeight - 40);
+    panelEl.style.left = x+"px";
+    panelEl.style.top = y+"px";
+    panelEl.style.right = "auto";
+    if(onMove) onMove(x,y);
+  });
+  header.addEventListener("pointerup",(ev)=>{
+    dragging=false;
+  });
+  header.addEventListener("pointercancel",()=>{ dragging=false; });
+}
+
+/* ---------- nodes ---------- */
+function createNode({title="NODE", text="", x=120, y=120, w=null, collapsed=false, cluster=""}={}){
+  const id = uid("n");
+  STATE.graph.nodes[id] = {
+    id, title, text,
+    x, y,
+    w: w || parseInt(getComputedStyle(document.documentElement).getPropertyValue("--nodeW")) || 260,
+    h: 0,
+    collapsed: !!collapsed,
+    cluster: cluster || ""
+  };
+  save();
+  schedule();
+  return id;
+}
+
+function createCluster(){
+  // cluster is just a label; nodes can share it. We create a labeled node as anchor.
+  const name = prompt("cluster label", "CLUSTER");
+  if(name==null) return;
+  const id = createNode({title: name.trim() || "CLUSTER", text:"", x: 120+Math.random()*220, y: 120+Math.random()*160, cluster: name.trim() || "CLUSTER"});
+  focusNode(id);
+}
+
+function deleteNode(id){
+  if(!STATE.graph.nodes[id]) return;
+  // delete incident edges
+  for(const eid of Object.keys(STATE.graph.edges)){
+    const e = STATE.graph.edges[eid];
+    if(e.from===id || e.to===id) delete STATE.graph.edges[eid];
+  }
+  delete STATE.graph.nodes[id];
+  if(STATE.sel.nodeId===id) STATE.sel.nodeId=null;
+  if(STATE.sel.linkFrom===id) STATE.sel.linkFrom=null;
+  save();
+  schedule();
+}
+
+function nodeCenter(id){
+  const n = STATE.graph.nodes[id];
+  if(!n) return {x:0,y:0};
+  const el = $("node_"+id);
+  if(!el) return {x:n.x + (n.w||260)/2, y:n.y + 20};
+  const r = el.getBoundingClientRect();
+  return {x: r.left + r.width/2, y: r.top + 18};
+}
+
+function focusNode(id){
+  STATE.sel.nodeId = id;
+  STATE.sel.edgeId = null;
+  setToast("selected node: " + (STATE.graph.nodes[id]?.title||id), true);
+  save();
+  schedule();
+}
+
+function focusEdge(eid){
+  STATE.sel.edgeId = eid;
+  STATE.sel.nodeId = null;
+  const e = STATE.graph.edges[eid];
+  setToast("selected edge: " + (e?.label || "(unlabeled)"), true);
+  save();
+  schedule();
+}
+
+/* ---------- edges ---------- */
+function createEdge(fromId, toId, label=""){
+  if(!STATE.graph.nodes[fromId] || !STATE.graph.nodes[toId]) return null;
+  const id = uid("e");
+  STATE.graph.edges[id] = { id, from:fromId, to:toId, label: label||"", dir:true };
+  save();
+  schedule();
+  return id;
+}
+
+function deleteEdge(eid){
+  if(!STATE.graph.edges[eid]) return;
+  delete STATE.graph.edges[eid];
+  if(STATE.sel.edgeId===eid) STATE.sel.edgeId=null;
+  save();
+  schedule();
+}
+
+/* ---------- render ---------- */
+function render(){
+  // ui toggles
+  document.body.classList.toggle("invert", !!STATE.ui.invert);
+  document.body.classList.toggle("chromeOff", !!STATE.ui.chromeOff);
+  document.body.classList.toggle("modeLink", STATE.sel.mode==="link");
+
+  $("listMode").value = STATE.ui.listMode || "nodes";
+
+  // nodes
+  stage.innerHTML = "";
+  for(const id of Object.keys(STATE.graph.nodes)){
+    const n = STATE.graph.nodes[id];
+    stage.appendChild(renderNode(n));
+  }
+
+  // edges
+  renderEdges();
+
+  // stats + inspector
+  updateStats();
+  renderInspectorList();
+
+  // selection hint
+  const sh = $("selHint");
+  if(STATE.sel.nodeId){
+    const n = STATE.graph.nodes[STATE.sel.nodeId];
+    sh.textContent = "selected: node | " + (n?.title||STATE.sel.nodeId);
+  }else if(STATE.sel.edgeId){
+    const e = STATE.graph.edges[STATE.sel.edgeId];
+    sh.textContent = "selected: edge | " + (e?.label||"(unlabeled)");
+  }else{
+    sh.textContent = "selected: none";
+  }
+
+  // mode buttons
+  $("modeMove").style.borderColor = (STATE.sel.mode==="move") ? "var(--hair2)" : "var(--hair)";
+  $("modeLink").style.borderColor = (STATE.sel.mode==="link") ? "var(--hair2)" : "var(--hair)";
+  $("modeSelect").style.borderColor = (STATE.sel.mode==="select") ? "var(--hair2)" : "var(--hair)";
+}
+
+function renderNode(n){
+  const el = document.createElement("div");
+  el.className = "node" + (STATE.sel.nodeId===n.id ? " hot":"");
+  el.id = "node_"+n.id;
+  el.style.left = n.x+"px";
+  el.style.top = n.y+"px";
+  el.style.width = (n.w||260)+"px";
+
+  const header = document.createElement("div");
+  header.className = "nodeHeader";
+  header.dataset.drag = "node";
+  header.dataset.id = n.id;
+
+  const title = document.createElement("div");
+  title.className = "nodeTitle";
+  title.contentEditable = "true";
+  title.spellcheck = false;
+  title.textContent = n.title || "NODE";
+  title.addEventListener("input", ()=>{
+    n.title = title.textContent.trim() || "NODE";
+    save(); schedule();
+  });
+  title.addEventListener("pointerdown",(ev)=>{ ev.stopPropagation(); }); // keep editing
+
+  const meta = document.createElement("div");
+  meta.className = "nodeMeta";
+  const cluster = document.createElement("span");
+  cluster.className = "pill";
+  cluster.textContent = (n.cluster && n.cluster.trim()) ? n.cluster.trim() : "—";
+  cluster.title = "cluster";
+  cluster.addEventListener("click",(ev)=>{
+    ev.stopPropagation();
+    const v = prompt("cluster label", n.cluster||"");
+    if(v==null) return;
+    n.cluster = v.trim();
+    save(); schedule();
+  });
+
+  const collapseBtn = document.createElement("button");
+  collapseBtn.className = "btnSq";
+  collapseBtn.textContent = n.collapsed ? "+" : "–";
+  collapseBtn.title = "collapse";
+  collapseBtn.addEventListener("click",(ev)=>{
+    ev.stopPropagation();
+    n.collapsed = !n.collapsed;
+    save(); schedule();
+  });
+
+  meta.appendChild(cluster);
+  meta.appendChild(collapseBtn);
+
+  header.appendChild(title);
+  header.appendChild(meta);
+
+  const body = document.createElement("div");
+  body.className = "nodeBody" + (n.collapsed ? " collapsed":"");
+
+  const ta = document.createElement("textarea");
+  ta.className = "nodeText";
+  ta.value = n.text || "";
+  ta.spellcheck = false;
+  ta.addEventListener("input", ()=>{
+    n.text = ta.value;
+    save(); schedule();
+  });
+  ta.addEventListener("pointerdown",(ev)=>{ ev.stopPropagation(); });
+
+  const row = document.createElement("div");
+  row.className = "row";
+
+  const btnLink = document.createElement("button");
+  btnLink.className = "btn";
+  btnLink.textContent = "LINK FROM";
+  btnLink.title = "set as link source";
+  btnLink.addEventListener("click",(ev)=>{
+    ev.stopPropagation();
+    STATE.sel.mode = "link";
+    STATE.sel.linkFrom = n.id;
+    STATE.sel.nodeId = n.id;
+    STATE.sel.edgeId = null;
+    setToast("LINK: choose target (source = "+(n.title||n.id)+")", true);
+    save(); schedule();
+  });
+
+  const btnClone = document.createElement("button");
+  btnClone.className = "btn";
+  btnClone.textContent = "CLONE";
+  btnClone.title = "duplicate node";
+  btnClone.addEventListener("click",(ev)=>{
+    ev.stopPropagation();
+    const id2 = createNode({
+      title: (n.title||"NODE")+" (copy)",
+      text: n.text||"",
+      x: n.x+24, y: n.y+24,
+      w: n.w||260,
+      collapsed: n.collapsed,
+      cluster: n.cluster||""
+    });
+    focusNode(id2);
+  });
+
+  const btnDel = document.createElement("button");
+  btnDel.className = "btn";
+  btnDel.textContent = "DELETE";
+  btnDel.title = "delete node";
+  btnDel.addEventListener("click",(ev)=>{
+    ev.stopPropagation();
+    if(confirm("delete node + incident edges?")) deleteNode(n.id);
+  });
+
+  row.appendChild(btnLink);
+  row.appendChild(btnClone);
+  row.appendChild(btnDel);
+
+  body.appendChild(ta);
+  body.appendChild(row);
+
+  el.appendChild(header);
+  el.appendChild(body);
+
+  // select behavior
+  el.addEventListener("pointerdown",(ev)=>{
+    ev.stopPropagation();
+    if(STATE.sel.mode==="link"){
+      linkClickNode(n.id);
+    }else{
+      STATE.sel.nodeId = n.id;
+      STATE.sel.edgeId = null;
+      setToast("selected node: " + (n.title||n.id), true);
+      save(); schedule();
+    }
+  });
+
+  // dragging
+  makeNodeDraggable(el, header, n);
+
+  return el;
+}
+
+function makeNodeDraggable(nodeEl, handleEl, n){
+  let dragging=false, ox=0, oy=0;
+
+  handleEl.addEventListener("pointerdown",(ev)=>{
+    if(ev.button!==0) return;
+    ev.stopPropagation();
+    // if user is editing title, ignore (contenteditable selection)
+    if(document.activeElement && document.activeElement.isContentEditable) return;
+
+    if(STATE.sel.mode==="link"){
+      // in link mode, header click should count as link click
+      linkClickNode(n.id);
+      return;
+    }
+
+    dragging=true;
+    nodeEl.setPointerCapture(ev.pointerId);
+    const r = nodeEl.getBoundingClientRect();
+    ox = ev.clientX - r.left;
+    oy = ev.clientY - r.top;
+    STATE.sel.nodeId = n.id;
+    STATE.sel.edgeId = null;
+    save(); schedule();
+  });
+
+  handleEl.addEventListener("pointermove",(ev)=>{
+    if(!dragging) return;
+    const x = clamp(ev.clientX - ox, 0, window.innerWidth - 20);
+    const y = clamp(ev.clientY - oy, 0, window.innerHeight - 20);
+    n.x = x;
+    n.y = y;
+    nodeEl.style.left = x+"px";
+    nodeEl.style.top = y+"px";
+    renderEdges(); // live
+  });
+
+  handleEl.addEventListener("pointerup",()=>{
+    if(dragging){
+      dragging=false;
+      save();
+      schedule();
+    }
+  });
+  handleEl.addEventListener("pointercancel",()=>{ dragging=false; });
+}
+
+/* ---------- linking ---------- */
+function linkClickNode(targetId){
+  const src = STATE.sel.linkFrom;
+  if(!src){
+    STATE.sel.linkFrom = targetId;
+    setToast("LINK: choose target (source set)", true);
+    save(); schedule();
+    return;
+  }
+  if(src===targetId){
+    setToast("LINK: source=target (cancelled)", true);
+    STATE.sel.linkFrom = null;
+    save(); schedule();
+    return;
+  }
+  const label = prompt("edge label (optional)", "");
+  if(label===null){
+    setToast("LINK: cancelled", true);
+    STATE.sel.linkFrom = null;
+    save(); schedule();
+    return;
+  }
+  const eid = createEdge(src, targetId, (label||"").trim());
+  STATE.sel.edgeId = eid;
+  STATE.sel.nodeId = null;
+  STATE.sel.linkFrom = null;
+  setToast("edge created", true);
+  save(); schedule();
+}
+
+/* ---------- edges render ---------- */
+function svgSize(){
+  svg.setAttribute("viewBox", `0 0 ${window.innerWidth} ${window.innerHeight}`);
+}
+function clearSvg(){
+  // keep defs
+  while(svg.childNodes.length>1){
+    svg.removeChild(svg.lastChild);
+  }
+}
+function renderEdges(){
+  svgSize();
+  clearSvg();
+
+  const selectedNode = STATE.sel.nodeId;
+  const selectedEdge = STATE.sel.edgeId;
+
+  // gather quick incident set for muting
+  let incident = null;
+  if(STATE.ui.muteNonSelected && (selectedNode || selectedEdge)){
+    incident = new Set();
+    if(selectedNode){
+      for(const eid of Object.keys(STATE.graph.edges)){
+        const e = STATE.graph.edges[eid];
+        if(e.from===selectedNode || e.to===selectedNode) incident.add(eid);
+      }
+    }else if(selectedEdge){
+      incident.add(selectedEdge);
+    }
+  }
+
+  for(const eid of Object.keys(STATE.graph.edges)){
+    const e = STATE.graph.edges[eid];
+    const a = nodeCenter(e.from);
+    const b = nodeCenter(e.to);
+
+    const isHot = (selectedEdge===eid) || (selectedNode && (e.from===selectedNode || e.to===selectedNode));
+    const isMuted = (incident && !incident.has(eid));
+
+    // line
+    const line = document.createElementNS("http://www.w3.org/2000/svg","path");
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const dist = Math.max(1, Math.hypot(dx,dy));
+    // slight curve for readability
+    const nx = -dy / dist;
+    const ny = dx / dist;
+    const bend = clamp(dist*0.08, 10, 42);
+    const cx = (a.x+b.x)/2 + nx*bend;
+    const cy = (a.y+b.y)/2 + ny*bend;
+
+    line.setAttribute("d", `M ${a.x} ${a.y} Q ${cx} ${cy} ${b.x} ${b.y}`);
+    line.setAttribute("class", "edgeLine" + (isHot ? " hot":"") + (isMuted ? " muted":""));
+    line.setAttribute("marker-end", isHot ? "url(#arrowHot)" : "url(#arrow)");
+    svg.appendChild(line);
+
+    // label
+    if(STATE.ui.labelsOn){
+      const t = (e.label||"").trim();
+      if(t){
+        // label background box using computed text width approximation
+        const mx = cx;
+        const my = cy;
+
+        const pad = 4;
+        const w = Math.min(260, Math.max(60, t.length * 6.4 + pad*2));
+        const h = 18;
+
+        const box = document.createElementNS("http://www.w3.org/2000/svg","rect");
+        box.setAttribute("x", String(mx - w/2));
+        box.setAttribute("y", String(my - h/2));
+        box.setAttribute("width", String(w));
+        box.setAttribute("height", String(h));
+        box.setAttribute("rx","0");
+        box.setAttribute("class","edgeLabelBox");
+        svg.appendChild(box);
+
+        const txt = document.createElementNS("http://www.w3.org/2000/svg","text");
+        txt.setAttribute("x", String(mx));
+        txt.setAttribute("y", String(my + 4));
+        txt.setAttribute("text-anchor","middle");
+        txt.setAttribute("class","edgeLabel" + (isHot ? " hot":""));
+        txt.textContent = t;
+        svg.appendChild(txt);
+      }
+    }
+  }
+}
+
+/* ---------- analysis ---------- */
+function computeGraph(){
+  const nodes = Object.keys(STATE.graph.nodes);
+  const edges = Object.values(STATE.graph.edges);
+
+  const adj = new Map();
+  for(const id of nodes) adj.set(id, new Set());
+  for(const e of edges){
+    if(adj.has(e.from)) adj.get(e.from).add(e.to);
+    if(adj.has(e.to)) adj.get(e.to).add(e.from);
+  }
+  // components
+  const seen = new Set();
+  const comps = [];
+  for(const id of nodes){
+    if(seen.has(id)) continue;
+    const q=[id]; seen.add(id);
+    const comp=[];
+    while(q.length){
+      const v=q.pop();
+      comp.push(v);
+      for(const u of (adj.get(v)||[])){
+        if(!seen.has(u)){ seen.add(u); q.push(u); }
+      }
+    }
+    comps.push(comp);
+  }
+  // degrees
+  const deg = {};
+  for(const id of nodes){
+    deg[id] = (adj.get(id)||new Set()).size;
+  }
+  return {nodes, edges, adj, comps, deg};
+}
+
+function updateStats(){
+  const g = computeGraph();
+  $("statNodes").textContent = "NODES: " + g.nodes.length;
+  $("statEdges").textContent = "EDGES: " + g.edges.length;
+  $("statComp").textContent = "COMP: " + g.comps.length;
+}
+
+/* ---------- inspector list ---------- */
+function renderInspectorList(){
+  const list = $("list");
+  list.innerHTML = "";
+
+  const mode = STATE.ui.listMode || "nodes";
+  const g = computeGraph();
+
+  if(mode==="nodes"){
+    const ids = Object.keys(STATE.graph.nodes);
+    // sort by cluster then degree desc then title
+    ids.sort((a,b)=>{
+      const A=STATE.graph.nodes[a], B=STATE.graph.nodes[b];
+      const ca=(A.cluster||"").toLowerCase(), cb=(B.cluster||"").toLowerCase();
+      if(ca<cb) return -1; if(ca>cb) return 1;
+      const da=g.deg[a]||0, db=g.deg[b]||0;
+      if(db!==da) return db-da;
+      const ta=(A.title||"").toLowerCase(), tb=(B.title||"").toLowerCase();
+      return ta<tb?-1:ta>tb?1:0;
+    });
+
+    for(const id of ids){
+      const n = STATE.graph.nodes[id];
+      const it = document.createElement("div");
+      it.className="item";
+      it.style.cursor="pointer";
+      it.onclick=()=>focusNode(id);
+
+      const name = document.createElement("div");
+      name.className="name";
+      name.textContent = (n.title||"NODE");
+      name.title = n.text ? n.text.slice(0,220) : "";
+
+      const meta = document.createElement("div");
+      meta.className="meta";
+      meta.textContent = (n.cluster? n.cluster : "—") + " | d=" + (g.deg[id]||0);
+
+      it.appendChild(name);
+      it.appendChild(meta);
+      list.appendChild(it);
+    }
+    if(!ids.length){
+      list.appendChild(emptyLine("no nodes"));
+    }
+  }
+
+  if(mode==="edges"){
+    const eids = Object.keys(STATE.graph.edges);
+    // sort by label
+    eids.sort((a,b)=>{
+      const A=STATE.graph.edges[a], B=STATE.graph.edges[b];
+      const la=(A.label||"").toLowerCase(), lb=(B.label||"").toLowerCase();
+      return la<lb?-1:la>lb?1:0;
+    });
+
+    for(const eid of eids){
+      const e = STATE.graph.edges[eid];
+      const it = document.createElement("div");
+      it.className="item";
+      it.style.cursor="pointer";
+      it.onclick=()=>focusEdge(eid);
+
+      const name = document.createElement("div");
+      name.className="name";
+      const a = STATE.graph.nodes[e.from]?.title || e.from;
+      const b = STATE.graph.nodes[e.to]?.title || e.to;
+      name.textContent = (e.label && e.label.trim()) ? e.label.trim() : "(unlabeled)";
+      name.title = a + " -> " + b;
+
+      const meta = document.createElement("div");
+      meta.className="meta";
+      meta.textContent = " " + a + " → " + b;
+
+      it.appendChild(name);
+      it.appendChild(meta);
+
+      // edit label button
+      const edit = document.createElement("button");
+      edit.className="btnSq";
+      edit.textContent="E";
+      edit.title="edit label";
+      edit.onclick=(ev)=>{
+        ev.stopPropagation();
+        const v = prompt("edge label", e.label||"");
+        if(v==null) return;
+        e.label = v.trim();
+        save(); schedule();
+      };
+
+      it.appendChild(edit);
+
+      list.appendChild(it);
+    }
+    if(!eids.length){
+      list.appendChild(emptyLine("no edges"));
+    }
+  }
+
+  if(mode==="analysis"){
+    const {comps, deg} = g;
+    // components summary
+    list.appendChild(blockLine("components: " + comps.length));
+    comps
+      .slice()
+      .sort((a,b)=>b.length-a.length)
+      .forEach((comp, idx)=>{
+        const it = document.createElement("div");
+        it.className="item";
+        const name = document.createElement("div");
+        name.className="name";
+        name.textContent = "comp " + (idx+1) + " | size " + comp.length;
+
+        const meta = document.createElement("div");
+        meta.className="meta";
+        // show top nodes by degree
+        const top = comp.slice().sort((a,b)=>(deg[b]||0)-(deg[a]||0)).slice(0,3)
+          .map(id=> (STATE.graph.nodes[id]?.title||id) + "("+(deg[id]||0)+")")
+          .join(", ");
+        meta.textContent = top || "—";
+
+        it.appendChild(name);
+        it.appendChild(meta);
+        list.appendChild(it);
+      });
+
+    list.appendChild(blockLine("top degree"));
+    const ids = Object.keys(STATE.graph.nodes).sort((a,b)=>(deg[b]||0)-(deg[a]||0)).slice(0,10);
+    for(const id of ids){
+      const it = document.createElement("div");
+      it.className="item";
+      it.style.cursor="pointer";
+      it.onclick=()=>focusNode(id);
+      const name = document.createElement("div");
+      name.className="name";
+      name.textContent = (STATE.graph.nodes[id]?.title||id);
+      const meta = document.createElement("div");
+      meta.className="meta";
+      meta.textContent = "d=" + (deg[id]||0);
+      it.appendChild(name);
+      it.appendChild(meta);
+      list.appendChild(it);
+    }
+    if(!Object.keys(STATE.graph.nodes).length){
+      list.appendChild(emptyLine("no data"));
+    }
+  }
+
+  // update hot styling of nodes + edges on list changes
+  // (render() already does edges; node selection is in node render)
+}
+
+function emptyLine(text){
+  const it = document.createElement("div");
+  it.className="item";
+  const t = document.createElement("div");
+  t.className="name";
+  t.style.color="var(--muted)";
+  t.textContent=text;
+  it.appendChild(t);
+  return it;
+}
+function blockLine(text){
+  const it = document.createElement("div");
+  it.className="item";
+  it.style.background="rgba(255,255,255,.02)";
+  const t = document.createElement("div");
+  t.className="name";
+  t.style.fontWeight="700";
+  t.textContent=text;
+  it.appendChild(t);
+  return it;
+}
+
+/* ---------- stage interaction ---------- */
+stage.addEventListener("pointerdown",(ev)=>{
+  // click empty stage: clear selection (unless linking)
+  if(STATE.sel.mode==="link"){
+    // allow setting linkFrom by clicking empty? no
+    return;
+  }
+  STATE.sel.nodeId = null;
+  STATE.sel.edgeId = null;
+  save();
+  schedule();
+});
+window.addEventListener("resize", ()=>{
+  svgSize();
+  // keep panels within bounds
+  STATE.ui.hud.x = clamp(STATE.ui.hud.x, 6, window.innerWidth - 60);
+  STATE.ui.hud.y = clamp(STATE.ui.hud.y, 6, window.innerHeight - 40);
+  STATE.ui.inspect.x = clamp(STATE.ui.inspect.x, 6, window.innerWidth - 60);
+  STATE.ui.inspect.y = clamp(STATE.ui.inspect.y, 6, window.innerHeight - 40);
+  setPanelElPos($("hud"), STATE.ui.hud.x, STATE.ui.hud.y, STATE.ui.hud.w);
+  setPanelElPos($("inspect"), STATE.ui.inspect.x, STATE.ui.inspect.y, STATE.ui.inspect.w);
+  save();
+  schedule();
+});
+
+/* ---------- controls ---------- */
+$("addNode").onclick=()=>{
+  const id = createNode({title:"NODE", text:"", x: 140 + Math.random()*260, y: 120 + Math.random()*200});
+  focusNode(id);
+};
+$("addCluster").onclick=createCluster;
+
+$("modeMove").onclick=()=>{ STATE.sel.mode="move"; STATE.sel.linkFrom=null; setToast("mode: MOVE", true); save(); schedule(); };
+$("modeLink").onclick=()=>{ STATE.sel.mode="link"; STATE.sel.linkFrom=null; setToast("mode: LINK (click source then target)", true); save(); schedule(); };
+$("modeSelect").onclick=()=>{ STATE.sel.mode="select"; STATE.sel.linkFrom=null; setToast("mode: SELECT", true); save(); schedule(); };
+
+$("invertBtn").onclick=toggleInvert;
+$("centerBtn").onclick=centerAll;
+$("labelsBtn").onclick=toggleLabels;
+$("muteEdgesBtn").onclick=toggleMute;
+$("resetBtn").onclick=newGraph;
+
+$("exportBtn").onclick=exportFile;
+$("importBtn").onclick=()=>$("file").click();
+$("file").addEventListener("change", importFile);
+
+$("listMode").addEventListener("change", ()=>{
+  STATE.ui.listMode = $("listMode").value;
+  save(); schedule();
+});
+$("focusSel").onclick=()=>{
+  if(STATE.sel.nodeId) focusOnScreen(STATE.sel.nodeId);
+  if(STATE.sel.edgeId){
+    const e = STATE.graph.edges[STATE.sel.edgeId];
+    if(e) focusOnEdge(e);
+  }
+};
+$("deleteSel").onclick=()=>{
+  if(STATE.sel.nodeId){
+    if(confirm("delete selected node + incident edges?")) deleteNode(STATE.sel.nodeId);
+  }else if(STATE.sel.edgeId){
+    if(confirm("delete selected edge?")) deleteEdge(STATE.sel.edgeId);
+  }
+};
+
+$("snapBtn").onclick=snapByCluster;
+$("spreadBtn").onclick=spreadNodes;
+
+$("searchGo").onclick=searchNext;
+$("searchClr").onclick=()=>{ $("search").value=""; setToast("search cleared", true); };
+$("search").addEventListener("keydown",(ev)=>{
+  if(ev.key==="Enter"){ ev.preventDefault(); searchNext(); }
+});
+
+function toggleInvert(){
+  STATE.ui.invert = !STATE.ui.invert;
+  setToast("invert: " + (STATE.ui.invert ? "ON":"OFF"), true);
+  save(); schedule();
+}
+function toggleChrome(){
+  STATE.ui.chromeOff = !STATE.ui.chromeOff;
+  setToast("chrome: " + (STATE.ui.chromeOff ? "OFF":"ON"), true);
+  save(); schedule();
+}
+function toggleLabels(){
+  STATE.ui.labelsOn = !STATE.ui.labelsOn;
+  setToast("labels: " + (STATE.ui.labelsOn ? "ON":"OFF"), true);
+  save(); schedule();
+}
+function toggleMute(){
+  STATE.ui.muteNonSelected = !STATE.ui.muteNonSelected;
+  setToast("mute: " + (STATE.ui.muteNonSelected ? "ON":"OFF"), true);
+  save(); schedule();
+}
+function newGraph(){
+  if(!confirm("new empty graph? (does not affect invert/chrome)")) return;
+  const keepInvert = STATE.ui.invert;
+  const keepChrome = STATE.ui.chromeOff;
+  const keepLabels = STATE.ui.labelsOn;
+  const keepMute = STATE.ui.muteNonSelected;
+  const keepHud = {...STATE.ui.hud};
+  const keepInspect = {...STATE.ui.inspect};
+  const keepListMode = STATE.ui.listMode;
+
+  STATE.graph = {nodes:{}, edges:{}};
+  STATE.sel = {nodeId:null, edgeId:null, linkFrom:null, mode:"move"};
+
+  STATE.ui.invert = keepInvert;
+  STATE.ui.chromeOff = keepChrome;
+  STATE.ui.labelsOn = keepLabels;
+  STATE.ui.muteNonSelected = keepMute;
+  STATE.ui.hud = keepHud;
+  STATE.ui.inspect = keepInspect;
+  STATE.ui.listMode = keepListMode;
+
+  save(); schedule();
+}
+
+/* ---------- focus / layout ---------- */
+function focusOnScreen(nodeId){
+  const el = $("node_"+nodeId);
+  if(!el) return;
+  // simple nudge: bring into view by clamping within viewport
+  const r = el.getBoundingClientRect();
+  const n = STATE.graph.nodes[nodeId];
+  if(!n) return;
+
+  let dx=0, dy=0;
+  const pad=24;
+  if(r.left < pad) dx = pad - r.left;
+  if(r.top < pad) dy = pad - r.top;
+  if(r.right > window.innerWidth - pad) dx = (window.innerWidth - pad) - r.right;
+  if(r.bottom > window.innerHeight - pad) dy = (window.innerHeight - pad) - r.bottom;
+
+  if(dx || dy){
+    // move just that node (no camera system; void chrome = literal positions)
+    n.x = clamp(n.x + dx, 0, window.innerWidth - 40);
+    n.y = clamp(n.y + dy, 0, window.innerHeight - 40);
+    save(); schedule();
+  }
+}
+function focusOnEdge(e){
+  // move endpoints slightly towards center if offscreen
+  focusOnScreen(e.from);
+  focusOnScreen(e.to);
+}
+function centerAll(){
+  const ids = Object.keys(STATE.graph.nodes);
+  if(!ids.length) return;
+
+  // compute bounding box
+  let minX=Infinity, minY=Infinity, maxX=-Infinity, maxY=-Infinity;
+  for(const id of ids){
+    const n = STATE.graph.nodes[id];
+    minX = Math.min(minX, n.x);
+    minY = Math.min(minY, n.y);
+    maxX = Math.max(maxX, n.x + (n.w||260));
+    maxY = Math.max(maxY, n.y + 120);
+  }
+  const boxW = Math.max(1, maxX-minX);
+  const boxH = Math.max(1, maxY-minY);
+
+  const cx = (minX+maxX)/2;
+  const cy = (minY+maxY)/2;
+
+  const targetX = window.innerWidth/2;
+  const targetY = window.innerHeight/2;
+
+  const dx = targetX - cx;
+  const dy = targetY - cy;
+
+  for(const id of ids){
+    const n = STATE.graph.nodes[id];
+    n.x = clamp(n.x + dx, 0, window.innerWidth - 40);
+    n.y = clamp(n.y + dy, 0, window.innerHeight - 40);
+  }
+  setToast("centered", true);
+  save(); schedule();
+}
+
+/* ---------- quick layout ops ---------- */
+function snapByCluster(){
+  const ids = Object.keys(STATE.graph.nodes);
+  if(!ids.length) return;
+
+  // cluster buckets
+  const buckets = new Map();
+  for(const id of ids){
+    const n = STATE.graph.nodes[id];
+    const c = (n.cluster||"").trim() || "—";
+    if(!buckets.has(c)) buckets.set(c, []);
+    buckets.get(c).push(id);
+  }
+
+  const clusters = Array.from(buckets.keys()).sort((a,b)=>a<b?-1:a>b?1:0);
+  const cols = Math.max(1, Math.floor((window.innerWidth-40) / 320));
+  const gapX = 28, gapY = 22;
+  const startX = 24, startY = 70;
+
+  clusters.forEach((c, idx)=>{
+    const col = idx % cols;
+    const row = Math.floor(idx / cols);
+    const baseX = startX + col*(320+gapX);
+    const baseY = startY + row*(220+gapY);
+
+    const list = buckets.get(c);
+    list.forEach((id, j)=>{
+      const n = STATE.graph.nodes[id];
+      n.x = clamp(baseX + (j%1)*0, 0, window.innerWidth-40);
+      n.y = clamp(baseY + j*(STATE.graph.nodes[id].collapsed ? 44 : 140), 0, window.innerHeight-40);
+    });
+  });
+
+  setToast("snap by cluster", true);
+  save(); schedule();
+}
+
+function spreadNodes(){
+  const ids = Object.keys(STATE.graph.nodes);
+  if(!ids.length) return;
+
+  const margin = 24;
+  for(const id of ids){
+    const n = STATE.graph.nodes[id];
+    n.x = clamp(margin + Math.random()*(window.innerWidth - margin - (n.w||260) - 12), 0, window.innerWidth-40);
+    n.y = clamp(margin + Math.random()*(window.innerHeight - margin - 120), 0, window.innerHeight-40);
+  }
+  setToast("spread", true);
+  save(); schedule();
+}
+
+/* ---------- import/export (real files) ---------- */
+function exportFile(){
+  const data = JSON.stringify(STATE, null, 2);
+  const blob = new Blob([data], {type:"application/json"});
+  const a = document.createElement("a");
+  const ts = new Date().toISOString().replaceAll(":","-");
+  a.download = `KETADATA_VOID_CHROME_GRAPH__${ts}.json`;
+  a.href = URL.createObjectURL(blob);
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(()=>{
+    URL.revokeObjectURL(a.href);
+    a.remove();
+  }, 200);
+  setToast("exported JSON file", true);
+}
+
+function importFile(ev){
+  const f = ev.target.files && ev.target.files[0];
+  if(!f) return;
+  const reader = new FileReader();
+  reader.onload = ()=>{
+    try{
+      const data = JSON.parse(String(reader.result||""));
+      if(!data || !data.graph || !data.graph.nodes || !data.graph.edges) throw new Error("bad format");
+      // preserve some ui defaults if missing
+      STATE.ui = Object.assign(STATE.ui, data.ui||{});
+      STATE.graph = data.graph;
+      STATE.sel = Object.assign(STATE.sel, data.sel||{});
+      STATE.meta = Object.assign(STATE.meta, data.meta||{});
+      // sanity clamps
+      for(const id of Object.keys(STATE.graph.nodes)){
+        const n = STATE.graph.nodes[id];
+        n.x = Number.isFinite(n.x) ? clamp(n.x, 0, window.innerWidth-40) : 120;
+        n.y = Number.isFinite(n.y) ? clamp(n.y, 0, window.innerHeight-40) : 120;
+        n.w = Number.isFinite(n.w) ? clamp(n.w, 180, 540) : 260;
+        n.title = (n.title||"NODE");
+        n.text = (n.text||"");
+        n.cluster = (n.cluster||"");
+        n.collapsed = !!n.collapsed;
+      }
+      // drop edges pointing to missing nodes
+      for(const eid of Object.keys(STATE.graph.edges)){
+        const e = STATE.graph.edges[eid];
+        if(!STATE.graph.nodes[e.from] || !STATE.graph.nodes[e.to]) delete STATE.graph.edges[eid];
+      }
+      save();
+      setToast("imported", true);
+      schedule();
+    }catch(e){
+      alert("import failed: " + (e?.message||e));
+    }finally{
+      $("file").value = "";
+    }
+  };
+  reader.readAsText(f);
+}
+
+/* ---------- search ---------- */
+let searchHits = [];
+let searchIdx = 0;
+
+function searchNext(){
+  const q = ($("search").value||"").trim().toLowerCase();
+  if(!q){
+    setToast("search empty", true);
+    return;
+  }
+  // rebuild hits if new query
+  const all = Object.keys(STATE.graph.nodes);
+  searchHits = all.filter(id=>{
+    const n = STATE.graph.nodes[id];
+    return (n.title||"").toLowerCase().includes(q) || (n.text||"").toLowerCase().includes(q);
+  });
+  if(!searchHits.length){
+    setToast("no matches", true);
+    return;
+  }
+  const id = searchHits[searchIdx % searchHits.length];
+  searchIdx++;
+  focusNode(id);
+  focusOnScreen(id);
+}
+
+/* ---------- keyboard ---------- */
+window.addEventListener("keydown",(ev)=>{
+  // global shortcuts
+  if(ev.key==="I" && ev.shiftKey){ ev.preventDefault(); toggleInvert(); return; }
+  if(ev.key==="." && ev.ctrlKey){ ev.preventDefault(); toggleChrome(); return; }
+
+  if(ev.key==="Escape"){
+    if(STATE.sel.mode==="link" && STATE.sel.linkFrom){
+      STATE.sel.linkFrom = null;
+      setToast("link cancelled", true);
+      save(); schedule();
+      return;
+    }
+    // clear selection
+    STATE.sel.nodeId=null; STATE.sel.edgeId=null;
+    save(); schedule();
+    return;
+  }
+
+  if(ev.key==="Delete" || ev.key==="Backspace"){
+    // only if not typing in textarea/contenteditable
+    const ae = document.activeElement;
+    const typing = ae && (ae.tagName==="TEXTAREA" || ae.tagName==="INPUT" || ae.isContentEditable);
+    if(typing) return;
+    if(STATE.sel.nodeId){
+      ev.preventDefault();
+      deleteNode(STATE.sel.nodeId);
+      return;
+    }
+    if(STATE.sel.edgeId){
+      ev.preventDefault();
+      deleteEdge(STATE.sel.edgeId);
+      return;
+    }
+  }
+
+  if(ev.key==="m" || ev.key==="M"){
+    const ae = document.activeElement;
+    const typing = ae && (ae.tagName==="TEXTAREA" || ae.tagName==="INPUT" || ae.isContentEditable);
+    if(typing) return;
+    STATE.sel.mode="move"; STATE.sel.linkFrom=null;
+    setToast("mode: MOVE", true);
+    save(); schedule();
+  }
+  if(ev.key==="l" || ev.key==="L"){
+    const ae = document.activeElement;
+    const typing = ae && (ae.tagName==="TEXTAREA" || ae.tagName==="INPUT" || ae.isContentEditable);
+    if(typing) return;
+    STATE.sel.mode="link"; STATE.sel.linkFrom=null;
+    setToast("mode: LINK", true);
+    save(); schedule();
+  }
+  if(ev.key==="s" || ev.key==="S"){
+    const ae = document.activeElement;
+    const typing = ae && (ae.tagName==="TEXTAREA" || ae.tagName==="INPUT" || ae.isContentEditable);
+    if(typing) return;
+    STATE.sel.mode="select"; STATE.sel.linkFrom=null;
+    setToast("mode: SELECT", true);
+    save(); schedule();
+  }
+});
+
+/* ---------- init default graph ---------- */
+function boot(){
+  const ok = load();
+
+  initPanels();
+
+  // default graph if empty
+  const hasNodes = Object.keys(STATE.graph.nodes).length > 0;
+  if(!ok || !hasNodes){
+    const a = createNode({title:"CONSTELLATION", text:"notes + constellation links\n\nLINK mode: click source then target\ncluster label: click pill in header", x:140, y:140, cluster:"CORE"});
+    const b = createNode({title:"QUESTION", text:"what is this network proving?", x:460, y:210, cluster:"CORE"});
+    const c = createNode({title:"EVIDENCE", text:"attach fragments, quotes, incidents", x:760, y:140, cluster:"CORE"});
+    createEdge(a,b,"frames");
+    createEdge(b,c,"tests");
+    STATE.sel.nodeId = a;
+    save();
+  }
+
+  // hydrate inspector mode
+  STATE.ui.listMode = STATE.ui.listMode || "nodes";
+  $("listMode").value = STATE.ui.listMode;
+
+  schedule();
+  setToast("ready", true);
+  setTimeout(()=>setToast("", false), 600);
+}
+boot();
+
+/* =========================
+   KETADATA SERIALIZATION STAMP (MANDATORY)
+   AE / EE / WB + FILE_ID / ROOM_ID / VERSION / UPDATED_AT / CHANGELOG
+=========================
+
+AE:
+- brutal minimal void chrome, uniform text size, panels draggable/collapsible, monochrome grid, SVG edges w labels.
+
+EE:
+- draggable nodes, collapsible bodies, link mode (source->target), edge labels, inspector list, analysis (components/degree),
+  import/export (file download/upload), localStorage persistence, invert toggle, chrome toggle, quick layout ops.
+
+WB:
+- UI bindings, keyboard shortcuts, panel drag, state save/load, rendering pipeline.
+
+FILE_ID: KETADATA_VOID_CHROME_CLUSTER_NETWORK_MAKER
+ROOM_ID: void_chrome
+VERSION: v1.0.0
+UPDATED_AT: (runtime) STATE.meta.updatedAt
+CHANGELOG:
+- v1.0.0 initial build: nodes/edges, link mode, labels, inspector, analysis, import/export file I/O, invert, chrome toggle.
+*/
+</script>
+</body>
+</html>
