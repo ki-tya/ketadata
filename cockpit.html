@@ -1,0 +1,2194 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>KETADATA STUDIO /// DETECTIVE BOARD</title>
+<style>
+  :root{
+    --bg:#000;
+    --ink:rgba(255,255,255,.86);
+    --muted:rgba(255,255,255,.48);
+    --line:rgba(255,255,255,.12);
+    --line2:rgba(255,255,255,.22);
+    --panel:rgba(0,0,0,.92);
+    --panel2:rgba(255,255,255,.02);
+    --mono: ui-sans-serif, system-ui, -apple-system, Arial, Helvetica, sans-serif;
+    --mono2: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    --fs:12px; /* uniform text size */
+  }
+  *{ box-sizing:border-box; font-family:var(--mono); font-size:var(--fs); }
+  html,body{ height:100%; margin:0; background:var(--bg); color:var(--ink); overflow:hidden; }
+
+  /* Root toggles */
+  body.invert{
+    filter: invert(1) hue-rotate(180deg);
+  }
+  body.invert img, body.invert video, body.invert iframe{
+    filter: invert(1) hue-rotate(180deg);
+  }
+
+  /* Top bar */
+  .top{
+    position:fixed; top:0; left:0; right:0; height:46px;
+    display:flex; align-items:center; justify-content:space-between;
+    padding:0 10px;
+    border-bottom:1px solid var(--line);
+    background:var(--panel);
+    backdrop-filter: blur(6px);
+    z-index:100;
+  }
+  .brand{
+    letter-spacing:2px; text-transform:uppercase;
+    color:var(--muted);
+    display:flex; gap:10px; align-items:center; user-select:none;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  }
+  .top .actions{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; justify-content:flex-end; }
+
+  button, input[type="text"], input[type="file"], textarea, select{
+    background:var(--panel2);
+    border:1px solid var(--line2);
+    color:var(--ink);
+    padding:7px 9px;
+    border-radius:0;
+    outline:none;
+  }
+  button{ cursor:pointer; }
+  button:hover{ border-color:rgba(255,255,255,.34); }
+  .ghost{ border-color:rgba(255,255,255,.10); color:rgba(255,255,255,.62); }
+  .danger:hover{ border-color:rgba(255,120,120,.55); }
+  .hint{ color:var(--muted); letter-spacing:1px; text-transform:uppercase; }
+
+  /* Layout */
+  .shell{
+    position:absolute; top:46px; left:0; right:0; bottom:0;
+    display:grid;
+    grid-template-columns: 320px 6px 1fr 6px 320px;
+    grid-template-rows: 1fr 6px 220px;
+    grid-template-areas:
+      "left  v1 center v2 right"
+      "left  v1 h1     v2 right"
+      "left  v1 bottom v2 right";
+  }
+
+  .dock{
+    min-width:0; min-height:0;
+    border-right:1px solid var(--line);
+    background:var(--panel);
+    display:flex; flex-direction:column;
+    overflow:hidden;
+  }
+  .dock.right{ border-right:none; border-left:1px solid var(--line); }
+  .dock.bottom{
+    grid-area:bottom;
+    border-top:1px solid var(--line);
+    border-right:none;
+    border-left:none;
+  }
+
+  .left{ grid-area:left; }
+  .center{ grid-area:center; position:relative; overflow:hidden; background:#000; }
+  .right{ grid-area:right; }
+  .bottom{ grid-area:bottom; }
+
+  .resizer{ background:rgba(255,255,255,.06); z-index:50; }
+  .resizer:hover{ background:rgba(255,255,255,.10); }
+  .v1{ grid-area:v1; cursor:col-resize; }
+  .v2{ grid-area:v2; cursor:col-resize; }
+  .h1{ grid-area:h1; cursor:row-resize; }
+
+  .dockHeader{
+    height:40px;
+    padding:0 10px;
+    display:flex; align-items:center; justify-content:space-between;
+    border-bottom:1px solid var(--line);
+    user-select:none;
+  }
+  .dockHeader .title{
+    letter-spacing:2px; text-transform:uppercase;
+    color:var(--muted);
+    display:flex; gap:8px; align-items:center;
+  }
+  .dockHeader .controls{ display:flex; gap:8px; align-items:center; }
+
+  .tabbar{
+    display:flex; gap:6px; padding:8px 10px;
+    border-bottom:1px solid var(--line);
+    overflow:auto;
+  }
+  .tab{
+    padding:6px 8px;
+    border:1px solid rgba(255,255,255,.10);
+    background:rgba(255,255,255,.02);
+    color:rgba(255,255,255,.62);
+    letter-spacing:2px;
+    text-transform:uppercase;
+    cursor:pointer;
+    user-select:none;
+    white-space:nowrap;
+  }
+  .tab.active{
+    border-color:rgba(255,255,255,.26);
+    background:rgba(255,255,255,.04);
+    color:rgba(255,255,255,.82);
+  }
+
+  .dockBody{ flex:1; min-height:0; overflow:auto; padding:10px; }
+
+  .group{
+    border:1px solid rgba(255,255,255,.10);
+    background:rgba(255,255,255,.02);
+    padding:10px;
+    margin-bottom:10px;
+  }
+  .groupTitle{
+    letter-spacing:2px; text-transform:uppercase;
+    color:rgba(255,255,255,.48);
+    margin-bottom:8px;
+  }
+  .row{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .row .grow{ flex:1 1 auto; min-width:0; }
+  .tiny{ color:rgba(255,255,255,.48); }
+
+  .kv{
+    display:grid;
+    grid-template-columns: 90px 1fr;
+    gap:8px;
+    align-items:center;
+  }
+  .k{ color:rgba(255,255,255,.45); letter-spacing:2px; text-transform:uppercase; }
+  .v{ color:rgba(255,255,255,.82); min-width:0; }
+
+  input[type="range"]{ height:26px; padding:0; background:transparent; }
+
+  /* Center board */
+  #stage{ position:absolute; inset:0; overflow:hidden; touch-action:none; }
+  #viewport{ position:absolute; inset:0; transform-origin:0 0; }
+  #board{ position:absolute; inset:0; }
+
+  .item{
+    position:absolute;
+    border:1px solid transparent;
+    user-select:none;
+    transform-origin:center center;
+  }
+  .item.selected{ border-color:rgba(255,255,255,.22); }
+
+  /* Evidence image */
+  .item img{
+    width:100%; height:100%;
+    object-fit:contain; display:block;
+    pointer-events:none;
+  }
+
+  /* Card */
+  .card{
+    width:100%; height:100%;
+    border:1px solid rgba(255,255,255,.14);
+    background:rgba(0,0,0,.78);
+    display:flex; flex-direction:column;
+    overflow:hidden;
+  }
+  .cardHead{
+    height:26px;
+    border-bottom:1px solid rgba(255,255,255,.10);
+    display:flex; align-items:center; justify-content:space-between;
+    padding:0 8px;
+    letter-spacing:2px; text-transform:uppercase;
+    color:rgba(255,255,255,.60);
+    cursor:move;
+  }
+  .chip{ color:rgba(255,255,255,.62); }
+  .cardBody{
+    flex:1; min-height:0;
+    padding:8px;
+    background:transparent;
+    color:rgba(255,255,255,.86);
+    outline:none;
+    border:0;
+    font-family:var(--mono2);
+    white-space:pre-wrap;
+    line-height:1.25;
+    overflow:auto;
+  }
+
+  /* Handles */
+  .handle{
+    position:absolute;
+    width:18px; height:18px;
+    border:1px solid rgba(255,255,255,.40);
+    background:rgba(0,0,0,.78);
+  }
+  .h-nw{ left:-10px; top:-10px; cursor:nwse-resize; }
+  .h-ne{ right:-10px; top:-10px; cursor:nesw-resize; }
+  .h-sw{ left:-10px; bottom:-10px; cursor:nesw-resize; }
+  .h-se{ right:-10px; bottom:-10px; cursor:nwse-resize; }
+  .rot{
+    position:absolute; left:50%; top:-34px; transform:translateX(-50%);
+    width:18px; height:18px; border-radius:50%;
+    border:1px solid rgba(255,255,255,.40);
+    background:rgba(0,0,0,.82);
+    cursor:grab;
+  }
+
+  /* Link layer */
+  #linkLayer{ position:absolute; inset:0; pointer-events:auto; }
+  #linkLayer.hidden{ display:none; }
+  #linkSvg{ width:100%; height:100%; display:block; }
+  .edge{ stroke: rgba(255,255,255,.18); stroke-width:1; }
+  .edge.selected{ stroke: rgba(255,255,255,.42); stroke-width:2; }
+  .edgeHit{ stroke: rgba(255,255,255,0); stroke-width:10; cursor:pointer; }
+  .edgeLabel{
+    fill: rgba(255,255,255,.52);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    user-select:none;
+  }
+
+  /* YouTube windows */
+  .ytWin{
+    position:absolute;
+    width:280px; height:160px;
+    border:1px solid rgba(255,255,255,.14);
+    background:rgba(0,0,0,.82);
+    z-index:80;
+    overflow:hidden;
+  }
+  .ytHead{
+    height:26px;
+    display:flex; align-items:center; justify-content:space-between;
+    padding:0 8px;
+    border-bottom:1px solid rgba(255,255,255,.10);
+    cursor:move;
+    user-select:none;
+    color:rgba(255,255,255,.60);
+    letter-spacing:2px;
+    text-transform:uppercase;
+  }
+  .ytHead .btn{
+    padding:2px 6px;
+    border:1px solid rgba(255,255,255,.12);
+    background:rgba(255,255,255,.02);
+    color:rgba(255,255,255,.55);
+    cursor:pointer;
+  }
+  .ytHead .btn:hover{ border-color:rgba(255,255,255,.26); color:rgba(255,255,255,.75); }
+  .ytBody{ height:calc(100% - 26px); }
+  .ytBody iframe{ width:100%; height:100%; border:0; background:#000; }
+  .ytResize{
+    position:absolute; right:-10px; bottom:-10px;
+    width:20px; height:20px;
+    border:1px solid rgba(255,255,255,.34);
+    background:rgba(0,0,0,.70);
+    cursor:nwse-resize;
+  }
+
+  /* Toast */
+  #toast{
+    position:fixed; left:50%; bottom:12px; transform:translateX(-50%);
+    padding:8px 10px;
+    border:1px solid rgba(255,255,255,.16);
+    background:rgba(0,0,0,.92);
+    color:rgba(255,255,255,.72);
+    display:none;
+    z-index:200;
+    letter-spacing:1px;
+    text-transform:uppercase;
+  }
+  #toast.show{ display:block; }
+
+  /* Notes pad */
+  .notesBtn{
+    position:fixed; top:10px; right:10px; z-index:220;
+    padding:6px 8px;
+    letter-spacing:2px;
+    text-transform:uppercase;
+    color:rgba(255,255,255,.55);
+    background:rgba(255,255,255,.02);
+    border:1px solid rgba(255,255,255,.10);
+  }
+  .notesBtn:hover{ border-color:rgba(255,255,255,.22); color:rgba(255,255,255,.70); }
+  .notepad{
+    position:fixed; right:10px; top:44px; width:360px; height:340px;
+    z-index:230;
+    background:rgba(0,0,0,.92);
+    border:1px solid rgba(255,255,255,.14);
+    display:none;
+    resize: both;
+    overflow:hidden;
+    min-width:260px;
+    min-height:220px;
+  }
+  .notepad.open{ display:block; }
+  .npHeader{
+    display:flex; align-items:center; justify-content:space-between; gap:10px;
+    padding:8px 10px;
+    border-bottom:1px solid rgba(255,255,255,.10);
+    cursor:move;
+    user-select:none;
+    color:rgba(255,255,255,.62);
+    letter-spacing:2px;
+    text-transform:uppercase;
+  }
+  .npActions{ display:flex; gap:8px; align-items:center; }
+  .npActions button{
+    padding:5px 7px;
+    letter-spacing:2px;
+    color:rgba(255,255,255,.60);
+    border:1px solid rgba(255,255,255,.12);
+    background:rgba(255,255,255,.02);
+  }
+  .npActions button:hover{ border-color:rgba(255,255,255,.26); color:rgba(255,255,255,.78); }
+  .npBody{ height:calc(100% - 41px); padding:10px; }
+  .npText{
+    width:100%;
+    height:100%;
+    border:1px solid rgba(255,255,255,.10);
+    background:rgba(255,255,255,.02);
+    color:rgba(255,255,255,.82);
+    line-height:1.25;
+    letter-spacing:.2px;
+    padding:10px;
+    outline:none;
+    resize:none;
+    font-family:var(--mono2);
+  }
+
+  .collapsed{ display:none !important; }
+
+  @media (max-width: 1040px){
+    .shell{
+      grid-template-columns: 1fr;
+      grid-template-rows: 1fr 6px 220px;
+      grid-template-areas:
+        "center"
+        "h1"
+        "bottom";
+    }
+    .left,.right,.v1,.v2{ display:none; }
+  }
+</style>
+</head>
+<body>
+
+<div class="top">
+  <div class="brand">
+    <span>KETADATA STUDIO /// DETECTIVE BOARD</span>
+    <span class="hint">timelines + networks + evidence (all visible)</span>
+  </div>
+  <div class="actions">
+    <button id="btnInvert" class="ghost">Invert: Off</button>
+    <button id="btnAddEntity" class="ghost">Add Entity</button>
+    <button id="btnAddEvent" class="ghost">Add Event</button>
+    <button id="btnAddClue" class="ghost">Add Clue</button>
+    <button id="btnAddText" class="ghost">Add Text</button>
+    <button id="btnLinkMode" class="ghost">Link Mode: Off</button>
+    <button id="btnExportSel" class="ghost">Export Selection</button>
+    <button id="btnExportCase" class="ghost">Export Case</button>
+    <button id="btnImportCase" class="ghost">Import Case</button>
+    <input id="importFile" type="file" accept="application/json" style="display:none"/>
+    <button id="btnSave" class="ghost">Save Session</button>
+    <button id="btnLoad" class="ghost">Load Session</button>
+    <button id="btnClear" class="ghost danger">Clear</button>
+  </div>
+</div>
+
+<button id="notesBtn" class="notesBtn" title="Open notes">NOTES</button>
+<div id="notepad" class="notepad">
+  <div id="npHeader" class="npHeader">
+    <div>UI NOTES</div>
+    <div class="npActions">
+      <button id="npCopy" title="Copy notes">COPY</button>
+      <button id="npExport" title="Export notes to .txt">EXPORT</button>
+      <button id="npClear" title="Clear notes">CLEAR</button>
+      <button id="npClose" title="Close">X</button>
+    </div>
+  </div>
+  <div class="npBody">
+    <textarea id="npText" class="npText" placeholder="Edits / rules / prompts."></textarea>
+  </div>
+</div>
+
+<div class="shell" id="shell">
+  <!-- LEFT DOCK -->
+  <aside class="dock left" id="leftDock">
+    <div class="dockHeader">
+      <div class="title">LEFT DOCK</div>
+      <div class="controls">
+        <button id="collapseLeft" class="ghost" title="Collapse">–</button>
+      </div>
+    </div>
+    <div class="tabbar">
+      <div class="tab active" data-lefttab="assets">ASSETS</div>
+      <div class="tab" data-lefttab="case">CASE</div>
+    </div>
+    <div class="dockBody" id="leftBody">
+      <div id="left_assets">
+        <div class="group">
+          <div class="groupTitle">Import Evidence</div>
+          <div class="row">
+            <input id="fileImages" type="file" accept="image/*" multiple />
+          </div>
+          <div class="tiny" style="margin-top:8px;">
+            Wheel = zoom. Hold Space = pan. Drag any artifact. Links labelable.
+          </div>
+        </div>
+
+        <div class="group">
+          <div class="groupTitle">YouTube</div>
+          <div class="row">
+            <input id="ytUrl" class="grow" type="text" placeholder="Paste YouTube URL" />
+            <button id="btnAddYT">Add</button>
+          </div>
+        </div>
+
+        <div class="group">
+          <div class="groupTitle">Quick</div>
+          <div class="row">
+            <button id="btnCenter" class="ghost">Center View</button>
+            <button id="btnDeselect" class="ghost">Deselect</button>
+            <button id="btnTimelineAssist" class="ghost">Timeline Assist: Off</button>
+          </div>
+          <div class="tiny" style="margin-top:8px;">
+            Timeline Assist = one-click arrange events by date + lane (still draggable after).
+          </div>
+        </div>
+      </div>
+
+      <div id="left_case" style="display:none;">
+        <div class="group">
+          <div class="groupTitle">Case Metadata</div>
+          <div class="kv">
+            <div class="k">CASE</div><div class="v"><input id="caseName" type="text" placeholder="CASE NAME"/></div>
+            <div class="k">OWNER</div><div class="v"><input id="caseOwner" type="text" placeholder="OWNER"/></div>
+            <div class="k">TAGS</div><div class="v"><input id="caseTags" type="text" placeholder="comma tags"/></div>
+          </div>
+        </div>
+
+        <div class="group">
+          <div class="groupTitle">Entity / Event Index</div>
+          <div id="indexList" class="tiny" style="line-height:1.4; white-space:pre-wrap;"></div>
+        </div>
+
+        <div class="group">
+          <div class="groupTitle">Hotkeys</div>
+          <div class="tiny" style="white-space:pre-wrap;">
+SPACE: pan
+WHEEL: zoom
+ESC: clear selection / cancel link
+DEL/BKSP: delete selected item or link
+CTRL/CMD+S: save session
+          </div>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- RESIZERS -->
+  <div class="resizer v1" id="resizerV1"></div>
+
+  <!-- CENTER -->
+  <main class="center">
+    <div id="stage">
+      <div id="viewport">
+        <div id="linkLayer">
+          <svg id="linkSvg" xmlns="http://www.w3.org/2000/svg"></svg>
+        </div>
+        <div id="board"></div>
+      </div>
+    </div>
+  </main>
+
+  <div class="resizer v2" id="resizerV2"></div>
+
+  <!-- RIGHT DOCK -->
+  <aside class="dock right" id="rightDock">
+    <div class="dockHeader">
+      <div class="title">RIGHT DOCK</div>
+      <div class="controls">
+        <button id="collapseRight" class="ghost" title="Collapse">–</button>
+      </div>
+    </div>
+    <div class="tabbar">
+      <div class="tab active" data-righttab="inspector">INSPECTOR</div>
+      <div class="tab" data-righttab="prompt">PROMPT PACK</div>
+    </div>
+    <div class="dockBody">
+      <div id="right_inspector">
+        <div class="group">
+          <div class="groupTitle">Selection</div>
+          <div class="kv">
+            <div class="k">TYPE</div><div class="v" id="selType">—</div>
+            <div class="k">LABEL</div><div class="v"><input id="selLabel" type="text" placeholder="label"/></div>
+            <div class="k">OPACITY</div>
+            <div class="v">
+              <input id="selOpacity" type="range" min="5" max="100" step="1" value="100"/>
+              <span id="selOpacityLabel" class="tiny">100</span>
+            </div>
+          </div>
+          <div style="height:10px"></div>
+          <div class="row">
+            <button id="btnFront" class="ghost">Front</button>
+            <button id="btnBack" class="ghost">Back</button>
+            <button id="btnDelete" class="ghost danger">Delete</button>
+          </div>
+        </div>
+
+        <div class="group" id="cardMetaGroup" style="display:none;">
+          <div class="groupTitle">Card Meta</div>
+          <div class="kv">
+            <div class="k">KIND</div><div class="v" id="cardKind">—</div>
+            <div class="k">NAME</div><div class="v"><input id="cardName" type="text" placeholder="name/title"/></div>
+            <div class="k">DATE</div><div class="v"><input id="cardDate" type="text" placeholder="YYYY-MM-DD or freeform"/></div>
+            <div class="k">LANE</div><div class="v"><input id="cardLane" type="text" placeholder="timeline lane"/></div>
+          </div>
+          <div style="height:10px"></div>
+          <div class="row">
+            <button id="btnFocusOnCard" class="ghost">Focus</button>
+            <button id="btnStampCard" class="ghost">Stamp Template</button>
+          </div>
+          <div class="tiny" style="margin-top:8px;">
+            ENTITY: name/role/notes. EVENT: date/lane/title/details. CLUE: source/quote/notes.
+          </div>
+        </div>
+
+        <div class="group">
+          <div class="groupTitle">Linking</div>
+          <div class="tiny">Toggle Link Mode, click Item A then Item B. Click a line to select it.</div>
+          <div style="height:10px"></div>
+          <div class="row">
+            <input id="linkLabel" class="grow" type="text" placeholder="link label (optional)" />
+            <button id="btnLinksToggle" class="ghost">Links: On</button>
+          </div>
+          <div style="height:10px"></div>
+          <div class="row">
+            <input id="edgeNote" class="grow" type="text" placeholder="link note (selected link)" />
+            <button id="btnDelLink" class="ghost danger">Delete Link</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="right_prompt" style="display:none;">
+        <div class="group">
+          <div class="groupTitle">Prompt Pack</div>
+          <textarea id="promptPack" style="width:100%;height:260px;font-family:var(--mono2);line-height:1.25;"></textarea>
+          <div style="height:10px"></div>
+          <div class="row">
+            <button id="btnCopyPrompt" class="ghost">Copy</button>
+            <button id="btnRefreshPrompt" class="ghost">Refresh</button>
+          </div>
+        </div>
+
+        <div class="group">
+          <div class="groupTitle">Export</div>
+          <div class="tiny">Export Case writes a JSON file. Import Case restores it.</div>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- BOTTOM DOCK -->
+  <div class="resizer h1" id="resizerH1"></div>
+  <section class="dock bottom" id="bottomDock">
+    <div class="dockHeader">
+      <div class="title">LOG</div>
+      <div class="controls">
+        <button id="collapseBottom" class="ghost" title="Collapse">–</button>
+      </div>
+    </div>
+    <div class="dockBody">
+      <textarea id="log" spellcheck="false" style="width:100%;height:100%;font-family:var(--mono2);line-height:1.25;"></textarea>
+    </div>
+  </section>
+</div>
+
+<div id="toast"></div>
+
+<script>
+(() => {
+  /* =========================
+     STORAGE KEYS
+  ========================= */
+  const KEY_SESSION   = "ketadata_detective_session_v1";
+  const KEY_NOTES     = "ketadata_detective_ui_notes_v1";
+  const KEY_NOTES_POS = "ketadata_detective_ui_notes_pos_v1";
+
+  /* =========================
+     DOM
+  ========================= */
+  const toast = $("toast");
+  const shell = $("shell");
+  const leftDock = $("leftDock");
+  const rightDock = $("rightDock");
+  const bottomDock = $("bottomDock");
+  const resizerV1 = $("resizerV1");
+  const resizerV2 = $("resizerV2");
+  const resizerH1 = $("resizerH1");
+  const collapseLeft = $("collapseLeft");
+  const collapseRight = $("collapseRight");
+  const collapseBottom = $("collapseBottom");
+
+  const fileImages = $("fileImages");
+  const btnInvert = $("btnInvert");
+  const btnAddEntity = $("btnAddEntity");
+  const btnAddEvent = $("btnAddEvent");
+  const btnAddClue = $("btnAddClue");
+  const btnAddText = $("btnAddText");
+  const btnExportSel = $("btnExportSel");
+  const btnExportCase = $("btnExportCase");
+  const btnImportCase = $("btnImportCase");
+  const importFile = $("importFile");
+  const btnSave = $("btnSave");
+  const btnLoad = $("btnLoad");
+  const btnClear = $("btnClear");
+
+  const btnCenter = $("btnCenter");
+  const btnDeselect = $("btnDeselect");
+  const btnTimelineAssist = $("btnTimelineAssist");
+
+  const ytUrl = $("ytUrl");
+  const btnAddYT = $("btnAddYT");
+
+  const stage = $("stage");
+  const viewport = $("viewport");
+  const board = $("board");
+
+  const linkLayer = $("linkLayer");
+  const linkSvg = $("linkSvg");
+
+  const btnLinkMode = $("btnLinkMode");
+  const linkLabel = $("linkLabel");
+  const btnLinksToggle = $("btnLinksToggle");
+  const edgeNote = $("edgeNote");
+  const btnDelLink = $("btnDelLink");
+
+  const selType = $("selType");
+  const selLabel = $("selLabel");
+  const selOpacity = $("selOpacity");
+  const selOpacityLabel = $("selOpacityLabel");
+  const btnFront = $("btnFront");
+  const btnBack = $("btnBack");
+  const btnDelete = $("btnDelete");
+
+  const cardMetaGroup = $("cardMetaGroup");
+  const cardKind = $("cardKind");
+  const cardName = $("cardName");
+  const cardDate = $("cardDate");
+  const cardLane = $("cardLane");
+  const btnFocusOnCard = $("btnFocusOnCard");
+  const btnStampCard = $("btnStampCard");
+
+  const promptPack = $("promptPack");
+  const btnCopyPrompt = $("btnCopyPrompt");
+  const btnRefreshPrompt = $("btnRefreshPrompt");
+
+  const log = $("log");
+
+  const caseName = $("caseName");
+  const caseOwner = $("caseOwner");
+  const caseTags = $("caseTags");
+  const indexList = $("indexList");
+
+  // Notes
+  const notesBtn = $("notesBtn");
+  const notepad = $("notepad");
+  const npHeader = $("npHeader");
+  const npText = $("npText");
+  const npClose = $("npClose");
+  const npCopy = $("npCopy");
+  const npExport = $("npExport");
+  const npClear = $("npClear");
+
+  function $(id){ return document.getElementById(id); }
+
+  /* =========================
+     UTIL
+  ========================= */
+  function showToast(msg){
+    toast.textContent = String(msg || "");
+    toast.className = "show";
+    clearTimeout(showToast._t);
+    showToast._t = setTimeout(()=> toast.className = "", 900);
+  }
+  function uid(){
+    return Math.random().toString(16).slice(2) + Date.now().toString(16);
+  }
+  function clamp(n,a,b){ return Math.max(a, Math.min(b,n)); }
+
+  function downloadFile(filename, blob){
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.click();
+    setTimeout(()=> URL.revokeObjectURL(url), 250);
+  }
+
+  function parseYouTubeId(url){
+    try{
+      const u = new URL(url);
+      if(u.hostname.includes("youtu.be")) return u.pathname.slice(1);
+      if(u.searchParams.get("v")) return u.searchParams.get("v");
+      const m = u.pathname.match(/\/embed\/([^\/]+)/);
+      if(m) return m[1];
+    }catch{}
+    return null;
+  }
+
+  function safeName(s){
+    return String(s||"ketadata_case").trim().replace(/[^\w\-]+/g,"_").slice(0,64) || "ketadata_case";
+  }
+
+  function normalizeDateKey(s){
+    // accepts YYYY-MM-DD, YYYY/MM/DD, YYYY-MM-DD HH:MM
+    const t = String(s||"").trim();
+    const m = t.match(/(\d{4})[-\/](\d{2})[-\/](\d{2})/);
+    if(!m) return null;
+    return `${m[1]}-${m[2]}-${m[3]}`;
+  }
+
+  /* =========================
+     DOCK TABS
+  ========================= */
+  function bindTabGroup(selector, map){
+    document.querySelectorAll(selector).forEach(tab=>{
+      tab.addEventListener("click", ()=>{
+        const key = Object.keys(map).find(k => tab.dataset[k] !== undefined);
+        if(!key) return;
+        const val = tab.dataset[key];
+        tab.parentElement.querySelectorAll(".tab").forEach(t=>t.classList.remove("active"));
+        tab.classList.add("active");
+        for(const [bodyId, wants] of Object.entries(map)){
+          const el = document.getElementById(bodyId);
+          if(!el) continue;
+          el.style.display = (wants === val) ? "block" : "none";
+        }
+      });
+    });
+  }
+  bindTabGroup('[data-lefttab]',  { left_assets:"assets", left_case:"case" });
+  bindTabGroup('[data-righttab]', { right_inspector:"inspector", right_prompt:"prompt" });
+
+  /* =========================
+     RESIZERS
+  ========================= */
+  let layout = {
+    leftW: 320,
+    rightW: 320,
+    bottomH: 220,
+    leftCollapsed:false,
+    rightCollapsed:false,
+    bottomCollapsed:false
+  };
+
+  function applyLayout(){
+    const cols = [
+      layout.leftCollapsed ? "0px" : layout.leftW + "px",
+      layout.leftCollapsed ? "0px" : "6px",
+      "1fr",
+      layout.rightCollapsed ? "0px" : "6px",
+      layout.rightCollapsed ? "0px" : layout.rightW + "px",
+    ].join(" ");
+
+    const rows = [
+      "1fr",
+      layout.bottomCollapsed ? "0px" : "6px",
+      layout.bottomCollapsed ? "0px" : layout.bottomH + "px",
+    ].join(" ");
+
+    shell.style.gridTemplateColumns = cols;
+    shell.style.gridTemplateRows = rows;
+
+    leftDock.classList.toggle("collapsed", layout.leftCollapsed);
+    rightDock.classList.toggle("collapsed", layout.rightCollapsed);
+    bottomDock.classList.toggle("collapsed", layout.bottomCollapsed);
+
+    resizerV1.classList.toggle("collapsed", layout.leftCollapsed);
+    resizerV2.classList.toggle("collapsed", layout.rightCollapsed);
+    resizerH1.classList.toggle("collapsed", layout.bottomCollapsed);
+  }
+
+  function startDragResizer(kind, e){
+    e.preventDefault();
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const start = {...layout};
+    const onMove = (ev)=>{
+      if(kind === "left"){
+        layout.leftW = clamp(start.leftW + (ev.clientX - startX), 220, 560);
+      } else if(kind === "right"){
+        layout.rightW = clamp(start.rightW - (ev.clientX - startX), 220, 560);
+      } else if(kind === "bottom"){
+        layout.bottomH = clamp(start.bottomH - (ev.clientY - startY), 120, 420);
+      }
+      applyLayout();
+    };
+    const onUp = ()=>{
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+      saveSession(false);
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  }
+
+  resizerV1.addEventListener("mousedown", (e)=> startDragResizer("left", e));
+  resizerV2.addEventListener("mousedown", (e)=> startDragResizer("right", e));
+  resizerH1.addEventListener("mousedown", (e)=> startDragResizer("bottom", e));
+
+  collapseLeft.addEventListener("click", ()=>{
+    layout.leftCollapsed = !layout.leftCollapsed;
+    applyLayout(); saveSession(false);
+  });
+  collapseRight.addEventListener("click", ()=>{
+    layout.rightCollapsed = !layout.rightCollapsed;
+    applyLayout(); saveSession(false);
+  });
+  collapseBottom.addEventListener("click", ()=>{
+    layout.bottomCollapsed = !layout.bottomCollapsed;
+    applyLayout(); saveSession(false);
+  });
+
+  /* =========================
+     VIEWPORT (pan/zoom)
+  ========================= */
+  let view = { scale:1, panX:0, panY:0 };
+  let spaceDown = false;
+
+  function applyView(){
+    viewport.style.transform = `translate(${view.panX}px, ${view.panY}px) scale(${view.scale})`;
+    renderLinks();
+  }
+
+  function screenToWorld(clientX, clientY){
+    const r = stage.getBoundingClientRect();
+    const sx = clientX - r.left;
+    const sy = clientY - r.top;
+    const x = (sx - view.panX) / view.scale;
+    const y = (sy - view.panY) / view.scale;
+    return { x,y,sx,sy };
+  }
+
+  document.addEventListener("keydown", (e)=>{
+    if(e.code==="Space") spaceDown = true;
+    if((e.ctrlKey || e.metaKey) && e.key.toLowerCase()==="s"){
+      e.preventDefault();
+      saveSession(true);
+    }
+  });
+  document.addEventListener("keyup", (e)=>{
+    if(e.code==="Space") spaceDown = false;
+  });
+
+  stage.addEventListener("wheel", (e)=>{
+    e.preventDefault();
+    const delta = -Math.sign(e.deltaY) * 0.10;
+    const before = screenToWorld(e.clientX, e.clientY);
+    view.scale = clamp(view.scale * (1 + delta), 0.25, 2.5);
+    const after = screenToWorld(e.clientX, e.clientY);
+    view.panX += (after.sx - before.sx);
+    view.panY += (after.sy - before.sy);
+    applyView();
+  }, { passive:false });
+
+  let dragView = null;
+  stage.addEventListener("mousedown", (e)=>{
+    const onItem = e.target.closest && e.target.closest(".item");
+    const onYT = e.target.closest && e.target.closest(".ytWin");
+    if(onItem || onYT) return;
+    if(spaceDown){
+      dragView = { sx:e.clientX, sy:e.clientY, px:view.panX, py:view.panY };
+    } else {
+      if(!linkMode || !linkFromId){
+        selectItem(null);
+        selectEdge(null);
+      }
+    }
+  });
+  window.addEventListener("mousemove", (e)=>{
+    if(!dragView) return;
+    view.panX = dragView.px + (e.clientX - dragView.sx);
+    view.panY = dragView.py + (e.clientY - dragView.sy);
+    applyView();
+  });
+  window.addEventListener("mouseup", ()=> dragView=null);
+
+  btnCenter.addEventListener("click", ()=>{
+    view = { scale:1, panX:0, panY:0 };
+    applyView();
+    showToast("CENTERED");
+  });
+
+  /* =========================
+     STATE: CASE + ITEMS + LINKS
+  ========================= */
+  let CASE = { name:"", owner:"", tags:"" };
+  let items = []; // {id,type:"image"|"text"|"card", cardKind?, meta?, image?, x,y,w,h,r,opacity,label,z, text}
+  let edges = []; // {id,from,to,label,note}
+  let selectedId = null;
+  let selectedEdgeId = null;
+  let linkMode = false;
+  let linkFromId = null;
+  let linksVisible = true;
+  let invertOn = false;
+  let timelineAssistOn = false;
+
+  function nextZ(){ return items.reduce((m,it)=> Math.max(m, it.z||0), 0) + 1; }
+  function getItem(id){ return items.find(x=>x.id===id) || null; }
+  function itemCenter(it){ return { x: it.x + it.w/2, y: it.y + it.h/2 }; }
+
+  function selectItem(id){
+    selectedId = id;
+    if(id !== null) selectedEdgeId = null;
+    syncInspector();
+    render();
+    refreshPromptPack();
+  }
+  function selectEdge(id){
+    selectedEdgeId = id;
+    if(id !== null) selectedId = null;
+    syncInspector();
+    renderLinks();
+    refreshPromptPack();
+  }
+
+  function render(){
+    board.innerHTML = "";
+    const sorted = [...items].sort((a,b)=> (a.z||0)-(b.z||0));
+    for(const it of sorted){
+      const el = document.createElement("div");
+      el.className = "item" + (it.id === selectedId ? " selected" : "");
+      el.dataset.id = it.id;
+      el.style.left = it.x + "px";
+      el.style.top = it.y + "px";
+      el.style.width = it.w + "px";
+      el.style.height = it.h + "px";
+      el.style.opacity = String(it.opacity ?? 1);
+      el.style.transform = `rotate(${it.r || 0}deg)`;
+      el.style.zIndex = String(it.z || 0);
+
+      if(it.type === "image"){
+        const img = document.createElement("img");
+        img.src = it.image.processed || it.image.original;
+        el.appendChild(img);
+      } else if(it.type === "text"){
+        const div = document.createElement("div");
+        div.className = "cardBody";
+        div.contentEditable = "true";
+        div.spellcheck = false;
+        div.style.fontFamily = "var(--mono2)";
+        div.style.padding = "10px 12px";
+        div.textContent = it.text || "";
+        div.addEventListener("input", ()=>{
+          const x = getItem(it.id); if(x) x.text = div.textContent;
+          queueAutosave();
+          refreshPromptPack();
+          rebuildIndex();
+        });
+        div.addEventListener("pointerdown", (ev)=> ev.stopPropagation());
+        el.appendChild(div);
+      } else if(it.type === "card"){
+        const card = document.createElement("div");
+        card.className = "card";
+
+        const head = document.createElement("div");
+        head.className = "cardHead";
+        const kind = String(it.cardKind||"CARD").toUpperCase();
+        const left = document.createElement("div");
+        left.innerHTML = `<span class="chip">${kind}</span>`;
+        const right = document.createElement("div");
+        right.style.opacity = "0.75";
+        right.textContent = (it.label || "").toUpperCase();
+        head.appendChild(left);
+        head.appendChild(right);
+
+        const body = document.createElement("div");
+        body.className = "cardBody";
+        body.contentEditable = "true";
+        body.spellcheck = false;
+        body.textContent = it.text || "";
+        body.addEventListener("input", ()=>{
+          const x = getItem(it.id); if(x) x.text = body.textContent;
+          queueAutosave();
+          refreshPromptPack();
+          rebuildIndex();
+        });
+        body.addEventListener("pointerdown", (ev)=> ev.stopPropagation());
+
+        card.appendChild(head);
+        card.appendChild(body);
+        el.appendChild(card);
+      }
+
+      if(it.id === selectedId){
+        ["nw","ne","sw","se"].forEach(pos=>{
+          const h = document.createElement("div");
+          h.className = `handle h-${pos}`;
+          h.dataset.handle = pos;
+          el.appendChild(h);
+        });
+        const rot = document.createElement("div");
+        rot.className = "rot";
+        rot.dataset.handle = "rot";
+        el.appendChild(rot);
+      }
+
+      el.addEventListener("mousedown", onItemDown);
+      board.appendChild(el);
+    }
+    renderLinks();
+    rebuildIndex();
+  }
+
+  function renderLinks(){
+    linkLayer.classList.toggle("hidden", !linksVisible);
+    linkSvg.innerHTML = "";
+    if(!linksVisible) return;
+
+    for(const e of edges){
+      const a = getItem(e.from);
+      const b = getItem(e.to);
+      if(!a || !b) continue;
+
+      const ca = itemCenter(a);
+      const cb = itemCenter(b);
+      const midx = (ca.x + cb.x)/2;
+      const midy = (ca.y + cb.y)/2;
+      const isSel = (e.id === selectedEdgeId);
+
+      const line = document.createElementNS("http://www.w3.org/2000/svg","line");
+      line.setAttribute("x1", ca.x);
+      line.setAttribute("y1", ca.y);
+      line.setAttribute("x2", cb.x);
+      line.setAttribute("y2", cb.y);
+      line.setAttribute("class", "edge" + (isSel ? " selected" : ""));
+      linkSvg.appendChild(line);
+
+      const hit = document.createElementNS("http://www.w3.org/2000/svg","line");
+      hit.setAttribute("x1", ca.x);
+      hit.setAttribute("y1", ca.y);
+      hit.setAttribute("x2", cb.x);
+      hit.setAttribute("y2", cb.y);
+      hit.setAttribute("class", "edgeHit");
+      hit.addEventListener("mousedown", (ev)=>{
+        ev.stopPropagation();
+        selectEdge(e.id);
+      });
+      linkSvg.appendChild(hit);
+
+      const label = (e.label || "").trim();
+      if(label){
+        const t = document.createElementNS("http://www.w3.org/2000/svg","text");
+        t.setAttribute("x", midx + 6);
+        t.setAttribute("y", midy - 6);
+        t.setAttribute("class", "edgeLabel");
+        t.textContent = label.toUpperCase();
+        linkSvg.appendChild(t);
+      }
+    }
+  }
+
+  /* =========================
+     INDEX (CASE DOCK)
+  ========================= */
+  function rebuildIndex(){
+    const ents = items.filter(it=>it.type==="card" && (it.cardKind||"").toUpperCase()==="ENTITY");
+    const evts = items.filter(it=>it.type==="card" && (it.cardKind||"").toUpperCase()==="EVENT");
+
+    const byName = (a,b)=> String(a.meta?.name||a.label||"").localeCompare(String(b.meta?.name||b.label||""));
+    const byDate = (a,b)=> {
+      const da = normalizeDateKey(a.meta?.date) || "9999-99-99";
+      const db = normalizeDateKey(b.meta?.date) || "9999-99-99";
+      return da.localeCompare(db);
+    };
+
+    const out = [];
+    out.push(`CASE: ${CASE.name || "—"}`);
+    out.push(`OWNER: ${CASE.owner || "—"}`);
+    out.push(`TAGS: ${CASE.tags || "—"}`);
+    out.push("");
+    out.push(`ENTITIES (${ents.length})`);
+    [...ents].sort(byName).forEach(it=>{
+      const n = it.meta?.name || it.label || "ENTITY";
+      const role = (it.meta?.lane || "").trim();
+      out.push(`- ${n}${role ? " / " + role : ""}`);
+    });
+    out.push("");
+    out.push(`EVENTS (${evts.length})`);
+    [...evts].sort(byDate).forEach(it=>{
+      const d = it.meta?.date || "—";
+      const lane = it.meta?.lane || "—";
+      const n = it.meta?.name || it.label || "EVENT";
+      out.push(`- ${d} / ${lane} / ${n}`);
+    });
+
+    indexList.textContent = out.join("\n");
+  }
+
+  caseName.addEventListener("input", ()=>{ CASE.name = caseName.value; queueAutosave(); rebuildIndex(); });
+  caseOwner.addEventListener("input", ()=>{ CASE.owner = caseOwner.value; queueAutosave(); rebuildIndex(); });
+  caseTags.addEventListener("input", ()=>{ CASE.tags = caseTags.value; queueAutosave(); rebuildIndex(); });
+
+  /* =========================
+     SPIRAL IMPORT (IMAGES)
+  ========================= */
+  const GOLDEN_ANGLE = 2.399963229728653;
+  const SPIRAL_STEP = 92;
+  function spiralPos(n, cx, cy){
+    const r = SPIRAL_STEP * Math.sqrt(Math.max(0, n));
+    const t = n * GOLDEN_ANGLE;
+    return { x: cx + r*Math.cos(t), y: cy + r*Math.sin(t) };
+  }
+  function readAsDataURL(file){
+    return new Promise((res, rej)=>{
+      const fr = new FileReader();
+      fr.onload = ()=> res(fr.result);
+      fr.onerror = rej;
+      fr.readAsDataURL(file);
+    });
+  }
+
+  fileImages.addEventListener("change", async (ev)=>{
+    const files = [...ev.target.files || []];
+    if(!files.length) return;
+
+    const rect = stage.getBoundingClientRect();
+    const c = screenToWorld(rect.left + rect.width/2, rect.top + rect.height/2);
+
+    let base = items.filter(it => it.type==="image").length;
+
+    for(let i=0;i<files.length;i++){
+      const f = files[i];
+      const dataUrl = await readAsDataURL(f);
+
+      const W = 420, H = 270;
+      const p = spiralPos(base + i, c.x, c.y);
+
+      const it = {
+        id: uid(),
+        type:"image",
+        x: p.x - W/2,
+        y: p.y - H/2,
+        w: W,
+        h: H,
+        r: 0,
+        opacity: 1,
+        z: nextZ(),
+        label: f.name,
+        image: { original: dataUrl, processed: dataUrl, fx: null, intensity: 0 }
+      };
+      items.push(it);
+      selectedId = it.id;
+    }
+
+    ev.target.value = "";
+    render();
+    syncInspector();
+    refreshPromptPack();
+    queueAutosave();
+    showToast("IMPORTED");
+  });
+
+  /* =========================
+     ADD: TEXT + CARDS
+  ========================= */
+  function centerWorld(){
+    const rect = stage.getBoundingClientRect();
+    return screenToWorld(rect.left + rect.width/2, rect.top + rect.height/2);
+  }
+
+  function addTextBlock(){
+    const c = centerWorld();
+    const it = {
+      id: uid(),
+      type:"text",
+      x: c.x - 220,
+      y: c.y - 90,
+      w: 440,
+      h: 180,
+      r: 0,
+      opacity: 1,
+      z: nextZ(),
+      label: "TEXT",
+      text: "TYPE"
+    };
+    items.push(it);
+    selectItem(it.id);
+    queueAutosave();
+    showToast("TEXT ADDED");
+  }
+
+  function stampTemplate(kind){
+    kind = String(kind||"CLUE").toUpperCase();
+    if(kind==="ENTITY"){
+      return [
+        "NAME: ",
+        "ROLE: ",
+        "ALIASES: ",
+        "CONTACTS: ",
+        "NOTES: ",
+        "",
+        "EVIDENCE LINKS: "
+      ].join("\n");
+    }
+    if(kind==="EVENT"){
+      return [
+        "DATE: ",
+        "LANE: ",
+        "TITLE: ",
+        "WHERE: ",
+        "WHO: ",
+        "WHAT: ",
+        "WHY: ",
+        "",
+        "EVIDENCE LINKS: "
+      ].join("\n");
+    }
+    return [
+      "SOURCE: ",
+      "TYPE: (PHOTO/QUOTE/DOC/NOTE/URL)",
+      "SUMMARY: ",
+      "QUOTE/DETAIL: ",
+      "RELIABILITY: ",
+      "",
+      "LINKS: "
+    ].join("\n");
+  }
+
+  function addCard(kind){
+    const c = centerWorld();
+    const K = String(kind||"CLUE").toUpperCase();
+    const it = {
+      id: uid(),
+      type:"card",
+      cardKind: K,
+      x: c.x - 220,
+      y: c.y - 140,
+      w: 460,
+      h: 280,
+      r: 0,
+      opacity: 1,
+      z: nextZ(),
+      label: K,
+      meta: { name:"", date:"", lane:"" },
+      text: stampTemplate(K)
+    };
+    items.push(it);
+    selectItem(it.id);
+    queueAutosave();
+    showToast(K + " ADDED");
+    rebuildIndex();
+  }
+
+  btnAddText.addEventListener("click", addTextBlock);
+  btnAddEntity.addEventListener("click", ()=> addCard("ENTITY"));
+  btnAddEvent.addEventListener("click", ()=> addCard("EVENT"));
+  btnAddClue.addEventListener("click", ()=> addCard("CLUE"));
+
+  /* =========================
+     MOVE/RESIZE/ROTATE (ITEMS)
+  ========================= */
+  let dragItem = null;
+
+  function onItemDown(e){
+    const el = e.currentTarget;
+    const id = el.dataset.id;
+
+    // Link Mode behavior
+    if(linkMode){
+      e.preventDefault();
+      e.stopPropagation();
+
+      if(!linkFromId){
+        linkFromId = id;
+        selectItem(id);
+        showToast("LINK: SELECT TARGET");
+        return;
+      }
+      if(linkFromId === id){
+        linkFromId = null;
+        showToast("LINK: CANCEL");
+        return;
+      }
+      const newEdge = {
+        id: uid(),
+        from: linkFromId,
+        to: id,
+        label: (linkLabel.value || "").trim(),
+        note: ""
+      };
+      edges.push(newEdge);
+      linkFromId = null;
+      selectEdge(newEdge.id);
+      queueAutosave();
+      showToast("LINKED");
+      return;
+    }
+
+    // if click inside editable content, select but don't steal typing
+    const editable = e.target && (e.target.closest(".cardBody") || e.target.closest("[contenteditable='true']"));
+    if(editable){
+      selectItem(id);
+      return;
+    }
+
+    selectItem(id);
+
+    const it = getItem(id);
+    if(!it) return;
+
+    const handle = e.target.dataset && e.target.dataset.handle;
+    const pt = screenToWorld(e.clientX, e.clientY);
+
+    if(handle === "rot"){
+      const cx = it.x + it.w/2;
+      const cy = it.y + it.h/2;
+      const ang0 = Math.atan2(pt.y - cy, pt.x - cx);
+      dragItem = { type:"rot", id, cx, cy, ang0, r0: it.r||0 };
+      window.addEventListener("mousemove", onItemMove);
+      window.addEventListener("mouseup", onItemUp);
+      return;
+    }
+
+    if(handle){
+      dragItem = { type:"resize", id, handle, x0:it.x, y0:it.y, w0:it.w, h0:it.h, p0:pt };
+      window.addEventListener("mousemove", onItemMove);
+      window.addEventListener("mouseup", onItemUp);
+      return;
+    }
+
+    dragItem = { type:"move", id, x0:it.x, y0:it.y, p0:pt };
+    window.addEventListener("mousemove", onItemMove);
+    window.addEventListener("mouseup", onItemUp);
+  }
+
+  function onItemMove(e){
+    if(!dragItem) return;
+    const it = getItem(dragItem.id);
+    if(!it) return;
+    const pt = screenToWorld(e.clientX, e.clientY);
+
+    if(dragItem.type==="move"){
+      it.x = dragItem.x0 + (pt.x - dragItem.p0.x);
+      it.y = dragItem.y0 + (pt.y - dragItem.p0.y);
+      renderLinks();
+      // cheap render for smoothness
+      render();
+    }
+
+    if(dragItem.type==="resize"){
+      const dx = pt.x - dragItem.p0.x;
+      const dy = pt.y - dragItem.p0.y;
+
+      let x = dragItem.x0, y = dragItem.y0, w = dragItem.w0, h = dragItem.h0;
+
+      if(dragItem.handle==="se"){ w = dragItem.w0 + dx; h = dragItem.h0 + dy; }
+      if(dragItem.handle==="sw"){ x = dragItem.x0 + dx; w = dragItem.w0 - dx; h = dragItem.h0 + dy; }
+      if(dragItem.handle==="ne"){ y = dragItem.y0 + dy; w = dragItem.w0 + dx; h = dragItem.h0 - dy; }
+      if(dragItem.handle==="nw"){ x = dragItem.x0 + dx; y = dragItem.y0 + dy; w = dragItem.w0 - dx; h = dragItem.h0 - dy; }
+
+      it.x = x; it.y = y;
+      it.w = clamp(w, 80, 5000);
+      it.h = clamp(h, 80, 5000);
+      render();
+    }
+
+    if(dragItem.type==="rot"){
+      const ang = Math.atan2(pt.y - dragItem.cy, pt.x - dragItem.cx);
+      it.r = dragItem.r0 + (ang - dragItem.ang0) * 180/Math.PI;
+      render();
+    }
+  }
+
+  function onItemUp(){
+    if(!dragItem) return;
+    dragItem = null;
+    window.removeEventListener("mousemove", onItemMove);
+    window.removeEventListener("mouseup", onItemUp);
+    queueAutosave();
+  }
+
+  /* =========================
+     LINK MODE + LINKS TOGGLE
+  ========================= */
+  btnLinkMode.addEventListener("click", ()=>{
+    linkMode = !linkMode;
+    linkFromId = null;
+    btnLinkMode.textContent = "Link Mode: " + (linkMode ? "On" : "Off");
+    showToast(linkMode ? "LINK MODE" : "SELECT MODE");
+  });
+
+  btnLinksToggle.addEventListener("click", ()=>{
+    linksVisible = !linksVisible;
+    btnLinksToggle.textContent = "Links: " + (linksVisible ? "On" : "Off");
+    renderLinks();
+    queueAutosave();
+  });
+
+  btnDelLink.addEventListener("click", ()=>{
+    if(!selectedEdgeId) return;
+    edges = edges.filter(e => e.id !== selectedEdgeId);
+    selectEdge(null);
+    queueAutosave();
+    showToast("LINK DELETED");
+  });
+
+  edgeNote.addEventListener("input", ()=>{
+    const e = edges.find(x=>x.id===selectedEdgeId);
+    if(e) e.note = edgeNote.value;
+    queueAutosave();
+    refreshPromptPack();
+  });
+
+  /* =========================
+     INSPECTOR + CARD META
+  ========================= */
+  function syncInspector(){
+    const it = getItem(selectedId);
+    const edge = edges.find(x=>x.id===selectedEdgeId) || null;
+
+    if(edge){
+      selType.textContent = "LINK";
+      selLabel.value = edge.label || "";
+      selOpacity.disabled = true;
+      selLabel.disabled = false;
+      edgeNote.disabled = false;
+      btnDelLink.disabled = false;
+      edgeNote.value = edge.note || "";
+      cardMetaGroup.style.display = "none";
+      return;
+    }
+
+    edgeNote.disabled = true;
+    btnDelLink.disabled = true;
+
+    if(!it){
+      selType.textContent = "—";
+      selLabel.value = "";
+      selOpacity.value = "100";
+      selOpacityLabel.textContent = "100";
+      selLabel.disabled = true;
+      selOpacity.disabled = true;
+      btnFront.disabled = true;
+      btnBack.disabled = true;
+      btnDelete.disabled = true;
+      cardMetaGroup.style.display = "none";
+      return;
+    }
+
+    selType.textContent = (it.type === "card") ? ("CARD/" + String(it.cardKind||"").toUpperCase()) : it.type.toUpperCase();
+    selLabel.disabled = false;
+    selOpacity.disabled = false;
+    btnFront.disabled = false;
+    btnBack.disabled = false;
+    btnDelete.disabled = false;
+
+    selLabel.value = it.label || "";
+    selOpacity.value = String(Math.round((it.opacity ?? 1)*100));
+    selOpacityLabel.textContent = selOpacity.value;
+
+    if(it.type === "card"){
+      cardMetaGroup.style.display = "block";
+      cardKind.textContent = String(it.cardKind||"CARD").toUpperCase();
+      cardName.value = it.meta?.name || "";
+      cardDate.value = it.meta?.date || "";
+      cardLane.value = it.meta?.lane || "";
+    } else {
+      cardMetaGroup.style.display = "none";
+    }
+  }
+
+  selLabel.addEventListener("input", ()=>{
+    const it = getItem(selectedId);
+    const edge = edges.find(x=>x.id===selectedEdgeId) || null;
+    if(it){ it.label = selLabel.value; renderLinks(); render(); }
+    if(edge){ edge.label = selLabel.value; renderLinks(); }
+    refreshPromptPack();
+    queueAutosave();
+    rebuildIndex();
+  });
+
+  selOpacity.addEventListener("input", ()=>{
+    const it = getItem(selectedId);
+    if(!it) return;
+    it.opacity = clamp(Number(selOpacity.value)/100, 0.05, 1);
+    selOpacityLabel.textContent = selOpacity.value;
+    render();
+    queueAutosave();
+  });
+
+  btnFront.addEventListener("click", ()=>{
+    const it = getItem(selectedId); if(!it) return;
+    it.z = nextZ();
+    render();
+    queueAutosave();
+  });
+  btnBack.addEventListener("click", ()=>{
+    const it = getItem(selectedId); if(!it) return;
+    it.z = 0;
+    render();
+    queueAutosave();
+  });
+  btnDelete.addEventListener("click", ()=>{
+    deleteSelection();
+  });
+
+  btnDeselect.addEventListener("click", ()=>{
+    selectItem(null);
+    selectEdge(null);
+    showToast("DESELECTED");
+  });
+
+  function deleteSelection(){
+    if(selectedEdgeId){
+      edges = edges.filter(x=>x.id!==selectedEdgeId);
+      selectEdge(null);
+      queueAutosave();
+      showToast("LINK DELETED");
+      return;
+    }
+    if(!selectedId) return;
+    const id = selectedId;
+    items = items.filter(x=>x.id!==id);
+    edges = edges.filter(e=> e.from!==id && e.to!==id);
+    selectItem(null);
+    queueAutosave();
+    showToast("DELETED");
+    rebuildIndex();
+  }
+
+  function updateCardMeta(){
+    const it = getItem(selectedId);
+    if(!it || it.type!=="card") return;
+    it.meta = it.meta || { name:"", date:"", lane:"" };
+    it.meta.name = cardName.value || "";
+    it.meta.date = cardDate.value || "";
+    it.meta.lane = cardLane.value || "";
+    // keep label in sync if name provided
+    const nm = (it.meta.name || "").trim();
+    if(nm) it.label = nm;
+    render();
+    refreshPromptPack();
+    rebuildIndex();
+    queueAutosave();
+  }
+  cardName.addEventListener("input", updateCardMeta);
+  cardDate.addEventListener("input", updateCardMeta);
+  cardLane.addEventListener("input", updateCardMeta);
+
+  btnFocusOnCard.addEventListener("click", ()=>{
+    const it = getItem(selectedId); if(!it) return;
+    // center selected item in viewport
+    const r = stage.getBoundingClientRect();
+    const targetX = (r.width/2) - (it.x + it.w/2)*view.scale;
+    const targetY = (r.height/2) - (it.y + it.h/2)*view.scale;
+    view.panX = targetX;
+    view.panY = targetY;
+    applyView();
+    showToast("FOCUS");
+  });
+
+  btnStampCard.addEventListener("click", ()=>{
+    const it = getItem(selectedId);
+    if(!it || it.type!=="card") return;
+    it.text = stampTemplate(it.cardKind);
+    render();
+    queueAutosave();
+    showToast("STAMPED");
+  });
+
+  /* =========================
+     TIMELINE ASSIST (ARRANGE EVENTS)
+  ========================= */
+  btnTimelineAssist.addEventListener("click", ()=>{
+    timelineAssistOn = !timelineAssistOn;
+    btnTimelineAssist.textContent = "Timeline Assist: " + (timelineAssistOn ? "On" : "Off");
+    if(timelineAssistOn){
+      arrangeTimeline();
+      showToast("TIMELINE ARRANGED");
+    }else{
+      showToast("TIMELINE FREE");
+    }
+    queueAutosave();
+  });
+
+  function arrangeTimeline(){
+    const events = items.filter(it=>it.type==="card" && String(it.cardKind||"").toUpperCase()==="EVENT");
+    if(!events.length) return;
+
+    // compute date domain
+    const parsed = events.map(it=>{
+      const dk = normalizeDateKey(it.meta?.date) || null;
+      return { it, dk };
+    });
+
+    const dated = parsed.filter(x=>x.dk);
+    if(!dated.length) return;
+
+    const minD = dated.reduce((m,x)=> x.dk < m ? x.dk : m, dated[0].dk);
+    const maxD = dated.reduce((m,x)=> x.dk > m ? x.dk : m, dated[0].dk);
+
+    // map date to x
+    const t0 = Date.parse(minD + "T00:00:00Z");
+    const t1 = Date.parse(maxD + "T00:00:00Z");
+    const span = Math.max(1, t1 - t0);
+
+    // lanes
+    const lanes = new Map(); // laneName -> idx
+    function laneIndex(name){
+      const k = (String(name||"").trim() || "GENERAL").toUpperCase();
+      if(!lanes.has(k)) lanes.set(k, lanes.size);
+      return lanes.get(k);
+    }
+
+    // anchor region near center
+    const c = centerWorld();
+    const baseX = c.x - 600;
+    const baseY = c.y - 260;
+    const width = 1200;
+    const laneH = 320;
+
+    dated.forEach(({it, dk})=>{
+      const tt = Date.parse(dk + "T00:00:00Z");
+      const u = (tt - t0) / span;
+      const lx = baseX + u * width;
+      const li = laneIndex(it.meta?.lane);
+      const ly = baseY + li * laneH;
+
+      it.x = lx - it.w/2;
+      it.y = ly;
+      it.r = 0;
+      it.z = nextZ();
+    });
+
+    render();
+    rebuildIndex();
+  }
+
+  /* =========================
+     INVERT
+  ========================= */
+  btnInvert.addEventListener("click", ()=>{
+    invertOn = !invertOn;
+    document.body.classList.toggle("invert", invertOn);
+    btnInvert.textContent = "Invert: " + (invertOn ? "On" : "Off");
+    queueAutosave();
+  });
+
+  /* =========================
+     EXPORT SELECTION (PNG/TXT)
+  ========================= */
+  btnExportSel.addEventListener("click", ()=>{
+    const it = getItem(selectedId);
+    if(!it){ showToast("NO SELECTION"); return; }
+
+    if(it.type === "image"){
+      const dataUrl = it.image.processed || it.image.original;
+      const a = document.createElement("a");
+      const safe = (it.label || "ketadata").replace(/[^\w\-]+/g,"_").slice(0,48);
+      a.download = `${safe}.png`;
+      a.href = dataUrl;
+      a.click();
+      showToast("EXPORTED PNG");
+      return;
+    }
+
+    // text or card -> txt
+    if(it.type === "text" || it.type === "card"){
+      const name = safeName(it.label || it.cardKind || "note");
+      const head = it.type==="card"
+        ? `KIND: ${(it.cardKind||"CARD").toUpperCase()}\nNAME: ${(it.meta?.name||"")}\nDATE: ${(it.meta?.date||"")}\nLANE: ${(it.meta?.lane||"")}\n—\n`
+        : "";
+      const blob = new Blob([head + (it.text || "")], { type:"text/plain;charset=utf-8" });
+      downloadFile(`${name}.txt`, blob);
+      showToast("EXPORTED TXT");
+      return;
+    }
+  });
+
+  /* =========================
+     EXPORT/IMPORT CASE (JSON FILE)
+  ========================= */
+  btnExportCase.addEventListener("click", ()=>{
+    const payload = makeCasePayload();
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type:"application/json;charset=utf-8" });
+    const fn = safeName(CASE.name || "ketadata_case") + "__case.json";
+    downloadFile(fn, blob);
+    showToast("CASE EXPORTED");
+  });
+
+  btnImportCase.addEventListener("click", ()=>{
+    importFile.click();
+  });
+
+  importFile.addEventListener("change", async (ev)=>{
+    const f = ev.target.files && ev.target.files[0];
+    if(!f){ return; }
+    try{
+      const txt = await f.text();
+      const p = JSON.parse(txt);
+      loadCasePayload(p);
+      showToast("CASE IMPORTED");
+    }catch{
+      showToast("IMPORT FAIL");
+    }finally{
+      ev.target.value = "";
+    }
+  });
+
+  function makeCasePayload(){
+    return {
+      kind: "KETADATA_CASE",
+      version: 1,
+      savedAt: new Date().toISOString(),
+      CASE,
+      layout,
+      view,
+      invertOn,
+      linksVisible,
+      items,
+      edges,
+      ytWindows,
+      log: log.value || ""
+    };
+  }
+
+  function loadCasePayload(p){
+    if(!p || typeof p !== "object") throw new Error("bad");
+    CASE = p.CASE || CASE;
+    layout = p.layout || layout;
+    view = p.view || view;
+    invertOn = !!p.invertOn;
+    linksVisible = (p.linksVisible !== undefined) ? !!p.linksVisible : true;
+    items = p.items || [];
+    edges = p.edges || [];
+    ytWindows = p.ytWindows || [];
+    log.value = p.log || "";
+
+    caseName.value = CASE.name || "";
+    caseOwner.value = CASE.owner || "";
+    caseTags.value = CASE.tags || "";
+
+    document.body.classList.toggle("invert", invertOn);
+    btnInvert.textContent = "Invert: " + (invertOn ? "On" : "Off");
+    btnLinksToggle.textContent = "Links: " + (linksVisible ? "On" : "Off");
+
+    applyLayout();
+    applyView();
+    render();
+    renderYT();
+    syncInspector();
+    refreshPromptPack();
+    saveSession(false);
+  }
+
+  /* =========================
+     PROMPT PACK
+  ========================= */
+  function refreshPromptPack(){
+    const it = getItem(selectedId);
+    const edge = edges.find(x=>x.id===selectedEdgeId) || null;
+
+    let out = [];
+    out.push("KETADATA DETECTIVE BOARD");
+    out.push("—");
+    out.push(`CASE: ${CASE.name || "—"}`);
+    out.push(`OWNER: ${CASE.owner || "—"}`);
+    out.push(`TAGS: ${CASE.tags || "—"}`);
+    out.push("");
+
+    if(edge){
+      out.push("SELECTION: LINK");
+      out.push(`LABEL: ${(edge.label||"").trim() || "—"}`);
+      out.push(`NOTE: ${(edge.note||"").trim() || "—"}`);
+      out.push(`FROM: ${(getItem(edge.from)?.label||edge.from)}`);
+      out.push(`TO: ${(getItem(edge.to)?.label||edge.to)}`);
+      promptPack.value = out.join("\n");
+      return;
+    }
+
+    if(!it){
+      out.push("SELECTION: —");
+      out.push("ACTION: select an artifact/card/link.");
+      promptPack.value = out.join("\n");
+      return;
+    }
+
+    out.push(`SELECTION: ${it.type.toUpperCase()}`);
+    out.push(`LABEL: ${(it.label||"").trim() || "—"}`);
+    out.push(`OPACITY: ${Math.round((it.opacity??1)*100)}%`);
+    out.push(`ROTATION: ${Math.round(it.r||0)}deg`);
+    out.push(`SIZE: ${Math.round(it.w)} x ${Math.round(it.h)}`);
+    out.push("");
+
+    if(it.type === "card"){
+      out.push(`CARD KIND: ${(it.cardKind||"CARD").toUpperCase()}`);
+      out.push(`NAME: ${(it.meta?.name||"").trim() || "—"}`);
+      out.push(`DATE: ${(it.meta?.date||"").trim() || "—"}`);
+      out.push(`LANE: ${(it.meta?.lane||"").trim() || "—"}`);
+      out.push("");
+      out.push("TASK");
+      out.push("- extract claims, entities, and contradictions");
+      out.push("- propose 5 link labels that make the network legible");
+      out.push("- propose 5 missing evidence artifacts to collect next");
+      out.push("");
+      out.push("CONTENT");
+      out.push((it.text||"").slice(0,1200));
+      promptPack.value = out.join("\n");
+      return;
+    }
+
+    if(it.type === "image"){
+      out.push("IMAGE");
+      out.push("- describe the image as evidence");
+      out.push("- list observable facts (no interpretation)");
+      out.push("- list interpretations separately");
+      out.push("- propose links to existing entities/events");
+      promptPack.value = out.join("\n");
+      return;
+    }
+
+    out.push("TEXT");
+    out.push((it.text||"").slice(0,1200));
+    out.push("");
+    out.push("TASK");
+    out.push("- compress into bullets");
+    out.push("- extract timeline events");
+    out.push("- extract entities (people/orgs/places) + roles");
+    promptPack.value = out.join("\n");
+  }
+
+  btnRefreshPrompt.addEventListener("click", ()=>{
+    refreshPromptPack();
+    showToast("REFRESHED");
+  });
+  btnCopyPrompt.addEventListener("click", async ()=>{
+    try{
+      await navigator.clipboard.writeText(promptPack.value || "");
+      showToast("COPIED");
+    }catch{
+      showToast("COPY FAILED");
+    }
+  });
+
+  /* =========================
+     YOUTUBE WINDOWS
+  ========================= */
+  let ytWindows = []; // {id,x,y,w,h,videoId}
+  function addYTWindow(videoId){
+    const win = { id: uid(), x: 80, y: 80, w: 320, h: 190, videoId };
+    ytWindows.push(win);
+    renderYT();
+    queueAutosave();
+  }
+
+  btnAddYT.addEventListener("click", ()=>{
+    const id = parseYouTubeId(ytUrl.value.trim());
+    if(!id){ showToast("BAD URL"); return; }
+    addYTWindow(id);
+    ytUrl.value = "";
+    showToast("YOUTUBE ADDED");
+  });
+
+  function renderYT(){
+    document.querySelectorAll(".ytWin").forEach(n=> n.remove());
+
+    for(const w of ytWindows){
+      const el = document.createElement("div");
+      el.className = "ytWin";
+      el.style.left = w.x + "px";
+      el.style.top = w.y + "px";
+      el.style.width = w.w + "px";
+      el.style.height = w.h + "px";
+
+      const head = document.createElement("div");
+      head.className = "ytHead";
+      head.innerHTML = `<span>YOUTUBE</span><div style="display:flex;gap:6px;align-items:center;">
+        <button class="btn" data-act="close">X</button>
+      </div>`;
+
+      const body = document.createElement("div");
+      body.className = "ytBody";
+      const iframe = document.createElement("iframe");
+      iframe.allow = "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share";
+      iframe.referrerPolicy = "strict-origin-when-cross-origin";
+      iframe.src = `https://www.youtube.com/embed/${w.videoId}?autoplay=0&controls=1&modestbranding=1&rel=0`;
+      body.appendChild(iframe);
+
+      const rz = document.createElement("div");
+      rz.className = "ytResize";
+
+      el.appendChild(head);
+      el.appendChild(body);
+      el.appendChild(rz);
+      stage.appendChild(el);
+
+      // drag
+      let drag = null;
+      head.addEventListener("mousedown", (e)=>{
+        const btn = e.target.closest && e.target.closest("button");
+        if(btn) return;
+        drag = { sx:e.clientX, sy:e.clientY, x0:w.x, y0:w.y };
+        e.preventDefault();
+      });
+      window.addEventListener("mousemove", (e)=>{
+        if(!drag) return;
+        w.x = drag.x0 + (e.clientX - drag.sx);
+        w.y = drag.y0 + (e.clientY - drag.sy);
+        el.style.left = w.x + "px";
+        el.style.top = w.y + "px";
+      });
+      window.addEventListener("mouseup", ()=>{
+        if(!drag) return;
+        drag = null;
+        queueAutosave();
+      });
+
+      // resize
+      let rdrag = null;
+      rz.addEventListener("mousedown", (e)=>{
+        rdrag = { sx:e.clientX, sy:e.clientY, w0:w.w, h0:w.h };
+        e.preventDefault();
+        e.stopPropagation();
+      });
+      window.addEventListener("mousemove", (e)=>{
+        if(!rdrag) return;
+        w.w = clamp(rdrag.w0 + (e.clientX - rdrag.sx), 220, 960);
+        w.h = clamp(rdrag.h0 + (e.clientY - rdrag.sy), 140, 720);
+        el.style.width = w.w + "px";
+        el.style.height = w.h + "px";
+      });
+      window.addEventListener("mouseup", ()=>{
+        if(!rdrag) return;
+        rdrag = null;
+        queueAutosave();
+      });
+
+      // close
+      head.addEventListener("click", (e)=>{
+        const btn = e.target.closest && e.target.closest("button");
+        if(!btn) return;
+        if(btn.dataset.act === "close"){
+          ytWindows = ytWindows.filter(x=>x.id!==w.id);
+          renderYT();
+          queueAutosave();
+          showToast("YOUTUBE CLOSED");
+        }
+      });
+    }
+  }
+
+  /* =========================
+     SESSION SAVE/LOAD (LOCAL)
+  ========================= */
+  function saveSession(withToast=true){
+    const payload = {
+      version: 1,
+      CASE,
+      layout,
+      view,
+      invertOn,
+      items,
+      edges,
+      linksVisible,
+      ytWindows,
+      log: log.value || "",
+      timelineAssistOn
+    };
+    localStorage.setItem(KEY_SESSION, JSON.stringify(payload));
+    if(withToast) showToast("SAVED");
+  }
+
+  function loadSession(withToast=true){
+    const raw = localStorage.getItem(KEY_SESSION);
+    if(!raw){ if(withToast) showToast("NO SAVE"); return; }
+    try{
+      const p = JSON.parse(raw);
+      CASE = p.CASE || CASE;
+      layout = p.layout || layout;
+      view = p.view || view;
+      invertOn = !!p.invertOn;
+      items = p.items || [];
+      edges = p.edges || [];
+      linksVisible = (p.linksVisible !== undefined) ? !!p.linksVisible : true;
+      ytWindows = p.ytWindows || [];
+      log.value = p.log || "";
+      timelineAssistOn = !!p.timelineAssistOn;
+
+      caseName.value = CASE.name || "";
+      caseOwner.value = CASE.owner || "";
+      caseTags.value = CASE.tags || "";
+
+      document.body.classList.toggle("invert", invertOn);
+      btnInvert.textContent = "Invert: " + (invertOn ? "On" : "Off");
+      btnLinksToggle.textContent = "Links: " + (linksVisible ? "On" : "Off");
+      btnTimelineAssist.textContent = "Timeline Assist: " + (timelineAssistOn ? "On" : "Off");
+
+      applyLayout();
+      applyView();
+      render();
+      renderYT();
+      syncInspector();
+      refreshPromptPack();
+      if(withToast) showToast("LOADED");
+    }catch{
+      if(withToast) showToast("LOAD FAIL");
+    }
+  }
+
+  btnSave.addEventListener("click", ()=> saveSession(true));
+  btnLoad.addEventListener("click", ()=> loadSession(true));
+
+  btnClear.addEventListener("click", ()=>{
+    if(!confirm("CLEAR SESSION?")) return;
+    CASE = { name:"", owner:"", tags:"" };
+    caseName.value = ""; caseOwner.value = ""; caseTags.value = "";
+    items = [];
+    edges = [];
+    ytWindows = [];
+    selectedId = null;
+    selectedEdgeId = null;
+    linkFromId = null;
+    log.value = "";
+    render();
+    renderYT();
+    syncInspector();
+    refreshPromptPack();
+    saveSession(false);
+    showToast("CLEARED");
+  });
+
+  let autosaveTimer = null;
+  function queueAutosave(){
+    clearTimeout(autosaveTimer);
+    autosaveTimer = setTimeout(()=> saveSession(false), 450);
+  }
+
+  log.addEventListener("input", queueAutosave);
+
+  /* =========================
+     KEYBOARD
+  ========================= */
+  document.addEventListener("keydown", (e)=>{
+    if(e.key === "Escape"){
+      linkFromId = null;
+      selectItem(null);
+      selectEdge(null);
+      showToast("RESET");
+      return;
+    }
+    if(e.key === "Delete" || e.key === "Backspace"){
+      const active = document.activeElement;
+      if(active && (active.tagName==="INPUT" || active.tagName==="TEXTAREA" || active.isContentEditable)) return;
+      deleteSelection();
+    }
+  });
+
+  /* =========================
+     NOTES PAD
+  ========================= */
+  function openNotes(){ notepad.classList.add("open"); }
+  function closeNotes(){ notepad.classList.remove("open"); }
+
+  notesBtn.addEventListener("click", ()=>{
+    if(notepad.classList.contains("open")) closeNotes();
+    else openNotes();
+  });
+  npClose.addEventListener("click", closeNotes);
+
+  npText.value = localStorage.getItem(KEY_NOTES) || "";
+  npText.addEventListener("input", ()=> localStorage.setItem(KEY_NOTES, npText.value));
+
+  npClear.addEventListener("click", ()=>{
+    if(!confirm("CLEAR NOTES?")) return;
+    npText.value = "";
+    localStorage.setItem(KEY_NOTES, "");
+  });
+
+  npCopy.addEventListener("click", async ()=>{
+    try{ await navigator.clipboard.writeText(npText.value || ""); showToast("NOTES COPIED"); }
+    catch{ showToast("COPY FAIL"); }
+  });
+
+  npExport.addEventListener("click", ()=>{
+    const blob = new Blob([npText.value], { type:"text/plain;charset=utf-8" });
+    downloadFile("ketadata-ui-notes.txt", blob);
+    showToast("NOTES EXPORTED");
+  });
+
+  // draggable notepad + remember position
+  let npDrag = null;
+  function setNotepadPos(x,y){
+    notepad.style.left = x + "px";
+    notepad.style.top = y + "px";
+    notepad.style.right = "auto";
+    localStorage.setItem(KEY_NOTES_POS, JSON.stringify({x,y}));
+  }
+  const savedPos = localStorage.getItem(KEY_NOTES_POS);
+  if(savedPos){
+    try{ const {x,y} = JSON.parse(savedPos); setNotepadPos(x,y); }catch{}
+  }
+  npHeader.addEventListener("mousedown", (e)=>{
+    if(e.target.closest("button")) return;
+    const r = notepad.getBoundingClientRect();
+    npDrag = { dx: e.clientX - r.left, dy: e.clientY - r.top };
+    e.preventDefault();
+  });
+  window.addEventListener("mousemove", (e)=>{
+    if(!npDrag) return;
+    const x = clamp(e.clientX - npDrag.dx, 0, window.innerWidth - 120);
+    const y = clamp(e.clientY - npDrag.dy, 0, window.innerHeight - 80);
+    setNotepadPos(x,y);
+  });
+  window.addEventListener("mouseup", ()=> npDrag=null);
+
+  /* =========================
+     INIT
+  ========================= */
+  applyLayout();
+  applyView();
+
+  selLabel.disabled = true;
+  selOpacity.disabled = true;
+  edgeNote.disabled = true;
+  btnDelLink.disabled = true;
+
+  btnLinksToggle.textContent = "Links: On";
+  btnTimelineAssist.textContent = "Timeline Assist: Off";
+  btnInvert.textContent = "Invert: Off";
+
+  loadSession(false);
+  render();
+  renderYT();
+  syncInspector();
+  refreshPromptPack();
+
+  // seed log if empty
+  if(!log.value.trim()){
+    log.value =
+`CASE LOG
+—
+Use ENTITY cards for people/orgs/places.
+Use EVENT cards for timeline nodes (date + lane).
+Use CLUE cards for sources, quotes, documents, and fragments.
+Link everything. Label links like: MOTIVE / ALIBI / CONTACT / MONEY / LOCATION / CONTRADICTION / CONFIRMS / DENIES.
+`;
+  }
+
+})();
+</script>
+
+<!--
+AE: brutal chic monochrome / uniform text size
+EE: draggable artifacts + links + timeline assist + case JSON export/import
+WB: localStorage session + file export/import
+FILE_ID: KETADATA_DETECTIVE_BOARD
+ROOM_ID: STUDIO
+VERSION: v1
+UPDATED_AT: 2026-02-05
+CHANGELOG:
+- v1: entity/event/clue cards + timeline assist + case json import/export + invert toggle
+-->
+</body>
+</html>
