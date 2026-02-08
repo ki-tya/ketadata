@@ -1,0 +1,1680 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>KETADATA // CASE BOARD</title>
+<style>
+  :root{
+    --bg:#000;
+    --fg:rgba(255,255,255,.86);
+    --muted:rgba(255,255,255,.52);
+    --hair:rgba(255,255,255,.12);
+    --hair2:rgba(255,255,255,.20);
+    --panel:rgba(0,0,0,.92);
+    --panel2:rgba(255,255,255,.03);
+    --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    --sans: Arial, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+    --t:46px;
+    --z-top:1000;
+    --z-note:1200;
+    --z-toast:1400;
+    --text:12px; /* single-size text rule */
+  }
+  *{ box-sizing:border-box; }
+  html,body{ height:100%; margin:0; background:var(--bg); color:var(--fg); overflow:hidden; }
+  body{ font-family:var(--sans); font-size:var(--text); line-height:1.25; }
+
+  /* ===== global toggles ===== */
+  body.invert{
+    filter: invert(1) hue-rotate(180deg);
+    background:#fff;
+  }
+
+  /* ===== top bar (non-overlapping) ===== */
+  .top{
+    position:fixed; inset:0 0 auto 0; height:var(--t);
+    display:flex; align-items:center; justify-content:space-between;
+    padding:0 10px; gap:10px;
+    border-bottom:1px solid var(--hair);
+    background:var(--panel);
+    backdrop-filter: blur(6px);
+    z-index:var(--z-top);
+    min-width:0;
+  }
+  .top .left, .top .right{
+    display:flex; align-items:center; gap:8px;
+    min-width:0;
+  }
+  .brand{
+    display:flex; align-items:center; gap:10px;
+    user-select:none;
+    min-width:0;
+  }
+  .brand .k{
+    font-family:var(--mono);
+    letter-spacing:2px;
+    text-transform:uppercase;
+    color:var(--muted);
+    white-space:nowrap;
+  }
+  .brand .sig{
+    font-family:var(--mono);
+    letter-spacing:1px;
+    color:rgba(255,255,255,.42);
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    max-width:42vw;
+  }
+
+  .btn, .inp, select, textarea{
+    font: inherit;
+    background:var(--panel2);
+    border:1px solid var(--hair2);
+    color:var(--fg);
+    padding:7px 9px;
+    border-radius:0;
+    outline:none;
+    height:30px;
+  }
+  .btn{
+    cursor:pointer;
+    user-select:none;
+    white-space:nowrap;
+  }
+  .btn:hover{ border-color:rgba(255,255,255,.34); }
+  .btn.ghost{ border-color:rgba(255,255,255,.10); color:rgba(255,255,255,.62); }
+  .btn.danger:hover{ border-color:rgba(255,120,120,.55); }
+  .btn.small{ padding:5px 7px; height:28px; }
+  .inp{ min-width:0; }
+
+  .top .right{
+    flex: 0 0 auto;
+    flex-wrap:nowrap;
+  }
+  .cluster{
+    display:flex; gap:8px; align-items:center;
+    flex:0 0 auto;
+  }
+
+  /* ===== shell (center + left + right + bottom) ===== */
+  #shell{
+    position:absolute; top:var(--t); left:0; right:0; bottom:0;
+    display:grid;
+    grid-template-columns: 320px 6px 1fr 6px 340px;
+    grid-template-rows: 1fr 6px 240px;
+    grid-template-areas:
+      "left  v1 center v2 right"
+      "left  v1 center v2 right"
+      "bottom bottom bottom bottom bottom";
+  }
+  .dock{
+    background:var(--panel);
+    border-right:1px solid var(--hair);
+    min-width:0; min-height:0;
+    overflow:hidden;
+    display:flex; flex-direction:column;
+  }
+  .dock.right{ border-right:none; border-left:1px solid var(--hair); }
+  .dock.bottom{
+    grid-area:bottom;
+    border-top:1px solid var(--hair);
+    border-right:none;
+    border-left:none;
+  }
+  .left{ grid-area:left; }
+  .center{ grid-area:center; position:relative; overflow:hidden; background:#000; }
+  .right{ grid-area:right; }
+  .dockHeader{
+    height:40px;
+    display:flex; align-items:center; justify-content:space-between;
+    padding:0 10px;
+    border-bottom:1px solid var(--hair);
+    user-select:none;
+  }
+  .dockHeader .title{
+    font-family:var(--mono);
+    letter-spacing:2px;
+    text-transform:uppercase;
+    color:var(--muted);
+    white-space:nowrap;
+  }
+  .dockHeader .controls{ display:flex; gap:8px; align-items:center; }
+  .dockBody{
+    flex:1; min-height:0;
+    overflow:auto;
+    padding:10px;
+  }
+
+  .resizer{ background:rgba(255,255,255,.06); z-index:50; }
+  .resizer:hover{ background:rgba(255,255,255,.10); }
+  .v1{ grid-area:v1; cursor:col-resize; }
+  .v2{ grid-area:v2; cursor:col-resize; }
+  .h1{ grid-area:h1; cursor:row-resize; display:none; } /* bottom is whole row; no middle splitter */
+
+  .collapsed{ display:none !important; }
+
+  /* ===== group blocks (quiet until used) ===== */
+  .group{
+    border:1px solid rgba(255,255,255,.10);
+    background:rgba(255,255,255,.02);
+    padding:10px;
+    margin-bottom:10px;
+  }
+  .groupTitle{
+    font-family:var(--mono);
+    letter-spacing:2px;
+    text-transform:uppercase;
+    color:rgba(255,255,255,.48);
+    margin-bottom:8px;
+    white-space:nowrap;
+  }
+  .row{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .row .grow{ flex:1 1 auto; min-width:0; }
+  .hint{ color:var(--muted); }
+
+  /* ===== center board (pan/zoom + items + links) ===== */
+  #stage{ position:absolute; inset:0; overflow:hidden; touch-action:none; }
+  #viewport{ position:absolute; inset:0; transform-origin:0 0; }
+  #board{ position:absolute; inset:0; }
+  #linkLayer{ position:absolute; inset:0; pointer-events:auto; }
+  #linkSvg{ width:100%; height:100%; display:block; }
+
+  .edge{ stroke: rgba(255,255,255,.18); stroke-width:1; }
+  .edge.selected{ stroke: rgba(255,255,255,.42); stroke-width:2; }
+  .edgeHit{ stroke: rgba(255,255,255,0); stroke-width:10; cursor:pointer; }
+  .edgeLabel{
+    fill: rgba(255,255,255,.52);
+    font-family:var(--mono);
+    font-size: var(--text);
+    letter-spacing:2px;
+    text-transform:uppercase;
+    user-select:none;
+  }
+
+  .item{
+    position:absolute;
+    border:1px solid transparent;
+    user-select:none;
+    background:rgba(255,255,255,.02);
+  }
+  .item.selected{ border-color:rgba(255,255,255,.22); }
+  .item .head{
+    height:26px;
+    display:flex; align-items:center; justify-content:space-between;
+    padding:0 8px;
+    border-bottom:1px solid rgba(255,255,255,.10);
+    cursor:move;
+    user-select:none;
+    font-family:var(--mono);
+    letter-spacing:1px;
+    text-transform:uppercase;
+    color:rgba(255,255,255,.62);
+    gap:8px;
+  }
+  .item .head .name{
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; flex:1 1 auto;
+  }
+  .item .head .chip{
+    color:rgba(255,255,255,.44);
+    white-space:nowrap;
+  }
+  .item .body{
+    padding:8px;
+    min-height:0;
+  }
+  .item textarea{
+    width:100%;
+    height:100%;
+    min-height:80px;
+    resize:none;
+    background:transparent;
+    border:1px solid rgba(255,255,255,.10);
+    padding:8px;
+    color:rgba(255,255,255,.82);
+    font-family:var(--mono);
+    font-size:var(--text);
+    line-height:1.25;
+    outline:none;
+  }
+  .item img{
+    width:100%;
+    height:100%;
+    object-fit:contain;
+    display:block;
+    pointer-events:none;
+  }
+
+  .handle{
+    position:absolute;
+    width:14px; height:14px;
+    border:1px solid rgba(255,255,255,.40);
+    background:rgba(0,0,0,.78);
+  }
+  .h-se{ right:-8px; bottom:-8px; cursor:nwse-resize; }
+  .rot{
+    position:absolute; left:50%; top:-22px; transform:translateX(-50%);
+    width:12px; height:12px; border-radius:50%;
+    border:1px solid rgba(255,255,255,.40);
+    background:rgba(0,0,0,.82);
+    cursor:grab;
+  }
+
+  /* ===== lists in docks ===== */
+  .list{
+    border:1px solid rgba(255,255,255,.10);
+    background:rgba(255,255,255,.02);
+    overflow:hidden;
+  }
+  .list .rowItem{
+    display:flex; align-items:center; justify-content:space-between;
+    gap:8px;
+    padding:8px 10px;
+    border-top:1px solid rgba(255,255,255,.08);
+    cursor:pointer;
+  }
+  .list .rowItem:first-child{ border-top:none; }
+  .list .rowItem:hover{ background:rgba(255,255,255,.03); }
+  .list .rowItem .a{
+    min-width:0; flex:1 1 auto;
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+    font-family:var(--mono);
+    letter-spacing:1px;
+    text-transform:uppercase;
+    color:rgba(255,255,255,.72);
+  }
+  .list .rowItem .b{
+    white-space:nowrap;
+    color:rgba(255,255,255,.48);
+    font-family:var(--mono);
+  }
+
+  /* ===== timeline (right) ===== */
+  .timeline{
+    border-left:1px solid rgba(255,255,255,.10);
+    padding-left:10px;
+  }
+  .tlItem{
+    display:flex; gap:10px; align-items:flex-start;
+    padding:8px 0;
+    border-top:1px solid rgba(255,255,255,.08);
+  }
+  .tlItem:first-child{ border-top:none; }
+  .tlDate{
+    width:90px; flex:0 0 auto;
+    font-family:var(--mono);
+    color:rgba(255,255,255,.60);
+  }
+  .tlText{
+    min-width:0; flex:1 1 auto;
+    font-family:var(--mono);
+    color:rgba(255,255,255,.76);
+    overflow:hidden;
+  }
+
+  /* ===== bottom drawer: connections & labels ===== */
+  .bottomGrid{
+    display:grid;
+    grid-template-columns: 1fr 1fr;
+    gap:10px;
+  }
+
+  /* ===== KETA NOTE (white square, collapsible, draggable) ===== */
+  #ketaIcon{
+    position:fixed;
+    top:8px; right:8px;
+    width:30px; height:30px;
+    border:1px solid rgba(255,255,255,.22);
+    background:#fff;
+    z-index:var(--z-note);
+    cursor:pointer;
+  }
+  #ketaNote{
+    position:fixed;
+    right:8px; top:44px;
+    width:320px; height:260px;
+    border:1px solid rgba(255,255,255,.14);
+    background:rgba(0,0,0,.92);
+    z-index:var(--z-note);
+    display:none;
+    overflow:hidden;
+    resize:both;
+    min-width:220px; min-height:180px;
+  }
+  #ketaNote.open{ display:block; }
+  #ketaHead{
+    height:34px;
+    display:flex; align-items:center; justify-content:space-between;
+    padding:0 10px;
+    border-bottom:1px solid rgba(255,255,255,.10);
+    cursor:move;
+    user-select:none;
+    font-family:var(--mono);
+    letter-spacing:2px;
+    text-transform:uppercase;
+    color:rgba(255,255,255,.62);
+  }
+  #ketaBody{ height:calc(100% - 34px); padding:10px; }
+  #ketaText{
+    width:100%; height:100%;
+    background:rgba(255,255,255,.02);
+    border:1px solid rgba(255,255,255,.10);
+    color:rgba(255,255,255,.82);
+    font-family:var(--mono);
+    font-size:var(--text);
+    line-height:1.25;
+    padding:8px;
+    outline:none;
+    resize:none;
+  }
+
+  /* ===== toast ===== */
+  #toast{
+    position:fixed; left:50%; bottom:12px; transform:translateX(-50%);
+    padding:8px 10px;
+    border:1px solid rgba(255,255,255,.16);
+    background:rgba(0,0,0,.92);
+    color:rgba(255,255,255,.72);
+    font-family:var(--mono);
+    letter-spacing:1px;
+    text-transform:uppercase;
+    display:none;
+    z-index:var(--z-toast);
+  }
+  #toast.show{ display:block; }
+
+  /* ===== restore strip (when docks collapsed) ===== */
+  #restoreStrip{
+    position:fixed;
+    left:10px;
+    top:calc(var(--t) + 8px);
+    display:flex; gap:8px;
+    z-index:var(--z-top);
+    pointer-events:none;
+  }
+  #restoreStrip .btn{ pointer-events:auto; }
+
+  @media (max-width: 1040px){
+    #shell{
+      grid-template-columns: 1fr;
+      grid-template-rows: 1fr 240px;
+      grid-template-areas:
+        "center"
+        "bottom";
+    }
+    .left,.right,.v1,.v2{ display:none; }
+    #restoreStrip{ display:none; }
+  }
+</style>
+</head>
+<body>
+
+<div class="top">
+  <div class="left">
+    <div class="brand">
+      <div class="k">KETADATA</div>
+      <div class="sig" id="sig"></div>
+    </div>
+  </div>
+
+  <div class="right">
+    <div class="cluster">
+      <button class="btn ghost" id="btnInvert">INVERT</button>
+      <button class="btn ghost" id="btnImport">IMPORT</button>
+      <button class="btn ghost" id="btnExport">EXPORT</button>
+      <button class="btn ghost" id="btnExportTimeline">EXPORT TIMELINE</button>
+      <button class="btn ghost danger" id="btnClear">CLEAR</button>
+    </div>
+  </div>
+</div>
+
+<div id="restoreStrip">
+  <button class="btn ghost small" id="restoreLeft" style="display:none;">LEFT</button>
+  <button class="btn ghost small" id="restoreRight" style="display:none;">RIGHT</button>
+</div>
+
+<div id="ketaIcon" title="KETA_NOTE"></div>
+<div id="ketaNote">
+  <div id="ketaHead">
+    <div>KETA_NOTE</div>
+    <div style="display:flex;gap:8px;align-items:center;">
+      <button class="btn ghost small" id="ketaCopy">COPY</button>
+      <button class="btn ghost small" id="ketaClose">X</button>
+    </div>
+  </div>
+  <div id="ketaBody">
+    <textarea id="ketaText" spellcheck="false" placeholder=""></textarea>
+  </div>
+</div>
+
+<div id="shell">
+  <!-- LEFT DOCK -->
+  <aside class="dock left" id="leftDock">
+    <div class="dockHeader">
+      <div class="title">INPUT</div>
+      <div class="controls">
+        <button class="btn ghost small" id="collapseLeft">–</button>
+      </div>
+    </div>
+    <div class="dockBody">
+      <div class="group">
+        <div class="groupTitle">Add Node</div>
+        <div class="row">
+          <select id="nodeType" class="inp">
+            <option value="PERSON">PERSON</option>
+            <option value="VENUE">VENUE</option>
+            <option value="ORG">ORG</option>
+            <option value="PLATFORM">PLATFORM</option>
+            <option value="INCIDENT">INCIDENT</option>
+            <option value="DOC">DOC</option>
+          </select>
+          <input id="nodeName" class="inp grow" type="text" placeholder="name" />
+        </div>
+        <div style="height:8px"></div>
+        <textarea id="nodeNotes" spellcheck="false" placeholder="notes (neutral description, evidence pointers, etc.)"></textarea>
+        <div style="height:8px"></div>
+        <div class="row">
+          <button class="btn ghost" id="btnAddNode">ADD</button>
+          <button class="btn ghost" id="btnPinToBoard">ADD + PLACE</button>
+          <span class="hint" id="leftHint"></span>
+        </div>
+      </div>
+
+      <div class="group">
+        <div class="groupTitle">Add Evidence</div>
+        <div class="row">
+          <input id="fileImages" class="inp grow" type="file" accept="image/*" multiple />
+          <button class="btn ghost" id="btnAddTextCard">TEXT CARD</button>
+        </div>
+        <div style="height:8px"></div>
+        <div class="hint">Imports place images onto the board. You can connect them later in the bottom drawer.</div>
+      </div>
+    </div>
+  </aside>
+
+  <div class="resizer v1" id="resizerV1"></div>
+
+  <!-- CENTER -->
+  <main class="center">
+    <div id="stage" title="SPACE+DRAG to pan. WHEEL to zoom.">
+      <div id="viewport">
+        <div id="linkLayer"><svg id="linkSvg" xmlns="http://www.w3.org/2000/svg"></svg></div>
+        <div id="board"></div>
+      </div>
+    </div>
+  </main>
+
+  <div class="resizer v2" id="resizerV2"></div>
+
+  <!-- RIGHT DOCK -->
+  <aside class="dock right" id="rightDock">
+    <div class="dockHeader">
+      <div class="title">TIMELINE</div>
+      <div class="controls">
+        <button class="btn ghost small" id="collapseRight">–</button>
+      </div>
+    </div>
+    <div class="dockBody">
+      <div class="group">
+        <div class="groupTitle">Add Event</div>
+        <div class="row">
+          <input id="evtDate" class="inp" type="text" placeholder="YYYY-MM-DD or YYYY-MM" style="width:180px"/>
+          <input id="evtLabel" class="inp grow" type="text" placeholder="label" />
+        </div>
+        <div style="height:8px"></div>
+        <textarea id="evtNotes" spellcheck="false" placeholder="notes"></textarea>
+        <div style="height:8px"></div>
+        <div class="row">
+          <button class="btn ghost" id="btnAddEvent">ADD</button>
+          <button class="btn ghost" id="btnPlaceEvent">ADD + PLACE</button>
+        </div>
+      </div>
+
+      <div class="group">
+        <div class="groupTitle">Timeline</div>
+        <div id="timeline" class="timeline"></div>
+        <div id="timelineEmpty" class="hint" style="display:none;">(no events)</div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- BOTTOM DOCK -->
+  <section class="dock bottom" id="bottomDock">
+    <div class="dockHeader">
+      <div class="title">CONNECTIONS</div>
+      <div class="controls">
+        <button class="btn ghost small" id="btnLinksToggle">LINKS: ON</button>
+        <button class="btn ghost small" id="btnCenter">CENTER</button>
+      </div>
+    </div>
+    <div class="dockBody">
+      <div class="bottomGrid">
+        <div class="group">
+          <div class="groupTitle">Board Items</div>
+          <div id="itemsList" class="list"></div>
+          <div id="itemsEmpty" class="hint" style="display:none;">(no items on board)</div>
+        </div>
+
+        <div class="group">
+          <div class="groupTitle">Create Link</div>
+          <div class="row">
+            <select id="linkFrom" class="inp grow"></select>
+            <select id="linkTo" class="inp grow"></select>
+          </div>
+          <div style="height:8px"></div>
+          <div class="row">
+            <input id="linkType" class="inp grow" type="text" placeholder="relation label" />
+            <button class="btn ghost" id="btnAddLink">ADD</button>
+          </div>
+          <div style="height:8px"></div>
+          <textarea id="linkNotes" spellcheck="false" placeholder="link notes"></textarea>
+          <div style="height:8px"></div>
+
+          <div class="groupTitle">Selected</div>
+          <div class="row">
+            <button class="btn ghost" id="btnFront">FRONT</button>
+            <button class="btn ghost" id="btnDelete">DELETE</button>
+            <button class="btn ghost" id="btnDeselect">DESELECT</button>
+          </div>
+          <div style="height:8px"></div>
+          <div class="hint" id="selHint"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<div id="toast"></div>
+
+<input id="fileImport" type="file" accept="application/json" style="display:none" />
+
+<script>
+(() => {
+  /* =========================
+     IDs / Keys
+  ========================= */
+  const FILE_ID = "KETADATA_CASE_BOARD_v3_1";
+  const ROOM_ID = "CASE_BOARD";
+  const VERSION = "3.1.0";
+  const KEY = `KDT::${FILE_ID}::STATE`;
+  const KEY_NOTE = `KDT::${FILE_ID}::KETA_NOTE`;
+  const KEY_NOTE_POS = `KDT::${FILE_ID}::KETA_NOTE_POS`;
+
+  /* =========================
+     DOM
+  ========================= */
+  const $ = (id)=>document.getElementById(id);
+  const toast = $("toast");
+  const sig = $("sig");
+
+  const btnInvert = $("btnInvert");
+  const btnImport = $("btnImport");
+  const btnExport = $("btnExport");
+  const btnExportTimeline = $("btnExportTimeline");
+  const btnClear = $("btnClear");
+
+  const shell = $("shell");
+  const leftDock = $("leftDock");
+  const rightDock = $("rightDock");
+  const collapseLeft = $("collapseLeft");
+  const collapseRight = $("collapseRight");
+  const restoreLeft = $("restoreLeft");
+  const restoreRight = $("restoreRight");
+  const resizerV1 = $("resizerV1");
+  const resizerV2 = $("resizerV2");
+
+  const stage = $("stage");
+  const viewport = $("viewport");
+  const board = $("board");
+  const linkSvg = $("linkSvg");
+
+  const btnLinksToggle = $("btnLinksToggle");
+  const btnCenter = $("btnCenter");
+
+  const nodeType = $("nodeType");
+  const nodeName = $("nodeName");
+  const nodeNotes = $("nodeNotes");
+  const btnAddNode = $("btnAddNode");
+  const btnPinToBoard = $("btnPinToBoard");
+
+  const fileImages = $("fileImages");
+  const btnAddTextCard = $("btnAddTextCard");
+
+  const evtDate = $("evtDate");
+  const evtLabel = $("evtLabel");
+  const evtNotes = $("evtNotes");
+  const btnAddEvent = $("btnAddEvent");
+  const btnPlaceEvent = $("btnPlaceEvent");
+  const timeline = $("timeline");
+  const timelineEmpty = $("timelineEmpty");
+
+  const itemsList = $("itemsList");
+  const itemsEmpty = $("itemsEmpty");
+
+  const linkFrom = $("linkFrom");
+  const linkTo = $("linkTo");
+  const linkType = $("linkType");
+  const linkNotes = $("linkNotes");
+  const btnAddLink = $("btnAddLink");
+
+  const btnFront = $("btnFront");
+  const btnDelete = $("btnDelete");
+  const btnDeselect = $("btnDeselect");
+  const selHint = $("selHint");
+
+  const fileImport = $("fileImport");
+
+  const ketaIcon = $("ketaIcon");
+  const ketaNote = $("ketaNote");
+  const ketaHead = $("ketaHead");
+  const ketaText = $("ketaText");
+  const ketaClose = $("ketaClose");
+  const ketaCopy = $("ketaCopy");
+
+  const leftHint = $("leftHint");
+
+  /* =========================
+     Utils
+  ========================= */
+  const nowISO = () => new Date().toISOString().slice(0,19);
+  const clamp = (n,a,b)=> Math.max(a, Math.min(b,n));
+  const uid = ()=> (Math.random().toString(16).slice(2) + Date.now().toString(16));
+  function toastMsg(msg){
+    toast.textContent = msg;
+    toast.className = "show";
+    clearTimeout(toast._t);
+    toast._t = setTimeout(()=> toast.className="", 900);
+  }
+  function dl(filename, text, mime="application/json;charset=utf-8"){
+    const blob = new Blob([text], {type:mime});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.click();
+    setTimeout(()=> URL.revokeObjectURL(url), 500);
+  }
+
+  /* =========================
+     Layout state
+  ========================= */
+  let L = { leftW:320, rightW:340, leftCollapsed:false, rightCollapsed:false };
+  function applyLayout(){
+    const cols = [
+      L.leftCollapsed ? "0px" : L.leftW + "px",
+      L.leftCollapsed ? "0px" : "6px",
+      "1fr",
+      L.rightCollapsed ? "0px" : "6px",
+      L.rightCollapsed ? "0px" : L.rightW + "px"
+    ].join(" ");
+    shell.style.gridTemplateColumns = cols;
+
+    leftDock.classList.toggle("collapsed", L.leftCollapsed);
+    rightDock.classList.toggle("collapsed", L.rightCollapsed);
+    resizerV1.classList.toggle("collapsed", L.leftCollapsed);
+    resizerV2.classList.toggle("collapsed", L.rightCollapsed);
+
+    restoreLeft.style.display = L.leftCollapsed ? "inline-block" : "none";
+    restoreRight.style.display = L.rightCollapsed ? "inline-block" : "none";
+  }
+
+  function startResizer(kind, e){
+    e.preventDefault();
+    const sx = e.clientX;
+    const start = {...L};
+    const onMove = (ev)=>{
+      if(kind==="left"){
+        L.leftW = clamp(start.leftW + (ev.clientX - sx), 240, 560);
+      }else if(kind==="right"){
+        L.rightW = clamp(start.rightW - (ev.clientX - sx), 260, 640);
+      }
+      applyLayout();
+    };
+    const onUp = ()=>{
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+      save(false);
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  }
+  resizerV1.addEventListener("mousedown", (e)=> startResizer("left", e));
+  resizerV2.addEventListener("mousedown", (e)=> startResizer("right", e));
+  collapseLeft.addEventListener("click", ()=>{ L.leftCollapsed = !L.leftCollapsed; applyLayout(); save(false); });
+  collapseRight.addEventListener("click", ()=>{ L.rightCollapsed = !L.rightCollapsed; applyLayout(); save(false); });
+  restoreLeft.addEventListener("click", ()=>{ L.leftCollapsed=false; applyLayout(); save(false); });
+  restoreRight.addEventListener("click", ()=>{ L.rightCollapsed=false; applyLayout(); save(false); });
+
+  /* =========================
+     Viewport (pan/zoom)
+  ========================= */
+  let V = { scale:1, panX:0, panY:0 };
+  let spaceDown = false;
+  let draggingView = null;
+
+  function applyView(){
+    viewport.style.transform = `translate(${V.panX}px, ${V.panY}px) scale(${V.scale})`;
+    renderLinks();
+  }
+  function screenToWorld(clientX, clientY){
+    const r = stage.getBoundingClientRect();
+    const sx = clientX - r.left;
+    const sy = clientY - r.top;
+    const x = (sx - V.panX) / V.scale;
+    const y = (sy - V.panY) / V.scale;
+    return { x,y,sx,sy };
+  }
+
+  document.addEventListener("keydown", (e)=>{
+    if(e.code==="Space") spaceDown = true;
+    if((e.ctrlKey||e.metaKey) && e.key.toLowerCase()==="s"){
+      e.preventDefault(); save(true);
+    }
+  });
+  document.addEventListener("keyup", (e)=>{ if(e.code==="Space") spaceDown = false; });
+
+  stage.addEventListener("wheel", (e)=>{
+    e.preventDefault();
+    const delta = -Math.sign(e.deltaY) * 0.10;
+    const before = screenToWorld(e.clientX, e.clientY);
+    V.scale = clamp(V.scale * (1 + delta), 0.25, 2.75);
+    const after = screenToWorld(e.clientX, e.clientY);
+    V.panX += (after.sx - before.sx);
+    V.panY += (after.sy - before.sy);
+    applyView();
+    saveSoon();
+  }, {passive:false});
+
+  stage.addEventListener("mousedown", (e)=>{
+    const onItem = e.target.closest && e.target.closest(".item");
+    if(onItem) return;
+    if(spaceDown){
+      draggingView = { sx:e.clientX, sy:e.clientY, px:V.panX, py:V.panY };
+      e.preventDefault();
+    }else{
+      select(null);
+      selectEdge(null);
+    }
+  });
+  window.addEventListener("mousemove", (e)=>{
+    if(!draggingView) return;
+    V.panX = draggingView.px + (e.clientX - draggingView.sx);
+    V.panY = draggingView.py + (e.clientY - draggingView.sy);
+    applyView();
+  });
+  window.addEventListener("mouseup", ()=> draggingView=null);
+  btnCenter.addEventListener("click", ()=>{ V={scale:1, panX:0, panY:0}; applyView(); toastMsg("CENTER"); saveSoon(); });
+
+  /* =========================
+     Data model
+  ========================= */
+  // nodes: {id,type,name,notes,meta:{...}, stats:{...}}
+  // items on board: {id,kind:"NODE"|"EVENT"|"IMG"|"TEXT", refId?, x,y,w,h,r,z, notes?, img?{original}, text?}
+  // edges: {id,fromItemId,toItemId,label,notes}
+  // events: {id,date,label,notes}
+  let nodes = [];
+  let events = [];
+  let items = [];
+  let edges = [];
+  let linksVisible = true;
+
+  let selectedId = null;
+  let selectedEdgeId = null;
+
+  function nextZ(){
+    return items.reduce((m,it)=> Math.max(m, it.z||0), 0) + 1;
+  }
+  function getItem(id){ return items.find(x=>x.id===id) || null; }
+  function getEdge(id){ return edges.find(x=>x.id===id) || null; }
+  function itemCenter(it){ return { x: it.x + it.w/2, y: it.y + it.h/2 }; }
+
+  function select(id){
+    selectedId = id;
+    if(id!==null) selectedEdgeId = null;
+    render();
+    syncSelectionHint();
+  }
+  function selectEdge(id){
+    selectedEdgeId = id;
+    if(id!==null) selectedId = null;
+    renderLinks();
+    syncSelectionHint();
+  }
+
+  function syncSelectionHint(){
+    const it = getItem(selectedId);
+    const ed = getEdge(selectedEdgeId);
+    if(ed){
+      selHint.textContent = `SELECTED: LINK  ${ed.label ? ("// "+ed.label.toUpperCase()) : ""}`;
+      return;
+    }
+    if(!it){
+      selHint.textContent = "";
+      return;
+    }
+    const label = boardLabel(it);
+    selHint.textContent = `SELECTED: ${it.kind}  // ${label}`;
+  }
+
+  function boardLabel(it){
+    if(it.kind==="NODE"){
+      const n = nodes.find(x=>x.id===it.refId);
+      return (n?.name || "—").toUpperCase();
+    }
+    if(it.kind==="EVENT"){
+      const ev = events.find(x=>x.id===it.refId);
+      return (ev?.label || "—").toUpperCase();
+    }
+    if(it.kind==="IMG") return "IMAGE";
+    if(it.kind==="TEXT") return (it.title || "TEXT").toUpperCase();
+    return "—";
+  }
+
+  /* =========================
+     Rendering (board + links)
+  ========================= */
+  function render(){
+    board.innerHTML = "";
+    const sorted = [...items].sort((a,b)=> (a.z||0)-(b.z||0));
+    for(const it of sorted){
+      const el = document.createElement("div");
+      el.className = "item" + (it.id===selectedId ? " selected":"");
+      el.dataset.id = it.id;
+      el.style.left = it.x+"px";
+      el.style.top = it.y+"px";
+      el.style.width = it.w+"px";
+      el.style.height = it.h+"px";
+      el.style.transform = `rotate(${it.r||0}deg)`;
+      el.style.zIndex = String(it.z||0);
+
+      const head = document.createElement("div");
+      head.className = "head";
+      const name = document.createElement("div");
+      name.className = "name";
+      name.textContent = boardLabel(it);
+      const chip = document.createElement("div");
+      chip.className = "chip";
+      chip.textContent = it.kind;
+      head.appendChild(name);
+      head.appendChild(chip);
+
+      const body = document.createElement("div");
+      body.className = "body";
+
+      if(it.kind==="IMG" && it.img?.original){
+        const img = document.createElement("img");
+        img.src = it.img.original;
+        body.appendChild(img);
+      }else{
+        const ta = document.createElement("textarea");
+        ta.spellcheck = false;
+        ta.value = (it.kind==="NODE")
+          ? (nodes.find(x=>x.id===it.refId)?.notes || "")
+          : (it.kind==="EVENT")
+            ? (events.find(x=>x.id===it.refId)?.notes || "")
+            : (it.text || "");
+        ta.addEventListener("input", ()=>{
+          if(it.kind==="NODE"){
+            const n = nodes.find(x=>x.id===it.refId); if(n) n.notes = ta.value;
+          }else if(it.kind==="EVENT"){
+            const ev = events.find(x=>x.id===it.refId); if(ev) ev.notes = ta.value;
+          }else{
+            it.text = ta.value;
+          }
+          saveSoon();
+        });
+        // prevent drag steal while typing
+        ta.addEventListener("pointerdown", (ev)=> ev.stopPropagation());
+        body.appendChild(ta);
+      }
+
+      el.appendChild(head);
+      el.appendChild(body);
+
+      if(it.id===selectedId){
+        const se = document.createElement("div");
+        se.className = "handle h-se";
+        se.dataset.handle = "se";
+        const rot = document.createElement("div");
+        rot.className = "rot";
+        rot.dataset.handle = "rot";
+        el.appendChild(se);
+        el.appendChild(rot);
+      }
+
+      el.addEventListener("mousedown", onItemDown);
+      board.appendChild(el);
+    }
+    renderLinks();
+    renderBoardLists();
+  }
+
+  function renderLinks(){
+    linkSvg.innerHTML = "";
+    if(!linksVisible) return;
+
+    for(const e of edges){
+      const a = getItem(e.fromItemId);
+      const b = getItem(e.toItemId);
+      if(!a || !b) continue;
+      const ca = itemCenter(a);
+      const cb = itemCenter(b);
+      const midx = (ca.x + cb.x)/2;
+      const midy = (ca.y + cb.y)/2;
+      const isSel = (e.id===selectedEdgeId);
+
+      const line = document.createElementNS("http://www.w3.org/2000/svg","line");
+      line.setAttribute("x1", ca.x); line.setAttribute("y1", ca.y);
+      line.setAttribute("x2", cb.x); line.setAttribute("y2", cb.y);
+      line.setAttribute("class", "edge"+(isSel?" selected":""));
+      linkSvg.appendChild(line);
+
+      const hit = document.createElementNS("http://www.w3.org/2000/svg","line");
+      hit.setAttribute("x1", ca.x); hit.setAttribute("y1", ca.y);
+      hit.setAttribute("x2", cb.x); hit.setAttribute("y2", cb.y);
+      hit.setAttribute("class", "edgeHit");
+      hit.addEventListener("mousedown", (ev)=>{ ev.stopPropagation(); selectEdge(e.id); });
+      linkSvg.appendChild(hit);
+
+      const label = (e.label||"").trim();
+      if(label){
+        const t = document.createElementNS("http://www.w3.org/2000/svg","text");
+        t.setAttribute("x", midx + 6);
+        t.setAttribute("y", midy - 6);
+        t.setAttribute("class", "edgeLabel");
+        t.textContent = label.toUpperCase();
+        linkSvg.appendChild(t);
+      }
+    }
+  }
+
+  /* =========================
+     Drag / resize / rotate items
+  ========================= */
+  let drag = null;
+  function onItemDown(e){
+    const id = e.currentTarget.dataset.id;
+    select(id);
+
+    const it = getItem(id);
+    if(!it) return;
+
+    // head drag only for move (clean typing)
+    const inHead = e.target.closest && e.target.closest(".head");
+    const handle = e.target.dataset && e.target.dataset.handle;
+    const pt = screenToWorld(e.clientX, e.clientY);
+
+    if(handle==="rot"){
+      const cx = it.x + it.w/2;
+      const cy = it.y + it.h/2;
+      const ang0 = Math.atan2(pt.y - cy, pt.x - cx);
+      drag = { mode:"rot", id, cx, cy, ang0, r0: it.r||0 };
+    }else if(handle==="se"){
+      drag = { mode:"resize", id, x0:it.x, y0:it.y, w0:it.w, h0:it.h, p0:pt };
+    }else if(inHead){
+      drag = { mode:"move", id, x0:it.x, y0:it.y, p0:pt };
+    }else{
+      // click body -> select only
+      return;
+    }
+
+    window.addEventListener("mousemove", onDragMove);
+    window.addEventListener("mouseup", onDragUp);
+    e.preventDefault();
+  }
+
+  function onDragMove(e){
+    if(!drag) return;
+    const it = getItem(drag.id); if(!it) return;
+    const pt = screenToWorld(e.clientX, e.clientY);
+
+    if(drag.mode==="move"){
+      it.x = drag.x0 + (pt.x - drag.p0.x);
+      it.y = drag.y0 + (pt.y - drag.p0.y);
+      renderLinks();
+      // no full rerender needed, but simplest: rerender (keeps consistent)
+      render();
+      return;
+    }
+    if(drag.mode==="resize"){
+      const dx = pt.x - drag.p0.x;
+      const dy = pt.y - drag.p0.y;
+      it.w = clamp(drag.w0 + dx, 180, 2400);
+      it.h = clamp(drag.h0 + dy, 120, 2400);
+      render();
+      return;
+    }
+    if(drag.mode==="rot"){
+      const ang = Math.atan2(pt.y - drag.cy, pt.x - drag.cx);
+      it.r = drag.r0 + (ang - drag.ang0) * 180/Math.PI;
+      render();
+      return;
+    }
+  }
+  function onDragUp(){
+    drag = null;
+    window.removeEventListener("mousemove", onDragMove);
+    window.removeEventListener("mouseup", onDragUp);
+    saveSoon();
+  }
+
+  /* =========================
+     Bottom lists + link selectors
+  ========================= */
+  function renderBoardLists(){
+    // board items list
+    itemsList.innerHTML = "";
+    const onBoard = items.slice().sort((a,b)=> (a.z||0)-(b.z||0));
+    itemsEmpty.style.display = onBoard.length ? "none" : "block";
+    for(const it of onBoard){
+      const r = document.createElement("div");
+      r.className = "rowItem";
+      r.dataset.id = it.id;
+
+      const a = document.createElement("div");
+      a.className = "a";
+      a.textContent = boardLabel(it);
+
+      const b = document.createElement("div");
+      b.className = "b";
+      b.textContent = it.kind;
+
+      r.appendChild(a);
+      r.appendChild(b);
+
+      r.addEventListener("click", ()=>{
+        select(it.id);
+        // quick focus: center on item
+        const cx = it.x + it.w/2;
+        const cy = it.y + it.h/2;
+        const r = stage.getBoundingClientRect();
+        V.panX = (r.width/2) - cx*V.scale;
+        V.panY = (r.height/2) - cy*V.scale;
+        applyView();
+        saveSoon();
+      });
+
+      itemsList.appendChild(r);
+    }
+
+    // link dropdowns reflect all items on board
+    const opt = (it)=>{
+      const o = document.createElement("option");
+      o.value = it.id;
+      o.textContent = `${it.kind} // ${boardLabel(it)}`.slice(0,140);
+      return o;
+    };
+
+    const keepFrom = linkFrom.value;
+    const keepTo = linkTo.value;
+
+    linkFrom.innerHTML = "";
+    linkTo.innerHTML = "";
+    for(const it of onBoard){
+      linkFrom.appendChild(opt(it));
+      linkTo.appendChild(opt(it.cloneNode?it:it)); // harmless
+    }
+    if(onBoard.length){
+      if(keepFrom && onBoard.some(x=>x.id===keepFrom)) linkFrom.value = keepFrom;
+      if(keepTo && onBoard.some(x=>x.id===keepTo)) linkTo.value = keepTo;
+    }
+  }
+
+  /* =========================
+     Nodes / Events creation
+  ========================= */
+  function addNode(type, name, notes="", meta={}, stats={}){
+    const n = { id: uid(), type, name, notes, meta, stats };
+    nodes.push(n);
+    return n;
+  }
+
+  function addEvent(date, label, notes=""){
+    const ev = { id: uid(), date, label, notes };
+    events.push(ev);
+    sortEvents();
+    return ev;
+  }
+
+  function placeBoardItem(kind, refId=null, opts={}){
+    const r = stage.getBoundingClientRect();
+    const c = screenToWorld(r.left + r.width/2, r.top + r.height/2);
+    const it = {
+      id: uid(),
+      kind,
+      refId,
+      x: (opts.x ?? (c.x - 160)),
+      y: (opts.y ?? (c.y - 90)),
+      w: opts.w ?? 320,
+      h: opts.h ?? 220,
+      r: opts.r ?? 0,
+      z: nextZ()
+    };
+    if(kind==="IMG"){
+      it.w = opts.w ?? 420;
+      it.h = opts.h ?? 270;
+      it.img = { original: opts.dataUrl || "" };
+    }
+    if(kind==="TEXT"){
+      it.title = opts.title || "TEXT";
+      it.text = opts.text || "";
+      it.w = opts.w ?? 360;
+      it.h = opts.h ?? 240;
+    }
+    items.push(it);
+    select(it.id);
+    render();
+    saveSoon();
+    return it;
+  }
+
+  btnAddNode.addEventListener("click", ()=>{
+    const type = (nodeType.value||"PERSON").trim();
+    const name = (nodeName.value||"").trim();
+    if(!name){ toastMsg("NAME REQUIRED"); return; }
+    const notes = nodeNotes.value || "";
+    const n = addNode(type, name, notes);
+    nodeName.value = "";
+    nodeNotes.value = "";
+    leftHint.textContent = `${type} ADDED`;
+    saveSoon();
+    toastMsg("NODE ADDED");
+  });
+
+  btnPinToBoard.addEventListener("click", ()=>{
+    const type = (nodeType.value||"PERSON").trim();
+    const name = (nodeName.value||"").trim();
+    if(!name){ toastMsg("NAME REQUIRED"); return; }
+    const notes = nodeNotes.value || "";
+    const n = addNode(type, name, notes);
+    nodeName.value = "";
+    nodeNotes.value = "";
+    placeBoardItem("NODE", n.id);
+    toastMsg("PLACED");
+  });
+
+  btnAddEvent.addEventListener("click", ()=>{
+    const d = (evtDate.value||"").trim();
+    const l = (evtLabel.value||"").trim();
+    if(!d || !l){ toastMsg("DATE + LABEL"); return; }
+    addEvent(d, l, evtNotes.value||"");
+    evtLabel.value=""; evtNotes.value="";
+    renderTimeline();
+    saveSoon();
+    toastMsg("EVENT ADDED");
+  });
+
+  btnPlaceEvent.addEventListener("click", ()=>{
+    const d = (evtDate.value||"").trim();
+    const l = (evtLabel.value||"").trim();
+    if(!d || !l){ toastMsg("DATE + LABEL"); return; }
+    const ev = addEvent(d, l, evtNotes.value||"");
+    evtLabel.value=""; evtNotes.value="";
+    renderTimeline();
+    placeBoardItem("EVENT", ev.id, { w:320, h:220 });
+    toastMsg("EVENT PLACED");
+  });
+
+  function sortEvents(){
+    // tolerant sort: YYYY-MM-DD, YYYY-MM, else lexical
+    const score = (s)=>{
+      const m = (s||"").match(/^(\d{4})(?:-(\d{2})(?:-(\d{2}))?)?$/);
+      if(!m) return Number.MAX_SAFE_INTEGER;
+      const y = Number(m[1]);
+      const mo = Number(m[2]||"01");
+      const d = Number(m[3]||"01");
+      return y*10000 + mo*100 + d;
+    };
+    events.sort((a,b)=> score(a.date) - score(b.date));
+  }
+
+  function renderTimeline(){
+    timeline.innerHTML = "";
+    timelineEmpty.style.display = events.length ? "none" : "block";
+    for(const ev of events){
+      const row = document.createElement("div");
+      row.className = "tlItem";
+      const d = document.createElement("div");
+      d.className = "tlDate";
+      d.textContent = (ev.date||"").slice(0,10);
+      const t = document.createElement("div");
+      t.className = "tlText";
+      t.textContent = ev.label || "—";
+      row.appendChild(d);
+      row.appendChild(t);
+      row.addEventListener("click", ()=>{
+        // place if not already placed
+        const existing = items.find(x=>x.kind==="EVENT" && x.refId===ev.id);
+        if(existing){
+          select(existing.id);
+        }else{
+          placeBoardItem("EVENT", ev.id, { w:320, h:220 });
+        }
+      });
+      timeline.appendChild(row);
+    }
+  }
+
+  /* =========================
+     Evidence import
+  ========================= */
+  function readAsDataURL(file){
+    return new Promise((res, rej)=>{
+      const fr = new FileReader();
+      fr.onload = ()=> res(fr.result);
+      fr.onerror = rej;
+      fr.readAsDataURL(file);
+    });
+  }
+  fileImages.addEventListener("change", async (ev)=>{
+    const files = [...(ev.target.files||[])];
+    if(!files.length) return;
+    for(const f of files){
+      const dataUrl = await readAsDataURL(f);
+      placeBoardItem("IMG", null, { dataUrl, w:420, h:270 });
+    }
+    ev.target.value = "";
+    toastMsg("IMPORTED");
+  });
+
+  btnAddTextCard.addEventListener("click", ()=>{
+    placeBoardItem("TEXT", null, { title:"TEXT", text:"" });
+    toastMsg("TEXT");
+  });
+
+  /* =========================
+     Links (bottom drawer)
+  ========================= */
+  btnLinksToggle.addEventListener("click", ()=>{
+    linksVisible = !linksVisible;
+    btnLinksToggle.textContent = `LINKS: ${linksVisible ? "ON":"OFF"}`;
+    renderLinks();
+    saveSoon();
+  });
+
+  btnAddLink.addEventListener("click", ()=>{
+    const a = linkFrom.value;
+    const b = linkTo.value;
+    if(!a || !b || a===b){ toastMsg("PICK TWO"); return; }
+    const label = (linkType.value||"").trim();
+    const notes = (linkNotes.value||"").trim();
+    const e = { id: uid(), fromItemId:a, toItemId:b, label, notes };
+    edges.push(e);
+    linkType.value = "";
+    linkNotes.value = "";
+    selectEdge(e.id);
+    render();
+    saveSoon();
+    toastMsg("LINK ADDED");
+  });
+
+  /* =========================
+     Selection actions
+  ========================= */
+  btnFront.addEventListener("click", ()=>{
+    const it = getItem(selectedId);
+    if(!it) return;
+    it.z = nextZ();
+    render();
+    saveSoon();
+  });
+
+  btnDelete.addEventListener("click", ()=>{
+    if(selectedEdgeId){
+      edges = edges.filter(x=>x.id!==selectedEdgeId);
+      selectEdge(null);
+      render();
+      saveSoon();
+      toastMsg("LINK DELETED");
+      return;
+    }
+    const it = getItem(selectedId);
+    if(!it) return;
+    const id = it.id;
+    items = items.filter(x=>x.id!==id);
+    edges = edges.filter(e=> e.fromItemId!==id && e.toItemId!==id);
+    select(null);
+    render();
+    saveSoon();
+    toastMsg("DELETED");
+  });
+
+  btnDeselect.addEventListener("click", ()=>{ select(null); selectEdge(null); toastMsg("DESELECT"); });
+
+  document.addEventListener("keydown", (e)=>{
+    if(e.key==="Escape"){ select(null); selectEdge(null); return; }
+    if(e.key==="Delete" || e.key==="Backspace"){
+      const a = document.activeElement;
+      if(a && (a.tagName==="INPUT" || a.tagName==="TEXTAREA" || a.isContentEditable)) return;
+      btnDelete.click();
+    }
+  });
+
+  /* =========================
+     Invert
+  ========================= */
+  let invertOn = false;
+  btnInvert.addEventListener("click", ()=>{
+    invertOn = !invertOn;
+    document.body.classList.toggle("invert", invertOn);
+    saveSoon();
+  });
+
+  /* =========================
+     Import / Export
+  ========================= */
+  function statePayload(){
+    return {
+      file_id: FILE_ID,
+      room_id: ROOM_ID,
+      version: VERSION,
+      updated_at: nowISO(),
+      ui: { invertOn, linksVisible },
+      layout: L,
+      view: V,
+      nodes,
+      events,
+      items,
+      edges,
+      keta_note: ketaText.value || "",
+      keta_note_pos: getKetaPos()
+    };
+  }
+
+  function save(withToast){
+    localStorage.setItem(KEY, JSON.stringify(statePayload()));
+    localStorage.setItem(KEY_NOTE, ketaText.value || "");
+    localStorage.setItem(KEY_NOTE_POS, JSON.stringify(getKetaPos()));
+    if(withToast) toastMsg("SAVED");
+  }
+
+  let st = null;
+  function saveSoon(){
+    clearTimeout(st);
+    st = setTimeout(()=> save(false), 350);
+  }
+
+  function loadFromPayload(p){
+    if(!p) return false;
+    L = p.layout || L;
+    V = p.view || V;
+    invertOn = !!(p.ui && p.ui.invertOn);
+    linksVisible = (p.ui && p.ui.linksVisible !== undefined) ? !!p.ui.linksVisible : true;
+
+    nodes = Array.isArray(p.nodes) ? p.nodes : [];
+    events = Array.isArray(p.events) ? p.events : [];
+    items = Array.isArray(p.items) ? p.items : [];
+    edges = Array.isArray(p.edges) ? p.edges : [];
+
+    sortEvents();
+    applyLayout();
+    applyView();
+
+    document.body.classList.toggle("invert", invertOn);
+    btnLinksToggle.textContent = `LINKS: ${linksVisible ? "ON":"OFF"}`;
+
+    ketaText.value = p.keta_note ?? (localStorage.getItem(KEY_NOTE) || "");
+    const pos = p.keta_note_pos;
+    if(pos) setKetaPos(pos.x, pos.y);
+
+    renderTimeline();
+    render();
+    return true;
+  }
+
+  btnExport.addEventListener("click", ()=>{
+    dl(`${FILE_ID}__STATE.json`, JSON.stringify(statePayload(), null, 2));
+    toastMsg("EXPORTED");
+  });
+
+  btnExportTimeline.addEventListener("click", ()=>{
+    const payload = {
+      file_id: FILE_ID,
+      room_id: ROOM_ID,
+      version: VERSION,
+      exported_at: nowISO(),
+      timeline: events
+    };
+    dl(`${FILE_ID}__TIMELINE.json`, JSON.stringify(payload, null, 2));
+    toastMsg("TIMELINE");
+  });
+
+  btnImport.addEventListener("click", ()=> fileImport.click());
+  fileImport.addEventListener("change", async (ev)=>{
+    const f = ev.target.files && ev.target.files[0];
+    if(!f) return;
+    try{
+      const text = await f.text();
+      const p = JSON.parse(text);
+      if(loadFromPayload(p)){
+        save(false);
+        toastMsg("IMPORTED");
+      }else{
+        toastMsg("IMPORT FAIL");
+      }
+    }catch{
+      toastMsg("IMPORT FAIL");
+    }
+    ev.target.value = "";
+  });
+
+  btnClear.addEventListener("click", ()=>{
+    if(!confirm("CLEAR ALL DATA?")) return;
+    nodes = [];
+    events = [];
+    items = [];
+    edges = [];
+    selectedId = null;
+    selectedEdgeId = null;
+    renderTimeline();
+    render();
+    save(false);
+    toastMsg("CLEARED");
+  });
+
+  /* =========================
+     KETA NOTE
+  ========================= */
+  function openNote(){ ketaNote.classList.add("open"); }
+  function closeNote(){ ketaNote.classList.remove("open"); }
+  ketaIcon.addEventListener("click", ()=>{
+    if(ketaNote.classList.contains("open")) closeNote(); else openNote();
+  });
+  ketaClose.addEventListener("click", closeNote);
+  ketaText.addEventListener("input", saveSoon);
+  ketaCopy.addEventListener("click", async ()=>{
+    try{ await navigator.clipboard.writeText(ketaText.value||""); toastMsg("COPIED"); }
+    catch{ toastMsg("COPY FAIL"); }
+  });
+
+  // draggable note + persist
+  let noteDrag = null;
+  function getKetaPos(){
+    const r = ketaNote.getBoundingClientRect();
+    // if closed and not explicitly positioned, use default
+    return { x: Number(ketaNote.style.left?.replace("px","")) || r.left, y: Number(ketaNote.style.top?.replace("px","")) || r.top };
+  }
+  function setKetaPos(x,y){
+    ketaNote.style.left = x+"px";
+    ketaNote.style.top = y+"px";
+    ketaNote.style.right = "auto";
+  }
+  // restore pos
+  try{
+    const pos = JSON.parse(localStorage.getItem(KEY_NOTE_POS) || "null");
+    if(pos && typeof pos.x==="number" && typeof pos.y==="number") setKetaPos(pos.x,pos.y);
+  }catch{}
+
+  // restore note text
+  ketaText.value = localStorage.getItem(KEY_NOTE) || "";
+
+  ketaHead.addEventListener("mousedown", (e)=>{
+    if(e.target.closest("button")) return;
+    const r = ketaNote.getBoundingClientRect();
+    noteDrag = { dx: e.clientX - r.left, dy: e.clientY - r.top };
+    e.preventDefault();
+  });
+  window.addEventListener("mousemove", (e)=>{
+    if(!noteDrag) return;
+    const x = clamp(e.clientX - noteDrag.dx, 0, window.innerWidth - 120);
+    const y = clamp(e.clientY - noteDrag.dy, 0, window.innerHeight - 80);
+    setKetaPos(x,y);
+  });
+  window.addEventListener("mouseup", ()=>{
+    if(!noteDrag) return;
+    noteDrag = null;
+    saveSoon();
+  });
+
+  /* =========================
+     Seed (neutral parts of your set)
+     - No allegation edges are encoded here.
+  ========================= */
+  function seed(){
+    if(localStorage.getItem(KEY)) return;
+
+    // Orgs / venues / platforms
+    const conf = addNode("ORG", "Confessions Event", "", { kind:"EVENT_SERIES" });
+    const burn = addNode("ORG", "The Burning Palace", "");
+    addNode("ORG", "Lubov Gallery", "");
+    addNode("ORG", "Dimes Square", "", { kind:"ECOSYSTEM" });
+    addNode("ORG", "Red Scare Podcast", "");
+
+    addNode("VENUE", "KGB Bar — Red Room", "");
+    addNode("VENUE", "KGB Bar — Private Curtain", "");
+    addNode("VENUE", "KGB Bar — 1st Floor", "");
+    addNode("VENUE", "Sovereign House (CLOSED)", "");
+    addNode("VENUE", "Clandestino", "");
+    addNode("VENUE", "Funny Bar", "");
+    addNode("VENUE", "Treasure Chest", "");
+    addNode("VENUE", "Pubkey", "");
+
+    addNode("PLATFORM", "Twitter/X", "");
+    addNode("PLATFORM", "Instagram", "");
+    addNode("PLATFORM", "Reddit", "");
+    addNode("PLATFORM", "Substack", "");
+    addNode("PLATFORM", "TikTok", "");
+    addNode("PLATFORM", "Facebook", "");
+
+    // People (top + named)
+    const addP = (name, appearances=null, metaExtra={})=>{
+      const stats = appearances!==null ? { appeared_at_events: appearances } : {};
+      return addNode("PERSON", name, "", metaExtra, stats);
+    };
+    addP("Cassidy Grady", 42);
+    addP("Annabel Boardman", 35);
+    addP("Chloe Wheeler", 11);
+    addP("Jo Rosenthal", 7);
+    addP("Jonah Howell", 7);
+    addP("Izzy Tanashian", 6);
+    addP("Page Garcia", 6);
+    addP("Chloe Pingeon", 5);
+    addP("Christian Cail", 5);
+    addP("Peter Vack", 5);
+    addP("Billy Pedlow", 4);
+    addP("Bob Laine", 4);
+    addP("Jack Ludkey", 4);
+    addP("Leya Ivanov", 4);
+    addP("Nick Dove", 4);
+    addP("Zack Graham", 4);
+    addP("Adam Gluck", 3);
+    addP("Anamaria Silic", 3);
+    addP("August Lamm", 3);
+    addP("Ben Hale", 3);
+    addP("Carrigan Miller", 3);
+    addP("Ella Schmidt", 3);
+    addP("Gordon Glasgow", 3);
+    addP("John Padula", 3);
+    addP("Josie Girand", 3);
+    addP("Kathy Joyce", 3);
+    addP("Noah Kumin", 3);
+    addP("Panos Ale", 3);
+    addP("Ruby Sutton", 3);
+    addP("Sam Forster", 3);
+    addP("Sammy Loren", 3);
+    addP("Sophie Dess", 3);
+
+    addP("Angel Tramp", null, { role:"COHOST" });
+    addP("Max Hartman");
+    addP("Nic Dolinger");
+    addP("Alex Bienstock");
+    addP("Charley Shealy");
+    addP("Anthony Flescher");
+    addP("Andre");
+    addP("Joe Buck");
+    addP("Asher Bentley");
+    addP("Dylan Smith");
+    addP("Alex Barney");
+    addP("Noelia Madison");
+    addP("Anna Mezebish");
+    addP("Theo Thimo");
+    addP("Keely Whezly");
+
+    // Timeline (neutral)
+    addEvent("2023-10-22", "Confessions Event — start", "");
+    addEvent("2024-07-12", "Confessions Event — venue change", "");
+    addEvent("2024-04-05", "Incident [K]-[CSJ]", "");
+    addEvent("2025-03", "Incident [C]-[MJ]", "");
+    addEvent("2025-05", "Incident [T]-[oJ]", "");
+
+    renderTimeline();
+
+    // Place a few anchors on board (minimal)
+    const n1 = placeBoardItem("NODE", conf.id, { x:120, y:120, w:340, h:220 });
+    const n2 = placeBoardItem("NODE", burn.id, { x:520, y:140, w:340, h:220 });
+    const ev1 = events.find(x=>x.label.includes("start"))?.id;
+    const ev2 = events.find(x=>x.label.includes("venue change"))?.id;
+    if(ev1) placeBoardItem("EVENT", ev1, { x:170, y:420, w:320, h:220 });
+    if(ev2) placeBoardItem("EVENT", ev2, { x:560, y:430, w:320, h:220 });
+
+    // Connect those anchors with neutral labels
+    edges.push({ id: uid(), fromItemId:n1.id, toItemId:n2.id, label:"RELATED", notes:"" });
+
+    // Save once
+    save(false);
+  }
+
+  /* =========================
+     Init
+  ========================= */
+  function init(){
+    sig.textContent = `${FILE_ID}  //  ${ROOM_ID}  //  v${VERSION}`;
+    applyLayout();
+    applyView();
+    btnLinksToggle.textContent = `LINKS: ${linksVisible ? "ON":"OFF"}`;
+
+    // load saved
+    const raw = localStorage.getItem(KEY);
+    if(raw){
+      try{
+        const p = JSON.parse(raw);
+        loadFromPayload(p);
+      }catch{
+        // ignore
+      }
+    }else{
+      seed();
+      render();
+      renderTimeline();
+    }
+  }
+  init();
+})();
+</script>
+
+<!--
+AE/WB/EE SERIALIZATION STAMP
+AE: brutal minimal monochrome; single-size text; non-busy empty state; KETA_NOTE white square.
+EE: node/event/item model; board pan/zoom; draggable cards; bottom-driven linking; import/export; localStorage persistence.
+WB: UI bindings; restore-strip for collapsed docks; state signature.
+
+FILE_ID: KETADATA_CASE_BOARD_v3_1
+ROOM_ID: CASE_BOARD
+VERSION: 3.1.0
+UPDATED_AT: 2026-02-08
+CHANGELOG:
+- 3.1.0: Case Board baseline (nodes/events/items/links + timeline export). No embedded allegation labeling.
+-->
+</body>
+</html>
