@@ -1,0 +1,1692 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>KETADATA // CASE BOARD (GLASS)</title>
+<style>
+  :root{
+    --bg:#000;
+    --ink:rgba(255,255,255,.86);
+    --muted:rgba(255,255,255,.56);
+    --hair:rgba(255,255,255,.10);
+    --hair2:rgba(255,255,255,.18);
+
+    --glass:rgba(255,255,255,.06);
+
+    --t:46px;
+    --pad:10px;
+    --r:0px;
+    --txt:12px; /* single size */
+    --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace;
+    --sans: Arial, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+
+    --leftW: 320px;
+    --rightW: 360px;
+    --bottomH: 220px;
+  }
+
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0; overflow:hidden;
+    background:var(--bg);
+    color:var(--ink);
+    font-family:var(--sans);
+    font-size:var(--txt);
+    letter-spacing:.2px;
+  }
+
+  /* ===== global modes ===== */
+  body.invert{ background:#fff; color:#000; }
+  body.invert .glass,
+  body.invert .bar{
+    background:rgba(0,0,0,.06);
+    border-color:rgba(0,0,0,.12);
+    color:rgba(0,0,0,.86);
+  }
+  body.invert .btn{border-color:rgba(0,0,0,.18); color:rgba(0,0,0,.82)}
+  body.invert .btn:hover{border-color:rgba(0,0,0,.34)}
+  body.invert .field, body.invert textarea, body.invert select{
+    background:rgba(0,0,0,.04);
+    border-color:rgba(0,0,0,.16);
+    color:rgba(0,0,0,.86);
+  }
+  body.invert .nodeCard{background:rgba(255,255,255,.70)}
+  body.invert .edgeLine{stroke:rgba(0,0,0,.22)}
+  body.invert .edgeLine.sel{stroke:rgba(0,0,0,.46)}
+  body.invert .edgeLabel{fill:rgba(0,0,0,.66)}
+  body.invert .nodeTitle{color:rgba(0,0,0,.86)}
+  body.invert .nodeMeta{color:rgba(0,0,0,.62)}
+
+  /* ===== top bar ===== */
+  .bar{
+    position:fixed; inset:0 0 auto 0; height:var(--t);
+    display:grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items:center;
+    padding:0 var(--pad);
+    background:rgba(0,0,0,.72);
+    border-bottom:1px solid var(--hair);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    z-index:1000;
+    gap:10px;
+  }
+  .brand{display:flex; gap:10px; align-items:center; user-select:none; white-space:nowrap; overflow:hidden;}
+  .brand .k{letter-spacing:2px; text-transform:uppercase; color:var(--muted);}
+  .brand .sig{font-family:var(--mono); color:rgba(255,255,255,.38); overflow:hidden; text-overflow:ellipsis;}
+  .barMid{display:flex; gap:8px; align-items:center; justify-content:center; min-width:0;}
+  .barRight{display:flex; gap:8px; align-items:center; justify-content:flex-end; min-width:0;}
+
+  .btn{
+    background:rgba(255,255,255,.02);
+    border:1px solid var(--hair2);
+    color:rgba(255,255,255,.78);
+    padding:7px 9px;
+    border-radius:var(--r);
+    font-size:var(--txt);
+    line-height:1;
+    cursor:pointer;
+    user-select:none;
+    white-space:nowrap;
+  }
+  .btn:hover{border-color:rgba(255,255,255,.34)}
+  .btn.on{
+    background:rgba(255,255,255,.06);
+    border-color:rgba(255,255,255,.38);
+    color:rgba(255,255,255,.88);
+  }
+  .btn.danger:hover{border-color:rgba(255,120,120,.55)}
+  .btn.mini{padding:6px 8px}
+
+  .field, textarea, select{
+    background:rgba(255,255,255,.02);
+    border:1px solid var(--hair2);
+    color:rgba(255,255,255,.84);
+    padding:7px 9px;
+    border-radius:var(--r);
+    font-size:var(--txt);
+    outline:none;
+    width:100%;
+  }
+  textarea{resize:none; font-family:var(--mono); line-height:1.25}
+  .muted{color:var(--muted)}
+  .mono{font-family:var(--mono)}
+
+  /* ===== shell layout ===== */
+  .shell{
+    position:absolute;
+    top:var(--t);
+    left:0; right:0; bottom:0;
+    display:grid;
+    grid-template-columns: var(--leftW) 6px 1fr 6px var(--rightW);
+    grid-template-rows: 1fr 6px var(--bottomH);
+    grid-template-areas:
+      "left  rv1 center rv2 right"
+      "left  rv1 rh1    rv2 right"
+      "left  rv1 bottom rv2 right";
+  }
+
+  .glass{
+    background:rgba(255,255,255,.04);
+    border:1px solid var(--hair);
+    border-top:none;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    min-width:0; min-height:0;
+  }
+
+  .panel{display:flex; flex-direction:column; overflow:hidden;}
+  .panelHead{
+    height:40px;
+    display:flex; align-items:center; justify-content:space-between;
+    padding:0 var(--pad);
+    border-bottom:1px solid var(--hair);
+    user-select:none;
+    background:rgba(0,0,0,.22);
+  }
+  .panelHead .title{letter-spacing:2px; text-transform:uppercase; color:rgba(255,255,255,.58);}
+  .panelBody{padding:var(--pad); overflow:auto; min-height:0;}
+
+  .left{grid-area:left}
+  .center{grid-area:center; position:relative; overflow:hidden; background:#000;}
+  .right{grid-area:right}
+  .bottom{grid-area:bottom}
+
+  .resizer{background:rgba(255,255,255,.06); z-index:200;}
+  .resizer:hover{background:rgba(255,255,255,.10)}
+  .rv1{grid-area:rv1; cursor:col-resize}
+  .rv2{grid-area:rv2; cursor:col-resize}
+  .rh1{grid-area:rh1; cursor:row-resize}
+
+  .railBtn{
+    position:fixed;
+    z-index:1200;
+    background:rgba(255,255,255,.04);
+    border:1px solid var(--hair2);
+    color:rgba(255,255,255,.72);
+    padding:7px 9px;
+    border-radius:var(--r);
+    font-size:var(--txt);
+    cursor:pointer;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    display:none;
+  }
+  .railBtn:hover{border-color:rgba(255,255,255,.34)}
+  #railLeft{left:10px; top:calc(var(--t) + 10px)}
+  #railRight{right:10px; top:calc(var(--t) + 10px)}
+  #railBottom{left:50%; transform:translateX(-50%); bottom:10px}
+
+  /* ===== stage ===== */
+  #stage{position:absolute; inset:0; touch-action:none;}
+  #viewport{position:absolute; inset:0; transform-origin:0 0;}
+  #edges{position:absolute; inset:0;}
+  #edgeSvg{width:100%; height:100%; display:block}
+  .edgeLine{stroke:rgba(255,255,255,.18); stroke-width:1}
+  .edgeLine.sel{stroke:rgba(255,255,255,.42); stroke-width:2}
+  .edgeHit{stroke:rgba(255,255,255,0); stroke-width:12; cursor:pointer}
+  .edgeLabel{
+    fill:rgba(255,255,255,.52);
+    font-size:var(--txt);
+    letter-spacing:2px;
+    text-transform:uppercase;
+    user-select:none;
+    pointer-events:none;
+  }
+  #board{position:absolute; inset:0}
+
+  .nodeCard{
+    position:absolute;
+    width:260px; height:150px;
+    background:rgba(0,0,0,.55);
+    border:1px solid rgba(255,255,255,.14);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    overflow:hidden;
+    border-radius:var(--r);
+  }
+  .nodeCard.sel{border-color:rgba(255,255,255,.34)}
+  .nodeTop{
+    height:28px;
+    display:flex; align-items:center; justify-content:space-between;
+    padding:0 8px;
+    border-bottom:1px solid rgba(255,255,255,.10);
+    cursor:move;
+    user-select:none;
+    background:rgba(255,255,255,.02);
+  }
+  .nodeType{
+    font-family:var(--mono);
+    color:rgba(255,255,255,.44);
+    letter-spacing:2px;
+    text-transform:uppercase;
+  }
+  .nodeActions{display:flex; gap:6px; align-items:center}
+  .nodeActions .miniBtn{
+    padding:4px 6px;
+    border:1px solid rgba(255,255,255,.12);
+    background:rgba(255,255,255,.02);
+    color:rgba(255,255,255,.60);
+    font-size:var(--txt);
+    cursor:pointer;
+  }
+  .nodeActions .miniBtn:hover{border-color:rgba(255,255,255,.26); color:rgba(255,255,255,.78)}
+  .nodeBody{
+    height:calc(100% - 28px);
+    padding:8px;
+    display:flex;
+    flex-direction:column;
+    gap:6px;
+  }
+  .nodeTitle{
+    font-family:var(--mono);
+    color:rgba(255,255,255,.86);
+    border:1px solid rgba(255,255,255,.10);
+    background:rgba(255,255,255,.02);
+    padding:6px 8px;
+    outline:none;
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+  }
+  .nodeMeta{
+    display:grid;
+    grid-template-columns: 1fr 1fr;
+    gap:6px;
+  }
+  .nodeMeta .meta{
+    font-family:var(--mono);
+    border:1px solid rgba(255,255,255,.10);
+    background:rgba(255,255,255,.02);
+    padding:6px 8px;
+    outline:none;
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    color:rgba(255,255,255,.74);
+  }
+  .nodeNotes{
+    flex:1;
+    font-family:var(--mono);
+    border:1px solid rgba(255,255,255,.10);
+    background:rgba(255,255,255,.02);
+    padding:6px 8px;
+    outline:none;
+    overflow:auto;
+    white-space:pre-wrap;
+    line-height:1.25;
+    color:rgba(255,255,255,.78);
+  }
+  .resizeHandle{
+    position:absolute;
+    right:-10px; bottom:-10px;
+    width:20px; height:20px;
+    background:rgba(0,0,0,.65);
+    border:1px solid rgba(255,255,255,.26);
+    cursor:nwse-resize;
+  }
+
+  /* ===== keta note (fixed: never scales with board; pointer drag; persisted min+pos) ===== */
+  #ketaNote{
+    position:fixed;
+    left:auto; top:auto;
+    right:10px;
+    top:calc(var(--t) + 10px);
+    width:260px;
+    height:260px;
+    background:#fff;
+    color:#000;
+    border:1px solid rgba(255,255,255,.20);
+    z-index:1600; /* above everything */
+    display:flex; flex-direction:column;
+    border-radius:0;
+    box-shadow:none;
+    transform:none !important; /* hard block any accidental scaling */
+  }
+  #ketaNote.min{
+    width:44px; height:44px;
+    overflow:hidden;
+  }
+  #ketaHead{
+    height:28px;
+    display:flex; align-items:center; justify-content:space-between;
+    padding:0 8px;
+    border-bottom:1px solid rgba(0,0,0,.12);
+    cursor:grab;
+    user-select:none;
+    font-family:var(--mono);
+    font-size:var(--txt);
+    letter-spacing:2px;
+    text-transform:uppercase;
+  }
+  #ketaHead:active{cursor:grabbing}
+  #ketaBody{flex:1; padding:8px; display:flex}
+  #ketaText{
+    width:100%;
+    height:100%;
+    border:1px solid rgba(0,0,0,.14);
+    background:rgba(0,0,0,.03);
+    color:#000;
+    font-family:var(--mono);
+    font-size:var(--txt);
+    line-height:1.25;
+    outline:none;
+    padding:8px;
+    resize:none;
+  }
+  #ketaMini{
+    width:34px;
+    height:20px;
+    border:1px solid rgba(0,0,0,.18);
+    background:rgba(0,0,0,.04);
+    cursor:pointer;
+    font-size:var(--txt);
+    line-height:18px;
+    text-align:center;
+    user-select:none;
+  }
+
+  .block{border:1px solid rgba(255,255,255,.10); background:rgba(255,255,255,.02); padding:10px; margin-bottom:10px}
+  .row{display:flex; gap:8px; align-items:center; flex-wrap:wrap}
+  .grow{flex:1 1 auto; min-width:0}
+  .list{border:1px solid rgba(255,255,255,.10); background:rgba(255,255,255,.02); max-height:240px; overflow:auto;}
+  .listItem{
+    display:flex; justify-content:space-between; gap:8px;
+    padding:8px 10px;
+    border-bottom:1px solid rgba(255,255,255,.08);
+    cursor:pointer;
+    user-select:none;
+  }
+  .listItem:last-child{border-bottom:none}
+  .listItem:hover{background:rgba(255,255,255,.03)}
+  .listItem.sel{background:rgba(255,255,255,.05)}
+  .tag{
+    font-family:var(--mono);
+    color:rgba(255,255,255,.46);
+    letter-spacing:2px;
+    text-transform:uppercase;
+    white-space:nowrap;
+  }
+  .toast{
+    position:fixed; left:50%; transform:translateX(-50%);
+    bottom:12px;
+    padding:8px 10px;
+    border:1px solid rgba(255,255,255,.16);
+    background:rgba(0,0,0,.86);
+    color:rgba(255,255,255,.72);
+    font-size:var(--txt);
+    display:none;
+    z-index:2000;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+  }
+  .toast.show{display:block}
+
+  @media (max-width: 1040px){
+    .shell{
+      grid-template-columns: 1fr;
+      grid-template-rows: 1fr 6px var(--bottomH);
+      grid-template-areas:
+        "center"
+        "rh1"
+        "bottom";
+    }
+    .left,.right,.rv1,.rv2{display:none}
+    #railLeft,#railRight{display:block}
+  }
+</style>
+</head>
+<body>
+
+<div class="bar">
+  <div class="brand">
+    <div class="k">KETADATA</div>
+    <div class="sig mono" id="sig">CASE_BOARD_GLASS_v1</div>
+  </div>
+
+  <div class="barMid">
+    <button class="btn mini" id="btnToggleLeft">LEFT</button>
+    <button class="btn mini" id="btnToggleRight">RIGHT</button>
+    <button class="btn mini" id="btnToggleBottom">BOTTOM</button>
+    <button class="btn mini" id="btnInvert">INVERT</button>
+  </div>
+
+  <div class="barRight">
+    <button class="btn mini" id="btnExport">EXPORT</button>
+    <button class="btn mini" id="btnImport">IMPORT</button>
+    <button class="btn mini danger" id="btnClear">CLEAR</button>
+  </div>
+</div>
+
+<button class="railBtn" id="railLeft">LEFT</button>
+<button class="railBtn" id="railRight">RIGHT</button>
+<button class="railBtn" id="railBottom">BOTTOM</button>
+
+<div class="shell" id="shell">
+
+  <aside class="panel glass left" id="leftPanel">
+    <div class="panelHead">
+      <div class="title">INPUT</div>
+      <div class="row" style="gap:6px">
+        <button class="btn mini" id="btnLeftCollapse">–</button>
+      </div>
+    </div>
+    <div class="panelBody">
+      <div class="block">
+        <div class="row">
+          <select id="inType" class="grow">
+            <option value="person">PERSON</option>
+            <option value="org">ORG</option>
+            <option value="venue">VENUE</option>
+            <option value="event">EVENT</option>
+            <option value="incident">INCIDENT</option>
+            <option value="platform">PLATFORM</option>
+            <option value="evidence">EVIDENCE</option>
+            <option value="note">NOTE</option>
+          </select>
+          <button class="btn mini" id="btnAddNode">ADD</button>
+        </div>
+        <div style="height:8px"></div>
+
+        <input id="inName" class="field" type="text" placeholder="name / label"/>
+        <div style="height:8px"></div>
+
+        <div class="row">
+          <input id="inDate" class="field grow" type="date"/>
+          <input id="inTag" class="field grow" type="text" placeholder="tag (optional)"/>
+        </div>
+        <div style="height:8px"></div>
+
+        <textarea id="inNotes" rows="6" placeholder="notes (optional)"></textarea>
+        <div style="height:10px"></div>
+        <div class="muted">Add now, refine later. Everything stays editable.</div>
+      </div>
+
+      <div class="block">
+        <div class="row">
+          <button class="btn mini" id="btnCenterView">CENTER</button>
+          <button class="btn mini" id="btnDeselect">DESELECT</button>
+          <button class="btn mini" id="btnFitAll">FIT</button>
+        </div>
+        <div style="height:10px"></div>
+        <div class="muted">Pan: hold SPACE + drag. Zoom: wheel.</div>
+      </div>
+    </div>
+  </aside>
+
+  <div class="resizer rv1" id="rzLeft"></div>
+
+  <main class="center" id="centerPanel">
+    <div id="stage">
+      <div id="viewport">
+        <div id="edges"><svg id="edgeSvg" xmlns="http://www.w3.org/2000/svg"></svg></div>
+        <div id="board"></div>
+      </div>
+    </div>
+  </main>
+
+  <div class="resizer rv2" id="rzRight"></div>
+
+  <aside class="panel glass right" id="rightPanel">
+    <div class="panelHead">
+      <div class="title">TIMELINE</div>
+      <div class="row" style="gap:6px">
+        <button class="btn mini" id="btnTimelineExport">EXPORT</button>
+        <button class="btn mini" id="btnRightCollapse">–</button>
+      </div>
+    </div>
+    <div class="panelBody">
+      <div class="block">
+        <div class="row">
+          <input id="tlFilter" class="field grow" type="text" placeholder="filter (name / tag)"/>
+          <select id="tlType" class="grow">
+            <option value="all">ALL</option>
+            <option value="event">EVENT</option>
+            <option value="incident">INCIDENT</option>
+          </select>
+        </div>
+      </div>
+      <div class="list" id="timelineList"></div>
+    </div>
+  </aside>
+
+  <div class="resizer rh1" id="rzBottom"></div>
+
+  <section class="panel glass bottom" id="bottomPanel">
+    <div class="panelHead">
+      <div class="title">CONNECTIONS</div>
+      <div class="row" style="gap:6px">
+        <button class="btn mini" id="btnLinksToggle">LINKS</button>
+        <button class="btn mini" id="btnBottomCollapse">–</button>
+      </div>
+    </div>
+    <div class="panelBody" style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+      <div class="block" style="margin:0;">
+        <div class="row">
+          <div class="muted">All nodes</div>
+          <div class="grow"></div>
+          <button class="btn mini" id="btnSelectA">SET A</button>
+          <button class="btn mini" id="btnSelectB">SET B</button>
+        </div>
+        <div style="height:8px"></div>
+        <div class="list" id="nodeList" style="max-height:160px;"></div>
+      </div>
+
+      <div class="block" style="margin:0;">
+        <div class="row">
+          <input id="linkLabel" class="field grow" type="text" placeholder="link label (optional)"/>
+          <button class="btn mini" id="btnCreateLink">CREATE</button>
+        </div>
+        <div style="height:8px"></div>
+        <div class="row">
+          <button class="btn mini" id="btnDeleteLink">DELETE</button>
+          <button class="btn mini" id="btnClearLinkSel">DESELECT</button>
+          <div class="grow"></div>
+          <div class="muted">Selected: <span class="mono" id="linkSel">—</span></div>
+        </div>
+        <div style="height:8px"></div>
+        <textarea id="linkNote" rows="5" placeholder="link note (optional)"></textarea>
+        <div style="height:10px"></div>
+        <div class="muted">Pick A + B, create. Reversible.</div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<div id="ketaNote">
+  <div id="ketaHead">
+    <div>KETA_NOTE</div>
+    <div id="ketaMini" title="minimize">–</div>
+  </div>
+  <div id="ketaBody">
+    <textarea id="ketaText"></textarea>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+<input id="fileImport" type="file" accept="application/json" style="display:none"/>
+
+<script>
+(() => {
+  const KEY = "KETADATA_CASE_BOARD_GLASS_v1";
+  const KEY_NOTE = "KETADATA_CASE_BOARD_KETA_NOTE_v1";
+  const KEY_NOTE_POS = "KETADATA_CASE_BOARD_KETA_NOTE_POS_v1";
+  const KEY_NOTE_MIN = "KETADATA_CASE_BOARD_KETA_NOTE_MIN_v1";
+
+  const $ = (id)=>document.getElementById(id);
+  const toast = $("toast");
+
+  const shell = $("shell");
+  const leftPanel = $("leftPanel");
+  const rightPanel = $("rightPanel");
+  const bottomPanel = $("bottomPanel");
+
+  const rzLeft = $("rzLeft");
+  const rzRight = $("rzRight");
+  const rzBottom = $("rzBottom");
+
+  const btnToggleLeft = $("btnToggleLeft");
+  const btnToggleRight = $("btnToggleRight");
+  const btnToggleBottom = $("btnToggleBottom");
+
+  const btnLeftCollapse = $("btnLeftCollapse");
+  const btnRightCollapse = $("btnRightCollapse");
+  const btnBottomCollapse = $("btnBottomCollapse");
+
+  const railLeft = $("railLeft");
+  const railRight = $("railRight");
+  const railBottom = $("railBottom");
+
+  const btnInvert = $("btnInvert");
+  const btnExport = $("btnExport");
+  const btnImport = $("btnImport");
+  const btnClear = $("btnClear");
+  const fileImport = $("fileImport");
+
+  const inType = $("inType");
+  const inName = $("inName");
+  const inDate = $("inDate");
+  const inTag = $("inTag");
+  const inNotes = $("inNotes");
+  const btnAddNode = $("btnAddNode");
+
+  const btnCenterView = $("btnCenterView");
+  const btnDeselect = $("btnDeselect");
+  const btnFitAll = $("btnFitAll");
+
+  const stage = $("stage");
+  const viewport = $("viewport");
+  const board = $("board");
+  const edgeSvg = $("edgeSvg");
+
+  const btnLinksToggle = $("btnLinksToggle");
+  const nodeList = $("nodeList");
+  const btnSelectA = $("btnSelectA");
+  const btnSelectB = $("btnSelectB");
+  const linkLabel = $("linkLabel");
+  const btnCreateLink = $("btnCreateLink");
+  const btnDeleteLink = $("btnDeleteLink");
+  const btnClearLinkSel = $("btnClearLinkSel");
+  const linkSel = $("linkSel");
+  const linkNote = $("linkNote");
+
+  const timelineList = $("timelineList");
+  const tlFilter = $("tlFilter");
+  const tlType = $("tlType");
+  const btnTimelineExport = $("btnTimelineExport");
+
+  const ketaNote = $("ketaNote");
+  const ketaHead = $("ketaHead");
+  const ketaMini = $("ketaMini");
+  const ketaText = $("ketaText");
+
+  const clamp=(n,a,b)=>Math.max(a,Math.min(b,n));
+  const uid=()=>Math.random().toString(16).slice(2)+Date.now().toString(16);
+
+  function show(msg){
+    toast.textContent = msg;
+    toast.classList.add("show");
+    clearTimeout(show._t);
+    show._t=setTimeout(()=>toast.classList.remove("show"), 850);
+  }
+  function safeUpper(s){ return String(s||"").trim().toUpperCase(); }
+  function escapeHtml(s){
+    return String(s||"").replace(/[&<>"']/g, m => ({
+      "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
+    }[m]));
+  }
+
+  /* ===== layout state ===== */
+  let L = { leftW:320, rightW:360, bottomH:220, leftOpen:true, rightOpen:true, bottomOpen:true };
+  function applyLayout(){
+    document.documentElement.style.setProperty("--leftW", L.leftOpen ? (L.leftW+"px") : "0px");
+    document.documentElement.style.setProperty("--rightW", L.rightOpen ? (L.rightW+"px") : "0px");
+    document.documentElement.style.setProperty("--bottomH", L.bottomOpen ? (L.bottomH+"px") : "0px");
+
+    leftPanel.style.display = L.leftOpen ? "flex":"none";
+    rightPanel.style.display = L.rightOpen ? "flex":"none";
+    bottomPanel.style.display = L.bottomOpen ? "flex":"none";
+
+    rzLeft.style.display = L.leftOpen ? "block":"none";
+    rzRight.style.display = L.rightOpen ? "block":"none";
+    rzBottom.style.display = L.bottomOpen ? "block":"none";
+
+    btnToggleLeft.classList.toggle("on", L.leftOpen);
+    btnToggleRight.classList.toggle("on", L.rightOpen);
+    btnToggleBottom.classList.toggle("on", L.bottomOpen);
+
+    railLeft.style.display = L.leftOpen ? "none":"block";
+    railRight.style.display = L.rightOpen ? "none":"block";
+    railBottom.style.display = L.bottomOpen ? "none":"block";
+
+    shell.style.gridTemplateColumns = `${L.leftOpen ? L.leftW+"px":"0px"} ${L.leftOpen ? "6px":"0px"} 1fr ${L.rightOpen ? "6px":"0px"} ${L.rightOpen ? L.rightW+"px":"0px"}`;
+    shell.style.gridTemplateRows = `1fr ${L.bottomOpen ? "6px":"0px"} ${L.bottomOpen ? L.bottomH+"px":"0px"}`;
+  }
+
+  function startResizer(kind, e){
+    e.preventDefault();
+    const sx = e.clientX, sy = e.clientY;
+    const s = {...L};
+    const onMove=(ev)=>{
+      if(kind==="left")  L.leftW = clamp(s.leftW + (ev.clientX - sx), 240, 560);
+      if(kind==="right") L.rightW= clamp(s.rightW - (ev.clientX - sx), 260, 720);
+      if(kind==="bottom")L.bottomH=clamp(s.bottomH - (ev.clientY - sy), 140, 520);
+      applyLayout();
+    };
+    const onUp=()=>{
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+      save(false);
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  }
+  rzLeft.addEventListener("mousedown",(e)=>startResizer("left",e));
+  rzRight.addEventListener("mousedown",(e)=>startResizer("right",e));
+  rzBottom.addEventListener("mousedown",(e)=>startResizer("bottom",e));
+
+  function togglePanel(which, force){
+    if(which==="left")   L.leftOpen = (force!==undefined)?!!force:!L.leftOpen;
+    if(which==="right")  L.rightOpen= (force!==undefined)?!!force:!L.rightOpen;
+    if(which==="bottom") L.bottomOpen=(force!==undefined)?!!force:!L.bottomOpen;
+    applyLayout();
+    saveSoon();
+  }
+
+  btnToggleLeft.onclick = ()=>togglePanel("left");
+  btnToggleRight.onclick= ()=>togglePanel("right");
+  btnToggleBottom.onclick=()=>togglePanel("bottom");
+
+  btnLeftCollapse.onclick = ()=>togglePanel("left", false);
+  btnRightCollapse.onclick= ()=>togglePanel("right", false);
+  btnBottomCollapse.onclick=()=>togglePanel("bottom", false);
+
+  railLeft.onclick = ()=>togglePanel("left", true);
+  railRight.onclick= ()=>togglePanel("right", true);
+  railBottom.onclick=()=>togglePanel("bottom", true);
+
+  /* ===== viewport pan/zoom ===== */
+  let VIEW = {scale:1, panX:0, panY:0};
+  let spaceDown=false;
+  let panDrag=null;
+
+  function applyView(){
+    viewport.style.transform = `translate(${VIEW.panX}px, ${VIEW.panY}px) scale(${VIEW.scale})`;
+    renderEdges();
+  }
+
+  function screenToWorld(clientX, clientY){
+    const r = stage.getBoundingClientRect();
+    const sx = clientX - r.left;
+    const sy = clientY - r.top;
+    return { x:(sx - VIEW.panX)/VIEW.scale, y:(sy - VIEW.panY)/VIEW.scale, sx, sy };
+  }
+
+  document.addEventListener("keydown",(e)=>{
+    if(e.code==="Space") spaceDown=true;
+    if(e.key==="Escape"){
+      selectNode(null);
+      selectEdge(null);
+      modePick=null;
+      show("DESELECT");
+    }
+  });
+  document.addEventListener("keyup",(e)=>{ if(e.code==="Space") spaceDown=false; });
+
+  stage.addEventListener("wheel",(e)=>{
+    e.preventDefault();
+    const delta = -Math.sign(e.deltaY)*0.10;
+    const before = screenToWorld(e.clientX, e.clientY);
+    VIEW.scale = clamp(VIEW.scale*(1+delta), 0.25, 2.5);
+    const after = screenToWorld(e.clientX, e.clientY);
+    VIEW.panX += (after.sx - before.sx);
+    VIEW.panY += (after.sy - before.sy);
+    applyView();
+    saveSoon();
+  }, {passive:false});
+
+  stage.addEventListener("mousedown",(e)=>{
+    const onCard = e.target.closest && e.target.closest(".nodeCard");
+    const onEdge = e.target.closest && e.target.closest("svg");
+    if(onCard || onEdge) return;
+    if(spaceDown){
+      panDrag = {sx:e.clientX, sy:e.clientY, px:VIEW.panX, py:VIEW.panY};
+    }else{
+      selectNode(null);
+      selectEdge(null);
+    }
+  });
+  window.addEventListener("mousemove",(e)=>{
+    if(!panDrag) return;
+    VIEW.panX = panDrag.px + (e.clientX - panDrag.sx);
+    VIEW.panY = panDrag.py + (e.clientY - panDrag.sy);
+    applyView();
+  });
+  window.addEventListener("mouseup",()=>{ if(panDrag){panDrag=null; saveSoon();} });
+
+  btnCenterView.onclick=()=>{
+    VIEW={scale:1, panX:0, panY:0};
+    applyView();
+    saveSoon();
+    show("CENTER");
+  };
+  btnDeselect.onclick=()=>{
+    selectNode(null); selectEdge(null);
+    show("DESELECT");
+  };
+  btnFitAll.onclick=()=>{
+    if(!NODES.length){ show("EMPTY"); return; }
+    let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
+    for(const n of NODES){
+      minX=Math.min(minX,n.x); minY=Math.min(minY,n.y);
+      maxX=Math.max(maxX,n.x+n.w); maxY=Math.max(maxY,n.y+n.h);
+    }
+    const pad=80; minX-=pad; minY-=pad; maxX+=pad; maxY+=pad;
+    const r=stage.getBoundingClientRect();
+    const bw=maxX-minX, bh=maxY-minY;
+    const s=Math.min(2.2, Math.max(0.25, Math.min(r.width/bw, r.height/bh)));
+    VIEW.scale=s;
+    VIEW.panX = (r.width/2) - ((minX + bw/2)*s);
+    VIEW.panY = (r.height/2) - ((minY + bh/2)*s);
+    applyView();
+    saveSoon();
+    show("FIT");
+  };
+
+  /* ===== model ===== */
+  let NODES=[];
+  let EDGES=[];
+  let selectedNodeId=null;
+  let selectedEdgeId=null;
+  let linksOn=true;
+
+  function zNext(){ return NODES.reduce((m,n)=>Math.max(m,n.z||0),0)+1; }
+  function nodeById(id){ return NODES.find(n=>n.id===id) || null; }
+  function edgeById(id){ return EDGES.find(e=>e.id===id) || null; }
+  function centerOf(n){ return {x:n.x+n.w/2, y:n.y+n.h/2}; }
+
+  function selectNode(id){
+    selectedNodeId=id;
+    if(id) selectedEdgeId=null;
+    renderBoard();
+    syncLists();
+  }
+  function selectEdge(id){
+    selectedEdgeId=id;
+    if(id) selectedNodeId=null;
+    renderEdges();
+    syncLists();
+  }
+
+  /* ===== render ===== */
+  function renderBoard(){
+    board.innerHTML="";
+    const sorted=[...NODES].sort((a,b)=>(a.z||0)-(b.z||0));
+    for(const n of sorted){
+      const el=document.createElement("div");
+      el.className="nodeCard"+(n.id===selectedNodeId?" sel":"");
+      el.style.left=n.x+"px";
+      el.style.top=n.y+"px";
+      el.style.width=n.w+"px";
+      el.style.height=n.h+"px";
+      el.style.zIndex=String(n.z||0);
+      el.dataset.id=n.id;
+
+      const top=document.createElement("div");
+      top.className="nodeTop";
+      top.innerHTML = `
+        <div class="nodeType">${safeUpper(n.type)}</div>
+        <div class="nodeActions">
+          <button class="miniBtn" data-act="front">↑</button>
+          <button class="miniBtn" data-act="del">×</button>
+        </div>
+      `;
+      el.appendChild(top);
+
+      const body=document.createElement("div");
+      body.className="nodeBody";
+
+      const title=document.createElement("div");
+      title.className="nodeTitle";
+      title.contentEditable="true";
+      title.spellcheck=false;
+      title.textContent = n.name || "";
+      title.addEventListener("input",()=>{
+        const nn=nodeById(n.id); if(nn) nn.name=title.textContent.trim();
+        saveSoon(); syncLists(); renderEdges(); renderTimeline();
+      });
+      title.addEventListener("pointerdown",(ev)=>ev.stopPropagation());
+      body.appendChild(title);
+
+      const metaWrap=document.createElement("div");
+      metaWrap.className="nodeMeta";
+
+      const metaDate=document.createElement("div");
+      metaDate.className="meta";
+      metaDate.contentEditable="true";
+      metaDate.spellcheck=false;
+      metaDate.textContent = n.date || "";
+      metaDate.title="date (YYYY-MM-DD or free text)";
+      metaDate.addEventListener("input",()=>{
+        const nn=nodeById(n.id); if(nn) nn.date=metaDate.textContent.trim();
+        saveSoon(); renderTimeline(); renderEdges();
+      });
+      metaDate.addEventListener("pointerdown",(ev)=>ev.stopPropagation());
+
+      const metaTag=document.createElement("div");
+      metaTag.className="meta";
+      metaTag.contentEditable="true";
+      metaTag.spellcheck=false;
+      metaTag.textContent = n.tag || "";
+      metaTag.title="tag";
+      metaTag.addEventListener("input",()=>{
+        const nn=nodeById(n.id); if(nn) nn.tag=metaTag.textContent.trim();
+        saveSoon(); syncLists(); renderTimeline();
+      });
+      metaTag.addEventListener("pointerdown",(ev)=>ev.stopPropagation());
+
+      metaWrap.appendChild(metaDate);
+      metaWrap.appendChild(metaTag);
+      body.appendChild(metaWrap);
+
+      const notes=document.createElement("div");
+      notes.className="nodeNotes";
+      notes.contentEditable="true";
+      notes.spellcheck=false;
+      notes.textContent = n.notes || "";
+      notes.addEventListener("input",()=>{
+        const nn=nodeById(n.id); if(nn) nn.notes=notes.textContent;
+        saveSoon();
+      });
+      notes.addEventListener("pointerdown",(ev)=>ev.stopPropagation());
+      body.appendChild(notes);
+
+      el.appendChild(body);
+
+      const rz=document.createElement("div");
+      rz.className="resizeHandle";
+      el.appendChild(rz);
+
+      top.addEventListener("mousedown",(e)=>startNodeDrag(e,n.id));
+      rz.addEventListener("mousedown",(e)=>startNodeResize(e,n.id));
+      el.addEventListener("mousedown",(e)=>{
+        if(e.target.closest(".miniBtn")) return;
+        selectNode(n.id);
+      });
+
+      top.addEventListener("click",(e)=>{
+        const b=e.target.closest && e.target.closest(".miniBtn");
+        if(!b) return;
+        const act=b.dataset.act;
+        if(act==="front"){
+          const nn=nodeById(n.id); if(nn){ nn.z=zNext(); renderBoard(); renderEdges(); saveSoon(); }
+        }
+        if(act==="del"){
+          deleteNode(n.id);
+        }
+      });
+
+      board.appendChild(el);
+    }
+    renderEdges();
+    updateSig();
+  }
+
+  function renderEdges(){
+    edgeSvg.innerHTML="";
+    if(!linksOn) return;
+
+    for(const ed of EDGES){
+      const a=nodeById(ed.a), b=nodeById(ed.b);
+      if(!a || !b) continue;
+      const ca=centerOf(a), cb=centerOf(b);
+      const midx=(ca.x+cb.x)/2, midy=(ca.y+cb.y)/2;
+      const sel=(ed.id===selectedEdgeId);
+
+      const line=document.createElementNS("http://www.w3.org/2000/svg","line");
+      line.setAttribute("x1", ca.x);
+      line.setAttribute("y1", ca.y);
+      line.setAttribute("x2", cb.x);
+      line.setAttribute("y2", cb.y);
+      line.setAttribute("class", "edgeLine"+(sel?" sel":""));
+      edgeSvg.appendChild(line);
+
+      const hit=document.createElementNS("http://www.w3.org/2000/svg","line");
+      hit.setAttribute("x1", ca.x);
+      hit.setAttribute("y1", ca.y);
+      hit.setAttribute("x2", cb.x);
+      hit.setAttribute("y2", cb.y);
+      hit.setAttribute("class", "edgeHit");
+      hit.addEventListener("mousedown",(ev)=>{
+        ev.stopPropagation();
+        selectEdge(ed.id);
+        linkNote.value = ed.note || "";
+        linkSel.textContent = ed.id.slice(-6).toUpperCase();
+      });
+      edgeSvg.appendChild(hit);
+
+      const label=(ed.label||"").trim();
+      if(label){
+        const t=document.createElementNS("http://www.w3.org/2000/svg","text");
+        t.setAttribute("x", midx+6);
+        t.setAttribute("y", midy-6);
+        t.setAttribute("class","edgeLabel");
+        t.textContent = safeUpper(label);
+        edgeSvg.appendChild(t);
+      }
+    }
+  }
+
+  /* ===== node drag/resize ===== */
+  let drag=null;
+  function startNodeDrag(e, id){
+    e.preventDefault();
+    selectNode(id);
+    const n=nodeById(id); if(!n) return;
+    n.z=zNext();
+
+    const p0=screenToWorld(e.clientX, e.clientY);
+    drag={mode:"move", id, x0:n.x, y0:n.y, p0};
+    window.addEventListener("mousemove", onNodeMove);
+    window.addEventListener("mouseup", onNodeUp);
+  }
+  function startNodeResize(e, id){
+    e.preventDefault();
+    e.stopPropagation();
+    selectNode(id);
+    const n=nodeById(id); if(!n) return;
+    const p0=screenToWorld(e.clientX, e.clientY);
+    drag={mode:"resize", id, w0:n.w, h0:n.h, p0};
+    window.addEventListener("mousemove", onNodeMove);
+    window.addEventListener("mouseup", onNodeUp);
+  }
+  function onNodeMove(e){
+    if(!drag) return;
+    const n=nodeById(drag.id); if(!n) return;
+    const p=screenToWorld(e.clientX, e.clientY);
+
+    if(drag.mode==="move"){
+      n.x = drag.x0 + (p.x - drag.p0.x);
+      n.y = drag.y0 + (p.y - drag.p0.y);
+      renderBoard();
+    }else{
+      n.w = clamp(drag.w0 + (p.x - drag.p0.x), 200, 900);
+      n.h = clamp(drag.h0 + (p.y - drag.p0.y), 120, 800);
+      renderBoard();
+    }
+  }
+  function onNodeUp(){
+    if(!drag) return;
+    drag=null;
+    window.removeEventListener("mousemove", onNodeMove);
+    window.removeEventListener("mouseup", onNodeUp);
+    saveSoon();
+  }
+  function deleteNode(id){
+    NODES = NODES.filter(n=>n.id!==id);
+    EDGES = EDGES.filter(e=>e.a!==id && e.b!==id);
+    if(selectedNodeId===id) selectedNodeId=null;
+    renderBoard(); syncLists(); renderTimeline();
+    saveSoon();
+    show("DELETED");
+  }
+
+  /* ===== connections UI ===== */
+  let modePick=null;
+  let pickA=null, pickB=null;
+
+  function setPick(which){ modePick=which; show("PICK "+which); }
+  btnSelectA.onclick=()=>setPick("A");
+  btnSelectB.onclick=()=>setPick("B");
+
+  btnCreateLink.onclick=()=>{
+    if(!pickA || !pickB || pickA===pickB){ show("PICK A+B"); return; }
+    const ed={id:uid(), a:pickA, b:pickB, label:(linkLabel.value||"").trim(), note:(linkNote.value||"").trim()};
+    EDGES.push(ed);
+    selectEdge(ed.id);
+    linkSel.textContent = ed.id.slice(-6).toUpperCase();
+    saveSoon();
+    renderEdges();
+    show("LINKED");
+  };
+
+  btnDeleteLink.onclick=()=>{
+    if(!selectedEdgeId){ show("NO LINK"); return; }
+    EDGES = EDGES.filter(e=>e.id!==selectedEdgeId);
+    selectedEdgeId=null;
+    linkSel.textContent="—";
+    linkNote.value="";
+    saveSoon();
+    renderEdges();
+    syncLists();
+    show("LINK DELETED");
+  };
+
+  btnClearLinkSel.onclick=()=>{
+    selectEdge(null);
+    linkSel.textContent="—";
+    linkNote.value="";
+    show("DESELECT");
+  };
+
+  linkNote.addEventListener("input",()=>{
+    const e=edgeById(selectedEdgeId);
+    if(e) e.note=linkNote.value;
+    saveSoon();
+  });
+  linkLabel.addEventListener("input",()=>{
+    const e=edgeById(selectedEdgeId);
+    if(e){ e.label=linkLabel.value; renderEdges(); saveSoon(); }
+  });
+
+  btnLinksToggle.onclick=()=>{
+    linksOn=!linksOn;
+    btnLinksToggle.classList.toggle("on", linksOn);
+    renderEdges();
+    saveSoon();
+    show(linksOn ? "LINKS ON":"LINKS OFF");
+  };
+
+  function syncLists(){
+    nodeList.innerHTML="";
+    for(const n of [...NODES].sort((a,b)=>String(a.type).localeCompare(String(b.type)) || String(a.name||"").localeCompare(String(b.name||"")))){
+      const row=document.createElement("div");
+      row.className="listItem"+(n.id===selectedNodeId?" sel":"");
+      row.dataset.id=n.id;
+      row.innerHTML=`
+        <div style="min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
+          <span class="tag mono">${safeUpper(n.type)}</span>
+          <span style="margin-left:8px;">${escapeHtml(n.name||"")}</span>
+        </div>
+        <div class="mono muted" style="white-space:nowrap;">${escapeHtml((n.tag||"").slice(0,18))}</div>
+      `;
+      row.addEventListener("click",()=>{
+        if(modePick==="A"){ pickA=n.id; modePick=null; show("A SET"); }
+        else if(modePick==="B"){ pickB=n.id; modePick=null; show("B SET"); }
+        else{ selectNode(n.id); }
+        renderPickState();
+      });
+      nodeList.appendChild(row);
+    }
+    renderPickState();
+
+    if(selectedEdgeId){
+      const e=edgeById(selectedEdgeId);
+      if(e){
+        linkSel.textContent = e.id.slice(-6).toUpperCase();
+        linkLabel.value = e.label || "";
+        linkNote.value = e.note || "";
+      }
+    }
+  }
+
+  function renderPickState(){
+    const kids=[...nodeList.children];
+    for(const el of kids){
+      const id=el.dataset.id;
+      if(id===pickA || id===pickB){
+        el.style.background="rgba(255,255,255,.05)";
+      }else{
+        el.style.background="";
+      }
+    }
+  }
+
+  /* ===== timeline ===== */
+  function parseDateLoose(s){
+    const t=String(s||"").trim();
+    const m=t.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if(m) return new Date(+m[1], +m[2]-1, +m[3]).getTime();
+    const m2=t.match(/^(\d{4})-(\d{2})$/);
+    if(m2) return new Date(+m2[1], +m2[2]-1, 1).getTime();
+    const m3=t.match(/^(\d{4})$/);
+    if(m3) return new Date(+m3[1], 0, 1).getTime();
+    return NaN;
+  }
+
+  function renderTimeline(){
+    const filt=(tlFilter.value||"").trim().toLowerCase();
+    const kind=tlType.value;
+
+    let items = NODES.filter(n=>{
+      const isWanted = (kind==="all") ? (n.type==="event"||n.type==="incident") : (n.type===kind);
+      if(!isWanted) return false;
+      const hay = (n.name+" "+(n.tag||"")+" "+(n.date||"")).toLowerCase();
+      if(filt && !hay.includes(filt)) return false;
+      return true;
+    });
+
+    items.sort((a,b)=>{
+      const ta=parseDateLoose(a.date);
+      const tb=parseDateLoose(b.date);
+      if(isNaN(ta) && isNaN(tb)) return String(a.name||"").localeCompare(String(b.name||""));
+      if(isNaN(ta)) return 1;
+      if(isNaN(tb)) return -1;
+      return ta - tb;
+    });
+
+    timelineList.innerHTML="";
+    for(const n of items){
+      const row=document.createElement("div");
+      row.className="listItem"+(n.id===selectedNodeId?" sel":"");
+      row.innerHTML=`
+        <div style="min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
+          <span class="tag mono">${safeUpper(n.type)}</span>
+          <span style="margin-left:8px;" class="mono muted">${escapeHtml(n.date||"")}</span>
+          <span style="margin-left:8px;">${escapeHtml(n.name||"")}</span>
+        </div>
+        <div class="mono muted" style="white-space:nowrap;">${escapeHtml((n.tag||"").slice(0,18))}</div>
+      `;
+      row.addEventListener("click",()=>{
+        selectNode(n.id);
+        const r=stage.getBoundingClientRect();
+        VIEW.panX = (r.width/2) - ((n.x+n.w/2)*VIEW.scale);
+        VIEW.panY = (r.height/2) - ((n.y+n.h/2)*VIEW.scale);
+        applyView();
+        saveSoon();
+      });
+      timelineList.appendChild(row);
+    }
+  }
+  tlFilter.addEventListener("input",()=>renderTimeline());
+  tlType.addEventListener("change",()=>renderTimeline());
+
+  btnTimelineExport.onclick=()=>{
+    const rows = NODES
+      .filter(n=>n.type==="event"||n.type==="incident")
+      .map(n=>({type:n.type, date:n.date||"", name:n.name||"", tag:n.tag||"", notes:(n.notes||"").slice(0,1000)}));
+    downloadText("ketadata_timeline.json", JSON.stringify({timeline:rows}, null, 2));
+    show("TIMELINE EXPORTED");
+  };
+
+  /* ===== add node ===== */
+  function addNode(payload, xy){
+    const rect = stage.getBoundingClientRect();
+    const c = xy ? xy : screenToWorld(rect.left+rect.width/2, rect.top+rect.height/2);
+    const n={
+      id:uid(),
+      type:payload.type||"note",
+      name:payload.name||"",
+      date:payload.date||"",
+      tag:payload.tag||"",
+      notes:payload.notes||"",
+      x:(c.x-140) + (Math.random()*30-15),
+      y:(c.y-90) + (Math.random()*30-15),
+      w:payload.w||260,
+      h:payload.h||170,
+      z:zNext()
+    };
+    NODES.push(n);
+    return n;
+  }
+
+  btnAddNode.onclick=()=>{
+    addNode({
+      type:inType.value,
+      name:(inName.value||"").trim(),
+      date:inDate.value || "",
+      tag:(inTag.value||"").trim(),
+      notes:inNotes.value || ""
+    });
+    inName.value=""; inNotes.value="";
+    selectNode(NODES[NODES.length-1].id);
+    renderBoard(); syncLists(); renderTimeline();
+    saveSoon();
+    show("ADDED");
+  };
+
+  /* ===== invert ===== */
+  let invert=false;
+  btnInvert.onclick=()=>{
+    invert=!invert;
+    document.body.classList.toggle("invert", invert);
+    btnInvert.classList.toggle("on", invert);
+    saveSoon();
+    show(invert ? "INVERT":"NORMAL");
+  };
+
+  /* ===== KETA NOTE FIX (persist pos + min; pointer drag; clamp; no scale) ===== */
+  function setNotePos(x,y){
+    ketaNote.style.left = x+"px";
+    ketaNote.style.top  = y+"px";
+    ketaNote.style.right="auto";
+  }
+  function saveNotePos(){
+    const r=ketaNote.getBoundingClientRect();
+    localStorage.setItem(KEY_NOTE_POS, JSON.stringify({x:r.left, y:r.top}));
+  }
+
+  // text
+  ketaText.value = localStorage.getItem(KEY_NOTE) || "";
+  ketaText.addEventListener("input",()=> localStorage.setItem(KEY_NOTE, ketaText.value));
+
+  // minimized state
+  let noteMin = (localStorage.getItem(KEY_NOTE_MIN)==="1");
+  function applyNoteMin(){
+    ketaNote.classList.toggle("min", noteMin);
+    ketaMini.textContent = noteMin ? "+" : "–";
+    localStorage.setItem(KEY_NOTE_MIN, noteMin ? "1":"0");
+  }
+  ketaMini.addEventListener("click",(e)=>{
+    e.stopPropagation();
+    noteMin=!noteMin;
+    applyNoteMin();
+  });
+  applyNoteMin();
+
+  // restore pos
+  const savedPos=localStorage.getItem(KEY_NOTE_POS);
+  if(savedPos){
+    try{
+      const p=JSON.parse(savedPos);
+      if(typeof p.x==="number" && typeof p.y==="number"){
+        const x=clamp(p.x, 0, window.innerWidth-60);
+        const y=clamp(p.y, 0, window.innerHeight-60);
+        setNotePos(x,y);
+      }
+    }catch{}
+  }
+
+  // pointer drag (works on trackpad/mouse/touch)
+  let noteDrag=null;
+  ketaHead.addEventListener("pointerdown",(e)=>{
+    if(e.target===ketaMini) return;
+    ketaHead.setPointerCapture(e.pointerId);
+    const r=ketaNote.getBoundingClientRect();
+    noteDrag={dx:e.clientX-r.left, dy:e.clientY-r.top, pid:e.pointerId};
+    e.preventDefault();
+  });
+  ketaHead.addEventListener("pointermove",(e)=>{
+    if(!noteDrag || e.pointerId!==noteDrag.pid) return;
+    const x=clamp(e.clientX-noteDrag.dx, 0, window.innerWidth-60);
+    const y=clamp(e.clientY-noteDrag.dy, 0, window.innerHeight-60);
+    setNotePos(x,y);
+  });
+  ketaHead.addEventListener("pointerup",(e)=>{
+    if(!noteDrag || e.pointerId!==noteDrag.pid) return;
+    noteDrag=null;
+    saveNotePos();
+  });
+  window.addEventListener("resize",()=>{ saveNotePos(); });
+
+  /* ===== export/import/clear ===== */
+  function stableSig(){ return `CASE_BOARD_GLASS_v1 / N:${NODES.length} / E:${EDGES.length}`; }
+  function updateSig(){ $("sig").textContent = stableSig(); }
+
+  function downloadText(filename, text){
+    const blob=new Blob([text], {type:"application/json;charset=utf-8"});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement("a");
+    a.href=url; a.download=filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function save(withToast){
+    const payload = {version:1, invert, layout:L, view:VIEW, nodes:NODES, edges:EDGES, picks:{pickA,pickB}, linksOn};
+    localStorage.setItem(KEY, JSON.stringify(payload));
+    updateSig();
+    if(withToast) show("SAVED");
+  }
+  let st=null;
+  function saveSoon(){
+    clearTimeout(st);
+    st=setTimeout(()=>save(false), 350);
+    updateSig();
+  }
+
+  function load(){
+    const raw=localStorage.getItem(KEY);
+    if(!raw) return false;
+    try{
+      const p=JSON.parse(raw);
+      invert=!!p.invert;
+      document.body.classList.toggle("invert", invert);
+      btnInvert.classList.toggle("on", invert);
+
+      L = Object.assign(L, p.layout||{});
+      VIEW = Object.assign(VIEW, p.view||{});
+      NODES = Array.isArray(p.nodes)?p.nodes:[];
+      EDGES = Array.isArray(p.edges)?p.edges:[];
+      linksOn = (p.linksOn!==undefined)?!!p.linksOn:true;
+
+      pickA = p.picks?.pickA || null;
+      pickB = p.picks?.pickB || null;
+
+      btnLinksToggle.classList.toggle("on", linksOn);
+
+      applyLayout();
+      applyView();
+      renderBoard();
+      syncLists();
+      renderTimeline();
+      updateSig();
+      return true;
+    }catch{
+      return false;
+    }
+  }
+
+  btnExport.onclick=()=>{
+    const payload = {version:1, invert, layout:L, view:VIEW, nodes:NODES, edges:EDGES};
+    downloadText("ketadata_case_board.json", JSON.stringify(payload, null, 2));
+    show("EXPORTED");
+  };
+
+  btnImport.onclick=()=> fileImport.click();
+
+  fileImport.addEventListener("change",(ev)=>{
+    const f=ev.target.files && ev.target.files[0];
+    if(!f) return;
+    const fr=new FileReader();
+    fr.onload=()=>{
+      try{
+        const p=JSON.parse(fr.result);
+        if(Array.isArray(p.nodes)) NODES=p.nodes;
+        if(Array.isArray(p.edges)) EDGES=p.edges;
+        if(p.view) VIEW=p.view;
+        if(p.layout) L=Object.assign(L, p.layout);
+        if(p.invert!==undefined){
+          invert=!!p.invert;
+          document.body.classList.toggle("invert", invert);
+          btnInvert.classList.toggle("on", invert);
+        }
+        linksOn = (p.linksOn!==undefined)?!!p.linksOn:true;
+        btnLinksToggle.classList.toggle("on", linksOn);
+
+        applyLayout();
+        applyView();
+        renderBoard();
+        syncLists();
+        renderTimeline();
+        save(false);
+        show("IMPORTED");
+      }catch{
+        show("IMPORT FAIL");
+      }
+    };
+    fr.readAsText(f);
+    ev.target.value="";
+  });
+
+  btnClear.onclick=()=>{
+    if(!confirm("CLEAR BOARD?")) return;
+    NODES=[]; EDGES=[];
+    pickA=null; pickB=null;
+    selectedNodeId=null; selectedEdgeId=null;
+    renderBoard();
+    syncLists();
+    renderTimeline();
+    save(false);
+    show("CLEARED");
+  };
+
+  /* ===== seed dataset (safe subset; no allegations encoded) ===== */
+  function seedData(){
+    const pos = {
+      org:   {x:240, y:140},
+      venue: {x:240, y:360},
+      plat:  {x:240, y:580},
+      people:{x:640, y:140},
+      inc:   {x:980, y:140},
+      ecosys:{x:980, y:420}
+    };
+
+    const conf = addNode({type:"org", name:"Confessions Event", tag:"central", notes:"venue lineage + cohost succession", w:300, h:190}, {x:pos.org.x, y:pos.org.y});
+    const burn = addNode({type:"org", name:"The Burning Palace", tag:"central", notes:"adjacent organization", w:300, h:190}, {x:pos.org.x+340, y:pos.org.y});
+    const lubov= addNode({type:"org", name:"Lubov Gallery", tag:"adjacent", notes:"event host / associated org", w:300, h:190}, {x:pos.org.x+680, y:pos.org.y});
+
+    const dimes = addNode({type:"org", name:"Dimes Square", tag:"ecosystem", notes:"cultural ecosystem node", w:320, h:210}, {x:pos.ecosys.x, y:pos.ecosys.y});
+    const redsc= addNode({type:"org", name:"Red Scare Podcast", tag:"platform anchor", notes:"primary platform in ecosystem", w:320, h:190}, {x:pos.ecosys.x+360, y:pos.ecosys.y});
+
+    const kgb  = addNode({type:"venue", name:"KGB Bar", tag:"venue", notes:"Red Room / Private Curtain / 1st Floor", w:300, h:190}, {x:pos.venue.x, y:pos.venue.y});
+    const sov  = addNode({type:"venue", name:"Sovereign House", tag:"venue", notes:"CLOSED", w:300, h:170}, {x:pos.venue.x+340, y:pos.venue.y});
+    const clan = addNode({type:"venue", name:"Clandestino", tag:"venue", notes:"", w:260, h:160}, {x:pos.venue.x+680, y:pos.venue.y});
+    const funny= addNode({type:"venue", name:"Funny Bar", tag:"venue", notes:"", w:260, h:160}, {x:pos.venue.x+940, y:pos.venue.y});
+    const chest= addNode({type:"venue", name:"Treasure Chest", tag:"venue", notes:"", w:260, h:160}, {x:pos.venue.x+1200, y:pos.venue.y});
+    const pubky= addNode({type:"venue", name:"Pubkey", tag:"venue", notes:"", w:260, h:160}, {x:pos.venue.x+1460, y:pos.venue.y});
+
+    const x  = addNode({type:"platform", name:"Twitter/X", tag:"platform", notes:"", w:240, h:150}, {x:pos.plat.x, y:pos.plat.y});
+    const ig = addNode({type:"platform", name:"Instagram", tag:"platform", notes:"", w:240, h:150}, {x:pos.plat.x+270, y:pos.plat.y});
+    const rd = addNode({type:"platform", name:"Reddit", tag:"platform", notes:"", w:240, h:150}, {x:pos.plat.x+540, y:pos.plat.y});
+    const ss = addNode({type:"platform", name:"Substack", tag:"platform", notes:"", w:240, h:150}, {x:pos.plat.x+810, y:pos.plat.y});
+    const tk = addNode({type:"platform", name:"TikTok", tag:"platform", notes:"", w:240, h:150}, {x:pos.plat.x+1080, y:pos.plat.y});
+    const fb = addNode({type:"platform", name:"Facebook", tag:"platform", notes:"", w:240, h:150}, {x:pos.plat.x+1350, y:pos.plat.y});
+
+    // People (seed top + notable names + cohosts)
+    const p1 = addNode({type:"person", name:"Cassidy Grady", tag:"42 appearances", notes:"event appearances: 42", w:280, h:170}, {x:pos.people.x, y:pos.people.y});
+    const p2 = addNode({type:"person", name:"Annabel Boardman", tag:"35 appearances", notes:"event appearances: 35", w:280, h:170}, {x:pos.people.x+310, y:pos.people.y});
+    const p3 = addNode({type:"person", name:"Chloe Wheeler", tag:"11 appearances", notes:"event appearances: 11", w:280, h:170}, {x:pos.people.x+620, y:pos.people.y});
+    const p4 = addNode({type:"person", name:"Angel Tramp", tag:"cohost", notes:"cohost (original)", w:280, h:170}, {x:pos.people.x+930, y:pos.people.y});
+
+    const p5 = addNode({type:"person", name:"Max Hartman", tag:"", notes:"associated_with: Third Location (The Boat)", w:280, h:170}, {x:pos.people.x, y:pos.people.y+200});
+    const p6 = addNode({type:"person", name:"Peter Vack", tag:"5 appearances", notes:"event appearances: 5", w:280, h:170}, {x:pos.people.x+310, y:pos.people.y+200});
+    const p7 = addNode({type:"person", name:"Nic Dolinger", tag:"", notes:"", w:280, h:170}, {x:pos.people.x+620, y:pos.people.y+200});
+    const p8 = addNode({type:"person", name:"Billy Pedlow", tag:"4 appearances", notes:"event appearances: 4", w:280, h:170}, {x:pos.people.x+930, y:pos.people.y+200});
+    const p9 = addNode({type:"person", name:"Jack Ludkey", tag:"4 appearances", notes:"event appearances: 4", w:280, h:170}, {x:pos.people.x+1240, y:pos.people.y+200});
+    const p10= addNode({type:"person", name:"Charley Shealy", tag:"", notes:"", w:280, h:170}, {x:pos.people.x+1550, y:pos.people.y+200});
+    const p11= addNode({type:"person", name:"Anthony Flescher", tag:"", notes:"", w:280, h:170}, {x:pos.people.x+1860, y:pos.people.y+200});
+    const p12= addNode({type:"person", name:"Asher Bentley", tag:"", notes:"", w:280, h:170}, {x:pos.people.x+2170, y:pos.people.y+200});
+    const p13= addNode({type:"person", name:"Dylan Smith", tag:"", notes:"", w:280, h:170}, {x:pos.people.x+2480, y:pos.people.y+200});
+    const p14= addNode({type:"person", name:"Alex Bienstock", tag:"", notes:"", w:280, h:170}, {x:pos.people.x+2790, y:pos.people.y+200});
+    const p15= addNode({type:"person", name:"Alex Barney", tag:"", notes:"", w:280, h:170}, {x:pos.people.x+3100, y:pos.people.y+200});
+
+    // Incidents (coded)
+    const i1 = addNode({type:"incident", name:"[K]-[CSJ]", date:"2024-04-05", tag:"⅝ Barrel Party", notes:"coded incident", w:300, h:180}, {x:pos.inc.x, y:pos.inc.y});
+    const i2 = addNode({type:"incident", name:"[C]-[MJ]", date:"2025-03", tag:"", notes:"coded incident", w:300, h:170}, {x:pos.inc.x+340, y:pos.inc.y});
+    const i3 = addNode({type:"incident", name:"[T]-[oJ]", date:"2025-05", tag:"", notes:"coded incident", w:300, h:170}, {x:pos.inc.x+680, y:pos.inc.y});
+    const i4 = addNode({type:"incident", name:"[JBJ]", date:"", tag:"date unknown", notes:"coded incident", w:300, h:170}, {x:pos.inc.x+1020, y:pos.inc.y});
+
+    // Edges: venue relationships
+    EDGES.push({id:uid(), a:conf.id, b:sov.id, label:"STARTED_AT", note:"2023-10-22"});
+    EDGES.push({id:uid(), a:conf.id, b:kgb.id, label:"MOVED_TO", note:"2024-07-12"});
+    EDGES.push({id:uid(), a:conf.id, b:kgb.id, label:"CURRENTLY_AT", note:"current"});
+
+    // Edges: cohost succession
+    EDGES.push({id:uid(), a:conf.id, b:p4.id, label:"ORIGINAL_COHOST", note:"Angel Tramp"});
+    EDGES.push({id:uid(), a:conf.id, b:p2.id, label:"THEN_COHOST", note:"Annabel Boardman"});
+    EDGES.push({id:uid(), a:conf.id, b:p3.id, label:"CURRENT_COHOST", note:"Chloe Wheeler"});
+
+    // Edges: network connections (from your diagram section)
+    EDGES.push({id:uid(), a:p1.id, b:p5.id, label:"CONNECTED_TO", note:""});
+    EDGES.push({id:uid(), a:p1.id, b:p6.id, label:"CONNECTED_TO", note:""});
+    EDGES.push({id:uid(), a:p1.id, b:p7.id, label:"CONNECTED_TO", note:""});
+    EDGES.push({id:uid(), a:p1.id, b:p8.id, label:"CONNECTED_TO", note:""});
+    EDGES.push({id:uid(), a:p1.id, b:p14.id, label:"CONNECTED_TO", note:""});
+    EDGES.push({id:uid(), a:p1.id, b:p12.id, label:"CONNECTED_TO", note:""});
+    EDGES.push({id:uid(), a:p1.id, b:p13.id, label:"CONNECTED_TO", note:""});
+    EDGES.push({id:uid(), a:p1.id, b:p10.id, label:"CONNECTED_TO", note:""});
+    EDGES.push({id:uid(), a:p1.id, b:p15.id, label:"CONNECTED_TO", note:""});
+
+    // Ecosystem edges
+    EDGES.push({id:uid(), a:dimes.id, b:redsc.id, label:"PRIMARY_PLATFORM", note:""});
+    EDGES.push({id:uid(), a:dimes.id, b:x.id, label:"PLATFORM", note:""});
+    EDGES.push({id:uid(), a:dimes.id, b:rd.id, label:"PLATFORM", note:""});
+    EDGES.push({id:uid(), a:dimes.id, b:ss.id, label:"PLATFORM", note:""});
+    EDGES.push({id:uid(), a:dimes.id, b:ig.id, label:"PLATFORM", note:""});
+
+    // Burning palace adjacency examples
+    EDGES.push({id:uid(), a:burn.id, b:p8.id, label:"ASSOCIATED_WITH", note:""});
+    EDGES.push({id:uid(), a:burn.id, b:p9.id, label:"ASSOCIATED_WITH", note:""});
+    EDGES.push({id:uid(), a:lubov.id, b:burn.id, label:"ADJACENT", note:""});
+
+    // Wire incidents to context without allegations
+    EDGES.push({id:uid(), a:i1.id, b:conf.id, label:"CONTEXT", note:"coded; link manually to involved parties if needed"});
+    EDGES.push({id:uid(), a:i2.id, b:conf.id, label:"CONTEXT", note:""});
+    EDGES.push({id:uid(), a:i3.id, b:conf.id, label:"CONTEXT", note:""});
+    EDGES.push({id:uid(), a:i4.id, b:conf.id, label:"CONTEXT", note:""});
+
+    // One “index” node for the long tail
+    addNode({type:"note", name:"PEOPLE (LONG TAIL)", tag:"171 unique", notes:"139+ individuals with 1–2 appearances.\nAdd/import as you go.", w:320, h:190}, {x:pos.people.x+340, y:pos.people.y+420});
+
+    // Also place a timeline anchor event (start/move)
+    addNode({type:"event", name:"Confessions Event START", date:"2023-10-22", tag:"Sovereign House", notes:"start date", w:300, h:180}, {x:pos.inc.x, y:pos.inc.y+260});
+    addNode({type:"event", name:"Confessions Event MOVE", date:"2024-07-12", tag:"KGB Bar", notes:"venue change", w:300, h:180}, {x:pos.inc.x+340, y:pos.inc.y+260});
+  }
+
+  /* ===== preseed on first run only ===== */
+  function loadOrSeed(){
+    const ok = load();
+    if(ok) return;
+    seedData();
+    applyLayout();
+    applyView();
+    renderBoard();
+    syncLists();
+    renderTimeline();
+    save(false);
+    show("SEEDED");
+  }
+
+  /* ===== actions ===== */
+  function downloadText(filename, text){
+    const blob=new Blob([text], {type:"application/json;charset=utf-8"});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement("a");
+    a.href=url; a.download=filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function save(withToast){
+    const payload = {version:1, invert, layout:L, view:VIEW, nodes:NODES, edges:EDGES, picks:{pickA,pickB}, linksOn};
+    localStorage.setItem(KEY, JSON.stringify(payload));
+    updateSig();
+    if(withToast) show("SAVED");
+  }
+
+  function load(){
+    const raw=localStorage.getItem(KEY);
+    if(!raw) return false;
+    try{
+      const p=JSON.parse(raw);
+      invert=!!p.invert;
+      document.body.classList.toggle("invert", invert);
+      btnInvert.classList.toggle("on", invert);
+
+      L = Object.assign(L, p.layout||{});
+      VIEW = Object.assign(VIEW, p.view||{});
+      NODES = Array.isArray(p.nodes)?p.nodes:[];
+      EDGES = Array.isArray(p.edges)?p.edges:[];
+      linksOn = (p.linksOn!==undefined)?!!p.linksOn:true;
+
+      pickA = p.picks?.pickA || null;
+      pickB = p.picks?.pickB || null;
+
+      btnLinksToggle.classList.toggle("on", linksOn);
+
+      applyLayout();
+      applyView();
+      renderBoard();
+      syncLists();
+      renderTimeline();
+      updateSig();
+      return true;
+    }catch{
+      return false;
+    }
+  }
+
+  let st=null;
+  function saveSoon(){
+    clearTimeout(st);
+    st=setTimeout(()=>save(false), 350);
+    updateSig();
+  }
+
+  btnExport.onclick=()=>{
+    const payload = {version:1, invert, layout:L, view:VIEW, nodes:NODES, edges:EDGES};
+    downloadText("ketadata_case_board.json", JSON.stringify(payload, null, 2));
+    show("EXPORTED");
+  };
+  btnImport.onclick=()=> fileImport.click();
+
+  fileImport.addEventListener("change",(ev)=>{
+    const f=ev.target.files && ev.target.files[0];
+    if(!f) return;
+    const fr=new FileReader();
+    fr.onload=()=>{
+      try{
+        const p=JSON.parse(fr.result);
+        if(Array.isArray(p.nodes)) NODES=p.nodes;
+        if(Array.isArray(p.edges)) EDGES=p.edges;
+        if(p.view) VIEW=p.view;
+        if(p.layout) L=Object.assign(L, p.layout);
+        if(p.invert!==undefined){
+          invert=!!p.invert;
+          document.body.classList.toggle("invert", invert);
+          btnInvert.classList.toggle("on", invert);
+        }
+        linksOn = (p.linksOn!==undefined)?!!p.linksOn:true;
+        btnLinksToggle.classList.toggle("on", linksOn);
+
+        applyLayout();
+        applyView();
+        renderBoard();
+        syncLists();
+        renderTimeline();
+        save(false);
+        show("IMPORTED");
+      }catch{
+        show("IMPORT FAIL");
+      }
+    };
+    fr.readAsText(f);
+    ev.target.value="";
+  });
+
+  btnClear.onclick=()=>{
+    if(!confirm("CLEAR BOARD?")) return;
+    NODES=[]; EDGES=[];
+    pickA=null; pickB=null;
+    selectedNodeId=null; selectedEdgeId=null;
+    renderBoard();
+    syncLists();
+    renderTimeline();
+    save(false);
+    show("CLEARED");
+  };
+
+  /* ===== boot ===== */
+  applyLayout();
+  applyView();
+  loadOrSeed();
+
+})();
+</script>
+
+<!--
+AE: glass-minimal brutalist utilitarian
+EE: nodes/edges/timeline/import-export/invert/panzoom/draggable panels + cards
+WB: localStorage session + file export/import + seeded dataset
+FILE_ID: KETADATA_CASE_BOARD_GLASS_v1
+ROOM_ID: CASE_BOARD
+VERSION: 1.1.0
+UPDATED_AT: 2026-02-08
+CHANGELOG:
+- v1.1.0 seeded investigation structure (safe subset) + keta_note pointer-drag + persist min/pos/text; prevents weird shrink
+-->
+</body>
+</html>
