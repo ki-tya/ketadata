@@ -1,0 +1,967 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>INVESTIGATION_CASEBOARD_DIMES_SQUARE_v1_1</title>
+
+<style>
+:root{
+  --bg:#000; --fg:#fff; --muted:#8a8a8a; --line:#222; --line2:#333;
+  --accent:#ff4444; --accent-dim:#ff444440; --warning:#ffaa00;
+  --top:44px; --bot:34px;
+
+  --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace;
+  --sans: Arial, system-ui, -apple-system;
+
+  --ctl-alpha:0.92;
+  --ctl-bg: rgba(0,0,0,var(--ctl-alpha));
+  --note-border: rgba(255,255,255,0.78);
+
+  --panel-border: rgba(255,255,255,0.22);
+  --panel-hair: rgba(255,255,255,0.14);
+  --panel-hair2: rgba(255,255,255,0.12);
+}
+*{box-sizing:border-box; margin:0; padding:0}
+html,body{height:100%; overflow:hidden}
+body{
+  background:var(--bg); color:var(--fg); font-family:var(--sans);
+  user-select:none;
+}
+body.invert{
+  --bg:#fff; --fg:#000; --muted:#3a3a3a; --line:#ddd; --line2:#bbb;
+  --ctl-bg: rgba(255,255,255,0.88);
+  --panel-border: rgba(0,0,0,0.18);
+  --panel-hair: rgba(0,0,0,0.12);
+  --panel-hair2: rgba(0,0,0,0.10);
+}
+#root{position:fixed; inset:0; background:var(--bg)}
+#stage{position:absolute; inset:0; background:var(--bg); pointer-events:none}
+
+/* ===== bars ===== */
+.topbar{
+  position:absolute; top:0; left:0; right:0; height:var(--top);
+  display:flex; align-items:center; justify-content:space-between;
+  padding:0 10px; border-bottom:1px solid var(--line);
+  background:linear-gradient(180deg, color-mix(in srgb, var(--bg) 70%, #070707) , var(--bg));
+  z-index:10;
+}
+.brand{
+  font-family:var(--mono); font-size:12px; letter-spacing:.10em;
+  text-transform:uppercase; display:flex; gap:10px; align-items:center;
+  white-space:nowrap;
+}
+.brand .sq{width:10px; height:10px; border:1px solid var(--fg); background:var(--bg)}
+.brand .sub{color:var(--muted); letter-spacing:.02em; text-transform:none}
+
+.actions{display:flex; gap:8px; font-family:var(--mono); font-size:11px; align-items:center}
+.bottombar{
+  position:absolute; left:0; right:0; bottom:0; height:var(--bot);
+  display:flex; align-items:center; justify-content:space-between;
+  padding:0 10px; border-top:1px solid var(--line);
+  background:linear-gradient(0deg, color-mix(in srgb, var(--bg) 70%, #070707) , var(--bg));
+  z-index:10; font-family:var(--mono); font-size:11px; color:var(--muted);
+}
+.btn{
+  background:transparent; color:var(--fg); border:1px solid var(--line2);
+  padding:6px 10px; font-family:var(--mono); font-size:12px;
+  letter-spacing:.08em; text-transform:uppercase; cursor:pointer;
+}
+.btn:hover{border-color:var(--fg)}
+.btn:active{transform:translateY(1px)}
+.btn.on{border-color:var(--fg); background:color-mix(in srgb, var(--fg) 8%, transparent)}
+.btn.warn{border-color:color-mix(in srgb, var(--warning) 60%, var(--line2))}
+.btn.warn:hover{border-color:var(--warning)}
+.sep{width:1px; height:18px; background:var(--line2); opacity:.6}
+
+/* ===== panels ===== */
+.panel{
+  position:absolute; z-index:20;
+  border:1px solid var(--panel-border);
+  background:var(--ctl-bg);
+  backdrop-filter:blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  display:none; flex-direction:column;
+  resize:both; overflow:hidden;
+  min-width:320px; min-height:220px;
+}
+.panel.open{display:flex}
+
+.panelHead{
+  padding:8px 10px; border-bottom:1px solid var(--panel-hair);
+  font-family:var(--mono); font-size:11px; letter-spacing:.14em; text-transform:uppercase;
+  display:flex; justify-content:space-between; align-items:center;
+  cursor:move; touch-action:none;
+  background:linear-gradient(180deg, rgba(255,255,255,0.04), rgba(0,0,0,0.0));
+}
+body.invert .panelHead{background:linear-gradient(180deg, rgba(0,0,0,0.04), rgba(0,0,0,0.0))}
+.panelBody{padding:10px; min-height:0; flex:1; overflow:auto}
+
+.headBtn{
+  background:var(--bg); color:var(--fg);
+  border:1px solid var(--panel-border);
+  padding:2px 8px; font-family:var(--mono); font-size:12px;
+  letter-spacing:.08em; text-transform:uppercase; cursor:pointer;
+}
+.headBtn:hover{border-color:color-mix(in srgb, var(--fg) 65%, transparent)}
+
+.searchInput{
+  width:100%; background:var(--bg); color:var(--fg);
+  border:1px solid var(--panel-border);
+  padding:8px 10px; font-family:var(--mono); font-size:11px;
+  margin-bottom:10px;
+}
+.searchInput:focus{outline:none; border-color:var(--fg)}
+
+.node{
+  display:inline-block;
+  background:color-mix(in srgb, var(--bg) 70%, rgba(255,255,255,0.06));
+  border:1px solid var(--panel-border);
+  padding:6px 12px; margin:4px;
+  font-size:11px; font-family:var(--mono);
+  letter-spacing:.06em; text-transform:uppercase;
+  cursor:pointer; transition:transform 0.12s, border-color 0.12s, background 0.12s;
+}
+.node:hover{
+  background:color-mix(in srgb, var(--accent) 12%, transparent);
+  border-color:color-mix(in srgb, var(--accent) 70%, var(--panel-border));
+  transform:translateY(-1px);
+}
+.node.central{
+  background:color-mix(in srgb, var(--accent) 18%, transparent);
+  border-color:var(--accent);
+  color:color-mix(in srgb, var(--accent) 85%, var(--fg));
+  font-weight:700;
+}
+.node.flag{
+  border-color:color-mix(in srgb, var(--warning) 60%, var(--panel-border));
+  color:color-mix(in srgb, var(--warning) 70%, var(--fg));
+}
+.node.soft{opacity:.86}
+
+.timeline{display:flex; flex-direction:column; gap:14px}
+.timelineItem{
+  position:relative; padding-left:22px;
+  border-left:1px solid var(--line2);
+}
+.timelineItem::before{
+  content:''; position:absolute; left:-5px; top:2px;
+  width:9px; height:9px;
+  border:1px solid var(--fg);
+  background:var(--bg);
+}
+.timelineDate{
+  color:color-mix(in srgb, var(--fg) 70%, var(--muted));
+  font-size:10px; text-transform:uppercase; letter-spacing:.14em;
+  margin-bottom:6px;
+}
+.timelineLabel{font-family:var(--mono); font-size:11px; letter-spacing:.06em}
+.timelineDetail{font-size:10px; color:var(--muted); margin-top:4px}
+
+.listItem{
+  display:flex; gap:8px; align-items:center;
+  padding:8px; border-top:1px solid var(--panel-hair2);
+  font-family:var(--mono); font-size:11px;
+}
+.listItem:first-child{border-top:none}
+.pill{
+  border:1px solid var(--panel-border);
+  padding:2px 6px;
+  text-transform:uppercase;
+  letter-spacing:.10em;
+  font-size:10px;
+  opacity:.9;
+}
+
+.statBox{
+  background:color-mix(in srgb, var(--bg) 70%, rgba(255,255,255,0.06));
+  border:1px solid var(--line2);
+  padding:12px; text-align:center;
+  margin-bottom:10px;
+}
+.statNumber{font-size:22px; color:var(--fg); font-weight:700; font-family:var(--mono)}
+.statLabel{font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:.14em; margin-top:6px}
+
+.crossRef{
+  background:color-mix(in srgb, var(--bg) 70%, rgba(255,255,255,0.06));
+  border-left:2px solid var(--warning);
+  padding:10px; margin:10px 0;
+}
+
+.toast{
+  position:absolute; left:12px; top:calc(var(--top) + 12px);
+  padding:8px 10px; border:1px solid var(--line2);
+  background:color-mix(in srgb, var(--bg) 86%, #080808);
+  font-family:var(--mono); font-size:11px;
+  letter-spacing:.06em; color:var(--fg); display:none; z-index:100;
+}
+
+/* ===== KETA NOTE (fixed) ===== */
+.ketanote{
+  position:absolute; z-index:30;
+  width:260px; height:260px;
+  background:#fff; color:#000;
+  border:1px solid var(--note-border);
+  display:flex; flex-direction:column;
+}
+.ketanote.min{width:44px; height:44px; overflow:hidden}
+.ketanoteHead{
+  height:28px; display:flex; align-items:center; justify-content:space-between;
+  padding:0 8px; border-bottom:1px solid rgba(0,0,0,0.12);
+  font-family:var(--mono); font-size:11px; letter-spacing:.14em; text-transform:uppercase;
+  cursor:move; touch-action:none;
+}
+.ketanoteBtn{
+  width:22px; height:18px;
+  border:1px solid rgba(0,0,0,0.22);
+  background:rgba(0,0,0,0.04);
+  font-family:var(--mono); font-size:12px; cursor:pointer;
+  display:flex; align-items:center; justify-content:center;
+}
+.ketanoteBtn:hover{border-color:rgba(0,0,0,0.45)}
+.ketanoteBody{flex:1; padding:8px}
+.ketanoteText{
+  width:100%; height:100%;
+  border:1px solid rgba(0,0,0,0.14);
+  background:rgba(0,0,0,0.03);
+  color:#000;
+  padding:8px;
+  font-family:var(--mono); font-size:11px;
+  resize:none;
+  outline:none;
+}
+
+input[type="file"]{display:none}
+.editable{
+  background:var(--bg); color:var(--fg);
+  border:1px solid var(--panel-border);
+  padding:8px; font-family:var(--mono); font-size:11px;
+  width:100%; resize:vertical; min-height:80px;
+}
+.editable:focus{outline:none; border-color:var(--fg)}
+.hint{font-family:var(--mono); font-size:10px; color:var(--muted); letter-spacing:.08em; text-transform:uppercase}
+</style>
+</head>
+
+<body>
+<div id="root">
+  <div id="stage"></div>
+
+  <!-- KETA NOTE -->
+  <div class="ketanote" id="ketaNote" aria-label="KETA_NOTE">
+    <div class="ketanoteHead" id="ketaHead">
+      <span>KETA_NOTE</span>
+      <button class="ketanoteBtn" id="ketaMin" title="MIN/MAX">–</button>
+    </div>
+    <div class="ketanoteBody">
+      <textarea class="ketanoteText" id="ketaText" placeholder=""></textarea>
+    </div>
+  </div>
+
+  <!-- NETWORK PANEL -->
+  <div class="panel" id="networkPanel">
+    <div class="panelHead" id="networkHead">
+      <span>NETWORK</span>
+      <div style="display:flex; gap:8px; align-items:center">
+        <button class="headBtn" id="networkSearch">SEARCH</button>
+        <button class="headBtn" id="networkClose">X</button>
+      </div>
+    </div>
+    <div class="panelBody">
+      <input type="text" class="searchInput" id="networkSearchInput" placeholder="SEARCH..." style="display:none">
+      <div style="text-align:center; margin:16px 0">
+        <div class="node central" style="font-size:14px; padding:10px 18px" id="networkCentral"></div>
+      </div>
+      <div class="hint" style="margin:0 0 10px 0;">CLICK NODE TO FILTER</div>
+      <div id="networkNodes"></div>
+    </div>
+  </div>
+
+  <!-- TIMELINE PANEL -->
+  <div class="panel" id="timelinePanel">
+    <div class="panelHead" id="timelineHead">
+      <span>TIMELINE</span>
+      <button class="headBtn" id="timelineClose">X</button>
+    </div>
+    <div class="panelBody">
+      <div class="timeline" id="timelineList"></div>
+    </div>
+  </div>
+
+  <!-- FLAGS PANEL (sanitized) -->
+  <div class="panel" id="flagsPanel">
+    <div class="panelHead" id="flagsHead">
+      <span>FLAGS</span>
+      <button class="headBtn" id="flagsClose">X</button>
+    </div>
+    <div class="panelBody">
+      <div class="hint" style="color:var(--warning); margin-bottom:10px;">PRIVATE / NEUTRAL FLAGS ONLY</div>
+      <div id="flagsList"></div>
+    </div>
+  </div>
+
+  <!-- EVENTS PANEL -->
+  <div class="panel" id="eventsPanel">
+    <div class="panelHead" id="eventsHead">
+      <span>EVENTS</span>
+      <div style="display:flex; gap:8px">
+        <button class="headBtn" id="eventsSearch">SEARCH</button>
+        <button class="headBtn" id="eventsClose">X</button>
+      </div>
+    </div>
+    <div class="panelBody">
+      <div class="statBox"><div class="statNumber" id="statEvents">62</div><div class="statLabel">TOTAL EVENTS</div></div>
+      <div class="statBox"><div class="statNumber" id="statPeople">171</div><div class="statLabel">UNIQUE PEOPLE</div></div>
+      <div class="statBox"><div class="statNumber" id="statSlots">374</div><div class="statLabel">PERFORMANCE SLOTS</div></div>
+      <input type="text" class="searchInput" id="eventsSearchInput" placeholder="SEARCH PEOPLE..." style="display:none">
+      <div id="eventsList"></div>
+    </div>
+  </div>
+
+  <!-- CROSSREF PANEL -->
+  <div class="panel" id="crossrefPanel">
+    <div class="panelHead" id="crossrefHead">
+      <span>CROSS-REF</span>
+      <button class="headBtn" id="crossrefClose">X</button>
+    </div>
+    <div class="panelBody" id="crossrefList"></div>
+  </div>
+
+  <!-- NOTES PANEL -->
+  <div class="panel" id="notesPanel">
+    <div class="panelHead" id="notesHead">
+      <span>NOTES</span>
+      <button class="headBtn" id="notesClose">X</button>
+    </div>
+    <div class="panelBody">
+      <textarea class="editable" id="notesText" placeholder="NOTES..."></textarea>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <div class="topbar">
+    <div class="brand">
+      <span class="sq"></span>
+      <span>INVESTIGATION // CASEBOARD</span>
+      <span class="sub">v1.1 · DIMES SQUARE</span>
+    </div>
+    <div class="actions">
+      <button class="btn" id="btnInvert">INVERT</button>
+      <span class="sep"></span>
+      <button class="btn" id="btnExport">EXPORT</button>
+      <button class="btn" id="btnImport">IMPORT</button>
+      <button class="btn warn" id="btnReset">RESET</button>
+    </div>
+  </div>
+
+  <div class="bottombar">
+    <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap">
+      <button class="btn" id="toggleNetwork">NETWORK</button>
+      <button class="btn" id="toggleTimeline">TIMELINE</button>
+      <button class="btn" id="toggleFlags">FLAGS</button>
+      <button class="btn" id="toggleEvents">EVENTS</button>
+      <button class="btn" id="toggleCrossref">CROSS-REF</button>
+      <button class="btn" id="toggleNotes">NOTES</button>
+    </div>
+    <div style="display:flex; gap:12px; align-items:center">
+      <span>SIG: <span id="sig">∅</span></span>
+    </div>
+  </div>
+
+  <input id="fileInput" type="file" accept="application/json" />
+</div>
+
+<script>
+const $=(id)=>document.getElementById(id);
+
+function clamp(n,min,max){return Math.max(min,Math.min(max,n));}
+function deepClone(o){return JSON.parse(JSON.stringify(o));}
+
+const STORAGE_KEY = "INVESTIGATION_CASEBOARD_DIMES_SQUARE_v1_1";
+const NOTE_KEY = "INVESTIGATION_CASEBOARD_DIMES_SQUARE_keta_note_text";
+const NOTE_UI_KEY = "INVESTIGATION_CASEBOARD_DIMES_SQUARE_keta_note_ui";
+
+const DEFAULT_DATA = {
+  version: "CASEBOARD_DIMES_v1_1",
+  invert: false,
+  notes: "",
+  stats: { totalEvents:62, uniquePeople:171, performanceSlots:374 },
+  network: {
+    central: "CASSIDY GRADY",
+    nodes: [
+      {name:"MAX HARTMAN", type:"primary"},
+      {name:"PETER VACK", type:"primary", events:5},
+      {name:"NIC DOLINGER", type:"primary"},
+      {name:"BILLY PEDLOW", type:"primary", events:4, flag:true},
+      {name:"ALEX BIENSTOCK", type:"primary", flag:true},
+      {name:"CHLOE WHEELER", type:"secondary", events:11, flag:true},
+      {name:"JOE BUCK", type:"secondary", flag:true},
+      {name:"JACK LUDKEY", type:"secondary", events:4, flag:true},
+      {name:"ASHER BENTLEY", type:"secondary", flag:true},
+      {name:"DYLAN SMITH", type:"secondary", flag:true},
+      {name:"CHARLEY SHEALY", type:"secondary", events:2, flag:true},
+      {name:"ANTHONY FLESCHER", type:"secondary", flag:true},
+      {name:"ANDRE", type:"secondary", flag:true},
+      {name:"THEO", type:"secondary"},
+      {name:"KIZZY", type:"secondary"},
+      {name:"ANNA", type:"secondary"},
+      {name:"ALEX BARNEY", type:"secondary"},
+      {name:"ANNABEL BOARDMAN", type:"cohost", events:35},
+      {name:"ANGEL TRAMP", type:"cohost"}
+    ]
+  },
+  timeline: [
+    {date:"2023-10-22", label:"CONFESSIONS STARTED_AT → SOVEREIGN HOUSE", detail:"ORIGINAL COHOST: ANGEL TRAMP"},
+    {date:"2024-04-05", label:"INCIDENT [K]-[CSJ]", detail:"⅝ BARREL PARTY"},
+    {date:"2024-07-12", label:"CONFESSIONS MOVED_TO → KGB BAR", detail:"COHOST: ANNABEL BOARDMAN"},
+    {date:"2025-03", label:"INCIDENT [C]-[MJ]", detail:""},
+    {date:"2025-05", label:"INCIDENT [T]-[oJ]", detail:""},
+    {date:"2025-CURRENT", label:"COHOST: CHLOE WHEELER", detail:""}
+  ],
+  flags: [
+    {name:"CHARLEY SHEALY", flag:"FLAG_A"},
+    {name:"ANTHONY FLESCHER", flag:"FLAG_A"},
+    {name:"ANDRE", flag:"FLAG_B"},
+    {name:"JACK LUDKEY", flag:"FLAG_A"},
+    {name:"JOE BUCK", flag:"FLAG_A"},
+    {name:"BILLY PEDLOW", flag:"FLAG_C"},
+    {name:"ALEX BIENSTOCK", flag:"FLAG_C"},
+    {name:"ASHER BENTLEY", flag:"FLAG_C"},
+    {name:"DYLAN SMITH", flag:"FLAG_C"},
+    {name:"CASSIDY ANGEL GRADY", flag:"FLAG_C"},
+    {name:"CHLOE WHEELER", flag:"FLAG_C"}
+  ],
+  topPeople: [
+    {name:"Cassidy Grady", count:42},
+    {name:"Annabel Boardman", count:35},
+    {name:"Chloe Wheeler", count:11},
+    {name:"Jo Rosenthal", count:7},
+    {name:"Jonah Howell", count:7},
+    {name:"Izzy Tanashian", count:6},
+    {name:"Page Garcia", count:6},
+    {name:"Chloe Pingeon", count:5},
+    {name:"Christian Cail", count:5},
+    {name:"Peter Vack", count:5},
+    {name:"Billy Pedlow", count:4},
+    {name:"Bob Laine", count:4},
+    {name:"Jack Ludkey", count:4},
+    {name:"Leya Ivanov", count:4},
+    {name:"Nick Dove", count:4},
+    {name:"Zack Graham", count:4}
+  ],
+  crossrefs: [
+    {name:"CHARLEY SHEALY", refs:["NETWORK DIAGRAM","FLAGS: FLAG_A","EVENTS: 2 APPEARANCES"]},
+    {name:"JACK LUDKEY", refs:["NETWORK DIAGRAM","FLAGS: FLAG_A","EVENTS: 4 APPEARANCES","THE BURNING PALACE"]},
+    {name:"BILLY PEDLOW", refs:["NETWORK DIAGRAM","FLAGS: FLAG_C","EVENTS: 4 APPEARANCES","THE BURNING PALACE"]},
+    {name:"PETER VACK", refs:["NETWORK DIAGRAM","SUPPORTING CHARACTERS","EVENTS: 5 APPEARANCES"]},
+    {name:"ALEX BIENSTOCK", refs:["NETWORK DIAGRAM","FLAGS: FLAG_C","CULTURAL PRODUCTS"]},
+    {name:"CHLOE WHEELER", refs:["NETWORK DIAGRAM","FLAGS: FLAG_C","CURRENT COHOST","EVENTS: 11 APPEARANCES"]},
+    {name:"NOELIA MADISON", refs:["SUPPORTING CHARACTERS","THE BURNING PALACE: INTERNS","EVENTS: 1 APPEARANCE"]}
+  ],
+  panels: {
+    network: {x:20, y:70, w:480, h:520, open:true},
+    timeline: {x:520, y:70, w:460, h:480, open:false},
+    flags: {x:20, y:610, w:500, h:380, open:false},
+    events: {x:540, y:570, w:440, h:420, open:false},
+    crossref: {x:1000, y:70, w:420, h:540, open:false},
+    notes: {x:1040, y:630, w:380, h:360, open:false}
+  }
+};
+
+let STATE=null;
+
+function loadState(){
+  try{
+    const raw=localStorage.getItem(STORAGE_KEY);
+    if(!raw) return deepClone(DEFAULT_DATA);
+    const p=JSON.parse(raw);
+    // deep fill
+    const base=deepClone(DEFAULT_DATA);
+    const out=Object.assign(base, p||{});
+    out.stats = Object.assign(base.stats, p.stats||{});
+    out.network = Object.assign(base.network, p.network||{});
+    out.panels = Object.assign(base.panels, p.panels||{});
+    for(const k in base.panels){
+      out.panels[k]=Object.assign(base.panels[k], (p.panels&&p.panels[k])||{});
+    }
+    if(!Array.isArray(out.network.nodes)) out.network.nodes=base.network.nodes;
+    if(!Array.isArray(out.timeline)) out.timeline=base.timeline;
+    if(!Array.isArray(out.flags)) out.flags=base.flags;
+    if(!Array.isArray(out.topPeople)) out.topPeople=base.topPeople;
+    if(!Array.isArray(out.crossrefs)) out.crossrefs=base.crossrefs;
+    return out;
+  }catch(e){
+    return deepClone(DEFAULT_DATA);
+  }
+}
+
+function saveState(){
+  try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(STATE)); }catch(e){}
+  updateSig();
+}
+
+function updateSig(){
+  const str=JSON.stringify(STATE);
+  let h=2166136261;
+  for(let i=0;i<str.length;i++){h^=str.charCodeAt(i);h=Math.imul(h,16777619);}
+  $("sig").textContent=(h>>>0).toString(16).slice(0,8);
+}
+
+let toastTimer=null;
+function toast(msg){
+  const t=$("toast");
+  t.textContent=msg;
+  t.style.display="block";
+  if(toastTimer) clearTimeout(toastTimer);
+  toastTimer=setTimeout(()=>{t.style.display="none";},1100);
+}
+
+function shouldIgnoreDragStart(ev){
+  const t=ev.target;
+  if(!t) return false;
+  if(t.closest && t.closest("button,input,textarea,select,a,label")) return true;
+  return false;
+}
+
+function makeDrag(el, handle, key){
+  if(!el || !handle) return;
+  let dragging=false, startX=0, startY=0, baseX=0, baseY=0;
+
+  const onDown=(ev)=>{
+    if(ev.button!==undefined && ev.button!==0) return;
+    if(shouldIgnoreDragStart(ev)) return;
+    dragging=true;
+    const rect=el.getBoundingClientRect();
+    baseX=rect.left; baseY=rect.top;
+    startX=ev.clientX; startY=ev.clientY;
+    try{ handle.setPointerCapture(ev.pointerId); }catch(e){}
+    ev.preventDefault();
+  };
+  const onMove=(ev)=>{
+    if(!dragging) return;
+    const dx=ev.clientX-startX, dy=ev.clientY-startY;
+    el.style.left = Math.max(0, baseX+dx)+"px";
+    el.style.top  = Math.max(parseInt(getComputedStyle(document.documentElement).getPropertyValue("--top"))||44, baseY+dy)+"px";
+  };
+  const onUp=(ev)=>{
+    if(!dragging) return;
+    dragging=false;
+    try{ handle.releasePointerCapture(ev.pointerId); }catch(e){}
+    const rect=el.getBoundingClientRect();
+    STATE.panels[key].x = rect.left;
+    STATE.panels[key].y = rect.top;
+    saveState();
+  };
+
+  handle.addEventListener("pointerdown", onDown, {passive:false});
+  window.addEventListener("pointermove", onMove, {passive:true});
+  window.addEventListener("pointerup", onUp, {passive:true});
+}
+
+function attachResize(el, key){
+  if(!el || !("ResizeObserver" in window)) return;
+  let raf=0;
+  const ro=new ResizeObserver(()=>{
+    if(raf) cancelAnimationFrame(raf);
+    raf=requestAnimationFrame(()=>{
+      const computed=getComputedStyle(el);
+      if(computed.display==="none") return;
+      const r=el.getBoundingClientRect();
+      STATE.panels[key].w=r.width;
+      STATE.panels[key].h=r.height;
+      saveState();
+    });
+  });
+  ro.observe(el);
+}
+
+function applyPanelState(id, key){
+  const el=$(id);
+  const p=STATE.panels[key];
+  el.classList.toggle("open", !!p.open);
+  if(p.open){
+    el.style.left=p.x+"px";
+    el.style.top=p.y+"px";
+    el.style.width=p.w+"px";
+    el.style.height=p.h+"px";
+  }
+}
+
+function setInvert(on){
+  STATE.invert=!!on;
+  document.body.classList.toggle("invert", STATE.invert);
+  $("btnInvert").classList.toggle("on", STATE.invert);
+  saveState();
+}
+
+function renderNetwork(){
+  $("networkCentral").textContent = STATE.network.central || "CENTRAL";
+  const wrap=$("networkNodes");
+  wrap.innerHTML="";
+
+  const searchBox=$("networkSearchInput");
+  const active = searchBox.style.display!=="none";
+  const q = active ? searchBox.value.trim().toLowerCase() : "";
+
+  const nodes = STATE.network.nodes.filter(n => !q || String(n.name||"").toLowerCase().includes(q));
+
+  const groups={primary:[], secondary:[], cohost:[]};
+  nodes.forEach(n=>{
+    if(groups[n.type]) groups[n.type].push(n);
+    else groups.secondary.push(n);
+  });
+
+  const groupLabel=(txt)=>{
+    const h=document.createElement("div");
+    h.className="hint";
+    h.style.margin="14px 0 6px 0";
+    h.textContent=txt;
+    wrap.appendChild(h);
+  };
+
+  const draw=(list)=>{
+    list.forEach(n=>{
+      const d=document.createElement("div");
+      d.className="node"+(n.flag?" flag":"")+((n.type==="secondary")?" soft":"");
+      let txt = String(n.name||"").toUpperCase();
+      if(n.events) txt += ` (${n.events})`;
+      d.textContent=txt;
+      d.addEventListener("click",()=>{
+        $("networkSearchInput").value=String(n.name||"");
+        $("networkSearchInput").style.display="block";
+        renderNetwork();
+        toast("FILTER: "+String(n.name||"").toUpperCase());
+      });
+      wrap.appendChild(d);
+    });
+  };
+
+  if(groups.primary.length){ groupLabel("PRIMARY"); draw(groups.primary); }
+  if(groups.secondary.length){ groupLabel("SECONDARY"); draw(groups.secondary); }
+  if(groups.cohost.length){ groupLabel("COHOST"); draw(groups.cohost); }
+}
+
+function renderTimeline(){
+  const el=$("timelineList");
+  el.innerHTML="";
+  STATE.timeline.forEach(t=>{
+    const item=document.createElement("div");
+    item.className="timelineItem";
+    item.innerHTML=`
+      <div class="timelineDate">${String(t.date||"")}</div>
+      <div class="timelineLabel">${String(t.label||"")}</div>
+      ${t.detail?`<div class="timelineDetail">${String(t.detail||"")}</div>`:""}
+    `;
+    el.appendChild(item);
+  });
+}
+
+function renderFlags(){
+  const el=$("flagsList");
+  el.innerHTML="";
+  STATE.flags.forEach(a=>{
+    const row=document.createElement("div");
+    row.className="listItem";
+    row.innerHTML=`
+      <div class="pill" style="color:color-mix(in srgb, var(--warning) 70%, var(--fg)); border-color:color-mix(in srgb, var(--warning) 50%, var(--panel-border));">
+        ${String(a.flag||"FLAG").toUpperCase()}
+      </div>
+      <div style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
+        ${String(a.name||"").toUpperCase()}
+      </div>
+    `;
+    el.appendChild(row);
+  });
+}
+
+function renderEvents(){
+  $("statEvents").textContent = String(STATE.stats.totalEvents||0);
+  $("statPeople").textContent = String(STATE.stats.uniquePeople||0);
+  $("statSlots").textContent  = String(STATE.stats.performanceSlots||0);
+
+  const el=$("eventsList");
+  el.innerHTML="";
+
+  const box=$("eventsSearchInput");
+  const active=box.style.display!=="none";
+  const q=active ? box.value.trim().toLowerCase() : "";
+
+  const list=STATE.topPeople.filter(p => !q || String(p.name||"").toLowerCase().includes(q));
+  list.forEach(p=>{
+    const row=document.createElement("div");
+    row.className="listItem";
+    row.innerHTML=`
+      <div style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
+        ${String(p.name||"")}
+      </div>
+      <div class="pill" style="border-color:var(--line2); color:var(--fg);">
+        ${String(p.count||0)}
+      </div>
+    `;
+    el.appendChild(row);
+  });
+}
+
+function renderCrossref(){
+  const el=$("crossrefList");
+  el.innerHTML="";
+  STATE.crossrefs.forEach(c=>{
+    const box=document.createElement("div");
+    box.className="crossRef";
+    box.innerHTML=`
+      <div style="font-family:var(--mono); font-size:11px; font-weight:700; margin-bottom:8px; letter-spacing:.08em;">
+        ${String(c.name||"").toUpperCase()}
+      </div>
+      ${(c.refs||[]).map(r=>`<div style="font-size:10px; color:var(--muted); margin-left:10px">• ${String(r||"")}</div>`).join("")}
+    `;
+    el.appendChild(box);
+  });
+}
+
+function renderNotes(){
+  $("notesText").value = STATE.notes || "";
+}
+
+function render(){
+  applyPanelState("networkPanel","network");
+  applyPanelState("timelinePanel","timeline");
+  applyPanelState("flagsPanel","flags");
+  applyPanelState("eventsPanel","events");
+  applyPanelState("crossrefPanel","crossref");
+  applyPanelState("notesPanel","notes");
+
+  renderNetwork();
+  renderTimeline();
+  renderFlags();
+  renderEvents();
+  renderCrossref();
+  renderNotes();
+
+  document.body.classList.toggle("invert", !!STATE.invert);
+  $("btnInvert").classList.toggle("on", !!STATE.invert);
+
+  updateSig();
+}
+
+function exportData(){
+  const blob=new Blob([JSON.stringify(STATE,null,2)], {type:"application/json"});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement("a");
+  const stamp=new Date().toISOString().replace(/[:.]/g,"-");
+  a.href=url; a.download=`INVESTIGATION_CASEBOARD_${stamp}.json`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url), 250);
+  toast("EXPORTED");
+}
+
+function importData(text){
+  try{
+    const p=JSON.parse(text);
+    // merge into default to avoid dead UI
+    const base=deepClone(DEFAULT_DATA);
+    STATE = Object.assign(base, p||{});
+    STATE.stats = Object.assign(base.stats, p.stats||{});
+    STATE.network = Object.assign(base.network, p.network||{});
+    STATE.panels = Object.assign(base.panels, p.panels||{});
+    for(const k in base.panels){
+      STATE.panels[k]=Object.assign(base.panels[k], (p.panels&&p.panels[k])||{});
+    }
+    if(!Array.isArray(STATE.network.nodes)) STATE.network.nodes=base.network.nodes;
+    if(!Array.isArray(STATE.timeline)) STATE.timeline=base.timeline;
+    if(!Array.isArray(STATE.flags)) STATE.flags=base.flags;
+    if(!Array.isArray(STATE.topPeople)) STATE.topPeople=base.topPeople;
+    if(!Array.isArray(STATE.crossrefs)) STATE.crossrefs=base.crossrefs;
+
+    saveState();
+    render();
+    toast("IMPORTED");
+  }catch(e){
+    toast("IMPORT FAILED");
+  }
+}
+
+function resetData(){
+  if(!confirm("RESET ALL DATA?")) return;
+  STATE=deepClone(DEFAULT_DATA);
+  saveState();
+  render();
+  toast("RESET");
+}
+
+/* ===== KETA NOTE (persist, fixed size, draggable, min) ===== */
+function loadNoteUI(){
+  try{
+    const raw=localStorage.getItem(NOTE_UI_KEY);
+    if(!raw) return {x:null,y:null,min:false};
+    const p=JSON.parse(raw);
+    return {x:typeof p.x==="number"?p.x:null, y:typeof p.y==="number"?p.y:null, min:!!p.min};
+  }catch{ return {x:null,y:null,min:false}; }
+}
+function saveNoteUI(ui){
+  try{ localStorage.setItem(NOTE_UI_KEY, JSON.stringify(ui)); }catch{}
+}
+function placeNote(ui){
+  const note=$("ketaNote");
+  const top = parseInt(getComputedStyle(document.documentElement).getPropertyValue("--top"))||44;
+  const pad=10;
+  const w = note.classList.contains("min") ? 44 : 260;
+  const h = note.classList.contains("min") ? 44 : 260;
+  let x = (ui.x==null) ? (window.innerWidth - w - pad) : ui.x;
+  let y = (ui.y==null) ? (top + pad) : ui.y;
+  x = clamp(x, 0, window.innerWidth - w);
+  y = clamp(y, top, window.innerHeight - h - (parseInt(getComputedStyle(document.documentElement).getPropertyValue("--bot"))||34));
+  note.style.left = x+"px";
+  note.style.top  = y+"px";
+  return {x,y,min:note.classList.contains("min")};
+}
+function initKetaNote(){
+  const note=$("ketaNote");
+  const head=$("ketaHead");
+  const minBtn=$("ketaMin");
+  const text=$("ketaText");
+
+  text.value = localStorage.getItem(NOTE_KEY) || "";
+  text.addEventListener("input",()=>{ try{localStorage.setItem(NOTE_KEY, text.value);}catch{} });
+
+  let ui=loadNoteUI();
+  note.classList.toggle("min", !!ui.min);
+  minBtn.textContent = note.classList.contains("min") ? "+" : "–";
+  ui = placeNote(ui);
+  saveNoteUI(ui);
+
+  minBtn.addEventListener("click",(e)=>{
+    e.stopPropagation();
+    note.classList.toggle("min");
+    minBtn.textContent = note.classList.contains("min") ? "+" : "–";
+    const cur=placeNote(loadNoteUI());
+    saveNoteUI(cur);
+  });
+
+  let dragging=false, sx=0, sy=0, bx=0, by=0;
+  head.addEventListener("pointerdown",(ev)=>{
+    if(ev.button!==undefined && ev.button!==0) return;
+    if(shouldIgnoreDragStart(ev)) return;
+    dragging=true;
+    const r=note.getBoundingClientRect();
+    bx=r.left; by=r.top;
+    sx=ev.clientX; sy=ev.clientY;
+    try{ head.setPointerCapture(ev.pointerId); }catch{}
+    ev.preventDefault();
+  }, {passive:false});
+
+  window.addEventListener("pointermove",(ev)=>{
+    if(!dragging) return;
+    const dx=ev.clientX-sx, dy=ev.clientY-sy;
+    note.style.left = Math.max(0, bx+dx)+"px";
+    note.style.top  = Math.max((parseInt(getComputedStyle(document.documentElement).getPropertyValue("--top"))||44), by+dy)+"px";
+  }, {passive:true});
+
+  window.addEventListener("pointerup",(ev)=>{
+    if(!dragging) return;
+    dragging=false;
+    try{ head.releasePointerCapture(ev.pointerId); }catch{}
+    const r=note.getBoundingClientRect();
+    const cur={x:r.left, y:r.top, min:note.classList.contains("min")};
+    saveNoteUI(cur);
+  }, {passive:true});
+
+  window.addEventListener("resize",()=>{
+    const cur=placeNote(loadNoteUI());
+    saveNoteUI(cur);
+  });
+}
+
+/* ===== init ===== */
+function init(){
+  STATE=loadState();
+
+  // panel drag + resize
+  [
+    ["networkPanel","networkHead","network"],
+    ["timelinePanel","timelineHead","timeline"],
+    ["flagsPanel","flagsHead","flags"],
+    ["eventsPanel","eventsHead","events"],
+    ["crossrefPanel","crossrefHead","crossref"],
+    ["notesPanel","notesHead","notes"]
+  ].forEach(([id, headId, key])=>{
+    makeDrag($(id), $(headId), key);
+    attachResize($(id), key);
+  });
+
+  // toggles
+  const tog=(k)=>{ STATE.panels[k].open=!STATE.panels[k].open; saveState(); render(); };
+  $("toggleNetwork").addEventListener("click",()=>tog("network"));
+  $("toggleTimeline").addEventListener("click",()=>tog("timeline"));
+  $("toggleFlags").addEventListener("click",()=>tog("flags"));
+  $("toggleEvents").addEventListener("click",()=>tog("events"));
+  $("toggleCrossref").addEventListener("click",()=>tog("crossref"));
+  $("toggleNotes").addEventListener("click",()=>tog("notes"));
+
+  // closes
+  $("networkClose").addEventListener("click",()=>{ STATE.panels.network.open=false; saveState(); render(); });
+  $("timelineClose").addEventListener("click",()=>{ STATE.panels.timeline.open=false; saveState(); render(); });
+  $("flagsClose").addEventListener("click",()=>{ STATE.panels.flags.open=false; saveState(); render(); });
+  $("eventsClose").addEventListener("click",()=>{ STATE.panels.events.open=false; saveState(); render(); });
+  $("crossrefClose").addEventListener("click",()=>{ STATE.panels.crossref.open=false; saveState(); render(); });
+  $("notesClose").addEventListener("click",()=>{ STATE.panels.notes.open=false; saveState(); render(); });
+
+  // searches
+  $("networkSearch").addEventListener("click",()=>{
+    const box=$("networkSearchInput");
+    box.style.display = (box.style.display==="none") ? "block" : "none";
+    if(box.style.display==="none") box.value="";
+    renderNetwork();
+  });
+  $("networkSearchInput").addEventListener("input", renderNetwork);
+
+  $("eventsSearch").addEventListener("click",()=>{
+    const box=$("eventsSearchInput");
+    box.style.display = (box.style.display==="none") ? "block" : "none";
+    if(box.style.display==="none") box.value="";
+    renderEvents();
+  });
+  $("eventsSearchInput").addEventListener("input", renderEvents);
+
+  // notes
+  $("notesText").addEventListener("input",()=>{
+    STATE.notes = $("notesText").value;
+    saveState();
+  });
+
+  // bar actions
+  $("btnInvert").addEventListener("click",()=>{ setInvert(!STATE.invert); toast(STATE.invert ? "INVERT ON":"INVERT OFF"); });
+  $("btnExport").addEventListener("click", exportData);
+  $("btnImport").addEventListener("click",()=>$("fileInput").click());
+  $("btnReset").addEventListener("click", resetData);
+
+  $("fileInput").addEventListener("change",(ev)=>{
+    const f=ev.target.files && ev.target.files[0];
+    if(!f) return;
+    const r=new FileReader();
+    r.onload=()=>importData(String(r.result||""));
+    r.readAsText(f);
+    ev.target.value="";
+  });
+
+  initKetaNote();
+  render();
+  toast("READY");
+}
+
+init();
+</script>
+
+<!--
+AE: brutal black / mono / hairlines / minimal accent
+EE: draggable + resizable panels; search filters; import/export/reset; invert; stable deep-fill import; keta_note fixed
+WB: localStorage state + file IO + note persistence
+FILE_ID: INVESTIGATION_CASEBOARD_DIMES_SQUARE_v1_1
+ROOM_ID: CASE_BOARD
+VERSION: 1.1.0
+UPDATED_AT: 2026-02-09
+CHANGELOG:
+- v1.1.0 remake in KETADATA bar/panel style; sanitize allegations -> FLAGS; add invert; fix KETA_NOTE persistence + drag + min
+-->
+</body>
+</html>
