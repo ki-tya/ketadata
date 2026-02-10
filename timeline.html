@@ -1,0 +1,1006 @@
+```html
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>KETADATA // EDITABLE TIMELINE v1</title>
+<style>
+:root{
+  --bg:#000; --fg:rgba(255,255,255,.88); --muted:rgba(255,255,255,.56);
+  --hair:rgba(255,255,255,.14); --hair2:rgba(255,255,255,.22);
+  --accent:rgba(255,255,255,.88);
+  --top:44px; --bot:34px;
+  --ui: rgba(0,0,0,.82);
+  --px:12px; /* single-size text */
+}
+*{box-sizing:border-box}
+html,body{height:100%; margin:0; background:var(--bg); color:var(--fg); font:var(--px) Arial, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial; overflow:hidden}
+#root{position:fixed; inset:0; background:var(--bg)}
+/* AE */
+.bar{
+  position:fixed; left:0; right:0; height:var(--top);
+  display:flex; align-items:center; gap:8px;
+  padding:6px 8px;
+  background:linear-gradient(to bottom, rgba(0,0,0,.92), rgba(0,0,0,.66));
+  border-bottom:1px solid var(--hair);
+  z-index:50;
+}
+.bot{
+  position:fixed; left:0; right:0; bottom:0; height:var(--bot);
+  display:flex; align-items:center; justify-content:space-between; gap:8px;
+  padding:6px 8px;
+  background:linear-gradient(to top, rgba(0,0,0,.92), rgba(0,0,0,.66));
+  border-top:1px solid var(--hair);
+  z-index:50;
+}
+.btn{
+  border:1px solid var(--hair);
+  background:rgba(0,0,0,.66);
+  color:var(--fg);
+  padding:4px 8px;
+  cursor:pointer;
+  user-select:none;
+}
+.btn:hover{border-color:var(--hair2)}
+.btn:active{transform:translateY(1px)}
+.pill{
+  border:1px solid var(--hair);
+  padding:4px 8px;
+  color:var(--muted);
+  background:rgba(0,0,0,.5);
+  user-select:none;
+  white-space:nowrap;
+}
+.sep{width:1px; height:22px; background:var(--hair); margin:0 2px}
+.square{
+  width:22px; height:22px;
+  border:1px solid var(--hair2);
+  background:rgba(0,0,0,.66);
+  cursor:pointer;
+}
+.square:hover{border-color:rgba(255,255,255,.45)}
+.square:active{transform:translateY(1px)}
+.right{margin-left:auto; display:flex; gap:8px; align-items:center}
+
+/* Stage */
+#stage{
+  position:fixed; left:0; right:0; top:var(--top); bottom:var(--bot);
+  overflow:hidden;
+}
+#viewport{
+  position:absolute; inset:0;
+  cursor:grab;
+}
+#viewport.grabbing{cursor:grabbing}
+#world{
+  position:absolute; left:0; top:0;
+  transform-origin:0 0;
+  will-change:transform;
+}
+#grid{
+  position:absolute; left:0; top:0; pointer-events:none;
+  width:6000px; height:2400px;
+  background:
+    linear-gradient(var(--hair) 1px, transparent 1px) 0 0/ 0 0,
+    linear-gradient(90deg, var(--hair) 1px, transparent 1px) 0 0/ 0 0;
+  opacity:.10;
+}
+
+/* Timeline axis */
+#axis{
+  position:absolute; left:0; top:0; width:6000px; height:2400px;
+}
+.axisLine{
+  position:absolute; left:0; right:0; top:140px; height:1px;
+  background:var(--hair2);
+}
+.tick{
+  position:absolute; top:118px; width:1px; height:46px;
+  background:var(--hair);
+}
+.tickLabel{
+  position:absolute; top:96px; transform:translateX(-50%);
+  color:var(--muted);
+  white-space:nowrap;
+  user-select:none;
+}
+.lane{
+  position:absolute; left:0; right:0;
+  height:1px; background:var(--hair);
+  opacity:.65;
+}
+.laneLabel{
+  position:absolute; left:8px; transform:translateY(-50%);
+  color:var(--muted);
+  background:rgba(0,0,0,.66);
+  padding:2px 6px;
+  border:1px solid var(--hair);
+  user-select:none;
+}
+
+/* Event cards */
+.event{
+  position:absolute;
+  min-width:220px;
+  border:1px solid var(--hair);
+  background:rgba(0,0,0,.74);
+  padding:6px 6px;
+  cursor:default;
+}
+.event.selected{border-color:rgba(255,255,255,.55)}
+.eRow{display:flex; gap:8px; align-items:center}
+.eDate{color:var(--fg)}
+.eType{color:var(--muted)}
+.eTitle{color:var(--fg)}
+.eMeta{color:var(--muted); margin-top:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:520px}
+.eTags{color:var(--muted); margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.eGrip{
+  margin-left:auto;
+  border:1px solid var(--hair);
+  background:rgba(0,0,0,.5);
+  padding:2px 6px;
+  cursor:grab;
+  user-select:none;
+}
+.eGrip:active{cursor:grabbing}
+
+/* Drawer */
+#drawer{
+  position:fixed;
+  top:calc(var(--top) + 8px);
+  right:8px;
+  width:360px;
+  height:calc(100% - var(--top) - var(--bot) - 16px);
+  border:1px solid var(--hair);
+  background:rgba(0,0,0,.82);
+  display:flex;
+  flex-direction:column;
+  z-index:60;
+}
+#drawer.hidden{display:none}
+#drawerHead{
+  display:flex; align-items:center; gap:8px;
+  padding:6px 8px;
+  border-bottom:1px solid var(--hair);
+}
+#drawerBody{padding:8px; overflow:auto}
+.field{display:flex; flex-direction:column; gap:4px; margin-bottom:8px}
+.label{color:var(--muted)}
+input, textarea, select{
+  font:var(--px) Arial, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+  background:rgba(0,0,0,.66);
+  border:1px solid var(--hair);
+  color:var(--fg);
+  padding:6px;
+  outline:none;
+}
+textarea{min-height:84px; resize:vertical}
+.row2{display:flex; gap:8px}
+.row2 .field{flex:1}
+.small{color:var(--muted)}
+#bulkBox{min-height:160px}
+.note{
+  color:var(--muted);
+  border:1px solid var(--hair);
+  background:rgba(0,0,0,.5);
+  padding:6px;
+  margin-top:8px;
+}
+
+/* Modes */
+.invert{filter:invert(1) hue-rotate(180deg)}
+.blackout .bar, .blackout .bot, .blackout #drawer{display:none !important}
+.blackout #stage{top:0; bottom:0}
+
+/* no intercept */
+#grid, #axis{pointer-events:none}
+</style>
+</head>
+<body>
+<div id="root">
+  <div class="bar" id="topbar">
+    <div class="square" id="sqInvert" title="INVERT (SHIFT+I)"></div>
+    <div class="square" id="sqBlackout" title="NULL (SHIFT+N)"></div>
+    <div class="sep"></div>
+    <div class="btn" id="btnAdd">ADD EVENT</div>
+    <div class="btn" id="btnFocusToday">FOCUS TODAY</div>
+    <div class="btn" id="btnFit">FIT</div>
+    <div class="btn" id="btnDrawer">EDITOR</div>
+    <div class="sep"></div>
+    <div class="btn" id="btnImport">IMPORT</div>
+    <div class="btn" id="btnExport">EXPORT</div>
+    <div class="pill" id="status">READY</div>
+    <div class="right">
+      <div class="pill" id="hud"></div>
+    </div>
+  </div>
+
+  <div id="stage">
+    <div id="viewport">
+      <div id="world">
+        <div id="grid"></div>
+        <div id="axis">
+          <div class="axisLine"></div>
+        </div>
+        <div id="eventsLayer"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="bot">
+    <div class="pill" id="hint">PAN: DRAG EMPTY SPACE • ZOOM: WHEEL • SELECT: CLICK EVENT • DRAG: GRIP • SHIFT+I INVERT • SHIFT+N NULL</div>
+    <div class="pill" id="sig"></div>
+  </div>
+
+  <div id="drawer" class="hidden">
+    <div id="drawerHead">
+      <div class="pill" id="drawerTitle">EDITOR</div>
+      <div class="btn" id="btnDelete">DELETE</div>
+      <div class="btn" id="btnDuplicate">DUPLICATE</div>
+      <div class="btn" id="btnCloseDrawer" style="margin-left:auto">CLOSE</div>
+    </div>
+    <div id="drawerBody">
+      <div class="field">
+        <div class="label">SELECTED EVENT ID</div>
+        <input id="fId" disabled />
+      </div>
+      <div class="row2">
+        <div class="field">
+          <div class="label">DATE (YYYY-MM-DD)</div>
+          <input id="fDate" placeholder="2026-02-01" />
+        </div>
+        <div class="field">
+          <div class="label">TYPE</div>
+          <select id="fType">
+            <option>CONFESSION</option>
+            <option>INCIDENT</option>
+            <option>EVENT</option>
+            <option>OTHER</option>
+          </select>
+        </div>
+      </div>
+      <div class="field">
+        <div class="label">TITLE</div>
+        <input id="fTitle" placeholder="Short label" />
+      </div>
+      <div class="row2">
+        <div class="field">
+          <div class="label">VENUE / LOCATION</div>
+          <input id="fVenue" placeholder="Lower East Side, Manhattan" />
+        </div>
+        <div class="field">
+          <div class="label">PEOPLE (comma-separated)</div>
+          <input id="fPeople" placeholder="Name1, Name2" />
+        </div>
+      </div>
+      <div class="field">
+        <div class="label">TAGS (comma-separated)</div>
+        <input id="fTags" placeholder="dimes, podcast, ig" />
+      </div>
+      <div class="field">
+        <div class="label">SOURCE / LINK</div>
+        <input id="fLink" placeholder="https://..." />
+      </div>
+      <div class="field">
+        <div class="label">NOTES (free text)</div>
+        <textarea id="fNotes" placeholder="Paste poster text / details here"></textarea>
+      </div>
+
+      <div class="note">
+        <div class="label">BULK PASTE (Excel/Sheets)</div>
+        <div class="small">Paste TSV/CSV. Recommended header:</div>
+        <div class="small">date<TAB>type<TAB>title<TAB>venue<TAB>people<TAB>tags<TAB>link<TAB>notes</div>
+        <textarea id="bulkBox" placeholder="2023-10-22	CONFESSION	EP01	Sovereign House	Cassidy	season1		poster text..."></textarea>
+        <div style="display:flex; gap:8px; margin-top:8px">
+          <div class="btn" id="btnBulkAdd">ADD ROWS</div>
+          <div class="btn" id="btnBulkReplace">REPLACE ALL</div>
+          <div class="btn" id="btnBulkClear">CLEAR</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <input type="file" id="fileIn" accept=".json,.txt,.csv,.tsv" style="display:none"/>
+</div>
+
+<script>
+/* =========================
+   EE: State + persistence
+========================= */
+const FILE_ID = "KETADATA_EDITABLE_TIMELINE_v1";
+const ROOM_ID = "TIMELINE";
+const VERSION = "1.0.0";
+const LS_KEY = "KDT::TIMELINE::STATE::" + FILE_ID;
+
+const $ = (id)=>document.getElementById(id);
+const root = $("root");
+const viewport = $("viewport");
+const world = $("world");
+const grid = $("grid");
+const axis = $("axis");
+const eventsLayer = $("eventsLayer");
+const drawer = $("drawer");
+const fileIn = $("fileIn");
+
+const LANES = [
+  {key:"CONFESSION", y:240},
+  {key:"INCIDENT",   y:420},
+  {key:"EVENT",      y:600},
+  {key:"OTHER",      y:780},
+];
+
+const WORLD_W = 6000;
+const WORLD_H = 2400;
+
+let STATE = loadState() || {
+  ui:{ invert:false, blackout:false, drawer:false },
+  view:{ x:80, y:120, z:1 },
+  config:{
+    startDate:"2023-01-01",
+    endDate:"2026-12-31",
+    pxPerDay:4.2,
+    snapY:true,
+    snapDays:true,
+    tick:"month"
+  },
+  events:[]
+};
+
+let selectedId = null;
+let dragging = null; // {mode:"pan"|"event", ...}
+
+/* =========================
+   WB: Utilities
+========================= */
+function clamp(n,a,b){ return Math.max(a, Math.min(b,n)); }
+function nowISO(){
+  const d=new Date(); const pad=(x)=>String(x).padStart(2,"0");
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+}
+function parseISO(s){
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(s||"").trim());
+  if(!m) return null;
+  const d = new Date(Date.UTC(+m[1], +m[2]-1, +m[3]));
+  return isNaN(d.getTime()) ? null : d;
+}
+function fmtISO(d){
+  const pad=(x)=>String(x).padStart(2,"0");
+  return `${d.getUTCFullYear()}-${pad(d.getUTCMonth()+1)}-${pad(d.getUTCDate())}`;
+}
+function daysBetween(a,b){
+  return Math.round((b.getTime()-a.getTime())/86400000);
+}
+function id(){
+  return "E_" + Math.random().toString(16).slice(2) + "_" + Date.now().toString(16);
+}
+function laneY(type){
+  const L = LANES.find(l=>l.key===type) || LANES[LANES.length-1];
+  return L.y;
+}
+function stableSig(){
+  const e = STATE.events || [];
+  const min = e.reduce((acc,ev)=>acc && acc < ev.date ? acc : ev.date, e[0]?.date || "");
+  const max = e.reduce((acc,ev)=>acc && acc > ev.date ? acc : ev.date, e[0]?.date || "");
+  return `${FILE_ID} | v${VERSION} | events:${e.length} | ${min||"—"}..${max||"—"}`;
+}
+
+/* =========================
+   EE: Storage
+========================= */
+function saveState(){
+  try{ localStorage.setItem(LS_KEY, JSON.stringify(STATE)); }catch(e){}
+  $("sig").textContent = stableSig();
+}
+function loadState(){
+  try{
+    const raw = localStorage.getItem(LS_KEY);
+    if(!raw) return null;
+    return JSON.parse(raw);
+  }catch(e){ return null; }
+}
+
+/* =========================
+   EE: Layout + render
+========================= */
+function applyModes(){
+  document.body.classList.toggle("invert", !!STATE.ui.invert);
+  document.body.classList.toggle("blackout", !!STATE.ui.blackout);
+  if(STATE.ui.drawer) drawer.classList.remove("hidden"); else drawer.classList.add("hidden");
+}
+function worldTransform(){
+  const z = STATE.view.z;
+  world.style.transform = `translate(${STATE.view.x}px, ${STATE.view.y}px) scale(${z})`;
+  // grid scale
+  const g = 80;
+  const gz = g * z;
+  grid.style.backgroundSize = `${gz}px ${gz}px, ${gz}px ${gz}px`;
+  $("hud").textContent = `Z:${z.toFixed(2)} | X:${Math.round(STATE.view.x)} Y:${Math.round(STATE.view.y)}`;
+}
+function buildAxis(){
+  axis.style.width = WORLD_W+"px";
+  axis.style.height = WORLD_H+"px";
+  grid.style.width = WORLD_W+"px";
+  grid.style.height = WORLD_H+"px";
+  eventsLayer.style.width = WORLD_W+"px";
+  eventsLayer.style.height = WORLD_H+"px";
+
+  // clear axis content except baseline
+  [...axis.querySelectorAll(".tick,.tickLabel,.lane,.laneLabel")].forEach(n=>n.remove());
+
+  // lanes
+  for(const L of LANES){
+    const ln = document.createElement("div");
+    ln.className="lane";
+    ln.style.top = (L.y)+"px";
+    axis.appendChild(ln);
+
+    const lab = document.createElement("div");
+    lab.className="laneLabel";
+    lab.style.top = (L.y)+"px";
+    lab.textContent = L.key;
+    axis.appendChild(lab);
+  }
+
+  // ticks
+  const start = parseISO(STATE.config.startDate) || parseISO("2023-01-01");
+  const end   = parseISO(STATE.config.endDate)   || parseISO("2026-12-31");
+  if(!start || !end) return;
+
+  const pxPerDay = STATE.config.pxPerDay;
+  const tickMode = STATE.config.tick;
+
+  let d = new Date(start.getTime());
+  d.setUTCDate(1);
+
+  while(d <= end){
+    let label = "";
+    let next = new Date(d.getTime());
+
+    if(tickMode==="year"){
+      label = String(d.getUTCFullYear());
+      next = new Date(Date.UTC(d.getUTCFullYear()+1, 0, 1));
+    } else if(tickMode==="month"){
+      const y = d.getUTCFullYear();
+      const m = d.getUTCMonth()+1;
+      label = `${y}-${String(m).padStart(2,"0")}`;
+      next = new Date(Date.UTC(y, d.getUTCMonth()+1, 1));
+    } else { // week
+      label = fmtISO(d);
+      next = new Date(d.getTime()+7*86400000);
+    }
+
+    const x = daysBetween(start, d) * pxPerDay + 120;
+    const t = document.createElement("div");
+    t.className="tick";
+    t.style.left = x+"px";
+    axis.appendChild(t);
+
+    const tl = document.createElement("div");
+    tl.className="tickLabel";
+    tl.style.left = x+"px";
+    tl.textContent = label;
+    axis.appendChild(tl);
+
+    d = next;
+  }
+}
+function xForDate(dateStr){
+  const start = parseISO(STATE.config.startDate) || parseISO("2023-01-01");
+  const d = parseISO(dateStr);
+  if(!start || !d) return 120;
+  return daysBetween(start, d) * STATE.config.pxPerDay + 120;
+}
+function dateForX(x){
+  const start = parseISO(STATE.config.startDate) || parseISO("2023-01-01");
+  if(!start) return null;
+  const day = Math.round((x-120)/STATE.config.pxPerDay);
+  const d = new Date(start.getTime() + day*86400000);
+  return fmtISO(d);
+}
+
+function renderEvents(){
+  eventsLayer.innerHTML = "";
+  for(const ev of STATE.events){
+    const card = document.createElement("div");
+    card.className="event" + (ev.id===selectedId ? " selected":"");
+    card.dataset.id = ev.id;
+    const x = ev.x ?? xForDate(ev.date);
+    const y = ev.y ?? laneY(ev.type);
+
+    card.style.left = (x)+"px";
+    card.style.top  = (y)+"px";
+
+    const row = document.createElement("div");
+    row.className="eRow";
+    row.innerHTML = `
+      <div class="eDate">${escapeHtml(ev.date||"")}</div>
+      <div class="eType">${escapeHtml(ev.type||"")}</div>
+      <div class="eGrip" data-grip="1">DRAG</div>
+    `;
+    const title = document.createElement("div");
+    title.className="eTitle";
+    title.style.marginTop="4px";
+    title.textContent = ev.title || "—";
+
+    const meta = document.createElement("div");
+    meta.className="eMeta";
+    meta.textContent = [ev.venue, ev.people].filter(Boolean).join(" • ");
+
+    const tags = document.createElement("div");
+    tags.className="eTags";
+    tags.textContent = (ev.tags||"");
+
+    card.appendChild(row);
+    card.appendChild(title);
+    if(meta.textContent) card.appendChild(meta);
+    if(tags.textContent) card.appendChild(tags);
+
+    card.addEventListener("mousedown",(e)=>{
+      const grip = e.target && e.target.dataset && e.target.dataset.grip==="1";
+      if(grip){
+        e.preventDefault();
+        select(ev.id);
+        dragging = {mode:"event", id:ev.id, sx:e.clientX, sy:e.clientY, ox:x, oy:y};
+        viewport.classList.add("grabbing");
+        return;
+      }
+    });
+
+    card.addEventListener("click",(e)=>{
+      e.stopPropagation();
+      select(ev.id);
+    });
+
+    eventsLayer.appendChild(card);
+  }
+}
+
+function render(){
+  applyModes();
+  buildAxis();
+  renderEvents();
+  worldTransform();
+  $("sig").textContent = stableSig();
+  saveState();
+}
+
+/* =========================
+   WB: Editor binding
+========================= */
+function fillEditor(ev){
+  $("fId").value = ev?.id || "";
+  $("fDate").value = ev?.date || "";
+  $("fType").value = ev?.type || "EVENT";
+  $("fTitle").value = ev?.title || "";
+  $("fVenue").value = ev?.venue || "";
+  $("fPeople").value = ev?.people || "";
+  $("fTags").value = ev?.tags || "";
+  $("fLink").value = ev?.link || "";
+  $("fNotes").value = ev?.notes || "";
+}
+function readEditorInto(ev){
+  ev.date = $("fDate").value.trim();
+  ev.type = $("fType").value.trim();
+  ev.title = $("fTitle").value.trim();
+  ev.venue = $("fVenue").value.trim();
+  ev.people= $("fPeople").value.trim();
+  ev.tags  = $("fTags").value.trim();
+  ev.link  = $("fLink").value.trim();
+  ev.notes = $("fNotes").value;
+}
+
+["fDate","fType","fTitle","fVenue","fPeople","fTags","fLink","fNotes"].forEach(id=>{
+  $(id).addEventListener("input",()=>{
+    const ev = STATE.events.find(e=>e.id===selectedId);
+    if(!ev) return;
+    readEditorInto(ev);
+
+    // Keep x anchored to date if snapDays enabled
+    if(STATE.config.snapDays && parseISO(ev.date)){
+      ev.x = xForDate(ev.date);
+    }
+    // Keep y on lane if snapY
+    if(STATE.config.snapY){
+      ev.y = laneY(ev.type);
+    }
+    render();
+  });
+});
+
+function select(id){
+  selectedId = id;
+  const ev = STATE.events.find(e=>e.id===id);
+  fillEditor(ev);
+  render();
+}
+
+/* =========================
+   EE: Add / delete / dup
+========================= */
+function addEvent(seed={}){
+  const d = seed.date && parseISO(seed.date) ? seed.date : nowISO();
+  const type = seed.type || "EVENT";
+  const ev = {
+    id:id(),
+    date:d,
+    type:type,
+    title:seed.title || "—",
+    venue:seed.venue || "",
+    people:seed.people || "",
+    tags:seed.tags || "",
+    link:seed.link || "",
+    notes:seed.notes || "",
+    x: seed.x ?? xForDate(d),
+    y: seed.y ?? laneY(type),
+  };
+  STATE.events.push(ev);
+  selectedId = ev.id;
+  STATE.ui.drawer = true;
+  $("status").textContent = "ADDED";
+  render();
+  // small nudge focus
+  focusOnEvent(ev);
+}
+function deleteSelected(){
+  if(!selectedId) return;
+  const idx = STATE.events.findIndex(e=>e.id===selectedId);
+  if(idx>=0) STATE.events.splice(idx,1);
+  selectedId = null;
+  fillEditor(null);
+  $("status").textContent = "DELETED";
+  render();
+}
+function duplicateSelected(){
+  const ev = STATE.events.find(e=>e.id===selectedId);
+  if(!ev) return;
+  addEvent({...ev, id:undefined, x:(ev.x||0)+40, y:(ev.y||0)+40, title: (ev.title||"—")+" (copy)"});
+}
+
+/* =========================
+   EE: Pan / zoom / snapping
+========================= */
+function screenToWorld(px,py){
+  const z = STATE.view.z;
+  return {
+    x:(px - STATE.view.x)/z,
+    y:(py - STATE.view.y)/z
+  };
+}
+viewport.addEventListener("mousedown",(e)=>{
+  // pan only if empty space (not on event)
+  if(e.target.closest && e.target.closest(".event")) return;
+  dragging = {mode:"pan", sx:e.clientX, sy:e.clientY, ox:STATE.view.x, oy:STATE.view.y};
+  viewport.classList.add("grabbing");
+});
+window.addEventListener("mousemove",(e)=>{
+  if(!dragging) return;
+  if(dragging.mode==="pan"){
+    STATE.view.x = dragging.ox + (e.clientX - dragging.sx);
+    STATE.view.y = dragging.oy + (e.clientY - dragging.sy);
+    worldTransform();
+    $("status").textContent = "PANNING";
+    saveState();
+  }
+  if(dragging.mode==="event"){
+    const ev = STATE.events.find(x=>x.id===dragging.id);
+    if(!ev) return;
+    const dx = (e.clientX - dragging.sx)/STATE.view.z;
+    const dy = (e.clientY - dragging.sy)/STATE.view.z;
+    let nx = dragging.ox + dx;
+    let ny = dragging.oy + dy;
+
+    // snap date to day
+    if(STATE.config.snapDays){
+      const ds = dateForX(nx);
+      if(ds){
+        ev.date = ds;
+        nx = xForDate(ds);
+      }
+    }
+    // snap Y to lane
+    if(STATE.config.snapY){
+      // choose nearest lane
+      let best = LANES[0], bestd=1e9;
+      for(const L of LANES){
+        const d = Math.abs(ny - L.y);
+        if(d<bestd){bestd=d; best=L;}
+      }
+      ev.type = best.key;
+      ny = best.y;
+    }
+
+    ev.x = nx; ev.y = ny;
+    fillEditor(ev);
+    worldTransform();
+    renderEvents(); // faster while dragging
+    $("status").textContent = "DRAGGING";
+    saveState();
+  }
+});
+window.addEventListener("mouseup",()=>{
+  if(!dragging) return;
+  dragging = null;
+  viewport.classList.remove("grabbing");
+  $("status").textContent = "READY";
+  render();
+});
+
+viewport.addEventListener("wheel",(e)=>{
+  e.preventDefault();
+  const delta = -e.deltaY;
+  const factor = delta>0 ? 1.08 : 1/1.08;
+  const z0 = STATE.view.z;
+  const z1 = clamp(z0*factor, 0.25, 3.2);
+
+  const m = screenToWorld(e.clientX, e.clientY);
+  // keep point under cursor stable
+  STATE.view.x = e.clientX - m.x * z1;
+  STATE.view.y = e.clientY - m.y * z1;
+  STATE.view.z = z1;
+
+  worldTransform();
+  $("status").textContent = "ZOOM";
+  saveState();
+},{passive:false});
+
+/* =========================
+   EE: Focus helpers
+========================= */
+function focusOnEvent(ev){
+  const z = STATE.view.z;
+  const sx = window.innerWidth/2;
+  const sy = (window.innerHeight - parseInt(getComputedStyle(document.documentElement).getPropertyValue("--top")) - parseInt(getComputedStyle(document.documentElement).getPropertyValue("--bot")))/2 + parseInt(getComputedStyle(document.documentElement).getPropertyValue("--top"));
+  STATE.view.x = sx - (ev.x)*z;
+  STATE.view.y = sy - (ev.y)*z;
+  worldTransform();
+  saveState();
+}
+function fitAll(){
+  if(!STATE.events.length){ STATE.view={x:80,y:120,z:1}; render(); return; }
+  let minX=1e9,minY=1e9,maxX=-1e9,maxY=-1e9;
+  for(const ev of STATE.events){
+    const x=ev.x ?? xForDate(ev.date); const y=ev.y ?? laneY(ev.type);
+    minX=Math.min(minX,x); maxX=Math.max(maxX,x+260);
+    minY=Math.min(minY,y); maxY=Math.max(maxY,y+140);
+  }
+  const pad=120;
+  minX-=pad; minY-=pad; maxX+=pad; maxY+=pad;
+
+  const w = window.innerWidth;
+  const h = window.innerHeight - parseInt(getComputedStyle(document.documentElement).getPropertyValue("--top")) - parseInt(getComputedStyle(document.documentElement).getPropertyValue("--bot"));
+  const z = clamp(Math.min(w/(maxX-minX), h/(maxY-minY)), 0.25, 2.2);
+
+  STATE.view.z = z;
+  STATE.view.x = 40 - minX*z;
+  STATE.view.y = (parseInt(getComputedStyle(document.documentElement).getPropertyValue("--top"))+20) - minY*z;
+  render();
+}
+
+/* =========================
+   EE: Bulk paste (TSV/CSV)
+========================= */
+function parseRows(text){
+  const t = String(text||"").trim();
+  if(!t) return [];
+  // detect delimiter: tabs preferred, else comma
+  const delim = t.includes("\t") ? "\t" : ",";
+  const lines = t.split(/\r?\n/).filter(Boolean);
+
+  // if header present (starts with date/type etc.), skip it
+  const head = lines[0].toLowerCase();
+  const hasHeader = head.includes("date") && (head.includes("type") || head.includes("title"));
+  const startIdx = hasHeader ? 1 : 0;
+
+  const out = [];
+  for(let i=startIdx;i<lines.length;i++){
+    const cols = splitCSVLine(lines[i], delim);
+    // map: date,type,title,venue,people,tags,link,notes
+    const obj = {
+      date: (cols[0]||"").trim(),
+      type: (cols[1]||"EVENT").trim().toUpperCase(),
+      title:(cols[2]||"—").trim(),
+      venue:(cols[3]||"").trim(),
+      people:(cols[4]||"").trim(),
+      tags:(cols[5]||"").trim(),
+      link:(cols[6]||"").trim(),
+      notes:(cols.slice(7).join(delim)||"").trim()
+    };
+    if(!parseISO(obj.date)) continue; // require valid date
+    if(!["CONFESSION","INCIDENT","EVENT","OTHER"].includes(obj.type)) obj.type="EVENT";
+    out.push(obj);
+  }
+  return out;
+}
+function splitCSVLine(line, delim){
+  // minimal parser: supports quoted cells
+  const s = String(line||"");
+  const res=[];
+  let cur="", q=false;
+  for(let i=0;i<s.length;i++){
+    const ch=s[i];
+    if(ch === '"'){
+      if(q && s[i+1]==='"'){ cur+='"'; i++; }
+      else q=!q;
+    } else if(!q && ch===delim){
+      res.push(cur); cur="";
+    } else {
+      cur+=ch;
+    }
+  }
+  res.push(cur);
+  return res;
+}
+function bulkAdd(replaceAll){
+  const rows = parseRows($("bulkBox").value);
+  if(replaceAll) STATE.events = [];
+  for(const r of rows){
+    addEvent(r);
+  }
+  $("status").textContent = replaceAll ? "REPLACED" : "BULK ADDED";
+  render();
+}
+
+/* =========================
+   EE: Import / export (real file IO)
+========================= */
+function downloadFile(name, mime, content){
+  const blob = new Blob([content], {type:mime});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url), 800);
+}
+function exportJSON(){
+  const payload = {
+    file_id: FILE_ID,
+    room_id: ROOM_ID,
+    version: VERSION,
+    exported_at: new Date().toISOString(),
+    state: STATE
+  };
+  downloadFile(`${FILE_ID}__export.json`, "application/json", JSON.stringify(payload,null,2));
+}
+function exportTSV(){
+  const header = ["date","type","title","venue","people","tags","link","notes"].join("\t");
+  const lines = [header];
+  for(const ev of STATE.events){
+    const row = [
+      ev.date||"",
+      ev.type||"",
+      (ev.title||"").replace(/\r?\n/g," "),
+      (ev.venue||"").replace(/\r?\n/g," "),
+      (ev.people||"").replace(/\r?\n/g," "),
+      (ev.tags||"").replace(/\r?\n/g," "),
+      (ev.link||"").replace(/\r?\n/g," "),
+      (ev.notes||"").replace(/\r?\n/g," ")
+    ].map(v=>String(v).replace(/\t/g," "));
+    lines.push(row.join("\t"));
+  }
+  downloadFile(`${FILE_ID}__export.tsv`, "text/tab-separated-values", lines.join("\n"));
+}
+function importFile(){
+  fileIn.value="";
+  fileIn.click();
+}
+fileIn.addEventListener("change", async ()=>{
+  const f = fileIn.files && fileIn.files[0];
+  if(!f) return;
+  const text = await f.text();
+  const name = (f.name||"").toLowerCase();
+  try{
+    if(name.endsWith(".json")){
+      const obj = JSON.parse(text);
+      const st = obj.state || obj;
+      if(st && st.events && st.view && st.ui){
+        STATE = st;
+        selectedId = null;
+        $("status").textContent = "IMPORTED JSON";
+        render();
+        return;
+      }
+      throw new Error("bad json");
+    }
+    // treat .tsv/.csv/.txt as bulk rows
+    const rows = parseRows(text);
+    STATE.events = [];
+    for(const r of rows) addEvent(r);
+    $("status").textContent = "IMPORTED ROWS";
+    render();
+  }catch(e){
+    $("status").textContent = "IMPORT FAILED";
+  }
+});
+
+/* =========================
+   WB: Controls
+========================= */
+$("btnAdd").onclick = ()=>addEvent({type:"EVENT", title:"—", date:nowISO()});
+$("btnDrawer").onclick = ()=>{
+  STATE.ui.drawer = !STATE.ui.drawer;
+  render();
+};
+$("btnCloseDrawer").onclick = ()=>{
+  STATE.ui.drawer = false;
+  render();
+};
+$("btnDelete").onclick = ()=>deleteSelected();
+$("btnDuplicate").onclick = ()=>duplicateSelected();
+$("btnFit").onclick = ()=>fitAll();
+$("btnFocusToday").onclick = ()=>{
+  const d = nowISO();
+  addEvent({date:d, type:"EVENT", title:"TODAY"});
+};
+$("btnImport").onclick = ()=>importFile();
+$("btnExport").onclick = ()=>{
+  // quick chooser: JSON if shift held, else TSV+JSON both
+  exportJSON();
+  exportTSV();
+  $("status").textContent = "EXPORTED";
+};
+$("btnBulkAdd").onclick = ()=>bulkAdd(false);
+$("btnBulkReplace").onclick = ()=>bulkAdd(true);
+$("btnBulkClear").onclick = ()=>{$("bulkBox").value="";};
+
+$("sqInvert").onclick = ()=>{ STATE.ui.invert = !STATE.ui.invert; render(); };
+$("sqBlackout").onclick = ()=>{ STATE.ui.blackout = !STATE.ui.blackout; render(); };
+
+window.addEventListener("keydown",(e)=>{
+  if(e.shiftKey && e.key.toLowerCase()==="i"){ e.preventDefault(); STATE.ui.invert=!STATE.ui.invert; render(); }
+  if(e.shiftKey && e.key.toLowerCase()==="n"){ e.preventDefault(); STATE.ui.blackout=!STATE.ui.blackout; render(); }
+  if(e.key==="Escape"){ dragging=null; viewport.classList.remove("grabbing"); $("status").textContent="READY"; }
+});
+
+/* click empty to deselect */
+viewport.addEventListener("click",(e)=>{
+  if(e.target.closest && e.target.closest(".event")) return;
+  selectedId = null;
+  fillEditor(null);
+  render();
+});
+
+/* =========================
+   WB: Safe text
+========================= */
+function escapeHtml(s){
+  return String(s||"").replace(/[&<>"']/g, m=>({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;" }[m]));
+}
+
+/* boot */
+(function boot(){
+  // ensure sane values
+  STATE.view.x = Number(STATE.view.x||80);
+  STATE.view.y = Number(STATE.view.y||120);
+  STATE.view.z = clamp(Number(STATE.view.z||1), 0.25, 3.2);
+
+  // default starter lanes visible even with no data
+  $("sig").textContent = stableSig();
+  render();
+
+  // if empty: create 1 seed row for immediate editing
+  if(!STATE.events.length){
+    addEvent({date:"2023-10-22", type:"CONFESSION", title:"—", venue:"", people:"", tags:"", link:"", notes:""});
+    STATE.ui.drawer = true;
+    render();
+  }
+})();
+</script>
+
+<!--
+AE: KETADATA brutal minimal black mirror timeline
+EE: zoom/pan, lane snapping, Excel/Sheets bulk paste, import/export w real file download, localStorage persistence
+WB: state wiring + safe parsing
+FILE_ID: KETADATA_EDITABLE_TIMELINE_v1
+ROOM_ID: TIMELINE
+VERSION: 1.0.0
+UPDATED_AT: 2026-02-09
+CHANGELOG:
+- v1.0.0: initial editable timeline + lanes + bulk paste + import/export + invert/null
+-->
+</body>
+</html>
+```
