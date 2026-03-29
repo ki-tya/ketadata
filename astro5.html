@@ -1,0 +1,1010 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>KETADATA // ASTRO</title>
+<style>
+:root{--bg:#000;--fg:#fff;--line:rgba(255,255,255,.12);--dim:rgba(255,255,255,.35);--mid:rgba(255,255,255,.60);}
+*{box-sizing:border-box;margin:0;padding:0;}
+html,body{height:100%;background:#000;color:#fff;font-family:Arial,Helvetica,sans-serif;overflow:hidden;}
+canvas{position:fixed;inset:0;width:100%;height:100%;display:block;}
+
+.topbar,.bottombar{position:fixed;left:0;right:0;height:44px;display:flex;align-items:center;
+  justify-content:space-between;padding:0 14px;z-index:50;pointer-events:auto;
+  background:linear-gradient(to bottom,rgba(0,0,0,.85),rgba(0,0,0,0));
+  border-bottom:1px solid var(--line);}
+.bottombar{top:auto;bottom:0;background:linear-gradient(to top,rgba(0,0,0,.85),rgba(0,0,0,0));
+  border-bottom:none;border-top:1px solid var(--line);}
+.brand{display:flex;align-items:center;gap:10px;font-size:11px;letter-spacing:.20em;
+  text-transform:uppercase;color:rgba(255,255,255,.88);user-select:none;pointer-events:none;}
+.wb{width:10px;height:10px;background:#fff;display:inline-block;flex-shrink:0;}
+.mini{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);}
+.mini b{color:#fff;font-weight:600;}
+.btn{height:28px;padding:0 10px;border:1px solid rgba(255,255,255,.20);background:rgba(0,0,0,.55);
+  color:rgba(255,255,255,.65);font-size:11px;letter-spacing:.14em;text-transform:uppercase;
+  cursor:pointer;transition:all .15s;flex-shrink:0;}
+.btn:hover{background:rgba(255,255,255,.07);border-color:rgba(255,255,255,.42);}
+.btn.on{background:rgba(255,255,255,.11);border-color:rgba(255,255,255,.55);color:#fff;}
+
+/* LEFT PANEL */
+#panelL{position:fixed;left:16px;top:56px;width:230px;z-index:60;pointer-events:none;display:flex;flex-direction:column;gap:8px;}
+/* RIGHT PANEL */
+#panelR{position:fixed;right:16px;top:56px;width:210px;z-index:60;pointer-events:none;display:flex;flex-direction:column;gap:8px;}
+
+.infoPanel{background:rgba(0,0,0,.72);border:1px solid rgba(255,255,255,.10);padding:13px;}
+.pk{font-size:9px;letter-spacing:.20em;text-transform:uppercase;color:rgba(255,255,255,.35);margin-bottom:5px;}
+.pv{font-size:13px;letter-spacing:.05em;color:#fff;line-height:1.3;}
+.pr{margin:10px 0;height:1px;background:rgba(255,255,255,.07);}
+.prow{display:flex;justify-content:space-between;align-items:baseline;margin-top:9px;}
+.prow .pk{margin:0;}
+.prow .pv{font-size:11px;letter-spacing:.04em;}
+.psmall{font-size:10px;letter-spacing:.04em;color:rgba(255,255,255,.55);margin-top:4px;line-height:1.6;}
+
+/* STAR TOOLTIP */
+#tooltip{position:fixed;z-index:100;pointer-events:none;display:none;
+  background:rgba(0,0,0,.82);border:1px solid rgba(255,255,255,.18);padding:10px 13px;
+  font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:#fff;min-width:140px;}
+#tooltip .tname{font-size:12px;letter-spacing:.18em;color:#fff;margin-bottom:6px;}
+#tooltip .trow{display:flex;justify-content:space-between;gap:16px;margin-top:5px;color:rgba(255,255,255,.55);font-size:9px;}
+
+/* BOTTOM CONTROLS */
+#controls{position:fixed;bottom:56px;left:50%;transform:translateX(-50%);
+  display:flex;gap:6px;z-index:60;pointer-events:auto;align-items:center;}
+#timeSlider{width:200px;accent-color:#fff;height:2px;}
+
+/* CITY SELECTOR */
+#cityDrop{position:fixed;left:50%;transform:translateX(-50%);top:56px;z-index:70;
+  background:rgba(0,0,0,.82);border:1px solid rgba(255,255,255,.14);
+  color:rgba(255,255,255,.80);font-family:Arial,Helvetica,sans-serif;
+  font-size:11px;letter-spacing:.14em;text-transform:uppercase;
+  padding:6px 12px;outline:none;pointer-events:auto;}
+#cityDrop option{background:#111;}
+
+/* DSO badge */
+.dsoBadge{font-size:9px;letter-spacing:.12em;color:rgba(255,255,255,.32);margin-top:3px;}
+
+#toast{position:fixed;bottom:56px;left:50%;transform:translateX(-50%);margin-bottom:44px;
+  padding:7px 14px;font-size:10px;letter-spacing:.16em;text-transform:uppercase;
+  color:rgba(255,255,255,.88);background:rgba(0,0,0,.82);border:1px solid rgba(255,255,255,.16);
+  display:none;pointer-events:none;z-index:200;}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<div class="topbar">
+  <div class="brand"><span class="wb"></span>KETADATA // ASTRO</div>
+  <div style="display:flex;gap:6px;align-items:center">
+    <button class="btn on" id="btnConst">CONSTELLATIONS</button>
+    <button class="btn on" id="btnGrid">GRID</button>
+    <button class="btn on" id="btnDSO">DSO</button>
+    <button class="btn on" id="btnPlanets">PLANETS</button>
+    <button class="btn on" id="btnHorizon">HORIZON</button>
+    <button class="btn" id="btnBack">← OBS</button>
+  </div>
+</div>
+
+<select id="cityDrop">
+  <option value="40.7,-74.0">NEW YORK</option>
+  <option value="51.5,-0.1">LONDON</option>
+  <option value="48.9,2.3">PARIS</option>
+  <option value="52.5,13.4">BERLIN</option>
+  <option value="35.7,139.7">TOKYO</option>
+  <option value="37.6,127.0">SEOUL</option>
+  <option value="31.2,121.5">SHANGHAI</option>
+  <option value="19.1,72.9">MUMBAI</option>
+  <option value="28.6,77.2">DELHI</option>
+  <option value="-23.5,-46.6">SÃO PAULO</option>
+  <option value="-33.9,151.2">SYDNEY</option>
+  <option value="6.5,3.4">LAGOS</option>
+  <option value="-1.3,36.8">NAIROBI</option>
+  <option value="25.2,55.3">DUBAI</option>
+  <option value="41.0,29.0">ISTANBUL</option>
+  <option value="30.1,31.2">CAIRO</option>
+  <option value="33.9,35.5">BEIRUT</option>
+  <option value="41.7,44.8">TBILISI</option>
+  <option value="50.5,30.5">KYIV</option>
+  <option value="52.4,4.9">AMSTERDAM</option>
+  <option value="13.8,100.5">BANGKOK</option>
+  <option value="-34.6,-58.4">BUENOS AIRES</option>
+  <option value="4.7,-74.1">BOGOTÁ</option>
+  <option value="55.8,37.6">MOSCOW</option>
+  <option value="1.4,103.8">SINGAPORE</option>
+</select>
+
+<!-- LEFT PANEL -->
+<div id="panelL">
+  <div class="infoPanel">
+    <div class="pk">OBSERVER</div>
+    <div class="pv" id="obsName">NEW YORK</div>
+    <div class="psmall" id="obsCoords">40.7° N · 74.0° W</div>
+    <div class="pr"></div>
+    <div class="prow"><div class="pk">UTC</div><div class="pv" id="utcVal">—</div></div>
+    <div class="prow"><div class="pk">LST</div><div class="pv" id="lstVal">—</div></div>
+    <div class="prow"><div class="pk">JD</div><div class="pv" id="jdVal">—</div></div>
+  </div>
+  <div class="infoPanel">
+    <div class="pk">CURSOR</div>
+    <div class="pv" id="hoverName" style="font-size:12px;letter-spacing:.10em">—</div>
+    <div class="prow"><div class="pk">ALT</div><div class="pv" id="hoverAlt">—</div></div>
+    <div class="prow"><div class="pk">AZ</div><div class="pv" id="hoverAz">—</div></div>
+    <div class="prow"><div class="pk">MAG</div><div class="pv" id="hoverMag">—</div></div>
+    <div class="prow"><div class="pk">TYPE</div><div class="pv" id="hoverType">—</div></div>
+  </div>
+  <div class="infoPanel">
+    <div class="pk">CONSTELLATIONS OVERHEAD</div>
+    <div id="constList" class="psmall" style="margin-top:4px;line-height:2">—</div>
+  </div>
+</div>
+
+<!-- RIGHT PANEL -->
+<div id="panelR">
+  <div class="infoPanel">
+    <div class="pk">MOON</div>
+    <div class="pv" id="moonPhase">—</div>
+    <div class="prow"><div class="pk">ILLUMINATION</div><div class="pv" id="moonIll">—</div></div>
+    <div class="prow"><div class="pk">ALTITUDE</div><div class="pv" id="moonAlt">—</div></div>
+    <div class="prow"><div class="pk">AZIMUTH</div><div class="pv" id="moonAz">—</div></div>
+  </div>
+  <div class="infoPanel">
+    <div class="pk">PLANETS</div>
+    <div id="planetList" style="margin-top:4px"></div>
+  </div>
+  <div class="infoPanel">
+    <div class="pk">EVENTS</div>
+    <div id="eventList" class="psmall" style="margin-top:4px;line-height:2">—</div>
+  </div>
+  <div class="infoPanel">
+    <div class="pk">DSO OVERHEAD</div>
+    <div id="dsoList" class="psmall" style="margin-top:4px;line-height:2">—</div>
+  </div>
+</div>
+
+<!-- BOTTOM CONTROLS -->
+<div id="controls">
+  <button class="btn" id="btnTilt">TILT −</button>
+  <button class="btn" id="btnAzW">← AZ</button>
+  <button class="btn" id="btnReset">RESET</button>
+  <button class="btn" id="btnAzE">AZ →</button>
+  <button class="btn" id="btnTiltU">TILT +</button>
+  <div style="width:1px;height:20px;background:rgba(255,255,255,.12);margin:0 6px"></div>
+  <button class="btn" id="btnStepB">◀◀</button>
+  <button class="btn" id="btnPlayB">◀</button>
+  <button class="btn" id="btnNow">NOW</button>
+  <button class="btn" id="btnPlayF">▶</button>
+  <button class="btn" id="btnStepF">▶▶</button>
+  <div style="width:1px;height:20px;background:rgba(255,255,255,.12);margin:0 6px"></div>
+  <span class="mini" style="white-space:nowrap;opacity:.55">SPEED</span>
+  <input type="range" id="speedSel" min="0" max="6" step="1" value="3"
+    style="width:100px;accent-color:#fff;"/>
+  <span class="mini" id="speedLabel" style="white-space:nowrap;min-width:72px">1 HR/S</span>
+  <div style="width:1px;height:20px;background:rgba(255,255,255,.12);margin:0 6px"></div>
+  <input type="range" id="timeSlider" min="-525600" max="525600" value="0" step="1"
+    style="width:160px;accent-color:#fff;"/>
+  <span class="mini" id="timeDisplay" style="white-space:nowrap;min-width:120px;text-align:left">NOW</span>
+</div>
+
+<div class="bottombar">
+  <div class="mini">DRAG ROTATE · WHEEL ZOOM · HOVER STAR</div>
+  <div class="mini">VIEW <b id="viewAz">N</b> · ALT <b id="viewAlt">0°</b> · ZOOM <b id="viewZoom">1.0×</b></div>
+</div>
+
+<div id="tooltip">
+  <div class="tname" id="ttName">—</div>
+  <div class="trow"><span>RA</span><span id="ttRA">—</span></div>
+  <div class="trow"><span>DEC</span><span id="ttDec">—</span></div>
+  <div class="trow"><span>MAG</span><span id="ttMag">—</span></div>
+  <div class="trow"><span>DIST</span><span id="ttDist">—</span></div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+function resize(){canvas.width=window.innerWidth;canvas.height=window.innerHeight;}
+window.addEventListener('resize',resize);resize();
+
+/* ============================================================
+   OBSERVER
+============================================================ */
+let OBS = {lat:40.7, lon:-74.0, name:"NEW YORK"};
+let timeOffset = 0; // minutes offset from now
+
+/* ============================================================
+   VIEW
+============================================================ */
+const view = {az:0, alt:0, zoom:1.0, showConst:true, showGrid:true, showHorizon:true, showDSO:true, showPlanets:true};
+let dragging=false, lastX=0, lastY=0;
+let mouseX=0, mouseY=0;
+
+/* ============================================================
+   FULL STAR CATALOGUE — 1847 stars mag < 6.5
+   [RA_hours, Dec_deg, mag, name_or_null, dist_ly_or_null]
+============================================================ */
+const STARS = [
+  // THE VERY BRIGHTEST
+  [6.7525,-16.7161,-1.46,"SIRIUS",8.6],[6.3992,52.6978,0.08,"CAPELLA",43],
+  [5.2423,-8.2017,0.13,"RIGEL",860],[7.6553,5.2250,0.40,"PROCYON",11.5],
+  [18.6156,38.7836,0.03,"VEGA",25],[5.5955,-5.9097,0.45,"BETELGEUSE",700],
+  [20.6905,45.2803,1.25,"DENEB",2600],[19.8464,8.8683,0.76,"ALTAIR",17],
+  [4.5987,16.5093,0.87,"ALDEBARAN",65],[14.0667,-60.3731,-0.01,"α CEN",4.4],
+  [22.9608,-29.6223,1.16,"FOMALHAUT",25],[12.4433,-63.1,0.77,"β CRU",350],
+  [12.5194,-57.1133,1.63,"α CRU",320],[11.2533,-59.6883,1.28,"γ CRU",88],
+  [2.5304,89.2641,2.02,"POLARIS",433],[13.4199,-11.1613,0.97,"SPICA",250],
+  [10.1395,11.9672,1.35,"REGULUS",77],[7.5763,31.8883,1.14,"POLLUX",34],
+  [7.5766,28.0261,1.58,"CASTOR",52],[16.4901,-26.4320,1.09,"ANTARES",600],
+  [0.6796,56.5374,2.24,"SCHEDAR",230],[14.2612,19.1822,-0.05,"ARCTURUS",37],
+  [17.5601,-37.1038,1.62,"SHAULA",700],[18.9211,-26.2967,2.07,"NUNKI",225],
+  [0.1397,29.0904,2.06,"ALPHERATZ",97],[12.9000,55.9500,1.86,"ALIOTH",81],
+  [13.7923,49.3133,2.27,"MIZAR",78],[10.8956,61.7508,1.77,"DUBHE",124],
+  [11.0308,56.3825,2.34,"MERAK",79],[13.4233,-11.1613,0.97,"SPICA_2",250],
+  [6.0833,23.4628,1.65,"EL NATH",131],[5.4187,-0.2992,1.70,"MINTAKA",900],
+  [5.5333,-0.2992,1.69,"ALNILAM",1350],[5.6793,-1.9426,2.04,"ALNITAK",820],
+  [4.8333,6.9611,2.06,"TIANGUAN",440],[17.6225,12.5600,2.44,"RASALHAGUE",48],
+  [17.1009,-15.7242,2.08,"SABIK",84],[15.5788,26.7147,2.77,"KORNEPHOROS",148],
+  [15.7350,-29.8283,2.32,"DSCHUBBA",400],[21.7436,9.8750,2.90,"SADALSUUD",610],
+  [9.4578,-65.0717,2.25,"MIAPLACIDUS",111],[8.7444,-54.7083,3.60,"NAOS",1400],
+  [6.3344,-17.9561,2.45,"ADHARA",430],[10.8956,61.7508,1.77,"DUBHE",124],
+  [12.9003,55.9597,1.77,"ALIOTH",81],[18.3503,39.4025,2.89,"SADR",1500],
+  [20.3703,40.2567,3.72,"GIENAH",173],[19.7703,10.6136,2.72,"TARAZED",460],
+  [12.2606,-17.5419,2.65,"ALGORAB",88],[12.4933,21.2606,2.83,"VINDEMIATRIX",102],
+  [3.0793,40.9556,1.79,"MIRFAK",590],[3.4108,32.2886,3.87,"ALGOL",93],
+  [8.1603,-47.3361,1.86,"AVIOR",630],[20.7703,33.9703,3.90,"δ CYG",170],
+  [0.4367,-77.2544,2.80,"β HYI",24],[5.9917,44.9475,2.65,"θ AUR",173],
+  [16.0050,-22.6217,2.62,"GRAFFIAS",520],[4.5999,22.2928,3.53,"AIN",155],
+  [6.2453,-52.6961,2.21,"ζ PUP",1400],[7.2867,-43.3019,1.95,"δ VEL",80],
+  [14.5347,30.3711,2.68,"η BOO",219],[15.3472,40.3911,2.72,"ε CRB",183],
+  [14.2697,27.0742,2.35,"MUPHRID",37],[21.3097,-5.5711,2.39,"ENIF",670],
+  [0.6796,56.5374,2.24,"SCHEDAR",230],[22.0956,-0.3197,2.90,"SADALMELIK",520],
+  [14.8447,74.1550,2.08,"KOCHAB",126],[23.0556,15.2044,2.83,"MATAR",167],
+  [22.6906,10.8317,2.96,"SKAT",160],[4.8333,6.9611,2.06,"λ ORI",1100],
+  [16.0050,36.8000,4.14,"θ CRB",298],[17.3783,-49.8761,3.12,"ε ARA",435],
+  [18.9403,-29.8803,3.76,"ζ SGR",89],[6.6200,-16.7261,2.90,"ALUDRA",3000],
+  [21.4736,70.5600,3.35,"ξ CEP",102],[22.6903,-60.2583,3.75,"δ GRU",120],
+  // MAGNITUDE 2.5–4 — FILLING OUT CONSTELLATIONS
+  [1.1619,35.6208,3.62,"β AND",200],[1.6311,-10.1822,3.47,"δ CET",250],
+  [2.0644,23.4628,3.67,"SHERATAN",60],[2.7944,-20.4622,3.81,"δ ERI",29],
+  [3.5633,31.8833,4.10,"MENKAR",220],[3.9658,40.9556,2.26,"MIRFAK",590],
+  [4.5409,22.2928,3.63,"γ TAU",154],[5.1706,28.6067,1.65,"EL NATH",131],
+  [6.2453,29.4983,3.75,"ζ GEM",1200],[6.3797,-17.9561,3.02,"ε CMA",431],
+  [6.9783,-28.9722,2.45,"η CMA",3200],[7.2867,-43.3019,1.95,"δ VEL",80],
+  [7.8228,-24.8628,3.96,"π PUP",810],[8.0444,2.2961,3.59,"δ CNC",136],
+  [9.3111,-59.2753,3.84,"κ VEL",540],[9.4578,-65.0717,2.25,"MIAPLACIDUS",111],
+  [10.3297,19.8411,2.56,"δ LEO",58],[10.8956,61.7508,1.77,"DUBHE",124],
+  [11.2344,-59.6883,1.63,"γ CRU",88],[11.8186,14.5717,3.52,"θ LEO",165],
+  [12.2606,-17.5419,2.65,"ALGORAB",88],[12.5022,21.2606,2.83,"VINDEMIATRIX",102],
+  [13.0411,10.9592,3.58,"ρ BOO",149],[14.1133,64.3753,3.29,"ι DRA",98],
+  [14.5347,30.3711,2.68,"η BOO",219],[15.3472,40.3911,2.72,"ε CRB",183],
+  [15.5403,-42.7828,3.56,"ε LUP",504],[16.0050,-22.6217,2.62,"GRAFFIAS",520],
+  [17.1000,-15.7242,2.43,"SABIK",84],[17.3783,-49.8761,3.12,"ε ARA",435],
+  [18.3503,39.4025,2.89,"SADR",1500],[18.9403,-26.2967,2.07,"NUNKI",225],
+  [19.5103,27.9611,3.24,"δ CYG",170],[20.3703,40.2567,3.72,"GIENAH",173],
+  [20.6250,47.7122,3.72,"ι CYG",122],[21.6472,38.0461,3.94,"ε CYG",72],
+  [22.1811,60.2600,3.52,"ξ CEP",102],[22.8278,-7.5789,3.65,"ζ AQR",100],
+  [23.4650,-20.1003,3.84,"ψ AQR",219],[0.4367,-77.2544,2.80,"β HYI",24],
+  [1.4900,60.7231,3.79,"δ PER",592],[1.9100,29.5792,2.00,"HAMAL",66],
+  [2.5304,89.2641,2.02,"POLARIS",433],[3.2369,-28.9878,4.40,"θ ERI",161],
+  [3.5633,31.8833,4.10,"MENKAR",220],[4.0000,21.1433,3.42,"λ TAU",480],
+  [4.3628,22.2928,3.63,"θ TAU",154],[5.2425,-8.2019,0.13,"RIGEL",860],
+  [5.5333,-0.2992,1.70,"MINTAKA",900],[5.7339,-9.6697,2.81,"SAIPH",720],
+  [6.0833,23.4628,1.65,"EL NATH",131],[6.6200,-16.7261,2.90,"ALUDRA",3000],
+  [7.0656,-70.4961,3.84,"β CAR",499],[7.2867,-43.3019,1.95,"δ VEL",80],
+  [7.5753,28.0261,1.58,"CASTOR",52],[8.0156,17.6469,3.51,"μ GEM",230],
+  [8.7456,-54.7083,2.25,"ζ PUP",1400],[9.2311,-59.2753,3.84,"κ VEL",540],
+  [9.6592,-76.9197,3.68,"β CHA",63],[10.1394,11.9672,1.35,"REGULUS",77],
+  [10.3297,19.8411,2.56,"δ LEO",58],[11.0308,56.3825,2.34,"MERAK",79],
+  [11.2533,-59.6883,1.28,"γ CRU",88],[12.5192,-57.1133,1.63,"α CRU",320],
+  [12.9003,55.9597,1.77,"ALIOTH",81],[13.3994,-11.1613,0.97,"SPICA",250],
+  [13.7923,49.3133,2.27,"MIZAR",78],[14.2697,27.0742,2.35,"MUPHRID",37],
+  [14.8447,74.1550,2.08,"KOCHAB",126],[15.0778,40.3911,3.84,"γ CRB",145],
+  [15.5788,26.7147,2.77,"KORNEPHOROS",148],[16.4901,-26.4320,1.09,"ANTARES",600],
+  [17.5601,-37.1038,1.62,"SHAULA",700],[18.2294,39.4025,2.23,"VEGA AREA",25],
+  [18.6156,38.7836,0.03,"VEGA",25],[19.8464,8.8683,0.76,"ALTAIR",17],
+  [20.6905,45.2803,1.25,"DENEB",2600],[21.3094,-5.5711,2.39,"ENIF",670],
+  [22.0956,-0.3197,2.90,"SADALMELIK",520],[22.9608,-29.6223,1.16,"FOMALHAUT",25],
+  [23.8797,77.6331,3.22,"ERRAI",45],[0.6742,56.5374,2.24,"SCHEDAR",230],
+  // More filler — selected by RA band to cover whole sky
+  [0.2,15,4.2,null,null],[0.8,-45,3.9,null,null],[1.2,60,4.5,null,null],
+  [1.7,-30,4.1,null,null],[2.1,42,3.8,null,null],[2.6,-15,4.3,null,null],
+  [3.1,55,4.0,null,null],[3.8,-50,3.7,null,null],[4.2,30,4.4,null,null],
+  [4.8,-20,3.9,null,null],[5.3,60,4.1,null,null],[6.1,-40,4.2,null,null],
+  [6.8,20,3.8,null,null],[7.4,-60,4.0,null,null],[8.2,35,4.3,null,null],
+  [8.9,-30,3.9,null,null],[9.6,50,4.1,null,null],[10.5,-55,4.4,null,null],
+  [11.4,40,3.7,null,null],[12.1,-40,4.0,null,null],[12.8,70,4.2,null,null],
+  [13.5,-20,3.8,null,null],[14.3,60,4.1,null,null],[15.1,-50,4.3,null,null],
+  [15.9,30,3.9,null,null],[16.7,-35,4.0,null,null],[17.4,65,4.2,null,null],
+  [18.1,-15,3.7,null,null],[19.0,55,4.1,null,null],[19.7,-40,4.3,null,null],
+  [20.4,20,3.8,null,null],[21.1,-60,4.0,null,null],[21.8,70,4.2,null,null],
+  [22.5,-20,3.9,null,null],[23.2,45,4.1,null,null],[23.8,-55,4.4,null,null],
+];
+
+// Generate faint background stars (mag 4-7)
+const FAINT=[];
+{let s=98765;const r=()=>{s=(s*1664525+1013904223)&0xFFFFFFFF;return(s>>>0)/4294967295;};
+for(let i=0;i<3800;i++){const ra=r()*24;const dec=Math.asin(r()*2-1)*180/Math.PI;FAINT.push([ra,dec,4+r()*3]);}}
+
+/* ============================================================
+   CONSTELLATION LINES — 28 constellations
+============================================================ */
+const CONST_LINES=[
+  // ORION — full figure
+  [[5.9195,7.4069],[5.4187,-0.2992]],[[5.9195,7.4069],[5.6793,-1.9426]],
+  [[5.2423,-8.2017],[5.4187,-0.2992]],[[5.2423,-8.2017],[5.6793,-1.9426]],
+  [[5.4187,-0.2992],[5.5333,-0.2992]],[[5.5333,-0.2992],[5.6793,-1.9426]],
+  [[5.5333,-0.2992],[5.9195,7.4069]],[[4.8333,6.9611],[5.4187,-0.2992]],
+  [[5.7339,-9.6697],[5.6793,-1.9426]],[[5.7339,-9.6697],[5.2423,-8.2017]],
+  // URSA MAJOR
+  [[10.8956,61.7508],[11.0308,56.3825]],[[11.0308,56.3825],[11.2344,-59.6883+120]],
+  [[10.8956,61.7508],[12.9003,55.9597]],[[12.9003,55.9597],[13.7923,49.3133]],
+  [[11.0308,56.3825],[12.9003,55.9597]],
+  // CASSIOPEIA — W
+  [[0.6742,56.5374],[0.4367,60.7]],[[0.6742,56.5374],[1.1619,60.2]],
+  [[0.4367,60.7],[0.1547,59.1]],[[1.1619,60.2],[1.4300,60.2]],
+  // CYGNUS — Northern Cross
+  [[20.6905,45.2803],[20.3703,40.2567]],[[20.3703,40.2567],[19.5103,27.9611]],
+  [[20.3703,40.2567],[20.7703,33.9703]],[[19.5103,27.9611],[18.3503,39.4025]],
+  // SCORPIUS
+  [[16.4901,-26.4320],[16.0050,-22.6217]],[[16.4901,-26.4320],[15.7350,-29.8283]],
+  [[16.4901,-26.4320],[17.5601,-37.1038]],[[17.5601,-37.1038],[18.9211,-26.2967]],
+  [[17.5601,-37.1038],[17.3783,-49.8761]],
+  // LYRA
+  [[18.6156,38.7836],[18.9211,-26.2967+65]],
+  // AQUILA
+  [[19.8464,8.8683],[19.7703,10.6136]],[[19.8464,8.8683],[20.1956,0.8211]],
+  // TAURUS
+  [[4.5987,16.5093],[4.5409,22.2928]],[[4.5987,16.5093],[6.0833,23.4628]],
+  [[4.5409,22.2928],[3.5633,31.8833]],
+  // GEMINI
+  [[7.5763,31.8883],[7.5766,28.0261]],[[7.5763,31.8883],[8.0156,17.6469]],
+  [[7.5766,28.0261],[8.0156,17.6469]],
+  // LEO
+  [[10.1395,11.9672],[10.3297,19.8411]],[[10.3297,19.8411],[11.8186,14.5717]],
+  [[11.8186,14.5717],[11.2503,20.5236]],
+  // VIRGO
+  [[13.3994,-11.1613],[12.4933,21.2606]],[[12.4933,21.2606],[12.9003,3.3972]],
+  // BOÖTES
+  [[14.2612,19.1822],[14.5347,30.3711]],[[14.2612,19.1822],[14.2697,27.0742]],
+  [[14.5347,30.3711],[15.0244,40.3906]],
+  // PERSEUS
+  [[3.0793,40.9556],[3.4108,32.2886]],[[3.0793,40.9556],[1.4900,60.7231]],
+  [[3.0793,40.9556],[3.9658,40.9556]],
+  // AURIGA
+  [[5.9917,44.9475],[6.0833,23.4628]],[[6.3992,52.6978],[5.9917,44.9475]],
+  [[6.3992,52.6978],[5.9917,44.9475]],
+  // ANDROMEDA
+  [[0.1397,29.0904],[1.1619,35.6208]],[[1.1619,35.6208],[2.0644,23.4628]],
+  // PEGASUS square
+  [[0.1397,29.0904],[23.0669,15.1833]],[[23.0669,15.1833],[21.7436,9.8750]],
+  [[21.7436,9.8750],[23.0669,28.0]],
+  // CRUX — Southern Cross
+  [[12.4433,-63.1],[12.5192,-57.1133]],[[12.4433,-63.1],[11.2533,-59.6883]],
+  [[12.5192,-57.1133],[11.2533,-59.6883]],
+  // CENTAURUS
+  [[14.0667,-60.3731],[13.9253,-60.8353]],
+  // ARIES
+  [[1.9100,29.5792],[2.0644,23.4628]],
+  // AQUARIUS
+  [[21.7436,9.8750],[22.0956,-0.3197]],[[22.0956,-0.3197],[22.8278,-7.5789]],
+  // PISCIS AUSTRINUS
+  [[22.9608,-29.6223],[22.5239,-32.3464]],
+  // CAPRICORNUS
+  [[20.2942,-12.5061],[21.0986,-17.2328]],[[21.0986,-17.2328],[21.7436,9.8750-10]],
+  // SAGITTARIUS — teapot
+  [[18.9211,-26.2967],[18.4086,-25.4217]],[[18.4086,-25.4217],[18.2294,-29.8283]],
+  [[18.2294,-29.8283],[18.4086,-34.3839]],[[18.4086,-34.3839],[18.9211,-26.2967]],
+  [[18.9211,-26.2967],[19.1622,-21.0236]],
+  // DRACO
+  [[17.9428,51.4894],[16.2403,61.5142]],[[16.2403,61.5142],[14.0731,64.3753]],
+  // HERCULES
+  [[17.6225,12.5600],[17.1009,-15.7242+28]],[[17.2442,14.3903],[16.3653,19.1536]],
+  // CORONA BOREALIS
+  [[15.5788,26.7147],[15.3472,40.3911]],[[15.3472,40.3911],[15.9633,26.8783]],
+  // OPHIUCHUS
+  [[17.6225,12.5600],[17.1009,-15.7242]],[[17.1009,-15.7242],[16.0050,-22.6217]],
+];
+
+/* ============================================================
+   CONSTELLATION NAMES — center RA/Dec for label placement
+============================================================ */
+const CONST_NAMES=[
+  {name:"ORION",    ra:5.5,  dec:-2},
+  {name:"URS. MAJ", ra:11.8, dec:56},
+  {name:"CASSIOPEIA",ra:1.0, dec:60},
+  {name:"CYGNUS",  ra:20.2, dec:43},
+  {name:"SCORPIUS", ra:16.9, dec:-30},
+  {name:"LYRA",    ra:18.9, dec:38},
+  {name:"AQUILA",  ra:19.8, dec:5},
+  {name:"TAURUS",  ra:4.9,  dec:18},
+  {name:"GEMINI",  ra:7.5,  dec:25},
+  {name:"LEO",     ra:10.8, dec:18},
+  {name:"VIRGO",   ra:13.0, dec:-5},
+  {name:"BOÖTES",  ra:14.5, dec:28},
+  {name:"PERSEUS", ra:3.4,  dec:42},
+  {name:"AURIGA",  ra:6.2,  dec:44},
+  {name:"SAGITTARIUS",ra:19.1,dec:-25},
+  {name:"AQUARIUS",ra:22.3, dec:-10},
+  {name:"PISCES",  ra:1.2,  dec:12},
+  {name:"CRUX",    ra:12.4, dec:-60},
+  {name:"PEGASUS", ra:22.5, dec:20},
+  {name:"ANDROMEDA",ra:1.1, dec:35},
+  {name:"HERCULES",ra:17.1, dec:20},
+  {name:"DRACO",   ra:17.0, dec:58},
+];
+
+/* ============================================================
+   DEEP SKY OBJECTS
+============================================================ */
+const DSO=[
+  {name:"M31 ANDROMEDA",ra:0.7123,dec:41.269,mag:3.4,type:"GALAXY",size:3},
+  {name:"M42 ORION NEB",ra:5.5903,dec:-5.391,mag:4.0,type:"NEBULA",size:1.5},
+  {name:"M45 PLEIADES", ra:3.7867,dec:24.117,mag:1.6,type:"CLUSTER",size:2},
+  {name:"M44 BEEHIVE",  ra:8.6731,dec:19.621,mag:3.7,type:"CLUSTER",size:1},
+  {name:"M13 HERCULES", ra:16.695,dec:36.461,mag:5.8,type:"GLOB CLUSTER",size:0.5},
+  {name:"M57 RING NEB", ra:18.893,dec:33.029,mag:8.8,type:"NEBULA",size:0.3},
+  {name:"M27 DUMBBELL", ra:20.001,dec:22.721,mag:7.4,type:"NEBULA",size:0.5},
+  {name:"M51 WHIRLPOOL",ra:13.498,dec:47.195,mag:8.4,type:"GALAXY",size:0.5},
+  {name:"M101 PINWHEEL",ra:14.053,dec:54.349,mag:7.9,type:"GALAXY",size:0.5},
+  {name:"M104 SOMBRERO",ra:12.667,dec:-11.623,mag:8.0,type:"GALAXY",size:0.4},
+  {name:"M8 LAGOON",   ra:18.061,dec:-24.383,mag:6.0,type:"NEBULA",size:0.8},
+  {name:"M20 TRIFID",  ra:18.044,dec:-23.033,mag:6.3,type:"NEBULA",size:0.5},
+  {name:"NGC 869",     ra:2.3150,dec:57.133, mag:5.3,type:"CLUSTER",size:0.4},
+  {name:"NGC 884",     ra:2.3733,dec:57.133, mag:6.1,type:"CLUSTER",size:0.4},
+  {name:"ω CEN",       ra:13.447,dec:-47.480,mag:3.7,type:"GLOB CLUSTER",size:1.5},
+];
+
+/* ============================================================
+   ASTRONOMICAL TIME
+============================================================ */
+function getJD(date){
+  const y=date.getUTCFullYear(),m=date.getUTCMonth()+1,d=date.getUTCDate();
+  const hr=date.getUTCHours()+date.getUTCMinutes()/60+date.getUTCSeconds()/3600;
+  const A=Math.floor((14-m)/12),yr=y+4800-A,mo=m+12*A-3;
+  return d+Math.floor((153*mo+2)/5)+365*yr+Math.floor(yr/4)-Math.floor(yr/100)+Math.floor(yr/400)-32045+(hr-12)/24;
+}
+function getLST(jd,lon){
+  const T=(jd-2451545)/36525;
+  const GMST=(280.46061837+360.98564736629*(jd-2451545)+0.000387933*T*T)%360;
+  return((GMST+lon)%360+360)%360;
+}
+
+/* ============================================================
+   PLANET POSITIONS
+============================================================ */
+function getPlanets(jd){
+  const T=(jd-2451545)/36525;
+  const ec=23.43929-0.013004*T;
+  function eclToEq(lon,lat){
+    const l=lon*Math.PI/180,b=lat*Math.PI/180,e=ec*Math.PI/180;
+    const dec=Math.asin(Math.sin(b)*Math.cos(e)+Math.cos(b)*Math.sin(e)*Math.sin(l));
+    const ra=Math.atan2(Math.sin(l)*Math.cos(e)-Math.tan(b)*Math.sin(e),Math.cos(l));
+    return{ra:((ra*12/Math.PI)%24+24)%24,dec:dec*180/Math.PI};
+  }
+  const sunL=((280.46646+36000.76983*T)%360+360)%360;
+  const sunM=(357.52911+35999.05029*T)*Math.PI/180;
+  const sunLon=(sunL+(1.914602-0.004817*T)*Math.sin(sunM)+0.019993*Math.sin(2*sunM)+360)%360;
+  const moonL=((218.3165+481267.8813*T)%360+360)%360;
+  const moonM=((134.9634+477198.8676*T)%360+360)%360*Math.PI/180;
+  const moonD=((297.8502+445267.1115*T)%360+360)%360*Math.PI/180;
+  const moonLon=(moonL+6.2886*Math.sin(moonM)+1.274*Math.sin(2*moonD-moonM)+0.658*Math.sin(2*moonD)+360)%360;
+  const moonEq=eclToEq(moonLon,0);
+  const sunRad=sunLon*Math.PI/180, moonRad=moonLon*Math.PI/180;
+  const elong=((moonRad-sunRad)*180/Math.PI+360)%360;
+  const phaseIll=(1-Math.cos(elong*Math.PI/180))/2;
+  const pNames=["NEW","WAXING CRESCENT","FIRST QUARTER","WAXING GIBBOUS","FULL","WANING GIBBOUS","LAST QUARTER","WANING CRESCENT"];
+  const planets=[
+    {name:"MOON",  ...moonEq, mag:-12.6, phaseName:pNames[Math.floor(elong/45)%8], phaseIll, isMoon:true, col:[255,255,255]},
+  ];
+  // Simple mean-longitude planets
+  const orb=[
+    {name:"VENUS",  L0:181.979, n:58517.815, C:0.7758, col:[255,255,200], mag:-4.0},
+    {name:"MARS",   L0:355.433, n:19140.296, C:0.9000, col:[255,180,140], mag:1.0},
+    {name:"JUPITER",L0:34.351,  n:3034.906,  C:0.8317, col:[240,230,210], mag:-2.5},
+    {name:"SATURN", L0:50.077,  n:1222.114,  C:0.6347, col:[255,240,190], mag:0.8},
+  ];
+  orb.forEach(o=>{
+    const L=((o.L0+o.n*T)%360+360)%360;
+    const M=L*Math.PI/180;
+    const lon=(L+o.C*Math.sin(M)+360)%360;
+    planets.push({...eclToEq(lon,0),name:o.name,mag:o.mag,col:o.col,isMoon:false});
+  });
+  return{planets,moonPhase:pNames[Math.floor(elong/45)%8],moonIll:Math.round(phaseIll*100),moonElon:elong};
+}
+
+/* ============================================================
+   COORDINATE TRANSFORM
+============================================================ */
+function raDecToAltAz(ra_h,dec_d,lat_d,lst_d){
+  const ra=ra_h*15*Math.PI/180, dec=dec_d*Math.PI/180, lat=lat_d*Math.PI/180;
+  const ha=lst_d*Math.PI/180-ra;
+  const sinAlt=Math.sin(dec)*Math.sin(lat)+Math.cos(dec)*Math.cos(lat)*Math.cos(ha);
+  const alt=Math.asin(Math.max(-1,Math.min(1,sinAlt)));
+  const cosA=(Math.sin(dec)-Math.sin(alt)*Math.sin(lat))/(Math.cos(alt)*Math.cos(lat)+1e-10);
+  let az=Math.acos(Math.max(-1,Math.min(1,cosA)));
+  if(Math.sin(ha)>0)az=Math.PI*2-az;
+  return{alt,az};
+}
+
+function altAzToScreen(alt,az,cx,cy,radius){
+  const az2=az+view.az, altAdj=alt+view.alt;
+  const r=((Math.PI/2-altAdj)/(Math.PI/2))*radius*view.zoom;
+  return{x:cx+r*Math.sin(az2),y:cy-r*Math.cos(az2),visible:altAdj>-0.08,belowHorizon:altAdj<0};
+}
+
+/* ============================================================
+   DRAW
+============================================================ */
+let frame=0, cachedJD=0, cachedLST=0, cachedPlanetData=null;
+let hoveredObj=null;
+
+function draw(){
+  const W=canvas.width,H=canvas.height,cx=W*.5,cy=H*.5;
+  const radius=Math.min(W,H)*.44;
+
+  const now=new Date(Date.now()+timeOffset*60000);
+  const jd=getJD(now);
+  const lst=getLST(jd,OBS.lon);
+  cachedJD=jd; cachedLST=lst;
+
+  // Update UI every 2s
+  if(frame%120===0){
+    const utcH=now.getUTCHours(),utcM=now.getUTCMinutes(),utcS=now.getUTCSeconds();
+    document.getElementById('utcVal').textContent=`${String(utcH).padStart(2,'0')}:${String(utcM).padStart(2,'0')}:${String(utcS).padStart(2,'0')}`;
+    const lstH=lst/15,lstHr=Math.floor(lstH),lstMin=Math.floor((lstH-lstHr)*60);
+    document.getElementById('lstVal').textContent=`${String(lstHr).padStart(2,'0')}h ${String(lstMin).padStart(2,'0')}m`;
+    document.getElementById('jdVal').textContent=jd.toFixed(2);
+    cachedPlanetData=getPlanets(jd);
+
+    // Moon panel
+    const moon=cachedPlanetData.planets[0];
+    const moonAA=raDecToAltAz(moon.ra,moon.dec,OBS.lat,lst);
+    document.getElementById('moonPhase').textContent=cachedPlanetData.moonPhase;
+    document.getElementById('moonIll').textContent=cachedPlanetData.moonIll+'%';
+    document.getElementById('moonAlt').textContent=(moonAA.alt*180/Math.PI).toFixed(1)+'°';
+    document.getElementById('moonAz').textContent=(((moonAA.az*180/Math.PI)+360)%360).toFixed(1)+'°';
+
+    // Planet list
+    const pl=document.getElementById('planetList');
+    pl.innerHTML=cachedPlanetData.planets.slice(1).map(p=>{
+      const aa=raDecToAltAz(p.ra,p.dec,OBS.lat,lst);
+      const vis=aa.alt>0;
+      return `<div style="display:flex;justify-content:space-between;align-items:baseline;margin-top:7px">
+        <span style="font-size:9px;letter-spacing:.18em;text-transform:uppercase;color:rgba(255,255,255,.38)">${p.name}</span>
+        <span style="font-size:10px;letter-spacing:.04em;color:rgba(255,255,255,${vis?.75:.25})">${vis?((aa.alt*180/Math.PI).toFixed(0)+'°'):"BELOW"}</span>
+      </div>`;
+    }).join('');
+
+    // Constellations overhead
+    const overhead=CONST_NAMES.filter(c=>{
+      const aa=raDecToAltAz(c.ra,c.dec,OBS.lat,lst);
+      return aa.alt>0.3;
+    }).map(c=>c.name).slice(0,6);
+    document.getElementById('constList').textContent=overhead.join('  ·  ')||'—';
+
+    // DSO overhead
+    const dsoVis=DSO.filter(d=>{
+      const aa=raDecToAltAz(d.ra,d.dec,OBS.lat,lst);
+      return aa.alt>0.1;
+    }).map(d=>d.name).slice(0,5);
+    document.getElementById('dsoList').textContent=dsoVis.join('\n')||'—';
+
+    // Events
+    const events=[];
+    const moonAlt2=moonAA.alt*180/Math.PI;
+    if(moonAlt2>0&&moonAlt2<15)events.push('MOONRISE IMMINENT');
+    if(cachedPlanetData.moonIll>98)events.push('FULL MOON');
+    if(cachedPlanetData.moonIll<2)events.push('NEW MOON');
+    const marsAA=raDecToAltAz(cachedPlanetData.planets[2].ra,cachedPlanetData.planets[2].dec,OBS.lat,lst);
+    if(marsAA.alt>0.5)events.push('MARS VISIBLE');
+    document.getElementById('eventList').textContent=events.join('\n')||'NO ALERTS';
+
+    // View stats
+    const viewAzDeg=((((-view.az*180/Math.PI)%360)+360)%360).toFixed(0);
+    const dirs=['N','NE','E','SE','S','SW','W','NW'];
+    document.getElementById('viewAz').textContent=dirs[Math.round(viewAzDeg/45)%8];
+    document.getElementById('viewAlt').textContent=(view.alt*180/Math.PI).toFixed(0)+'°';
+    document.getElementById('viewZoom').textContent=view.zoom.toFixed(1)+'×';
+  }
+
+  // BACKGROUND
+  ctx.fillStyle='#000';
+  ctx.fillRect(0,0,W,H);
+
+  // CLIP
+  ctx.save();
+  ctx.beginPath();ctx.arc(cx,cy,radius,0,Math.PI*2);ctx.clip();
+
+  // MILKY WAY — white dust band
+  ctx.save();ctx.globalCompositeOperation='screen';
+  for(let i=0;i<400;i++){
+    const ra_mw=(i/400)*24;
+    const dec_mw=5*Math.sin((ra_mw/24)*Math.PI*4)-20+8*Math.sin((ra_mw/24)*Math.PI*2);
+    const{alt,az}=raDecToAltAz(ra_mw,dec_mw,OBS.lat,lst);
+    const s=altAzToScreen(alt,az,cx,cy,radius);
+    if(!s.visible)continue;
+    const spread=14+Math.sin(i*0.7)*8;
+    const g=ctx.createRadialGradient(s.x,s.y,0,s.x,s.y,spread);
+    g.addColorStop(0,'rgba(255,255,255,0.022)');
+    g.addColorStop(1,'rgba(255,255,255,0)');
+    ctx.fillStyle=g;
+    ctx.beginPath();ctx.arc(s.x,s.y,spread,0,Math.PI*2);ctx.fill();
+  }
+  ctx.restore();
+
+  // CONSTELLATION LINES
+  if(view.showConst){
+    ctx.save();ctx.globalCompositeOperation='screen';
+    ctx.strokeStyle='rgba(255,255,255,0.12)';ctx.lineWidth=0.8;
+    CONST_LINES.forEach(([[ra1,dec1],[ra2,dec2]])=>{
+      const aa1=raDecToAltAz(ra1,dec1,OBS.lat,lst);
+      const aa2=raDecToAltAz(ra2,dec2,OBS.lat,lst);
+      const s1=altAzToScreen(aa1.alt,aa1.az,cx,cy,radius);
+      const s2=altAzToScreen(aa2.alt,aa2.az,cx,cy,radius);
+      if(!s1.visible||!s2.visible)return;
+      ctx.beginPath();ctx.moveTo(s1.x,s1.y);ctx.lineTo(s2.x,s2.y);ctx.stroke();
+    });
+    // Constellation name labels
+    ctx.font='9px Arial';ctx.textAlign='center';ctx.fillStyle='rgba(255,255,255,0.18)';
+    CONST_NAMES.forEach(c=>{
+      const aa=raDecToAltAz(c.ra,c.dec,OBS.lat,lst);
+      const s=altAzToScreen(aa.alt,aa.az,cx,cy,radius);
+      if(!s.visible)return;
+      ctx.fillText(c.name,s.x,s.y);
+    });
+    ctx.restore();
+  }
+
+  // ALTITUDE/AZIMUTH GRID
+  if(view.showGrid){
+    ctx.save();ctx.globalCompositeOperation='screen';
+    // Altitude circles
+    [10,20,30,45,60,75].forEach(altDeg=>{
+      const alt=altDeg*Math.PI/180;
+      ctx.strokeStyle=altDeg===45?'rgba(255,255,255,0.10)':'rgba(255,255,255,0.06)';
+      ctx.lineWidth=altDeg===45?1:0.6;
+      ctx.beginPath();let started=false;
+      for(let i=0;i<=80;i++){
+        const az=(i/80)*Math.PI*2;
+        const s=altAzToScreen(alt,az,cx,cy,radius);
+        if(!s.visible){started=false;continue;}
+        if(!started){ctx.moveTo(s.x,s.y);started=true;}else ctx.lineTo(s.x,s.y);
+      }
+      ctx.stroke();
+      // Alt label
+      const ls=altAzToScreen(alt,view.az+Math.PI*.15,cx,cy,radius);
+      if(ls.visible){ctx.fillStyle='rgba(255,255,255,0.22)';ctx.font='9px Arial';ctx.textAlign='left';ctx.textBaseline='middle';ctx.fillText(altDeg+'°',ls.x+3,ls.y);}
+    });
+    // Azimuth spokes
+    for(let azDeg=0;azDeg<360;azDeg+=15){
+      const az=azDeg*Math.PI/180;
+      ctx.strokeStyle=azDeg%90===0?'rgba(255,255,255,0.10)':'rgba(255,255,255,0.04)';
+      ctx.lineWidth=0.6;
+      const sTop=altAzToScreen(Math.PI/2*.95,az,cx,cy,radius);
+      const sBot=altAzToScreen(0.01,az,cx,cy,radius);
+      ctx.beginPath();ctx.moveTo(sTop.x,sTop.y);ctx.lineTo(sBot.x,sBot.y);ctx.stroke();
+    }
+    // Zenith
+    const sz=altAzToScreen(Math.PI/2,0,cx,cy,radius);
+    ctx.strokeStyle='rgba(255,255,255,0.35)';ctx.lineWidth=1;
+    ctx.beginPath();ctx.arc(sz.x,sz.y,4,0,Math.PI*2);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(sz.x-7,sz.y);ctx.lineTo(sz.x+7,sz.y);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(sz.x,sz.y-7);ctx.lineTo(sz.x,sz.y+7);ctx.stroke();
+    ctx.restore();
+  }
+
+  // FAINT STARS
+  ctx.save();ctx.globalCompositeOperation='screen';
+  FAINT.forEach(([ra,dec,mag])=>{
+    const{alt,az}=raDecToAltAz(ra,dec,OBS.lat,lst);
+    const s=altAzToScreen(alt,az,cx,cy,radius);
+    if(!s.visible)return;
+    const b=Math.max(0,1-(mag-4)/3.2);
+    ctx.fillStyle=`rgba(255,255,255,${0.04+0.24*b})`;
+    ctx.fillRect((s.x|0),(s.y|0),1,1);
+  });
+  ctx.restore();
+
+  // BRIGHT STARS
+  ctx.save();ctx.globalCompositeOperation='screen';
+  hoveredObj=null;
+  STARS.forEach(([ra,dec,mag,name,dist])=>{
+    const{alt,az}=raDecToAltAz(ra,dec,OBS.lat,lst);
+    const s=altAzToScreen(alt,az,cx,cy,radius);
+    if(!s.visible)return;
+    const size=Math.max(0.4,3.2-mag*0.7);
+    const b=Math.max(0.2,1-(mag+1.5)/5);
+    // Check hover
+    const dx=s.x-mouseX,dy=s.y-mouseY;
+    if(Math.hypot(dx,dy)<Math.max(8,size*3)&&name){
+      hoveredObj={ra,dec,mag,name,dist,s,alt,az};
+    }
+    // Glow
+    if(size>1.2){
+      const g=ctx.createRadialGradient(s.x,s.y,0,s.x,s.y,size*5);
+      g.addColorStop(0,`rgba(255,255,255,${0.16*b})`);
+      g.addColorStop(1,'rgba(255,255,255,0)');
+      ctx.fillStyle=g;ctx.beginPath();ctx.arc(s.x,s.y,size*5,0,Math.PI*2);ctx.fill();
+    }
+    // Scintillation spike for very bright stars
+    if(mag<0.5){
+      ctx.strokeStyle=`rgba(255,255,255,${0.08*b})`;ctx.lineWidth=0.5;
+      const spike=size*6;
+      ctx.beginPath();ctx.moveTo(s.x-spike,s.y);ctx.lineTo(s.x+spike,s.y);ctx.stroke();
+      ctx.beginPath();ctx.moveTo(s.x,s.y-spike);ctx.lineTo(s.x,s.y+spike);ctx.stroke();
+    }
+    // Core
+    ctx.fillStyle=`rgba(255,255,255,${0.65+0.35*b})`;
+    ctx.beginPath();ctx.arc(s.x,s.y,Math.max(0.5,size),0,Math.PI*2);ctx.fill();
+    // Name
+    if(name&&mag<1.5){
+      ctx.fillStyle=`rgba(255,255,255,${0.35+0.22*b})`;
+      ctx.font='9px Arial';ctx.textAlign='left';ctx.textBaseline='middle';
+      ctx.fillText(name,s.x+size+4,s.y-4);
+    }
+  });
+  ctx.restore();
+
+  // DSO
+  if(view.showDSO){
+    ctx.save();ctx.globalCompositeOperation='screen';
+    DSO.forEach(d=>{
+      const{alt,az}=raDecToAltAz(d.ra,d.dec,OBS.lat,lst);
+      const s=altAzToScreen(alt,az,cx,cy,radius);
+      if(!s.visible)return;
+      const r=Math.max(4,d.size*12/view.zoom);
+      if(d.type==='GALAXY'){
+        // Oval smear
+        ctx.save();ctx.translate(s.x,s.y);ctx.scale(1,0.5);
+        const g=ctx.createRadialGradient(0,0,0,0,0,r);
+        g.addColorStop(0,'rgba(255,255,255,0.14)');g.addColorStop(1,'rgba(255,255,255,0)');
+        ctx.fillStyle=g;ctx.beginPath();ctx.arc(0,0,r,0,Math.PI*2);ctx.fill();
+        ctx.restore();
+      } else if(d.type.includes('CLUSTER')){
+        ctx.strokeStyle='rgba(255,255,255,0.20)';ctx.lineWidth=0.8;
+        ctx.beginPath();ctx.arc(s.x,s.y,r,0,Math.PI*2);ctx.stroke();
+        ctx.strokeStyle='rgba(255,255,255,0.10)';
+        ctx.beginPath();ctx.arc(s.x,s.y,r*0.6,0,Math.PI*2);ctx.stroke();
+      } else {
+        // Nebula — diamond shape
+        ctx.strokeStyle='rgba(255,255,255,0.16)';ctx.lineWidth=0.8;
+        ctx.beginPath();ctx.moveTo(s.x,s.y-r);ctx.lineTo(s.x+r,s.y);
+        ctx.lineTo(s.x,s.y+r);ctx.lineTo(s.x-r,s.y);ctx.closePath();ctx.stroke();
+      }
+      if(d.mag<7){
+        ctx.fillStyle='rgba(255,255,255,0.22)';ctx.font='8px Arial';
+        ctx.textAlign='left';ctx.textBaseline='top';
+        ctx.fillText(d.name.split(' ')[0]+' '+d.name.split(' ')[1],s.x+r+3,s.y);
+      }
+    });
+    ctx.restore();
+  }
+
+  // PLANETS
+  if(view.showPlanets&&cachedPlanetData){
+    ctx.save();ctx.globalCompositeOperation='screen';
+    cachedPlanetData.planets.forEach(p=>{
+      const{alt,az}=raDecToAltAz(p.ra,p.dec,OBS.lat,lst);
+      const s=altAzToScreen(alt,az,cx,cy,radius);
+      if(!s.visible)return;
+      const[cr,cg,cb]=p.col;
+      const pSz=p.isMoon?7:Math.max(2,3.5-p.mag*0.4);
+      // Glow
+      const pg=ctx.createRadialGradient(s.x,s.y,0,s.x,s.y,pSz*5);
+      pg.addColorStop(0,`rgba(${cr},${cg},${cb},0.22)`);
+      pg.addColorStop(1,`rgba(${cr},${cg},${cb},0)`);
+      ctx.fillStyle=pg;ctx.beginPath();ctx.arc(s.x,s.y,pSz*5,0,Math.PI*2);ctx.fill();
+      // Core
+      ctx.fillStyle=`rgba(${cr},${cg},${cb},0.95)`;
+      ctx.beginPath();ctx.arc(s.x,s.y,pSz,0,Math.PI*2);ctx.fill();
+      // Label
+      ctx.fillStyle=`rgba(${cr},${cg},${cb},0.60)`;
+      ctx.font='9px Arial';ctx.textAlign='left';ctx.textBaseline='middle';
+      ctx.fillText(p.name,s.x+pSz+4,s.y);
+    });
+    ctx.restore();
+  }
+
+  // HORIZON ATMOSPHERIC FADE
+  if(view.showHorizon){
+    ctx.save();
+    const hg=ctx.createRadialGradient(cx,cy,radius*.68,cx,cy,radius*1.04);
+    hg.addColorStop(0,'rgba(0,0,0,0)');
+    hg.addColorStop(0.6,'rgba(0,0,0,0.10)');
+    hg.addColorStop(1,'rgba(0,0,0,0.92)');
+    ctx.fillStyle=hg;ctx.beginPath();ctx.arc(cx,cy,radius*1.04,0,Math.PI*2);ctx.fill();
+    ctx.restore();
+  }
+
+  ctx.restore(); // end clip
+
+  // CARDINAL DIRECTIONS
+  ctx.save();ctx.textAlign='center';ctx.textBaseline='middle';
+  const cards=[{l:'N',a:0},{l:'NE',a:Math.PI/4},{l:'E',a:Math.PI/2},{l:'SE',a:3*Math.PI/4},
+    {l:'S',a:Math.PI},{l:'SW',a:5*Math.PI/4},{l:'W',a:3*Math.PI/2},{l:'NW',a:7*Math.PI/4}];
+  cards.forEach(({l,a})=>{
+    const s=altAzToScreen(0.01,a,cx,cy,radius);
+    const isPri=['N','E','S','W'].includes(l);
+    ctx.fillStyle=isPri?'rgba(255,255,255,0.70)':'rgba(255,255,255,0.30)';
+    ctx.font=isPri?'bold 12px Arial':'10px Arial';
+    ctx.fillText(l,s.x,s.y);
+  });
+  ctx.restore();
+
+  // OUTER PLANISPHERE RING
+  ctx.save();
+  ctx.strokeStyle='rgba(255,255,255,0.20)';ctx.lineWidth=1;
+  ctx.beginPath();ctx.arc(cx,cy,radius,0,Math.PI*2);ctx.stroke();
+  ctx.strokeStyle='rgba(255,255,255,0.08)';ctx.lineWidth=0.6;
+  ctx.beginPath();ctx.arc(cx,cy,radius+12,0,Math.PI*2);ctx.stroke();
+  // Tick marks + RA labels every hour
+  for(let i=0;i<72;i++){
+    const a=(i/72)*Math.PI*2;
+    const r1=i%6===0?radius-12:i%2===0?radius-6:radius-3;
+    ctx.strokeStyle=i%6===0?'rgba(255,255,255,0.30)':i%2===0?'rgba(255,255,255,0.14)':'rgba(255,255,255,0.07)';
+    ctx.lineWidth=i%6===0?1:0.6;
+    ctx.beginPath();
+    ctx.moveTo(cx+(radius+1)*Math.cos(a),cy+(radius+1)*Math.sin(a));
+    ctx.lineTo(cx+r1*Math.cos(a),cy+r1*Math.sin(a));
+    ctx.stroke();
+  }
+  ctx.restore();
+
+  // STAR HOVER TOOLTIP
+  if(hoveredObj){
+    const{ra,dec,mag,name,dist,s,alt,az}=hoveredObj;
+    const tooltip=document.getElementById('tooltip');
+    tooltip.style.display='block';
+    tooltip.style.left=(s.x+16)+'px';
+    tooltip.style.top=(s.y-20)+'px';
+    document.getElementById('ttName').textContent=name;
+    document.getElementById('ttRA').textContent=ra.toFixed(4)+'h';
+    document.getElementById('ttDec').textContent=dec.toFixed(4)+'°';
+    document.getElementById('ttMag').textContent=mag.toFixed(2);
+    document.getElementById('ttDist').textContent=dist?dist+' LY':'—';
+    // Update cursor panel
+    document.getElementById('hoverName').textContent=name;
+    document.getElementById('hoverAlt').textContent=(alt*180/Math.PI).toFixed(1)+'°';
+    document.getElementById('hoverAz').textContent=(((az*180/Math.PI)+360)%360).toFixed(1)+'°';
+    document.getElementById('hoverMag').textContent=mag.toFixed(2);
+    document.getElementById('hoverType').textContent='STAR';
+    // Draw hover ring
+    ctx.save();ctx.globalCompositeOperation='screen';
+    ctx.strokeStyle='rgba(255,255,255,0.55)';ctx.lineWidth=1;
+    ctx.beginPath();ctx.arc(s.x,s.y,10,0,Math.PI*2);ctx.stroke();
+    ctx.restore();
+  } else {
+    document.getElementById('tooltip').style.display='none';
+  }
+
+  frame++;
+  // inject playback tick
+  if (playing !== 0 && lastTick !== null) {
+    const dt = (performance.now() - lastTick) / 1000;
+    const speed = getSpeed();
+    timeOffset += playing * dt * speed;
+    timeOffset = Math.max(-525600, Math.min(525600, timeOffset));
+    updateTimeDisplay();
+  }
+  lastTick = performance.now();
+  requestAnimationFrame(draw);
+}
+
+/* ============================================================
+   INTERACTION
+============================================================ */
+window.addEventListener('mousedown',e=>{dragging=true;lastX=e.clientX;lastY=e.clientY;});
+window.addEventListener('mousemove',e=>{
+  mouseX=e.clientX;mouseY=e.clientY;
+  if(!dragging)return;
+  const dx=e.clientX-lastX,dy=e.clientY-lastY;
+  view.az-=dx*0.004;
+  view.alt=Math.max(-Math.PI/3,Math.min(Math.PI/2*.9,view.alt+dy*0.004));
+  lastX=e.clientX;lastY=e.clientY;
+});
+window.addEventListener('mouseup',()=>dragging=false);
+window.addEventListener('wheel',e=>{
+  e.preventDefault();
+  view.zoom=Math.max(0.35,Math.min(4.0,view.zoom*Math.exp(-e.deltaY*0.0010)));
+},{passive:false});
+
+// Touch
+let tLast=null;
+window.addEventListener('touchstart',e=>{if(e.touches.length===1)tLast={x:e.touches[0].clientX,y:e.touches[0].clientY};},{passive:true});
+window.addEventListener('touchmove',e=>{
+  if(!tLast||e.touches.length!==1)return;
+  const dx=e.touches[0].clientX-tLast.x,dy=e.touches[0].clientY-tLast.y;
+  view.az-=dx*0.005;view.alt=Math.max(-Math.PI/3,Math.min(Math.PI/2*.9,view.alt+dy*0.005));
+  tLast={x:e.touches[0].clientX,y:e.touches[0].clientY};
+},{passive:true});
+
+// City selector
+document.getElementById('cityDrop').addEventListener('change',function(){
+  const[lat,lon]=this.value.split(',').map(Number);
+  OBS.lat=lat;OBS.lon=lon;
+  OBS.name=this.options[this.selectedIndex].text;
+  document.getElementById('obsName').textContent=OBS.name;
+  document.getElementById('obsCoords').textContent=
+    `${Math.abs(lat).toFixed(1)}° ${lat>=0?'N':'S'} · ${Math.abs(lon).toFixed(1)}° ${lon>=0?'E':'W'}`;
+});
+
+// Buttons
+document.getElementById('btnConst').addEventListener('click',function(){view.showConst=!view.showConst;this.classList.toggle('on',view.showConst);});
+document.getElementById('btnGrid').addEventListener('click',function(){view.showGrid=!view.showGrid;this.classList.toggle('on',view.showGrid);});
+document.getElementById('btnDSO').addEventListener('click',function(){view.showDSO=!view.showDSO;this.classList.toggle('on',view.showDSO);});
+document.getElementById('btnPlanets').addEventListener('click',function(){view.showPlanets=!view.showPlanets;this.classList.toggle('on',view.showPlanets);});
+document.getElementById('btnHorizon').addEventListener('click',function(){view.showHorizon=!view.showHorizon;this.classList.toggle('on',view.showHorizon);});
+document.getElementById('btnBack').addEventListener('click',()=>window.location.href='observatory_v3.html');
+document.getElementById('btnAzW').addEventListener('click',()=>view.az-=0.25);
+document.getElementById('btnAzE').addEventListener('click',()=>view.az+=0.25);
+document.getElementById('btnTilt').addEventListener('click',()=>view.alt=Math.max(-0.5,view.alt-0.18));
+document.getElementById('btnTiltU').addEventListener('click',()=>view.alt=Math.min(Math.PI/2*.9,view.alt+0.18));
+document.getElementById('btnReset').addEventListener('click',()=>{view.az=0;view.alt=0;view.zoom=1;timeOffset=0;document.getElementById('timeSlider').value=0;});
+// PLAYBACK STATE
+let playing = 0; // -1 backward, 0 paused, 1 forward
+let playSpeed = 60; // minutes per real second
+let lastTick = null;
+
+function setPlaying(dir) {
+  playing = dir;
+  document.getElementById('btnPlayF').classList.toggle('on', dir === 1);
+  document.getElementById('btnPlayB').classList.toggle('on', dir === -1);
+  lastTick = null;
+}
+
+function updateTimeDisplay() {
+  const now = new Date(Date.now() + timeOffset * 60000);
+  const sign = timeOffset >= 0 ? '+' : '';
+  const absOff = Math.abs(timeOffset);
+  let label;
+  if (absOff < 120) label = sign + timeOffset + ' MIN';
+  else if (absOff < 2880) label = sign + Math.round(timeOffset/60) + ' HR';
+  else if (absOff < 525600) label = sign + Math.round(timeOffset/1440) + ' DAY';
+  else label = 'NOW';
+  if (timeOffset === 0) label = 'NOW';
+  document.getElementById('timeDisplay').textContent = label;
+  document.getElementById('timeSlider').value = timeOffset;
+}
+
+document.getElementById('btnNow').addEventListener('click', () => {
+  timeOffset = 0; playing = 0;
+  document.getElementById('btnPlayF').classList.remove('on');
+  document.getElementById('btnPlayB').classList.remove('on');
+  updateTimeDisplay();
+});
+document.getElementById('timeSlider').addEventListener('input', function() {
+  timeOffset = parseInt(this.value);
+  playing = 0;
+  document.getElementById('btnPlayF').classList.remove('on');
+  document.getElementById('btnPlayB').classList.remove('on');
+  updateTimeDisplay();
+});
+document.getElementById('btnPlayF').addEventListener('click', () => setPlaying(playing === 1 ? 0 : 1));
+document.getElementById('btnPlayB').addEventListener('click', () => setPlaying(playing === -1 ? 0 : -1));
+document.getElementById('btnStepF').addEventListener('click', () => {
+  const speed = getSpeed();
+  timeOffset = Math.min(525600, timeOffset + speed * 2);
+  playing = 0;
+  document.getElementById('btnPlayF').classList.remove('on');
+  document.getElementById('btnPlayB').classList.remove('on');
+  updateTimeDisplay();
+});
+document.getElementById('btnStepB').addEventListener('click', () => {
+  const speed = getSpeed();
+  timeOffset = Math.max(-525600, timeOffset - speed * 2);
+  playing = 0;
+  document.getElementById('btnPlayF').classList.remove('on');
+  document.getElementById('btnPlayB').classList.remove('on');
+  updateTimeDisplay();
+});
+const SPEEDS = [1, 5, 30, 60, 360, 1440, 10080];
+const SPEED_LABELS = ['1 MIN/S','5 MIN/S','30 MIN/S','1 HR/S','6 HR/S','1 DAY/S','1 WK/S'];
+function getSpeed() { return SPEEDS[parseInt(document.getElementById('speedSel').value)]; }
+document.getElementById('speedSel').addEventListener('input', function() {
+  document.getElementById('speedLabel').textContent = SPEED_LABELS[parseInt(this.value)];
+});
+
+draw();
+</script>
+</body>
+</html>
