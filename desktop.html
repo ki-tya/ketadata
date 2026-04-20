@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>K-1</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #000; height: 100vh; overflow: hidden; }
+        body.dragging * { 
+            cursor: move !important; 
+            user-select: none !important; 
+            -webkit-user-select: none !important; 
+            -moz-user-select: none !important;
+            pointer-events: none !important;
+        }
+        body.dragging .preview-window,
+        body.dragging .content-preview-window { 
+            pointer-events: auto !important; 
+        }
+        .menu-bar { background: #fff; height: 24px; display: flex; align-items: center; padding: 0 12px; color: #000; font-size: 13px; z-index: 1000; border-bottom: 1px solid rgba(0,0,0,0.15); }
+        .menu-bar-left { display: flex; gap: 20px; flex: 1; }
+        .menu-bar-right { display: flex; gap: 12px; font-size: 12px; }
+        .menu-item { cursor: pointer; padding: 2px 8px; transition: background 0.2s; }
+        .menu-item:hover { background: rgba(0,0,0,0.08); border-radius: 3px; }
+        .menu-item.word-change { font-weight: 500; }
+        .desktop { height: calc(100vh - 24px); position: relative; padding: 20px; }
+
+        /* FOLDER */
+        .folder { width: 100px; text-align: center; cursor: pointer; position: absolute; user-select: none; }
+        .folder-icon {
+            width: 70px; height: 56px; margin: 0 auto 6px;
+            background: white;
+            position: relative;
+            border-radius: 0 4px 4px 4px;
+        }
+        .folder-icon::before {
+            content: '';
+            position: absolute;
+            top: -9px; left: 0;
+            width: 28px; height: 11px;
+            background: white;
+            border-radius: 4px 4px 0 0;
+        }
+        .folder-icon::after { content: none; }
+        .folder-name { color: white; font-size: 11px; text-shadow: 0 1px 2px rgba(0,0,0,0.8); word-wrap: break-word; padding: 0 5px; line-height: 1.3; }
+        .folder:hover .folder-icon,
+        .folder:hover .folder-icon::before { background: #cccccc; }
+
+        /* DRIVE */
+        .drive { width: 100px; text-align: center; cursor: pointer; position: absolute; user-select: none; }
+        .drive-icon {
+            width: 70px; height: 56px; margin: 0 auto 6px;
+            background: linear-gradient(180deg, #e8e8e8 0%, #c8c8c8 100%);
+            position: relative; border-radius: 4px;
+            border: 1px solid #aaa;
+            box-shadow: inset 0 1px 2px rgba(255,255,255,0.5);
+        }
+        .drive-icon::after {
+            content: '';
+            position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%);
+            width: 28px; height: 3px; background: #666; border-radius: 1px;
+        }
+        .drive:hover .drive-icon { background: linear-gradient(180deg, #f0f0f0 0%, #d8d8d8 100%); }
+        .drive-name { color: white; font-size: 11px; text-shadow: 0 1px 2px rgba(0,0,0,0.8); }
+
+        /* WINDOWS */
+        .window-container { position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 2000; }
+        .preview-window, .content-preview-window { 
+            pointer-events: auto; 
+            position: absolute;
+            background: rgba(40, 40, 40, 0.97);
+            border-radius: 12px;
+            box-shadow: 0 30px 90px rgba(0,0,0,0.8);
+            display: none;
+            overflow: hidden;
+        }
+        .preview-window { width: 700px; height: 600px; left: 50%; top: 50%; transform: translate(-50%, -50%); display: flex; }
+        .content-preview-window { width: 450px; height: 700px; background: #111; display: flex; flex-direction: column; }
+        .window-container.active .preview-window,
+        .window-container.active .content-preview-window { display: flex; }
+        .preview-window.resizing *, .content-preview-window.resizing * {
+            user-select: none; -webkit-user-select: none;
+        }
+
+        .preview-sidebar { width: 180px; background: rgba(28,28,28,0.99); border-right: 1px solid rgba(0,0,0,0.4); display: flex; flex-direction: column; }
+        .preview-sidebar-header { padding: 14px; border-bottom: 1px solid rgba(0,0,0,0.3); cursor: move; }
+        .preview-close-btn { color: rgba(255,255,255,0.55); font-size: 12px; cursor: pointer; display: flex; align-items: center; gap: 5px; padding: 5px; border-radius: 4px; transition: all 0.2s; }
+        .preview-close-btn:hover { background: rgba(255,255,255,0.1); color: rgba(255,255,255,0.9); }
+        .preview-folders { flex: 1; overflow-y: auto; padding: 8px 0; }
+        .preview-folder-item { color: rgba(255,255,255,0.7); font-size: 12px; padding: 6px 14px; cursor: pointer; display: flex; align-items: center; gap: 8px; transition: background 0.2s; }
+        .preview-folder-item:hover { background: rgba(255,255,255,0.08); }
+        .preview-folder-item.active { background: rgba(255,255,255,0.13); color: rgba(255,255,255,0.95); }
+        .preview-folder-icon { width: 12px; height: 10px; background: white; border-radius: 1px; opacity: 0.75; flex-shrink: 0; position: relative; }
+        .preview-folder-icon::before { content: ''; position: absolute; top: -3px; left: 0; width: 6px; height: 4px; background: white; border-radius: 1px 1px 0 0; opacity: 0.75; }
+        .preview-main { flex: 1; display: flex; flex-direction: column; }
+        .preview-header { background: rgba(55,55,55,0.95); padding: 11px 18px; border-bottom: 1px solid rgba(0,0,0,0.3); }
+        .preview-title { color: rgba(255,255,255,0.85); font-size: 13px; font-weight: 500; }
+        .preview-content { flex: 1; padding: 24px; overflow-y: auto; color: white; }
+        .preview-file-item { padding: 9px 12px; margin-bottom: 6px; background: rgba(255,255,255,0.04); border-radius: 6px; cursor: pointer; transition: all 0.2s; color: rgba(255,255,255,0.8); font-size: 13px; }
+        .preview-file-item:hover { background: rgba(255,255,255,0.1); color: white; }
+
+        .content-preview-header { background: rgba(55,55,55,0.95); padding: 11px 18px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.08); cursor: move; }
+        .content-preview-title { color: rgba(255,255,255,0.85); font-size: 13px; font-weight: 500; }
+        .content-preview-close { color: rgba(255,255,255,0.55); font-size: 20px; cursor: pointer; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; border-radius: 4px; transition: all 0.2s; line-height: 1; }
+        .content-preview-close:hover { background: rgba(255,255,255,0.1); color: white; }
+        .content-preview-body { flex: 1; padding: 28px; overflow-y: auto; color: white; }
+        .content-preview-body.cv-display { display: flex; justify-content: center; padding: 60px 20px; }
+        .content-preview-body.cv-display > div { max-width: 800px; width: 100%; }
+        .content-preview-body h1 { font-size: 26px; margin-bottom: 14px; font-weight: 300; }
+        .content-preview-body h2 { font-size: 20px; margin: 22px 0 10px; font-weight: 300; }
+        .content-preview-body h3 { font-size: 16px; margin: 18px 0 8px; font-weight: 400; }
+        .content-preview-body p { font-size: 14px; line-height: 2; margin-bottom: 12px; color: rgba(255,255,255,0.85); }
+        .content-preview-body img { max-width: 100%; height: auto; display: block; margin: 18px 0; border-radius: 4px; }
+        .loading { color: rgba(255,255,255,0.4); text-align: center; padding: 30px; font-size: 13px; }
+
+        .resize-handle { position: absolute; background: transparent; }
+        .resize-handle.corner-se { width: 20px; height: 20px; bottom: 0; right: 0; cursor: nwse-resize; }
+        .resize-handle.edge-e { width: 5px; height: 100%; top: 0; right: 0; cursor: ew-resize; }
+        .resize-handle.edge-s { width: 100%; height: 5px; bottom: 0; left: 0; cursor: ns-resize; }
+
+        .cv-mode { background: #000 !important; }
+        .cv-mode .content-preview-window { 
+            width: 100vw !important; height: 100vh !important;
+            left: 0 !important; top: 0 !important;
+            transform: none !important; border-radius: 0 !important;
+        }
+    </style>
+</head>
+<body>
+    <div class="menu-bar">
+        <div class="menu-bar-left">
+            <div class="menu-item" onclick="openCVFile()">K-1</div>
+            <div class="menu-item word-change" onclick="sortFolders('n')">Nx</div>
+            <div class="menu-item word-change" onclick="sortFolders('t')">Tx</div>
+            <div class="menu-item word-change" onclick="sortFolders('p')">P</div>
+            <div class="menu-item word-change" onclick="sortFolders('q')">Q</div>
+        </div>
+        <div class="menu-bar-right"><span id="clock"></span></div>
+    </div>
+    <div class="desktop" id="desktop"></div>
+    <div id="windowsContainer"></div>
+
+    <script>
+        const folderPositions = [{x:100,y:400},{x:250,y:400},{x:400,y:400},{x:550,y:400},{x:700,y:400},{x:850,y:400},{x:1000,y:400},{x:1150,y:400},{x:1300,y:400}];
+        const chronologicalPositions=[{x:100,y:400},{x:250,y:400},{x:400,y:400},{x:550,y:400},{x:700,y:400},{x:850,y:400},{x:1000,y:400},{x:1150,y:400},{x:1300,y:400}];
+        const geographicPositions=[{x:1150,y:80},{x:1280,y:160},{x:700,y:200},{x:550,y:340},{x:150,y:280},{x:200,y:420},{x:1050,y:420},{x:1200,y:650},{x:80,y:680}];
+
+        const portfolioData = {
+            'OFFSCREEN 2018/19': {
+                files: [
+                    {type:'markdown',name:'Offscreen Newsletter - Kat vs Culture',url:'https://raw.githubusercontent.com/ki-tya/ketadata/main/content/offscreen/kat%20vs%20culture.md'},
+                    {type:'markdown',name:'Offscreen Newsletter - The Forecast',url:'https://raw.githubusercontent.com/ki-tya/ketadata/main/content/offscreen/forecast.md'},
+                    {type:'markdown',name:'Offscreen Yearbook - Pages.pdf',url:'https://raw.githubusercontent.com/ki-tya/ketadata/main/content/offscreen/yearbook.md'},
+                    {type:'markdown',name:'Offscreen Yearbook - Months.pdf',url:'https://raw.githubusercontent.com/ki-tya/ketadata/main/content/offscreen/months.md'}
+                ]
+            },
+            'UVA 2018/21': {
+                files: [
+                    {type:'markdown',name:'[FINAL THESIS] Deconstructing the Pattern',url:'https://raw.githubusercontent.com/ki-tya/ketadata/main/content/academic/deconstructing%20the%20pattern%20%28final%20thesis%29.md'},
+                    {type:'markdown',name:'[PHILOSOPHY] TikTok: The Implications of Sound',url:'https://raw.githubusercontent.com/ki-tya/ketadata/main/content/academic/tiktok%20-%20the%20implications%20of%20sound.md'},
+                    {type:'markdown',name:'[FUTURE ENTREPRENEUR] Driving Forces',url:'https://raw.githubusercontent.com/ki-tya/ketadata/main/content/academic/driving%20forces.md'},
+                    {type:'markdown',name:'[DIGITAL PRACTICES] Podcast Production & Analysis',url:'https://raw.githubusercontent.com/ki-tya/ketadata/main/content/academic/podcast%20medium%20analysis.md'},
+                    {type:'markdown',name:'[MEDIA RESEARCH] Interface Analysis - Music Platforms',url:'https://raw.githubusercontent.com/ki-tya/ketadata/main/content/academic/music%20interface%20analysis.md'},
+                    {type:'markdown',name:'[MEDIA RESEARCH] Research Design',url:'https://raw.githubusercontent.com/ki-tya/ketadata/main/content/academic/media%20research%20design.md'},
+                    {type:'markdown',name:'[MEDIA RESEARCH] Celebrity Studies',url:'https://raw.githubusercontent.com/ki-tya/ketadata/main/content/academic/celebrity%20identity%20crisis.md'},
+                    {type:'markdown',name:'[MAD GENIUS DEBATE] Bo Burnham & His Double',url:'https://raw.githubusercontent.com/ki-tya/ketadata/main/content/academic/bo%20burnham%20%26%20his%20double.md'},
+                    {type:'markdown',name:'[FILM THEORY] Sensory Cinema',url:'https://raw.githubusercontent.com/ki-tya/ketadata/main/content/academic/sensory%20cinema.md'},
+                    {type:'markdown',name:'[MEDIA RESEARCH] Virtual Language',url:'https://raw.githubusercontent.com/ki-tya/ketadata/main/content/presentations/virtual%20language.md'},
+                    {type:'markdown',name:'[MEDIA RESEARCH] Main Character Mentality',url:'https://raw.githubusercontent.com/ki-tya/ketadata/main/content/presentations/main%20character%20mentality.md'},
+                    {type:'markdown',name:'[AESTHETICS & POLITICS] Drag: The Neo-Real Self',url:'https://raw.githubusercontent.com/ki-tya/ketadata/main/content/academic/drag%3A%20the%20neo-real%20self.md'},
+                    {type:'markdown',name:'[MEDIA RESEARCH] Trisha Paytas PPT',url:'https://raw.githubusercontent.com/ki-tya/ketadata/main/content/presentations/trisha%20paytas.md'},
+                    {type:'markdown',name:'[DATA JOURNALISM] Can a Woman Have It All? PPT',url:'https://raw.githubusercontent.com/ki-tya/ketadata/main/content/presentations/woman.md'}
+                ]
+            },
+            'POST-GRAD RESEARCH 2021/25': {
+                files: [
+                    {type:'markdown',name:'AI Mechanical Emotives',url:'https://raw.githubusercontent.com/ki-tya/ketadata/main/content/post-grad/ai%20mechanical%20emotives.md'},
+                    {type:'markdown',name:'Bitcoin Overview',url:'https://raw.githubusercontent.com/ki-tya/ketadata/main/content/post-grad/bitcoin%20basics.md'},
+                    {type:'markdown',name:'Bitcoin Maximalism',url:'https://raw.githubusercontent.com/ki-tya/ketadata/main/content/post-grad/bitcoin%20maximalism.md'},
+                    {type:'markdown',name:"Who's Afraid of Web3?",url:'https://raw.githubusercontent.com/ki-tya/ketadata/main/content/post-grad/who%27s%20afraid%20of%20web3%3F.md'},
+                    {type:'markdown',name:'Bitcoin Realism',url:'https://raw.githubusercontent.com/ki-tya/ketadata/main/content/post-grad/WEB3.md'},
+                    {type:'markdown',name:'Alt - Coin Colonoscopy',url:'https://raw.githubusercontent.com/ki-tya/ketadata/main/content/post-grad/coin%20colonoscopy.md'},
+                    {type:'markdown',name:'NFT Research',url:'https://raw.githubusercontent.com/ki-tya/ketadata/main/content/post-grad/nft%20research.md'},
+                    {type:'markdown',name:'Ordinals: DNA for Inscriptions',url:'https://raw.githubusercontent.com/ki-tya/ketadata/main/content/post-grad/ordinals%3A%20dna%20for%20inscriptions.md'},
+                    {type:'markdown',name:'Rentier Assets',url:'https://raw.githubusercontent.com/ki-tya/ketadata/main/content/post-grad/rentier%20assets.md'}
+                ]
+            },
+            'PRESENTATIONS 2021/24': {
+                files: [
+                    {type:'markdown',name:'WINLINE (1)',url:'https://raw.githubusercontent.com/ki-tya/ketadata/main/content/presentations/WINLINE%20(1).md'},
+                    {type:'markdown',name:'WINLINE (2)',url:'https://raw.githubusercontent.com/ki-tya/ketadata/main/content/presentations/WINLINE%20(2).md'},
+                    {type:'markdown',name:'Maker Protocol',url:'https://raw.githubusercontent.com/ki-tya/ketadata/main/content/presentations/maker protocol.md'}
+                ]
+            },
+            'WAREHOUSE DOCS 2021/22': {
+                files: [
+                    {type:'markdown',name:'GPU Specifications',url:'https://raw.githubusercontent.com/ki-tya/ketadata/main/content/warehouse/GPU%20specifications.md'},
+                    {type:'markdown',name:'Inventory Totals & Breakdown',url:'https://raw.githubusercontent.com/ki-tya/ketadata/main/content/warehouse/inventory%20totals.md'}
+                ]
+            },
+            'WEB 3 2021/24': {
+                files: [
+                    {type:'markdown',name:'L15 readme',url:'https://raw.githubusercontent.com/ki-tya/ketadata/main/content/web%203/L15%20readme.md'},
+                    {type:'markdown',name:'about L15',url:'https://raw.githubusercontent.com/ki-tya/ketadata/main/content/web%203/L15.md'},
+                    {type:'markdown',name:'L15 Trust Model',url:'https://raw.githubusercontent.com/ki-tya/ketadata/main/content/web%203/L15%20trust%20model.md'},
+                    {type:'markdown',name:'L15 Stable Summary',url:'https://raw.githubusercontent.com/ki-tya/ketadata/main/content/web%203/L15%20stable%20summary.md'},
+                    {type:'markdown',name:'L15SR Economics',url:'https://raw.githubusercontent.com/ki-tya/ketadata/main/content/web%203/L15SR%20economics.md'},
+                    {type:'markdown',name:'UTXORD PPT',url:'https://raw.githubusercontent.com/ki-tya/ketadata/main/content/web%203/UTXORD%20PPT.md'},
+                    {type:'markdown',name:'UTXORD Landing Page Design',url:'https://raw.githubusercontent.com/ki-tya/ketadata/main/content/web%203/UTXORD%20Landing%20Page%20Design.md'},
+                    {type:'markdown',name:'UTXORD Plug-in Wallet',url:'https://raw.githubusercontent.com/ki-tya/ketadata/main/content/web%203/UTXORD%20plug-in%20wallet.md'},
+                    {type:'markdown',name:'UTXORD Genetic Provenance',url:'https://raw.githubusercontent.com/ki-tya/ketadata/main/content/web%203/genetic%20provenance.md'},
+                    {type:'markdown',name:'UTXORD AMA Session Script',url:'https://raw.githubusercontent.com/ki-tya/ketadata/main/content/web%203/UTXORD%20ama%20session%20script.md'}
+                ]
+            },
+            'WRITING, EDITING & CONSULTING 2019/25': {
+                files: [
+                    {type:'markdown',name:'LIBRIF.AI',url:'https://raw.githubusercontent.com/ki-tya/ketadata/main/content/freelance%20%26%20consulting/librif-ai.md'},
+                    {type:'markdown',name:'MAGIC PEOPLE STUDIO',url:'https://raw.githubusercontent.com/ki-tya/ketadata/main/content/freelance%20%26%20consulting/magic%20people%20studio.md'},
+                    {type:'markdown',name:'Love Funeral (Production)',url:'https://raw.githubusercontent.com/ki-tya/ketadata/main/content/freelance%20%26%20consulting/magic%20people%20love%20funeral.md'},
+                    {type:'markdown',name:'Beaver Mills',url:'https://raw.githubusercontent.com/ki-tya/ketadata/main/content/presentations/beaver%20mills.md'}
+                ]
+            },
+            'PARKING LOT': {
+                files: [
+                    {type:'markdown',name:'[BOOK REVIEW] Helmut Newton',url:'https://raw.githubusercontent.com/ki-tya/ketadata/main/content/academic/helmut%20newton%20book%20review.md'},
+                    {type:'markdown',name:'[LITERARY ANALYSIS] Anne Sexton - Female Trauma',url:'https://raw.githubusercontent.com/ki-tya/ketadata/main/content/academic/anne%20sexton%20female%20trauma.md'},
+                    {type:'markdown',name:'[MAD GENIUS DEBATE] Mad Genius & Its Discontents',url:'https://raw.githubusercontent.com/ki-tya/ketadata/main/content/academic/mad%20genius%20%26%20its%20discontents.md'},
+                    {type:'markdown',name:'[PHILOSOPHY] The Sublime',url:'https://raw.githubusercontent.com/ki-tya/ketadata/main/content/academic/the%20sublime.md'},
+                    {type:'markdown',name:'[AESTHETICS & POLITICS] Visual Rhetoric - Hooded Man',url:'https://raw.githubusercontent.com/ki-tya/ketadata/main/content/academic/visual%20rhetoric.md'},
+                    {type:'markdown',name:'[FUTURE ENTREPRENEUR] Drugs 2030',url:'https://raw.githubusercontent.com/ki-tya/ketadata/main/content/academic/drugs%202030.md'},
+                    {type:'markdown',name:'[MEDIA RESEARCH] Dramatic Imaginary of Trisha Paytas',url:'https://raw.githubusercontent.com/ki-tya/ketadata/main/content/academic/dramatic%20imaginary%20of%20trisha%20paytas.md'},
+                    {type:'markdown',name:'UTXORD branding',url:'https://raw.githubusercontent.com/ki-tya/ketadata/main/content/web%203/UTXORD%20branding.md'},
+                    {type:'markdown',name:'UTXORD aesthetics',url:'https://raw.githubusercontent.com/ki-tya/ketadata/main/content/web%203/UTXORD%20aesthetics.md'},
+                    {type:'markdown',name:'Provenance Interview',url:'https://raw.githubusercontent.com/ki-tya/ketadata/main/content/post-grad/casey%20rodarmor%20provenance%20interview.md'},
+                    {type:'markdown',name:'UTXORD marketplace tweets',url:'https://raw.githubusercontent.com/ki-tya/ketadata/main/content/web%203/UTXORD%20marketplace%20tweets.md'},
+                    {type:'markdown',name:'UTXORD report',url:'https://raw.githubusercontent.com/ki-tya/ketadata/main/content/web%203/UTXORD%20report.md'},
+                    {type:'markdown',name:'UTXORD twitter & pr',url:'https://raw.githubusercontent.com/ki-tya/ketadata/main/content/web%203/UTXORD%20twitter%20%26%20pr.md'}
+                ]
+            },
+            'K-2': { files: [] }
+        };
+
+        const folderNames = Object.keys(portfolioData);
+        const desktop = document.getElementById('desktop');
+        let currentFolder = null, perpetualMotion = null;
+        let windowIdCounter = 0;
+        let isDragging = false, isResizing = false, resizeType = '';
+        let startX = 0, startY = 0, startWidth = 0, startHeight = 0;
+        let activeWindow = null;
+        let openWindows = new Set();
+
+        function getCirclePositions() {
+            const cx = window.innerWidth/2, cy = (window.innerHeight-24)/2+12;
+            const r = Math.min(cx,cy)*0.7, positions = [], angleStep = (2*Math.PI)/folderNames.length;
+            for(let i=0;i<folderNames.length;i++){
+                const angle = i*angleStep - Math.PI/2;
+                positions.push({x: cx+r*Math.cos(angle)-50, y: cy+r*Math.sin(angle)-50});
+            }
+            return positions;
+        }
+
+        function createFolders() {
+            desktop.innerHTML = '';
+            const ketadataDrive = document.createElement('div');
+            ketadataDrive.className = 'drive';
+            ketadataDrive.style.cssText = 'position:absolute;right:60px;bottom:40px';
+            ketadataDrive.innerHTML = '<div class="drive-icon"></div><div class="drive-name">K-DRIVE</div>';
+            ketadataDrive.onclick = () => { stopPerpetualMotion(); openKetadataDrive(); };
+            desktop.appendChild(ketadataDrive);
+
+            folderNames.forEach((name, i) => {
+                const folderEl = document.createElement('div');
+                folderEl.className = 'folder';
+                folderEl.style.cssText = `position:absolute;left:${folderPositions[i].x}px;top:${folderPositions[i].y}px`;
+                folderEl.innerHTML = `<div class="folder-icon"></div><div class="folder-name">${name}</div>`;
+                folderEl.onclick = () => { stopPerpetualMotion(); openFolder(name); };
+                desktop.appendChild(folderEl);
+            });
+        }
+
+        function sortFolders(letter) {
+            stopPerpetualMotion();
+            if(letter==='q'){startPerpetualMotion();return;}
+            const folderElements = document.querySelectorAll('.folder');
+            let positions = letter==='n' ? chronologicalPositions : letter==='t' ? getCirclePositions() : geographicPositions;
+            folderElements.forEach((el, i) => {
+                el.style.transition = 'all 0.5s ease';
+                el.style.left = positions[i].x + 'px';
+                el.style.top = positions[i].y + 'px';
+            });
+        }
+
+        function startPerpetualMotion() {
+            const folderElements = document.querySelectorAll('.folder');
+            const minTop = 24;
+            function animate() {
+                folderElements.forEach(el => {
+                    el.style.transition = 'all 3s ease-in-out';
+                    el.style.left = Math.random()*(window.innerWidth-150) + 'px';
+                    el.style.top = (minTop + Math.random()*(window.innerHeight-minTop-150)) + 'px';
+                });
+            }
+            animate();
+            perpetualMotion = setInterval(animate, 3000);
+        }
+
+        function stopPerpetualMotion() {
+            if(perpetualMotion){clearInterval(perpetualMotion);perpetualMotion=null;}
+        }
+
+        function createFinderWindow(folderName) {
+            const windowKey = 'finder:' + folderName;
+            if(openWindows.has(windowKey)) return;
+            openWindows.add(windowKey);
+
+            const windowId = 'finder-' + (windowIdCounter++);
+            const container = document.createElement('div');
+            container.className = 'window-container active';
+            container.id = windowId;
+            container.setAttribute('data-window-key', windowKey);
+
+            const offsetX = (windowIdCounter-1) * 30;
+            const offsetY = (windowIdCounter-1) * 30;
+            const winWidth = 700, winHeight = 600;
+            const startLeft = (window.innerWidth/2) - (winWidth/2) + offsetX;
+            const startTop = ((window.innerHeight-24)/2) - (winHeight/2) + 24 + offsetY;
+
+            container.innerHTML = `
+                <div class="preview-window" style="left:${startLeft}px;top:${startTop}px;transform:none;">
+                    <div class="preview-sidebar">
+                        <div class="preview-sidebar-header">
+                            <div class="preview-close-btn" onclick="closeWindow('${windowId}')">← Close</div>
+                        </div>
+                        <div class="preview-folders" id="${windowId}-folders"></div>
+                    </div>
+                    <div class="preview-main">
+                        <div class="preview-header"><div class="preview-title" id="${windowId}-title">Select a folder</div></div>
+                        <div class="preview-content" id="${windowId}-content"></div>
+                    </div>
+                </div>`;
+
+            document.getElementById('windowsContainer').appendChild(container);
+            setupWindowDragging(container.querySelector('.preview-window'), container.querySelector('.preview-sidebar-header'));
+
+            currentFolder = folderName;
+            renderPreviewFolders(windowId);
+            loadFolderInPreview(folderName, windowId);
+        }
+
+        function createContentWindow(fileName, url, isCv=false) {
+            const windowKey = isCv ? 'cv' : 'file:' + url;
+            if(openWindows.has(windowKey)) return;
+            openWindows.add(windowKey);
+
+            const windowId = 'content-' + (windowIdCounter++);
+            const container = document.createElement('div');
+            container.className = 'window-container active' + (isCv ? ' cv-mode' : '');
+            container.id = windowId;
+            container.setAttribute('data-window-key', windowKey);
+
+            let leftPos, topPos, transformVal;
+            if(isCv){
+                leftPos='0'; topPos='0'; transformVal='none';
+            } else {
+                const offsetX = (windowIdCounter-1)*30, offsetY = (windowIdCounter-1)*30;
+                leftPos = (window.innerWidth*0.6) - 225 + offsetX;
+                topPos = ((window.innerHeight-24)/2) - 350 + 24 + offsetY;
+                transformVal = 'none';
+            }
+
+            container.innerHTML = `
+                <div class="content-preview-window" style="left:${leftPos}px;top:${topPos}px;transform:${transformVal};">
+                    <div class="content-preview-header">
+                        <div class="content-preview-title">${fileName}</div>
+                        <div class="content-preview-close" onclick="closeWindow('${windowId}')">×</div>
+                    </div>
+                    <div class="content-preview-body ${isCv?'cv-display':''}">
+                        <div class="loading">Loading…</div>
+                    </div>
+                    ${isCv?'':'<div class="resize-handle edge-e"></div><div class="resize-handle edge-s"></div><div class="resize-handle corner-se"></div>'}
+                </div>`;
+
+            document.getElementById('windowsContainer').appendChild(container);
+
+            const win = container.querySelector('.content-preview-window');
+            const header = container.querySelector('.content-preview-header');
+            if(!isCv){ setupWindowDragging(win, header); setupWindowResize(win, container); }
+
+            fetch(url)
+                .then(r => r.text())
+                .then(md => {
+                    const body = container.querySelector('.content-preview-body');
+                    body.innerHTML = isCv ? '<div>' + parseMarkdown(md) + '</div>' : parseMarkdown(md);
+                })
+                .catch(() => {
+                    const body = container.querySelector('.content-preview-body');
+                    body.innerHTML = '<div style="color:rgba(255,80,80,0.8);padding:20px">Error loading file</div>';
+                });
+        }
+
+        function closeWindow(windowId) {
+            const container = document.getElementById(windowId);
+            if(container){
+                const key = container.getAttribute('data-window-key');
+                if(key) openWindows.delete(key);
+                container.remove();
+            }
+        }
+
+        function openFolder(folderName){ createFinderWindow(folderName); }
+
+        function renderPreviewFolders(windowId) {
+            const folderList = document.getElementById(`${windowId}-folders`);
+            folderList.innerHTML = '';
+            folderNames.forEach(name => {
+                const item = document.createElement('div');
+                item.className = 'preview-folder-item' + (name===currentFolder?' active':'');
+                item.innerHTML = `<div class="preview-folder-icon"></div><span>${name}</span>`;
+                item.onclick = () => loadFolderInPreview(name, windowId);
+                folderList.appendChild(item);
+            });
+        }
+
+        function loadFolderInPreview(folderName, windowId) {
+            currentFolder = folderName;
+            renderPreviewFolders(windowId);
+            const previewTitle = document.getElementById(`${windowId}-title`);
+            const previewContent = document.getElementById(`${windowId}-content`);
+            const folder = portfolioData[folderName];
+            previewTitle.textContent = folderName;
+            if(!folder.files || folder.files.length===0){
+                previewContent.innerHTML = '<div style="padding:30px;color:rgba(255,255,255,0.35);text-align:center">This folder is empty</div>';
+                return;
+            }
+            let html = '';
+            folder.files.forEach((file, i) => {
+                html += `<div class="preview-file-item" onclick="openFileInPreview('${folderName}',${i})">${file.name}</div>`;
+            });
+            previewContent.innerHTML = html;
+        }
+
+        function openFileInPreview(folderName, fileIndex) {
+            const file = portfolioData[folderName].files[fileIndex];
+            createContentWindow(file.name, file.url);
+        }
+
+        function openCVFile(){ createContentWindow('katgolubev_cv.md','https://raw.githubusercontent.com/ki-tya/ketadata/main/content/katgolubev_cv.md',true); }
+        function openKetadataDrive(){ createContentWindow('ketadata - README.md','https://raw.githubusercontent.com/ki-tya/ketadata/main/README.md'); }
+
+        function parseMarkdown(md) {
+            let html='', lines=md.split('\n'), inP=false;
+            for(let line of lines){
+                line = line.trim();
+                if(line===''){if(inP){html+='</p>';inP=false;}continue;}
+                const imgMatch = line.match(/!\[([^\]]*)\]\(([^)]+)\)/);
+                if(imgMatch){if(inP){html+='</p>';inP=false;}html+=`<img src="${imgMatch[2]}" alt="${imgMatch[1]}">`;continue;}
+                if(line.startsWith('### ')){if(inP){html+='</p>';inP=false;}html+='<h3>'+line.substring(4)+'</h3>';}
+                else if(line.startsWith('## ')){if(inP){html+='</p>';inP=false;}html+='<h2>'+line.substring(3)+'</h2>';}
+                else if(line.startsWith('# ')){if(inP){html+='</p>';inP=false;}html+='<h1>'+line.substring(2)+'</h1>';}
+                else{
+                    if(!inP){html+='<p>';inP=true;}else{html+=' ';}
+                    line = line
+                        .replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')
+                        .replace(/\*(.+?)\*/g,'<em>$1</em>')
+                        .replace(/\[(.+?)\]\((.+?)\)/g,'<a href="$2" target="_blank" style="color:#6ba4ff">$1</a>');
+                    html += line;
+                }
+            }
+            if(inP) html+='</p>';
+            return html;
+        }
+
+        function setupWindowDragging(win, header) {
+            header.addEventListener('mousedown', (e) => {
+                if(e.target.classList.contains('preview-close-btn')||e.target.classList.contains('content-preview-close')||
+                   e.target.closest('.preview-close-btn')||e.target.closest('.content-preview-close')) return;
+                const container = win.closest('.window-container');
+                if(container && container.classList.contains('cv-mode')) return;
+
+                const rect = win.getBoundingClientRect();
+                isDragging = true; activeWindow = win;
+                document.body.classList.add('dragging');
+                startX = e.clientX - rect.left;
+                startY = e.clientY - rect.top;
+                win.style.transform = 'none';
+                win.style.left = rect.left + 'px';
+                win.style.top = rect.top + 'px';
+                e.preventDefault(); e.stopPropagation();
+
+                const dragHandler = (mv) => {
+                    if(!isDragging || activeWindow!==win) return;
+                    mv.preventDefault(); mv.stopPropagation();
+                    let nl = mv.clientX - startX, nt = mv.clientY - startY;
+                    nl = Math.max(0, Math.min(nl, window.innerWidth - win.offsetWidth));
+                    nt = Math.max(24, Math.min(nt, window.innerHeight - win.offsetHeight));
+                    win.style.left = nl+'px'; win.style.top = nt+'px';
+                };
+                const upHandler = () => {
+                    isDragging=false; activeWindow=null;
+                    document.body.classList.remove('dragging');
+                    document.removeEventListener('mousemove',dragHandler,true);
+                    document.removeEventListener('mouseup',upHandler,true);
+                };
+                document.addEventListener('mousemove',dragHandler,true);
+                document.addEventListener('mouseup',upHandler,true);
+            });
+        }
+
+        function setupWindowResize(win, container) {
+            win.querySelectorAll('.resize-handle').forEach(handle => {
+                handle.addEventListener('mousedown', (e) => {
+                    e.stopPropagation(); e.preventDefault();
+                    isResizing=true; activeWindow=win;
+                    document.body.classList.add('dragging');
+                    resizeType = handle.classList.contains('corner-se')?'corner':handle.classList.contains('edge-e')?'e':'s';
+                    startX=e.clientX; startY=e.clientY;
+                    startWidth=win.offsetWidth; startHeight=win.offsetHeight;
+
+                    const dragHandler = (mv) => {
+                        if(!isResizing||activeWindow!==win) return;
+                        mv.preventDefault(); mv.stopPropagation();
+                        const dx=mv.clientX-startX, dy=mv.clientY-startY;
+                        if(resizeType==='corner'||resizeType==='e') win.style.width=Math.max(400,startWidth+dx)+'px';
+                        if(resizeType==='corner'||resizeType==='s') win.style.height=Math.max(300,startHeight+dy)+'px';
+                    };
+                    const upHandler = () => {
+                        isResizing=false; activeWindow=null;
+                        document.body.classList.remove('dragging');
+                        document.removeEventListener('mousemove',dragHandler,true);
+                        document.removeEventListener('mouseup',upHandler,true);
+                    };
+                    document.addEventListener('mousemove',dragHandler,true);
+                    document.addEventListener('mouseup',upHandler,true);
+                });
+            });
+        }
+
+        document.addEventListener('mouseup', () => {
+            if(isDragging||isResizing){
+                document.body.classList.remove('dragging');
+                isDragging=false; isResizing=false; activeWindow=null;
+            }
+        });
+
+        function updateClock() {
+            const now = new Date();
+            const days = ['SUN','MON','TUE','WED','THU','FRI','SAT'];
+            const months = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+            const day = days[now.getDay()];
+            const month = months[now.getMonth()];
+            const date = String(now.getDate()).padStart(2,'0');
+            let hours = now.getHours();
+            const mins = String(now.getMinutes()).padStart(2,'0');
+            const ampm = hours >= 12 ? 'PM' : 'AM';
+            hours = hours % 12 || 12;
+            document.getElementById('clock').textContent = `${day}   ${month}   ${date}   ${hours}:${mins} ${ampm}`;
+        }
+        updateClock();
+        setInterval(updateClock, 1000);
+
+        createFolders();
+    </script>
+</body>
+</html>
