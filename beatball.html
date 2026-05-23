@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>BRAIN BALL // WAVES</title>
+<title>BRAIN BALL // OBSERVATORY</title>
 
 <style>
 *{
@@ -228,7 +228,7 @@ input[type="range"]::-webkit-slider-thumb{
 <div class="crosshair"></div>
 
 <div class="status">
-    brain sphere // wave deformation
+    brain sphere // observatory
 </div>
 
 <div class="controls">
@@ -245,6 +245,14 @@ input[type="range"]::-webkit-slider-thumb{
 
         <button class="btn" id="waveToggle">
             waves
+        </button>
+
+        <button class="btn" id="flameToggle">
+            flames
+        </button>
+
+        <button class="btn" id="metronomeToggle">
+            metronome
         </button>
 
         <button class="btn" id="resetView">
@@ -295,6 +303,10 @@ let beatBump = false;
 let beatSpeed = 120;
 
 let wavesEnabled = false;
+let flamesEnabled = false;
+
+let metronomeEnabled = false;
+let metronomeAudio;
 
 function init(){
 
@@ -357,6 +369,12 @@ function init(){
     document.getElementById('waveToggle')
         .addEventListener('click',toggleWaves);
 
+    document.getElementById('flameToggle')
+        .addEventListener('click',toggleFlames);
+
+    document.getElementById('metronomeToggle')
+        .addEventListener('click',toggleMetronome);
+
     document.getElementById('resetView')
         .addEventListener('click',resetView);
 
@@ -379,7 +397,8 @@ function createSphere(){
             uniforms:{
                 time:{ value:0 },
                 beatBump:{ value:0 },
-                wavesEnabled:{ value:0 }
+                wavesEnabled:{ value:0 },
+                flamesEnabled:{ value:0 }
             },
 
             vertexShader:`
@@ -387,13 +406,16 @@ function createSphere(){
                 uniform float time;
                 uniform float beatBump;
                 uniform float wavesEnabled;
+                uniform float flamesEnabled;
 
                 varying vec3 vNormal;
                 varying vec3 vPosition;
 
                 void main(){
 
-                    vNormal = normalize(normalMatrix * normal);
+                    vNormal =
+                        normalize(normalMatrix * normal);
+
                     vPosition = position;
 
                     float displacement = 0.0;
@@ -411,10 +433,31 @@ function createSphere(){
                         float wave3 =
                             sin(length(position.xy) * 6.0 - time * 1.2);
 
-                        displacement =
+                        displacement +=
                             wave1 * 0.08 +
                             wave2 * 0.06 +
                             wave3 * 0.04;
+                    }
+
+                    if(flamesEnabled > 0.5){
+
+                        float flameMask =
+                            max(0.0, normal.y);
+
+                        float flameNoise =
+                            sin(position.x * 8.0 + time * 2.2) *
+                            cos(position.z * 8.0 + time * 1.8);
+
+                        float flameRise =
+                            sin(time * 3.0 + position.y * 10.0);
+
+                        float flames =
+                            flameMask *
+                            flameNoise *
+                            flameRise *
+                            0.12;
+
+                        displacement += flames;
                     }
 
                     displacement += beatBump * 0.18;
@@ -492,6 +535,31 @@ function toggleWaves(){
         .classList.toggle('active');
 }
 
+function toggleFlames(){
+
+    flamesEnabled = !flamesEnabled;
+
+    document.getElementById('flameToggle')
+        .classList.toggle('active');
+}
+
+function toggleMetronome(){
+
+    metronomeEnabled = !metronomeEnabled;
+
+    document.getElementById('metronomeToggle')
+        .classList.toggle('active');
+
+    if(metronomeEnabled){
+
+        playMetronome();
+
+    }else{
+
+        clearInterval(metronomeAudio);
+    }
+}
+
 function updateBeatSpeed(){
 
     beatSpeed =
@@ -501,6 +569,51 @@ function updateBeatSpeed(){
 
     document.getElementById('speedValue')
         .textContent = beatSpeed;
+
+    if(metronomeEnabled){
+        playMetronome();
+    }
+}
+
+function playMetronome(){
+
+    if(!metronomeEnabled) return;
+
+    if(metronomeAudio){
+        clearInterval(metronomeAudio);
+    }
+
+    const interval =
+        (60 / beatSpeed) * 1000;
+
+    metronomeAudio = setInterval(()=>{
+
+        const ctx =
+            new (
+                window.AudioContext ||
+                window.webkitAudioContext
+            )();
+
+        const osc =
+            ctx.createOscillator();
+
+        const gain =
+            ctx.createGain();
+
+        osc.type = 'square';
+
+        osc.frequency.value = 1200;
+
+        gain.gain.value = 0.02;
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+
+        osc.start();
+
+        osc.stop(ctx.currentTime + 0.03);
+
+    }, interval);
 }
 
 function resetView(){
@@ -611,6 +724,9 @@ function animate(){
 
     sphere.material.uniforms.wavesEnabled.value =
         wavesEnabled ? 1.0 : 0.0;
+
+    sphere.material.uniforms.flamesEnabled.value =
+        flamesEnabled ? 1.0 : 0.0;
 
     sphere.material.uniforms.time.value += 0.02;
 
