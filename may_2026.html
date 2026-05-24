@@ -19,8 +19,8 @@
   .keta-icon{width:12px;height:12px;border:1.5px solid rgba(255,255,255,.45);cursor:pointer;transition:background .1s}
   .keta-icon.filled{background:#fff}
   .page{height:100%;display:flex;flex-direction:column}
-  .wrap{flex:1;overflow:auto;padding:18px 0}
-  .cal{width:calc(var(--cell)*7 + var(--gap)*6);margin:0 auto;display:grid;grid-template-columns:repeat(7,var(--cell));grid-auto-rows:var(--cell);gap:var(--gap)}
+  .wrap{flex:1;overflow:auto;display:flex;align-items:center;justify-content:center;padding:24px}
+  .cal{width:calc(var(--cell)*7 + var(--gap)*6);display:grid;grid-template-columns:repeat(7,var(--cell));grid-auto-rows:var(--cell);gap:var(--gap)}
   .cell{border:1px solid var(--line);padding:8px;display:flex;flex-direction:column;position:relative;transition:border-color .12s,background .12s}
   .cell.pad{opacity:.10;pointer-events:none}
   .cell:not(.pad){cursor:pointer}
@@ -30,12 +30,11 @@
   .dn{position:absolute;top:7px;left:7px;font-size:11px;color:rgba(255,255,255,.42)}
   .dw{position:absolute;top:7px;right:7px;font-size:8px;letter-spacing:.14em;color:rgba(255,255,255,.20)}
   .prev{position:absolute;bottom:7px;left:7px;right:7px;font-size:9px;line-height:1.35;color:rgba(255,255,255,.28);overflow:hidden;max-height:38px}
-  .has-brief{position:absolute;bottom:7px;right:7px;width:4px;height:4px;background:rgba(255,255,255,.35);border-radius:50%}
+  .has-brief{position:absolute;bottom:7px;right:7px;width:5px;height:5px;background:rgba(255,255,255,.70);border-radius:50%}
+  .cell.focused{border-color:rgba(255,255,255,.55)!important;}
   body.wk .cell{display:none}
   body.wk .cell.inWeek{display:flex}
-  .bottom{height:64px;border-top:1px solid var(--line);display:flex;align-items:center;gap:12px;padding:0 16px;flex-shrink:0}
-  .bl{font-size:9px;letter-spacing:.18em;text-transform:uppercase;color:rgba(255,255,255,.18);white-space:nowrap}
-  .bt{flex:1;height:40px;background:#000;color:rgba(255,255,255,.45);border:1px solid var(--line);padding:7px 10px;font-family:Arial,Helvetica,sans-serif;font-size:10px;resize:none;outline:none}
+
   #kn{position:fixed;top:54px;right:18px;width:300px;height:200px;background:#fff;color:#000;border:1px solid #000;display:none;z-index:50}
   #kn .knh{height:26px;background:#000;color:#fff;padding:4px 8px;cursor:move;display:flex;justify-content:space-between;align-items:center;font-size:9px;letter-spacing:.18em;text-transform:uppercase}
   #kn textarea{width:100%;height:calc(100% - 26px);border:none;resize:none;padding:10px;font-family:Arial,Helvetica,sans-serif;font-size:11px;outline:none}
@@ -54,21 +53,22 @@
     </div>
   </div>
   <div class="wrap"><div class="cal" id="cal"></div></div>
-  <div class="bottom"><div class="bl">SYSTEM</div><textarea class="bt" id="sys" placeholder="laws · constraints · references"></textarea></div>
-</div>
+  </div>
 <div id="kn"><div class="knh"><span>KETA NOTE</span><span id="cn" style="cursor:pointer">×</span></div><textarea id="knt" placeholder="decisions · deviations · next actions"></textarea></div>
 <script>
 const CK='ketadata.cal.may_2026';
 const ST={wk:false,sw:0,sys:'',kn:''};
 const cal=document.getElementById('cal');
-const TODAY=23;
+const TODAY=24;
 
 function addPad(){const c=document.createElement('div');c.className='cell pad';cal.appendChild(c);}
+const BRIEFS=[23,24];
 function addDay(d,dw,file){
   const c=document.createElement('div');
-  c.className='cell';c.dataset.d=d;c.dataset.w=Math.floor((5+d-1)/7);
+  c.className='cell';c.dataset.d=d;c.dataset.w=Math.floor((5+d-1)/7);c.dataset.file=file;
   if(d===TODAY)c.classList.add('today');
-  c.innerHTML=`<div class="dn">${d}</div><div class="dw">${dw}</div><div class="prev" id="p${d}"></div>`;
+  const dot=BRIEFS.includes(d)?'<div class="has-brief"></div>':'';
+  c.innerHTML=`<div class="dn">${d}</div><div class="dw">${dw}</div><div class="prev" id="p${d}"></div>${dot}`;
   c.addEventListener('click',()=>{if(ST.wk){ST.sw=+c.dataset.w;applyW();persist();return;}window.location.href=file;});
   cal.appendChild(c);
 }
@@ -123,9 +123,6 @@ function loadPrev(){
       const hasBrief = data.notes||false;
     }catch(e){}
   }
-  // dot for day 23 (has brief)
-  const c23=cal.querySelector('[data-d="23"]');
-  if(c23&&!c23.querySelector('.has-brief')){const dot=document.createElement('div');dot.className='has-brief';c23.appendChild(dot);}
 }
 
 function applyW(){document.body.classList.toggle('wk',ST.wk);if(!ST.wk){cal.querySelectorAll('.cell').forEach(c=>c.classList.remove('inWeek'));return;}cal.querySelectorAll('.cell').forEach(c=>{c.classList.toggle('inWeek',c.classList.contains('pad')?ST.sw===0:+c.dataset.w===ST.sw);});}
@@ -142,9 +139,33 @@ document.getElementById('btnExp').addEventListener('click',()=>{persist();const 
 document.getElementById('btnImp').addEventListener('click',()=>document.getElementById('fileIn').click());
 document.getElementById('fileIn').addEventListener('change',()=>{const f=document.getElementById('fileIn').files[0];if(!f)return;const r=new FileReader();r.onload=()=>{try{Object.assign(ST,JSON.parse(r.result));document.getElementById('sys').value=ST.sys||'';document.getElementById('knt').value=ST.kn||'';applyW();}catch(e){alert('Import failed');}};r.readAsText(f);document.getElementById('fileIn').value='';});
 document.getElementById('sys').addEventListener('input',persist);document.getElementById('knt').addEventListener('input',persist);
-document.addEventListener('keydown',e=>{const tag=document.activeElement?.tagName.toLowerCase();if(!e.ctrlKey&&!e.metaKey&&e.key.toLowerCase()==='n'&&tag!=='textarea'&&tag!=='input')tgNote();});
 
-loadCal();applyW();loadPrev();
+
+
+let focusedDay = TODAY;
+function setFocus(d){
+  if(d<1||d>31) return;
+  cal.querySelectorAll('.cell.focused').forEach(c=>c.classList.remove('focused'));
+  const cell=cal.querySelector('[data-d="'+d+'"]');
+  if(cell){cell.classList.add('focused');focusedDay=d;}
+}
+document.addEventListener('keydown',e=>{
+  const tag=document.activeElement?.tagName.toLowerCase();
+  if(tag==='textarea'||tag==='input') return;
+  switch(e.key){
+    case 'ArrowRight': e.preventDefault(); setFocus(focusedDay+1); break;
+    case 'ArrowLeft':  e.preventDefault(); setFocus(focusedDay-1); break;
+    case 'ArrowDown':  e.preventDefault(); setFocus(focusedDay+7); break;
+    case 'ArrowUp':    e.preventDefault(); setFocus(focusedDay-7); break;
+    case 'Enter':{
+      const f=cal.querySelector('.cell.focused');
+      if(f&&f.dataset.file) window.location.href=f.dataset.file;
+      break;
+    }
+    case 'n': if(!e.ctrlKey&&!e.metaKey) tgNote(); break;
+  }
+});
+loadCal();applyW();loadPrev();setFocus(TODAY);
 </script>
 </body>
 </html>
