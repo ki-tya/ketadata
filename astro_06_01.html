@@ -69,7 +69,8 @@ html,body{height:100%;background:var(--bg);color:var(--fg);font-family:Arial,Hel
 </div>
 
 <div class="tabs">
-  <div class="tab on" data-tab="overview">OVERVIEW</div>
+  <div class="tab on" data-tab="sky">SKY</div>
+  <div class="tab" data-tab="overview">OVERVIEW</div>
   <div class="tab" data-tab="chart">CHART</div>
   <div class="tab" data-tab="reading">READING</div>
 </div>
@@ -77,7 +78,84 @@ html,body{height:100%;background:var(--bg);color:var(--fg);font-family:Arial,Hel
 <div class="panels">
 
   <!-- OVERVIEW -->
-  <div class="panel on" id="overview">
+    <div class="panel on" id="sky">
+<style>
+.wheel-wrap{width:100%;height:100%;display:flex;align-items:center;justify-content:center;position:relative}
+</style>
+<div class="wheel-wrap" id="wheelWrap"></div>
+<script>
+(function(){
+const SIGNS=['♈ AR','♉ TA','♊ GE','♋ CA','♌ LE','♍ VI','♎ LI','♏ SC','♐ SG','♑ CP','♒ AQ','♓ PI'];
+const SHORT=['AR','TA','GE','CA','LE','VI','LI','SC','SG','CP','AQ','PI'];
+const PLANETS=[
+  ['SUN',2,10,'☀',true],['URANUS',2,2,'⛢',true],['SATURN',0,8,'♄',true],
+  ['JUPITER',4,5,'♃',true],['PLUTO',10,3,'♇',true],['N.NODE',11,26,'☊',true],
+  ['NEPTUNE',0,0,'♆',false],['MOON',6,15,'☽',false],
+];
+const ASPECTS=[[0,1],[2,6],[0,3],[4,5]];
+function buildWheel(){
+  const wrap=document.getElementById('wheelWrap');
+  if(!wrap)return;
+  const size=Math.min(wrap.clientWidth,wrap.clientHeight)*0.92;
+  const W=size,CX=W/2,CY=W/2;
+  const R_OUTER=W*.46,R_SIGN=W*.40,R_TICK=W*.36,R_PLANET=W*.27,R_INNER=W*.18;
+  function toRad(d){return(d-90)*Math.PI/180;}
+  function polarXY(a,r){const rad=toRad(a);return[CX+r*Math.cos(rad),CY+r*Math.sin(rad)];}
+  function signAngle(si,d){return si*30+d;}
+  let s=`<svg width="${W}" height="${W}" viewBox="0 0 ${W} ${W}" xmlns="http://www.w3.org/2000/svg">`;
+  s+=`<rect width="${W}" height="${W}" fill="#000"/>`;
+  s+=`<circle cx="${CX}" cy="${CY}" r="${R_OUTER}" fill="none" stroke="#1a1a1a" stroke-width="1"/>`;
+  for(let i=0;i<12;i++){
+    const sa=i*30,ea=sa+30,ma=sa+15;
+    const[x1,y1]=polarXY(sa,R_INNER),[x2,y2]=polarXY(sa,R_OUTER);
+    s+=`<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#1e1e1e" stroke-width="1"/>`;
+    const[bx1,by1]=polarXY(sa,R_SIGN),[bx2,by2]=polarXY(ea,R_SIGN),[bx3,by3]=polarXY(ea,R_OUTER-2),[bx4,by4]=polarXY(sa,R_OUTER-2);
+    s+=`<path d="M${bx1},${by1} A${R_SIGN},${R_SIGN} 0 0,1 ${bx2},${by2} L${bx3},${by3} A${R_OUTER-2},${R_OUTER-2} 0 0,0 ${bx4},${by4} Z" fill="${i%2===0?'#050505':'#080808'}"/>`;
+    const[lx,ly]=polarXY(ma,(R_SIGN+R_OUTER)/2);
+    const rot=ma>90&&ma<270?ma+180:ma;
+    s+=`<text x="${lx}" y="${ly}" text-anchor="middle" dominant-baseline="middle" font-family="Arial,Helvetica,sans-serif" font-size="${W*.016}" fill="rgba(255,255,255,0.22)" transform="rotate(${rot-90},${lx},${ly})" letter-spacing="1">${SHORT[i]}</text>`;
+  }
+  for(let d=0;d<360;d+=5){
+    const isM=d%30===0;
+    const[x1,y1]=polarXY(d,R_TICK),[x2,y2]=polarXY(d,R_TICK+(isM?W*.035:W*.015));
+    s+=`<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${isM?'#2a2a2a':'#161616'}" stroke-width="${isM?1:0.5}"/>`;
+  }
+  s+=`<circle cx="${CX}" cy="${CY}" r="${R_INNER}" fill="#000" stroke="#1a1a1a" stroke-width="1"/>`;
+  for(const[a,b] of ASPECTS){
+    const pa=PLANETS[a],pb=PLANETS[b];
+    const[x1,y1]=polarXY(signAngle(pa[1],pa[2]),R_PLANET*.9),[x2,y2]=polarXY(signAngle(pb[1],pb[2]),R_PLANET*.9);
+    const op=pa[4]&&pb[4]?.08:.04;
+    s+=`<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#fff" stroke-width="0.5" opacity="${op}"/>`;
+  }
+  const placed=[];
+  for(const[name,si,deg,glyph,conf] of PLANETS){
+    let angle=signAngle(si,deg);
+    for(const p of placed){if(Math.abs(p-angle)<8)angle+=9;}
+    placed.push(angle);
+    const[px,py]=polarXY(angle,R_PLANET);
+    const col=conf?'#fff':'rgba(255,255,255,0.3)';
+    const ds=W*.008;
+    s+=`<circle cx="${px}" cy="${py}" r="${ds}" fill="${col}"/>`;
+    const[tx,ty]=polarXY(signAngle(si,deg),R_TICK-2);
+    s+=`<line x1="${px}" y1="${py}" x2="${tx}" y2="${ty}" stroke="${col}" stroke-width="0.4" opacity="0.3"/>`;
+    const[lx,ly]=polarXY(angle,R_PLANET+W*.055);
+    s+=`<text x="${lx}" y="${ly}" text-anchor="middle" dominant-baseline="middle" font-family="Arial,Helvetica,sans-serif" font-size="${W*.016}" fill="${col}" letter-spacing="0.5">${glyph}</text>`;
+    const[nx,ny]=polarXY(angle,R_PLANET+W*.082);
+    s+=`<text x="${nx}" y="${ny}" text-anchor="middle" dominant-baseline="middle" font-family="Arial,Helvetica,sans-serif" font-size="${W*.013}" fill="${conf?'rgba(255,255,255,0.45)':'rgba(255,255,255,0.2)'}">${name}</text>`;
+  }
+  s+=`<circle cx="${CX}" cy="${CY}" r="${W*.012}" fill="none" stroke="rgba(255,255,255,0.12)" stroke-width="0.5"/>`;
+  s+=`<text x="${CX}" y="${CY-W*.04}" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="${W*.018}" fill="rgba(255,255,255,0.15)" letter-spacing="2">06.01.26</text>`;
+  s+=`<text x="${CX}" y="${CY+W*.04}" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="${W*.013}" fill="rgba(255,255,255,0.10)" letter-spacing="1.5">GEMINI SEASON</text>`;
+  s+=`</svg>`;
+  wrap.innerHTML=s;
+}
+window.addEventListener('resize',buildWheel);
+setTimeout(buildWheel,50);
+})();
+</script>
+  </div>
+
+<div class="panel" id="overview">
     <div class="sky-label" style="margin-bottom:16px">SKY · JUNE 1 2026</div>
 
     <div class="sky-grid">
