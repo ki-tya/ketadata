@@ -1,0 +1,738 @@
+
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KETADATA / SURFACE PLAYER</title>
+<style>
+:root {
+  color-scheme: dark;
+  --f: #fff;
+  --m: #696969;
+  --line: #292929;
+  --bar: 42px;
+}
+* { box-sizing: border-box; }
+html, body {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  background: #000;
+  color: var(--f);
+  font-family: Arial, Helvetica, sans-serif;
+  overflow: hidden;
+}
+button, input { font: inherit; }
+button {
+  border: 0;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+}
+button:hover, button:focus-visible { color: #fff; }
+button:focus-visible, input:focus-visible {
+  outline: 1px solid #aaa;
+  outline-offset: 2px;
+}
+
+/* FULLSCREEN SURFACE */
+#surface {
+  position: fixed;
+  inset: 0 0 var(--bar);
+  background: #000;
+}
+#surface iframe,
+#surface video,
+#surface audio {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  display: none;
+  background: #000;
+}
+#surface audio { height: calc(100% - 80px); }
+#surface iframe.on,
+#surface video.on,
+#surface audio.on { display: block; }
+#empty {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: #505050;
+  font-size: 11px;
+  letter-spacing: .17em;
+}
+#empty.hide { display: none; }
+
+/* BOTTOM PLAYER */
+#bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: var(--bar);
+  border-top: 1px solid #292929;
+  background: #000;
+  display: grid;
+  grid-template-columns: minmax(0,1fr) auto minmax(0,1fr);
+  align-items: center;
+  padding: 0 17px;
+  z-index: 20;
+  font-size: 11px;
+  letter-spacing: .08em;
+}
+#bar-left {
+  display: flex;
+  align-items: center;
+  gap: 17px;
+  min-width: 0;
+  justify-self: start;
+  max-width: 100%;
+}
+#bar-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 17px;
+  justify-self: center;
+}
+#bar-right {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  justify-self: end;
+}
+#brand {
+  font-weight: 800;
+  letter-spacing: .06em;
+  color: #777;
+  white-space: nowrap;
+}
+#current {
+  color: #aaa;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  max-width: min(25vw,280px);
+  text-align: left;
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: .065em;
+}
+#bar button {
+  padding: 5px 6px;
+  color: #777;
+  white-space: nowrap;
+}
+#bar button:hover,
+#bar button[aria-expanded="true"] { color: #fff; }
+#bar-center button {
+  font-size: 12px;
+  min-width: 22px;
+  text-align: center;
+}
+#play {
+  color: #fff !important;
+  min-width: 52px !important;
+  font-size: 11px !important;
+  letter-spacing: .10em;
+}
+#expand { font-size: 12px; min-width: 35px; }
+
+/* EXPANDABLE LIBRARY */
+#drawer {
+  position: fixed;
+  bottom: var(--bar);
+  left: 0;
+  right: 0;
+  height: min(52vh,470px);
+  background: #030303;
+  border-top: 1px solid #404040;
+  z-index: 15;
+  display: none;
+  flex-direction: column;
+}
+#drawer.open { display: flex; }
+#dhead {
+  height: 40px;
+  min-height: 40px;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 18px;
+  font-size: 11px;
+  letter-spacing: .12em;
+}
+#dhead button { color: #777; }
+#dcontent {
+  display: grid;
+  grid-template-columns: minmax(150px,32%) minmax(0,1fr);
+  min-height: 0;
+  flex: 1;
+}
+#sets {
+  border-right: 1px solid var(--line);
+  padding: 13px;
+  overflow: auto;
+}
+#tracks { padding: 13px; overflow: auto; }
+.eyebrow {
+  font-size: 10px;
+  color: #666;
+  letter-spacing: .13em;
+  margin: 0 0 13px;
+}
+.set, .track {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  text-align: left;
+  gap: 12px;
+  padding: 11px 6px;
+  border-bottom: 1px solid #181818;
+  color: #777;
+  font-size: 11px;
+  letter-spacing: .06em;
+}
+.set:hover, .track:hover,
+.set.active, .track.active { color: #fff; }
+.track .number { color: #555; min-width: 21px; }
+.track .title {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.track .external { color: #555; font-size: 10px; }
+.addrow {
+  display: flex;
+  gap: 7px;
+  border-top: 1px solid var(--line);
+  padding-top: 13px;
+  margin-top: 14px;
+}
+.addrow input {
+  background: #000;
+  border: 1px solid #303030;
+  color: #eee;
+  min-width: 0;
+  flex: 1;
+  padding: 8px;
+  font-size: 11px;
+}
+.addrow button, .tiny {
+  border: 1px solid #363636;
+  padding: 6px 9px;
+  color: #777;
+  font-size: 10px;
+  letter-spacing: .07em;
+}
+.addrow button:hover, .tiny:hover {
+  border-color: #aaa;
+  color: #fff;
+}
+.paneltools {
+  display: flex;
+  gap: 7px;
+  flex-wrap: wrap;
+  margin: 13px 0;
+}
+.note {
+  font-size: 10px;
+  color: #626262;
+  line-height: 1.65;
+  max-width: 600px;
+}
+#notice {
+  position: fixed;
+  top: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 8px 12px;
+  background: #050505;
+  border: 1px solid #333;
+  color: #aaa;
+  font-size: 10px;
+  z-index: 50;
+  display: none;
+  max-width: 90vw;
+  text-align: center;
+}
+
+/* MOBILE */
+@media (max-width: 650px) {
+  #brand { display: none; }
+  #bar {
+    padding: 0 8px;
+    grid-template-columns: minmax(0,1fr) auto minmax(0,1fr);
+  }
+  #bar-left { gap: 0; }
+  #current { max-width: 22vw; font-size: 9px; }
+  #bar-center { gap: 3px; }
+  #bar-right { gap: 2px; }
+  #bar button { padding: 5px 4px; }
+  #bar-center button { min-width: 18px; }
+  #play {
+    min-width: 42px !important;
+    font-size: 10px !important;
+  }
+  #dcontent {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto 1fr;
+  }
+  #sets {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    overflow: auto;
+    white-space: nowrap;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+    padding: 8px;
+  }
+  #sets .eyebrow { display: none; }
+  .set {
+    width: auto;
+    white-space: nowrap;
+    border: 1px solid #222;
+    padding: 8px;
+  }
+  #drawer { height: min(67vh,550px); }
+  #tracks { padding: 10px; }
+}
+</style>
+</head>
+<body>
+
+<main id="surface" aria-label="Full screen surface">
+  <div id="empty">KETADATA / SURFACE</div>
+  <iframe id="frame"
+    title="Current KETADATA surface"
+    allow="autoplay; fullscreen; picture-in-picture"
+    allowfullscreen></iframe>
+  <video id="video" playsinline controls></video>
+  <audio id="audio" controls></audio>
+</main>
+
+<div id="notice" role="status"></div>
+
+<section id="drawer" aria-label="Surface playlists">
+  <div id="dhead">
+    <span>SURFACE / LIBRARY</span>
+    <button id="collapseTop"
+      aria-label="Collapse library">[ CLOSE ]</button>
+  </div>
+  <div id="dcontent">
+    <div id="sets"></div>
+    <div id="tracks"></div>
+  </div>
+</section>
+
+<footer id="bar">
+  <div id="bar-left">
+    <span id="brand">KETADATA</span>
+    <button id="current"
+      title="Open current surface in a new tab">
+      SURFACE / —
+    </button>
+  </div>
+
+  <div id="bar-center" aria-label="Playback controls">
+    <button id="prev"
+      title="Previous surface"
+      aria-label="Previous surface">◀</button>
+    <button id="play"
+      title="Load / pause media"
+      aria-label="Play or pause">PLAY</button>
+    <button id="next"
+      title="Next surface"
+      aria-label="Next surface">▶</button>
+  </div>
+
+  <div id="bar-right">
+    <button id="full"
+      title="Fullscreen"
+      aria-label="Fullscreen">⛶</button>
+    <button id="expand"
+      aria-expanded="false"
+      aria-controls="drawer"
+      title="Expand library">[ + ]</button>
+  </div>
+</footer>
+
+<script>
+(()=>{
+'use strict';
+
+const $ = id => document.getElementById(id);
+const BASE = 'https://ketadata.com/';
+
+const BUILTIN = [
+  {
+    name: 'SURFACE INDEX',
+    items: [
+      {title:'BLACK LOTUS',url:BASE+'blacklotus3.html'},
+      {title:'SUR_BASE',url:BASE+'sur_9ase_iv.html'},
+      {title:'ROOM',url:BASE+'room.html'},
+      {title:'CUBE',url:BASE+'cube.html'},
+      {title:'CHAKRA',url:BASE+'chakra.html'},
+      {title:'DELEUZE',url:BASE+'deleuze1.html'},
+      {title:'KDTV',url:BASE+'kdtv1.html'},
+      {title:'ASCII',url:BASE+'ascii.html'}
+    ]
+  }
+];
+
+const KEY = 'KETADATA_MIN_SURFACE_PLAYER_V1';
+
+let saved = {};
+try {
+  saved = JSON.parse(localStorage.getItem(KEY)||'{}');
+} catch {}
+
+let collections =
+  Array.isArray(saved.collections) && saved.collections.length
+    ? saved.collections
+    : structuredClone(BUILTIN);
+
+let si =
+  Number.isInteger(saved.si) &&
+  saved.si >= 0 &&
+  saved.si < collections.length
+    ? saved.si : 0;
+
+let ti = 0;
+let running = false;
+let drawer = false;
+let activeKind = '';
+
+const persist = () => {
+  try {
+    localStorage.setItem(KEY,JSON.stringify({collections,si}));
+  } catch {}
+};
+
+function notify(msg) {
+  $('notice').textContent = msg;
+  $('notice').style.display = 'block';
+  clearTimeout(notify.t);
+  notify.t = setTimeout(() =>
+    $('notice').style.display = 'none',2200);
+}
+
+function current() {
+  return (collections[si]?.items||[])[ti]||null;
+}
+
+function normalizeUrl(raw) {
+  try {
+    let u = new URL(
+      raw,
+      location.href.startsWith('file:') ? BASE : location.href
+    );
+    return ['https:','http:'].includes(u.protocol)
+      ? u.href : null;
+  } catch {
+    return null;
+  }
+}
+
+function mediaKind(url) {
+  let pathname = '';
+  try { pathname = new URL(url).pathname.toLowerCase(); }
+  catch {}
+
+  return /\.(mp4|webm|ogv)$/.test(pathname) ? 'video'
+    : /\.(mp3|wav|ogg|m4a)$/.test(pathname) ? 'audio'
+    : 'frame';
+}
+
+function unload() {
+  for (const k of ['frame','video','audio']) {
+    $(k).classList.remove('on');
+
+    if (k === 'frame') {
+      $(k).removeAttribute('src');
+    } else {
+      $(k).pause();
+      $(k).removeAttribute('src');
+      $(k).load();
+    }
+  }
+
+  $('empty').classList.remove('hide');
+  activeKind = '';
+}
+
+function load() {
+  const item = current();
+  unload();
+
+  if (!item) {
+    $('current').textContent = 'SURFACE / —';
+    $('play').textContent = 'PLAY';
+    running = false;
+    render();
+    return;
+  }
+
+  const u = normalizeUrl(item.url);
+  if (!u) {
+    notify('INVALID SURFACE URL');
+    return;
+  }
+
+  const kind = mediaKind(u);
+  activeKind = kind;
+  $(kind).src = u;
+  $(kind).classList.add('on');
+
+  $('empty').classList.add('hide');
+  $('current').textContent =
+    (item.title||'SURFACE').toUpperCase();
+  $('current').title = u;
+
+  running = true;
+  $('play').textContent =
+    kind === 'frame' ? 'RELOAD' : 'PAUSE';
+
+  if (kind !== 'frame') {
+    $(kind).play().catch(() =>
+      $('play').textContent = 'PLAY');
+  }
+
+  render();
+}
+
+function choose(i) {
+  const arr = collections[si]?.items||[];
+  if (!arr.length) return;
+  ti = (i+arr.length)%arr.length;
+  load();
+}
+
+function togglePlay() {
+  if (activeKind === 'frame') {
+    load();
+    return;
+  }
+  if (!activeKind) {
+    load();
+    return;
+  }
+
+  const el = $(activeKind);
+  if (el.paused) {
+    el.play()
+      .then(() => $('play').textContent = 'PAUSE')
+      .catch(() => notify('PLAYBACK BLOCKED'));
+  } else {
+    el.pause();
+    $('play').textContent = 'PLAY';
+  }
+}
+
+function toggleDrawer(val = !drawer) {
+  drawer = val;
+  $('drawer').classList.toggle('open',drawer);
+  $('expand').setAttribute('aria-expanded',String(drawer));
+  $('expand').textContent = drawer ? '[ − ]' : '[ + ]';
+}
+
+function render() {
+  const s = $('sets');
+  s.replaceChildren();
+
+  const sl = document.createElement('div');
+  sl.className = 'eyebrow';
+  sl.textContent = 'PLAYLISTS';
+  s.append(sl);
+
+  collections.forEach((set,i) => {
+    const b = document.createElement('button');
+    b.className = 'set'+(i===si?' active':'');
+    b.textContent = set.name;
+    b.onclick = () => {
+      si = i;
+      ti = 0;
+      persist();
+      load();
+    };
+    s.append(b);
+  });
+
+  const t = $('tracks');
+  t.replaceChildren();
+
+  const tl = document.createElement('p');
+  tl.className = 'eyebrow';
+  tl.textContent =
+    'SURFACES / '+(collections[si]?.name||'');
+  t.append(tl);
+
+  (collections[si]?.items||[]).forEach((item,i) => {
+    const b = document.createElement('button');
+    b.className = 'track'+(i===ti?' active':'');
+
+    const n = document.createElement('span');
+    n.className = 'number';
+    n.textContent = String(i+1).padStart(2,'0');
+
+    const nm = document.createElement('span');
+    nm.className = 'title';
+    nm.textContent = item.title;
+
+    const ext = document.createElement('span');
+    ext.className = 'external';
+    ext.textContent = '↗';
+
+    b.append(n,nm,ext);
+    b.onclick = () => choose(i);
+    t.append(b);
+  });
+
+  const tool = document.createElement('div');
+  tool.className = 'paneltools';
+
+  const newSet = document.createElement('button');
+  newSet.className = 'tiny';
+  newSet.textContent = '+ PLAYLIST';
+  newSet.onclick = () => {
+    const name = prompt('PLAYLIST NAME');
+    if (!name?.trim()) return;
+
+    collections.push({
+      name:name.trim().toUpperCase(),
+      items:[]
+    });
+
+    si = collections.length-1;
+    ti = 0;
+    persist();
+    load();
+  };
+
+  const remove = document.createElement('button');
+  remove.className = 'tiny';
+  remove.textContent = 'REMOVE CURRENT';
+  remove.onclick = () => {
+    const arr = collections[si].items;
+    if (!arr.length) return;
+
+    arr.splice(ti,1);
+    ti = Math.max(0,Math.min(ti,arr.length-1));
+    persist();
+    load();
+  };
+
+  tool.append(newSet,remove);
+  t.append(tool);
+
+  const add = document.createElement('form');
+  add.className = 'addrow';
+
+  const inp = document.createElement('input');
+  inp.type = 'text';
+  inp.placeholder = 'URL / RELATIVE SURFACE PATH';
+  inp.setAttribute('aria-label','Surface URL');
+
+  const ab = document.createElement('button');
+  ab.type = 'submit';
+  ab.textContent = 'ADD';
+
+  add.append(inp,ab);
+
+  add.onsubmit = e => {
+    e.preventDefault();
+    const u = normalizeUrl(inp.value.trim());
+
+    if (!u) {
+      notify('ENTER A VALID HTTP(S) URL');
+      return;
+    }
+
+    const path =
+      new URL(u).pathname.split('/').pop()||'SURFACE';
+
+    const title = path
+      .replace(/\.[^.]*$/,'')
+      .replace(/[-_]/g,' ')
+      .toUpperCase();
+
+    collections[si].items.push({title,url:u});
+    ti = collections[si].items.length-1;
+    persist();
+    load();
+  };
+
+  t.append(add);
+
+  const hint = document.createElement('p');
+  hint.className = 'note';
+  hint.textContent =
+    'Full-screen surface with a collapsible control layer. '+
+    'External sites may block embedding. '+
+    'For HTML surfaces, PLAY reloads the page; '+
+    'precise pause is only supported for direct audio/video files.';
+  t.append(hint);
+}
+
+$('prev').onclick = () => choose(ti-1);
+$('next').onclick = () => choose(ti+1);
+$('play').onclick = togglePlay;
+$('expand').onclick = () => toggleDrawer();
+$('collapseTop').onclick = () => toggleDrawer(false);
+
+$('current').onclick = () => {
+  const c = current();
+  if (c) window.open(c.url,'_blank','noopener,noreferrer');
+};
+
+$('full').onclick = () => {
+  if (!document.fullscreenElement)
+    document.documentElement.requestFullscreen?.();
+  else
+    document.exitFullscreen?.();
+};
+
+document.addEventListener('keydown',e => {
+  if (['INPUT','TEXTAREA'].includes(
+    document.activeElement?.tagName
+  )) return;
+
+  if (e.key==='Escape') toggleDrawer(false);
+  if (e.key==='ArrowRight') choose(ti+1);
+  if (e.key==='ArrowLeft') choose(ti-1);
+  if (e.key===' ') {
+    e.preventDefault();
+    togglePlay();
+  }
+  if (e.key==='p'||e.key==='P') toggleDrawer();
+});
+
+const query = new URLSearchParams(location.search);
+const qset = query.get('set');
+const qsurf = query.get('surface');
+
+if (
+  qset !== null &&
+  Number.isInteger(+qset) &&
+  +qset >= 0 &&
+  +qset < collections.length
+) si = +qset;
+
+if (
+  qsurf !== null &&
+  Number.isInteger(+qsurf) &&
+  +qsurf >= 0 &&
+  +qsurf < (collections[si]?.items.length||0)
+) ti = +qsurf;
+
+load();
+})();
+</script>
+</body>
+</html>
