@@ -38,6 +38,7 @@ h1 {
   font-size:clamp(8rem,15vw,17rem);
   cursor:pointer;
   user-select:none;
+  touch-action:manipulation;
   position:relative;
 }
 .word-row {
@@ -151,9 +152,9 @@ body.blacked #blackout { opacity:1; }
   }
   #warning {
     width:88vw;
-    font-size:clamp(10px,2.35vw,13px);
     bottom:calc(env(safe-area-inset-bottom, 0px) + 91px);
     line-height:1.4;
+    font-size:clamp(10px,2.35vw,13px);
   }
 }
 
@@ -585,14 +586,30 @@ function enterRoom(idx) {
   },1850);
 }
 
-ketaWord.addEventListener("click",() => {
+/* DESKTOP CLICK / MOBILE SINGLE- & DOUBLE-TAP */
+
+let lastTouchInteractionAt = 0;
+let lastTap = null;
+let pendingMobileEntry = null;
+const DOUBLE_TAP_MS = 340;
+const DOUBLE_TAP_RADIUS = 65;
+
+ketaWord.addEventListener("click", event => {
+  // Touch entry is handled separately so a
+  // second tap can cancel navigation.
+  if (event.pointerType === "touch" ||
+      Date.now() - lastTouchInteractionAt < 750) return;
+
   enterRoom(hoverIdx);
 });
 
 let isFlashing = false;
-let flashInterval;
+let flashInterval = null;
 
 function startStrobe() {
+  if (isFlashing || entering) return;
+
+  isFlashing = true;
   document.body.classList.add("strobe-active");
 
   flashInterval = setInterval(() => {
@@ -600,14 +617,86 @@ function startStrobe() {
       document.body.style.backgroundColor === "black"
         ? "white"
         : "black";
-  },50);
+  }, 50);
 }
 
 function stopStrobe() {
   clearInterval(flashInterval);
+  flashInterval = null;
+  isFlashing = false;
+
   document.body.style.backgroundColor = "black";
   document.body.classList.remove("strobe-active");
 }
+
+function toggleStrobe() {
+  if (isFlashing) stopStrobe();
+  else startStrobe();
+}
+
+/*
+  MOBILE:
+  Double tap page to toggle strobe.
+  Single tap on KETADATA enters player
+  after the double-tap detection window.
+  Links and buttons are unaffected.
+*/
+
+document.addEventListener("pointerup", event => {
+  if (
+    event.pointerType !== "touch" ||
+    entering ||
+    document.body.classList.contains("info-open")
+  ) return;
+
+  if (
+    event.target.closest(
+      "a, button, input, textarea, select"
+    )
+  ) return;
+
+  const now = Date.now();
+  lastTouchInteractionAt = now;
+
+  const nearLast =
+    lastTap &&
+    now - lastTap.time <= DOUBLE_TAP_MS &&
+    Math.hypot(
+      event.clientX - lastTap.x,
+      event.clientY - lastTap.y
+    ) <= DOUBLE_TAP_RADIUS;
+
+  if (nearLast) {
+    if (pendingMobileEntry) {
+      clearTimeout(pendingMobileEntry);
+    }
+
+    pendingMobileEntry = null;
+    lastTap = null;
+    toggleStrobe();
+    return;
+  }
+
+  lastTap = {
+    time: now,
+    x: event.clientX,
+    y: event.clientY
+  };
+
+  if (ketaWord.contains(event.target)) {
+    const tapped = event.target.closest(".ch");
+    const index = tapped
+      ? letters.indexOf(tapped)
+      : hoverIdx;
+
+    pendingMobileEntry = setTimeout(() => {
+      pendingMobileEntry = null;
+      lastTap = null;
+
+      enterRoom(index >= 0 ? index : hoverIdx);
+    }, DOUBLE_TAP_MS + 25);
+  }
+}, {passive:true});
 
 function enterBaseImmediate() {
   if(entering) return;
@@ -631,20 +720,16 @@ document.getElementById("base-link")
   });
 
 document.addEventListener("keydown",event => {
-  if(document.body.classList.contains("info-open")) {
-    return;
-  }
+  if (
+    document.body.classList.contains("info-open")
+  ) return;
 
-  if(event.key === " " || event.code === "Space") {
+  if (
+    event.key === " " ||
+    event.code === "Space"
+  ) {
     event.preventDefault();
-
-    if(isFlashing) {
-      stopStrobe();
-    } else {
-      startStrobe();
-    }
-
-    isFlashing = !isFlashing;
+    toggleStrobe();
   }
 
   if(event.key === "Enter") {
