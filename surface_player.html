@@ -1,0 +1,777 @@
+
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>KETADATA / SURFACE PLAYER</title>
+
+<style>
+:root {
+  color-scheme:dark;
+  --bar:44px;
+  --line:#292929;
+}
+* { box-sizing:border-box; }
+
+html,body {
+  margin:0;
+  width:100%;
+  height:100%;
+  overflow:hidden;
+  background:#000;
+  color:#fff;
+  font-family:Arial,Helvetica,sans-serif;
+}
+button {
+  font:inherit;
+  cursor:pointer;
+  color:#777;
+  background:none;
+  border:0;
+}
+button:hover,
+button:focus-visible,
+button.active { color:#fff; }
+button:focus-visible,
+a:focus-visible {
+  outline:1px solid #888;
+  outline-offset:3px;
+}
+
+/* SURFACE */
+
+#surface {
+  position:fixed;
+  inset:0 0 var(--bar);
+  background:#000;
+}
+#frame,#video,#audio {
+  width:100%;
+  height:100%;
+  border:0;
+  display:none;
+  background:#000;
+}
+#frame.on,#video.on,#audio.on { display:block; }
+#empty {
+  position:absolute;
+  inset:0;
+  display:grid;
+  place-items:center;
+  color:#555;
+  font-size:11px;
+  letter-spacing:.12em;
+  pointer-events:none;
+}
+#empty.hide { display:none; }
+
+/* PLAYER BAR */
+
+#bar {
+  height:var(--bar);
+  position:fixed;
+  bottom:0;
+  left:0;
+  right:0;
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);
+  align-items:center;
+  padding:0 16px;
+  background:#000;
+  border-top:1px solid var(--line);
+  z-index:30;
+  font-size:11px;
+  letter-spacing:.08em;
+}
+#bar-left,#bar-center,#bar-right {
+  display:flex;
+  align-items:center;
+  min-width:0;
+}
+#bar-left { gap:16px; }
+#bar-center { gap:15px; }
+#bar-right {
+  gap:9px;
+  justify-content:flex-end;
+}
+#brand {
+  font-weight:800;
+  letter-spacing:.06em;
+  text-decoration:none;
+  color:#888;
+  white-space:nowrap;
+}
+#brand:hover { color:#fff; }
+#current {
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  max-width:23vw;
+  text-transform:uppercase;
+  text-align:left;
+  font-size:11px;
+}
+#bar button { padding:5px; }
+#prev,#next {
+  font-size:17px;
+  width:31px;
+  height:32px;
+}
+#play {
+  color:#fff;
+  min-width:54px;
+  font-size:11px;
+  letter-spacing:.06em;
+}
+#expand { min-width:36px; }
+#full { font-size:16px; }
+
+/* LIBRARY DRAWER */
+
+#drawer {
+  display:none;
+  position:fixed;
+  bottom:var(--bar);
+  left:0;
+  right:0;
+  height:min(58vh,510px);
+  border-top:1px solid #444;
+  background:#030303;
+  z-index:20;
+  flex-direction:column;
+}
+#drawer.open { display:flex; }
+#dhead {
+  min-height:42px;
+  padding:0 17px;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  border-bottom:1px solid var(--line);
+  letter-spacing:.12em;
+  font-size:11px;
+}
+#dcontent {
+  display:grid;
+  grid-template-columns:minmax(150px,32%) 1fr;
+  min-height:0;
+  flex:1;
+}
+#sets,#tracks {
+  padding:12px;
+  overflow:auto;
+  scrollbar-width:thin;
+  scrollbar-color:#333 #000;
+}
+#sets { border-right:1px solid var(--line); }
+.eyebrow {
+  color:#666;
+  font-size:10px;
+  letter-spacing:.12em;
+  margin:5px 0 12px;
+}
+.set,.track {
+  display:flex;
+  align-items:center;
+  gap:10px;
+  width:100%;
+  padding:12px 6px;
+  text-align:left;
+  font-size:11px;
+  letter-spacing:.05em;
+  border-bottom:1px solid #1d1d1d;
+}
+.set.active,.track.active { color:#fff; }
+.count {
+  margin-left:auto;
+  color:#555;
+  font-size:10px;
+}
+.number {
+  min-width:20px;
+  color:#555;
+}
+.trackname {
+  flex:1;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.smalltools {
+  display:flex;
+  align-items:center;
+  gap:15px;
+  margin:12px 4px 15px;
+  color:#888;
+  font-size:10px;
+  letter-spacing:.08em;
+}
+.smalltools label {
+  cursor:pointer;
+  display:flex;
+  gap:7px;
+  align-items:center;
+}
+.smalltools input { accent-color:#fff; }
+.note {
+  color:#666;
+  font-size:10px;
+  line-height:1.6;
+  margin:15px 4px;
+}
+.set .featured { color:#ddd; }
+#notice {
+  display:none;
+  position:fixed;
+  top:14px;
+  left:50%;
+  transform:translateX(-50%);
+  border:1px solid #333;
+  background:#060606;
+  color:#aaa;
+  font-size:10px;
+  padding:8px 12px;
+  z-index:50;
+}
+
+/* MOBILE */
+
+@media(max-width:650px) {
+  #bar { padding:0 7px; }
+  #bar-left { gap:3px; }
+  #bar-center { gap:1px; }
+  #bar-right { gap:0; }
+  #brand { font-size:9px; }
+  #current {
+    max-width:17vw;
+    font-size:9px;
+  }
+  #bar button { padding:4px; }
+  #prev,#next { width:26px; }
+  #play {
+    min-width:44px;
+    font-size:10px;
+  }
+  #dcontent {
+    grid-template-columns:1fr;
+    grid-template-rows:auto minmax(0,1fr);
+  }
+  #sets {
+    display:flex;
+    overflow-x:auto;
+    white-space:nowrap;
+    border-right:0;
+    border-bottom:1px solid var(--line);
+    padding:8px;
+    gap:7px;
+  }
+  #sets .eyebrow { display:none; }
+  .set {
+    width:auto;
+    flex-shrink:0;
+    border:1px solid #222;
+    padding:9px 10px;
+  }
+  .count { margin-left:3px; }
+  #drawer { height:min(72vh,600px); }
+}
+</style>
+</head>
+
+<body>
+
+<main id="surface">
+  <div id="empty">KETADATA / SURFACE</div>
+  <iframe id="frame"
+    title="KETADATA surface"
+    allow="autoplay;fullscreen;picture-in-picture"
+    allowfullscreen></iframe>
+  <video id="video" playsinline controls></video>
+  <audio id="audio" controls></audio>
+</main>
+
+<div id="notice" role="status"></div>
+
+<section id="drawer" aria-label="Surface library">
+  <div id="dhead">
+    <span>SURFACE / LIBRARY</span>
+    <button id="close" aria-label="Close library">
+      [ CLOSE ]
+    </button>
+  </div>
+  <div id="dcontent">
+    <div id="sets"></div>
+    <div id="tracks"></div>
+  </div>
+</section>
+
+<footer id="bar">
+  <div id="bar-left">
+    <a id="brand"
+      href="https://ketadata.com/index.html">
+      KETADATA
+    </a>
+    <button id="current"
+      title="Open surface in new tab">—</button>
+  </div>
+
+  <div id="bar-center">
+    <button id="prev"
+      aria-label="Previous surface">◀</button>
+    <button id="play"
+      aria-label="Play or reload">RELOAD</button>
+    <button id="next"
+      aria-label="Next surface">▶</button>
+  </div>
+
+  <div id="bar-right">
+    <button id="full"
+      aria-label="Fullscreen"
+      title="Fullscreen">⛶</button>
+    <button id="expand"
+      aria-controls="drawer"
+      aria-expanded="false"
+      title="Library">[ + ]</button>
+  </div>
+</footer>
+
+<script>
+(()=>{
+'use strict';
+
+const $ = id => document.getElementById(id);
+const BASE = 'https://ketadata.com/';
+
+/* INDEX PLAYLIST — K E T A D A T A */
+
+const FEATURED = [
+  'room',
+  'chakra',
+  'blacklotus3',
+  'cube',
+  'deleuze1',
+  'crunch1',
+  'ktball',
+  'map'
+];
+
+/* COMPLETE LIBRARY */
+
+const LIBRARY = `
+KETA-CORE|page2,crunch1,crunch1_old,ascii,ball,map,map1,cube,cube1,kitty,room,room_new,room_old,room_prev_recent,kdtv1,kdtv1_new,kdtv1_old,kdtv1_prev,kdtv1a,kdtv1b,vault,obscura
+BLEAK-TECH|beatball,beatball_old,blacklotus2,bleak,bleak_old,chakra,chakra_old,chakra_recent
+KETA-MINDS|artaud,artaud1,bataille,bataille1,burroughs,borges,debord,deleuze,deleuze1,mcluhan,goffman,goffman1,holzer,holzer1,jung,etal,land
+KETA-ANIMA|butterfly,butterfly1,butterfly2,butterfly3,catball,catball1,catface,catface1,catface2,grace,grace1,grace3,kittycat,kittycat1,kittycat2,crow,snakes,fishtank,serp1,serpentine,lizard,octopus,leopard,pigface
+KETA-INDEX|index,index0,index001,index002,index003,index005,index006,index007,index008,index009,index01,index011,index012,index013,index014,index015,index01_tester,index02,index03,index04,index05,index06,index07,index08,index09,index11,index11a,index11backup,index_copy,index_finalref,index_prev1,index_recent,indexbackup,indexcentertext,indexminimal,indexold,indexpixel,indexremake1,indexremake2
+KETA-OBJECT|ashtray,ashtray1,coffee1,coffee,eye,eyes,mirror,mirror1,matchbook,matryoshka,molecule
+KETA-MISC|misc,misc2,misc3,misc4,misc5,misc6,misc7,misc8
+KETA-RELEASE|release,release2,release3,release4,wordbowl
+KETA-SLOP|slopstream2,slopstream3,slopstream4,slopstream6,chroma
+KETA-GPT|capture,capturegpt,capturegpt2,capturegpt3,capturegpt4,capturegpt5,capturegpt6,capturegpt7,capturegpt8,gptsubject
+KETA-MOSH|datamosh,datamosh1,datamosh2,datamosh3,datamosh4,datamosher,datamosher1,datamosher2,datamosher3
+K-MANDALA|mandala,mandala2,mandala3,mandala88,mandalagpt,mandalagpt2,mandalagpt3,mandalagpt4
+KETA-TENNIS|ktball,ktball1,tennis,tennisball,tennisball0,tennisball10,tennisball11,tennisball12,tennisball13,tennisball14,tennisball15,tennisball16,tennisball2,tennisball3,tennisball4,tennisball5,tennisball6,tennisball666,tennisball7,tennisball8,tennisball9,tennisball91,tenniscourt,tball,tball1,tball2,tball3,tball4,tball5,tball6,tball7,serve,serve1,serve2
+KETA-HIGH|mdma,mdma2,mdmagpt,mdmagpt2,subgpt2,subgpt3,subgpt4,subgpt5,dmt,dmt2,dmt3,dmt4,dmtzoom,drugprotocol
+INFINITY POOL|pool,pool3,pool4,pool5,pool6,grotto,grotto1,grotto2,underwater,underwater1,infinity
+HYPERSTITION|hyperstition,hyperstition1,hyperstition2,hyperstition3,hyperstition5
+KETA-MOTION|motion1,motion10,motion11,motion2,motion3,motion4,motion5,motion6,motion7,motion8,motion9,growth,growth1,growth2,turbulence,motion
+KETA-RIPPLE|ripple,ripple2,ripple3,ripplegpt
+KETA-FUNNEL|funnel,funnel1,funnel2,funnel3,funnel4
+KETA-ANNIVERSARY|aniversary1111,anniversary1,anniversary11,anniversary111
+KETA-ORTHO|orthodox,orthodox1,orthodox2,orthodox3,orthodox,orthodox1,orthodox2,orthodox3
+KETA-ADMIN|desktopbackup,desktoptester,desktoptester1,diekitty,consult,consult_old,consult_recent,consult_recenter,sensory3
+K-TRAP|newtrap,newtrap2,newtrap3
+K-DOT|polka1,polka2,polkadot
+KETA-RED|red,red1,redroom
+KETA-ASTRO|astro1,astro2,astro5
+KETA-SCREEN|cctv1,cctv1,screen6,screenplane,screenplane1,video,video2,darkroom,darkroom1,sur_wall,video,video2
+KETA-EPHEMERA|003,borromean,cp,cp1,depth,jan6,jan61,kmas,matrix,pulse,reading,sg,sg1,sovereignty,sublime,substance,substrate1,substrate3,target,target1,teleo,teleo1,temple,temple1,trace,widefield
+`.trim();
+
+/* BUILD COLLECTIONS */
+
+const archives = LIBRARY.split('\n').map(line => {
+  const [name,body] = line.split('|');
+  return {
+    name,
+    items:body.split(',')
+      .map(v=>v.trim())
+      .filter(Boolean)
+  };
+});
+
+const featured = {
+  name:'KETADATA / 8',
+  items:[...FEATURED]
+};
+
+const collections = [featured,...archives];
+
+let si=0;
+let ti=0;
+let allVersions=false;
+let drawerOpen=false;
+let activeKind='';
+
+/* INDEX DEEP LINKS */
+
+const query=new URLSearchParams(location.search);
+
+const requested=(query.get('file')||'')
+  .replace(/\.html$/i,'')
+  .toLowerCase();
+
+const qset=query.get('set');
+const qsurf=query.get('surface');
+
+if(requested && FEATURED.includes(requested)) {
+  si=0;
+  ti=FEATURED.indexOf(requested);
+}
+else if(
+  qset!==null &&
+  Number.isInteger(+qset) &&
+  +qset>=0 &&
+  +qset<collections.length
+) {
+  si=+qset;
+  ti=Number.isInteger(+qsurf) && +qsurf>=0
+    ? +qsurf : 0;
+}
+else if(requested) {
+  const idx=archives.findIndex(
+    set=>set.items.includes(requested)
+  );
+  if(idx>=0) {
+    si=idx+1;
+    ti=archives[idx].items.indexOf(requested);
+  }
+}
+
+/* CURATE ARCHIVE VARIANTS */
+
+function stem(file) {
+  return file
+    .replace(
+      /(?:_?(?:old|new|recent|backup|tester|prev|copy|finalref|recenter|latest)(?:\d+)?)$/i,
+      ''
+    )
+    .replace(/\d+$/,'')
+    .replace(/_$/,'');
+}
+
+function curated(set) {
+  if(set===featured) return [...FEATURED];
+
+  const groups=new Map();
+
+  for(const item of set.items) {
+    const key=stem(item);
+
+    if(!groups.has(key)) groups.set(key,[]);
+
+    if(!groups.get(key).includes(item)) {
+      groups.get(key).push(item);
+    }
+  }
+
+  return [...groups.values()].map(group=>{
+    const core=stem(group[0]);
+
+    return group.find(f=>f===core)
+      || group.find(f=>f===core+'1')
+      || group[0];
+  });
+}
+
+function viewItems() {
+  const set=collections[si];
+
+  return allVersions
+    ? [...new Set(set.items)]
+    : curated(set);
+}
+
+function sequence() {
+  return si===0 ? [...FEATURED] : viewItems();
+}
+
+let currentFile=si===0
+  ? FEATURED[ti]
+  : collections[si]?.items[ti];
+
+if(si!==0 && !allVersions) {
+  const seq=sequence();
+
+  if(!seq.includes(currentFile)) {
+    currentFile=seq[0]||null;
+  }
+}
+
+/* NOTICES */
+
+let noticeTimer;
+
+function notify(msg) {
+  $('notice').textContent=msg;
+  $('notice').style.display='block';
+
+  clearTimeout(noticeTimer);
+
+  noticeTimer=setTimeout(()=>{
+    $('notice').style.display='none';
+  },2000);
+}
+
+/* SURFACE LOADER */
+
+function unload() {
+  for(const kind of ['frame','video','audio']) {
+    const el=$(kind);
+    el.classList.remove('on');
+
+    if(kind==='frame') {
+      el.removeAttribute('src');
+    } else {
+      el.pause();
+      el.removeAttribute('src');
+      el.load();
+    }
+  }
+
+  $('empty').classList.remove('hide');
+  activeKind='';
+}
+
+function load() {
+  unload();
+
+  if(!currentFile) {
+    $('current').textContent='—';
+    $('play').textContent='PLAY';
+    render();
+    return;
+  }
+
+  const url=BASE+encodeURIComponent(currentFile)+'.html';
+
+  activeKind='frame';
+  $('frame').src=url;
+  $('frame').classList.add('on');
+
+  $('empty').classList.add('hide');
+  $('current').textContent=currentFile;
+  $('current').title=url;
+  $('play').textContent='RELOAD';
+
+  render();
+}
+
+/* NAVIGATION */
+
+function navigate(delta) {
+  const seq=sequence();
+
+  if(!seq.length) return;
+
+  let i=seq.indexOf(currentFile);
+  if(i<0) i=0;
+
+  currentFile=seq[
+    (i+delta+seq.length)%seq.length
+  ];
+
+  load();
+}
+
+function chooseSet(i) {
+  si=i;
+  currentFile=sequence()[0]||null;
+  load();
+}
+
+/* DRAWER */
+
+function toggleDrawer(value=!drawerOpen) {
+  drawerOpen=value;
+
+  $('drawer').classList.toggle('open',value);
+
+  $('expand').setAttribute(
+    'aria-expanded',String(value)
+  );
+
+  $('expand').textContent=value
+    ? '[ − ]'
+    : '[ + ]';
+}
+
+/* LIBRARY RENDER */
+
+function render() {
+  const sets=$('sets');
+  const tracks=$('tracks');
+
+  sets.replaceChildren();
+  tracks.replaceChildren();
+
+  let h=document.createElement('p');
+  h.className='eyebrow';
+  h.textContent='PLAYLISTS / '+collections.length;
+  sets.append(h);
+
+  collections.forEach((set,i)=>{
+    const b=document.createElement('button');
+
+    b.className='set'+(si===i?' active':'');
+    b.setAttribute('aria-label',set.name);
+
+    const name=document.createElement('span');
+    name.textContent=set.name;
+
+    if(i===0) name.className='featured';
+
+    const n=document.createElement('span');
+    n.className='count';
+
+    n.textContent=(
+      allVersions
+        ? new Set(set.items).size
+        : curated(set).length
+    );
+
+    b.append(name,n);
+    b.onclick=()=>chooseSet(i);
+
+    sets.append(b);
+  });
+
+  const p=document.createElement('p');
+  p.className='eyebrow';
+
+  p.textContent=collections[si].name+
+    ' / '+sequence().length;
+
+  tracks.append(p);
+
+  if(si!==0) {
+    const tools=document.createElement('div');
+    tools.className='smalltools';
+
+    const label=document.createElement('label');
+    const cb=document.createElement('input');
+
+    cb.type='checkbox';
+    cb.checked=allVersions;
+
+    cb.onchange=()=>{
+      allVersions=cb.checked;
+
+      if(!sequence().includes(currentFile)) {
+        currentFile=sequence()[0]||null;
+      }
+
+      load();
+    };
+
+    label.append(
+      cb,
+      document.createTextNode('SHOW ALL VERSIONS')
+    );
+
+    tools.append(label);
+    tracks.append(tools);
+  }
+
+  sequence().forEach((file,i)=>{
+    const b=document.createElement('button');
+
+    b.className='track'+(
+      file===currentFile?' active':''
+    );
+
+    const num=document.createElement('span');
+    num.className='number';
+    num.textContent=String(i+1).padStart(2,'0');
+
+    const name=document.createElement('span');
+    name.className='trackname';
+    name.textContent=file.toUpperCase();
+
+    b.append(num,name);
+
+    b.onclick=()=>{
+      currentFile=file;
+      load();
+    };
+
+    tracks.append(b);
+  });
+
+  const note=document.createElement('p');
+  note.className='note';
+
+  note.textContent=si===0
+    ? 'THE EIGHT INDEX LINKS FORM ONE CONTINUOUS LOOP. SELECT ANOTHER PLAYLIST FROM THE LIBRARY TO EXPLORE.'
+    : 'CURATED VIEW HIDES DUPLICATE FILES AND DEVELOPMENT VARIANTS. SHOW ALL VERSIONS TO EXPLORE THE FULL ARCHIVE.';
+
+  tracks.append(note);
+}
+
+/* PLAYER CONTROLS */
+
+$('prev').onclick=()=>navigate(-1);
+$('next').onclick=()=>navigate(1);
+$('play').onclick=load;
+
+$('expand').onclick=()=>toggleDrawer();
+$('close').onclick=()=>toggleDrawer(false);
+
+$('current').onclick=()=>{
+  if(currentFile) {
+    window.open(
+      BASE+currentFile+'.html',
+      '_blank',
+      'noopener,noreferrer'
+    );
+  }
+};
+
+$('full').onclick=()=>{
+  if(document.fullscreenElement) {
+    document.exitFullscreen?.();
+  } else {
+    document.documentElement.requestFullscreen?.();
+  }
+};
+
+/* KEYBOARD */
+
+document.addEventListener('keydown',e=>{
+  if(['INPUT','TEXTAREA'].includes(
+    document.activeElement?.tagName
+  )) return;
+
+  if(e.key==='ArrowRight') navigate(1);
+  if(e.key==='ArrowLeft') navigate(-1);
+  if(e.key==='Escape') toggleDrawer(false);
+
+  if(e.key.toLowerCase()==='p') {
+    toggleDrawer();
+  }
+
+  if(e.key===' ') {
+    e.preventDefault();
+    load();
+  }
+});
+
+/* START */
+
+load();
+
+})();
+</script>
+</body>
+</html>
